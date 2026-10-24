@@ -43,8 +43,10 @@ export function createSettingsView(host, deps) {
           'div',
           { className: 'row' },
           button(t('settings.save'), async () => {
-            const saved = await api.generationSetKey('tripo', key.value);
+            // El campo se vacía antes de esperar: la clave no se queda a la vista mientras se guarda.
+            const value = key.value;
             key.value = '';
+            const saved = await api.generationSetKey('tripo', value);
             if (!saved.ok) return deps.toast(saved.error.message, 'error');
             deps.toast(saved.value === 'system' ? t('settings.keySaved') : t('settings.keySession'));
             return render();
