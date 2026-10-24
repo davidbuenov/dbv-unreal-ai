@@ -16,3 +16,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Project bootstrap with the dbv-specs-ops v3.1.0 SDD framework: project identity, activation files for AI assistants, MIT license and initial README.
+- Desktop app base from dbv-tauri-starter 0.3.0: Tauri v2, three-tier AI subsystem (local, cloud with OS keychain, ACP agents), with the DBV Unreal AI identity (`com.davidbuenov.dbv-unreal-ai`).

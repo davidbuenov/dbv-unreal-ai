@@ -15,6 +15,15 @@
 ## 🏗️ Log de Decisiones Técnicas (ADR Ligero)
 *Registro de por qué se tomaron ciertas rutas (ej. cambios en librerías, arquitectura o patrones). Formato: `- **AAAA-MM-DD - Título:** decisión y motivo.`*
 
+- **2026-10-24 - ADR-V010-001 · Decisiones de `/plan` v0.1 tomadas SIN el usuario (para revisar):** el usuario autorizó encadenar `/plan` → `/build` → `/test` → `/code-simplify` en su ausencia. Detalle en `implementation_plan.md` §1:
+  - **D1 (P-05):** CI multiplataforma en GitHub Actions con Release en borrador; tiendas y auto-actualización en v0.2.
+  - **D2 (P-06):** referencia sintáctica de la API sacada **del motor en marcha** (`describe_python_api`, `validate_python`), guías desde la base local de MCPCLiente si el usuario da su carpeta; la app no incluye documentación de Epic.
+  - **D3:** el validador de REQ-26 corre dentro de Unreal y recibe el código como dato (nunca lo ejecuta).
+  - **D4:** al modelo se le dan las meta-herramientas de Epic + atajos propios, no las 282 aplanadas.
+  - **D5:** lectura/modificación por lista blanca de verbos; lo desconocido pide permiso.
+  - **D6:** el MCP propio exige `confirm_cost: true` para gastar y respeta el tope de la app.
+  - **D7:** `sysinfo` para encontrar los procesos del editor.
+  - **D8:** variante C++ del toolset como plantilla sin compilar (pendiente de verificar con el usuario).
 - **2026-10-24 - Alcance y forma (respuestas del usuario a P-01..P-04):** v0.1 = MVP + **MCP propio** (REQ-20 sube de v0.2 a v0.1); toolset en **dos variantes** con un único contrato (Python por defecto, C++ opcional); splats de World Labs mediante **plugin de terceros** sin redistribuirlo (v0.2).
 - **2026-10-24 - Identidad:** nombre visible **DBV Unreal AI** (se descartó «DBV Unreal Copilot» por la marca de Microsoft); identificador técnico `dbv-unreal-ai`. Autor David Bueno Vallejo, coautor David Bueno Carmona (ambos en el copyright de `LICENSE` y de las cabeceras).
 - **2026-10-24 - Bootstrap:** MIT, git, documentación en español con espejo en inglés (`README.en.md`, `CHANGELOG.en.md`). Stack: Tauri v2 + Vanilla JS sin bundler partiendo del código de dbv-tauri-starter, conservando dbv-specs-ops v3.1.0 (el starter trae la 2.8.0).

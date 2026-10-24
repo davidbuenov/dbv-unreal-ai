@@ -1,0 +1,356 @@
+.logo.vanilla:hover {
+  filter: drop-shadow(0 0 2em #ffe21c);
+}
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+
+  color: #0f0f0f;
+  background-color: #f6f6f6;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+.container {
+  margin: 0;
+  padding-top: 10vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: 0.75s;
+}
+
+.logo.tauri:hover {
+  filter: drop-shadow(0 0 2em #24c8db);
+}
+
+.row {
+  display: flex;
+  justify-content: center;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: #535bf2;
+}
+
+h1 {
+  text-align: center;
+}
+
+input,
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  color: #0f0f0f;
+  background-color: #ffffff;
+  transition: border-color 0.25s;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #396cd8;
+}
+button:active {
+  border-color: #396cd8;
+  background-color: #e8e8e8;
+}
+
+input,
+button {
+  outline: none;
+}
+
+#demo-input {
+  width: min(320px, 80vw);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75em 1.5em 0;
+}
+
+.topbar h1 {
+  font-size: 1.1em;
+  margin: 0;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background-color: transparent;
+  box-shadow: none;
+  color: inherit;
+}
+
+.btn-icon:hover {
+  background-color: rgba(100, 108, 255, 0.12);
+  border-color: transparent;
+}
+
+.btn-icon.active {
+  color: #396cd8;
+  background-color: rgba(57, 108, 216, 0.15);
+}
+
+.lang-picker select {
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  padding: 0 0.6em;
+  font-size: 0.85em;
+  font-weight: 600;
+  background-color: transparent;
+  color: inherit;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.lang-picker select:hover {
+  background-color: rgba(100, 108, 255, 0.12);
+}
+
+.about-updates-hint {
+  font-size: 0.85em;
+  color: #6b6b6b;
+}
+
+.demo-banner {
+  margin: 0.5em 1.5em 0;
+  padding: 0.6em 1em;
+  border-radius: 8px;
+  background-color: #eef2ff;
+  color: #3730a3;
+  font-size: 0.9em;
+}
+
+.dirty-hint {
+  font-size: 0.85em;
+  color: #6b6b6b;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ─── Documento de demostración para la IA (docs/IA.md) ───────────────────── */
+.demo-divider {
+  width: min(520px, 90vw);
+  margin: 1.5em auto;
+  border: 0;
+  border-top: 1px solid #d1d5db;
+}
+
+.doc-editor {
+  position: relative;
+  width: min(640px, 92vw);
+  margin: 0 auto;
+}
+
+#demo-doc {
+  display: block;
+  width: 100%;
+  min-height: 12em;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 0.6em 0.8em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+  text-align: left;
+  color: #0f0f0f;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+
+.doc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8em;
+  margin: 0.8em 0 2em;
+}
+
+#doc-status {
+  font-size: 0.85em;
+  color: #6b6b6b;
+}
+
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: min(520px, 90vw);
+  padding: 0.6em 1em;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #ffffff;
+  font-size: 0.9em;
+  z-index: 400;
+}
+
+.app-toast-error {
+  background: #991b1b;
+}
+
+.hidden {
+  display: none;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+}
+
+/* Mismo empate de especificidad que .modal-overlay (una sola clase cada uno) — sin este selector
+   más específico, .hidden pierde contra .modal-overlay por orden de aparición en la hoja. */
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-card {
+  background-color: #ffffff;
+  color: #0f0f0f;
+  border-radius: 10px;
+  padding: 1.5em;
+  max-width: 360px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.modal-card h3 {
+  margin-top: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5em;
+  margin-top: 1em;
+}
+
+.modal-actions .danger {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.modal-actions .danger:hover {
+  border-color: #991b1b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #f6f6f6;
+    background-color: #2f2f2f;
+  }
+
+  #demo-doc {
+    color: #f6f6f6;
+    background-color: #1e1e1e;
+    border-color: #404040;
+  }
+
+  .demo-divider {
+    border-top-color: #404040;
+  }
+
+  a:hover {
+    color: #24c8db;
+  }
+
+  input,
+  button {
+    color: #ffffff;
+    background-color: #0f0f0f98;
+  }
+  button:active {
+    background-color: #0f0f0f69;
+  }
+
+  .lang-picker select {
+    color: #ffffff;
+    background-color: transparent;
+    border-color: transparent;
+  }
+
+  .lang-picker select:hover {
+    background-color: rgba(36, 200, 219, 0.15);
+  }
+
+  .lang-picker select option {
+    background-color: #1f1f1f;
+    color: #ffffff;
+  }
+
+  .demo-banner {
+    background-color: #312e81;
+    color: #e0e7ff;
+  }
+
+  .dirty-hint {
+    color: #a3a3a3;
+  }
+
+  .modal-card {
+    background-color: #1f1f1f;
+    color: #f6f6f6;
+  }
+
+  .btn-icon:hover {
+    background-color: rgba(36, 200, 219, 0.15);
+  }
+
+  .btn-icon.active {
+    color: #24c8db;
+    background-color: rgba(36, 200, 219, 0.2);
+  }
+
+  .about-updates-hint {
+    color: #a3a3a3;
+  }
+}

@@ -1,0 +1,152 @@
+﻿<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DBV Unreal AI</title>
+    <!-- Sin type="module" a propósito, y cada fichero envuelto en IIFE: ver
+         dbv-specs-ops/docs/NATIVE_DESKTOP_APPS.md §3 y la Lección sobre colisión de ámbito
+         global en dbv-specs-ops/memory.md -->
+    <script src="i18n.js" defer></script>
+    <script src="main.js" defer></script>
+  </head>
+
+  <body>
+    <header class="topbar">
+      <h1 data-i18n="app.title">DBV Unreal AI</h1>
+      <div class="toolbar-actions">
+        <!-- IA opcional (docs/IA.md): sin ninguna IA conectada, pulsarlo abre «Conectar una IA» y no se carga nada antes -->
+        <button
+          id="btn-ai"
+          class="btn-icon"
+          data-i18n-title="ai.button"
+          title="Asistente de IA (Ctrl+Mayús+I)"
+        >
+          ✨
+        </button>
+        <button
+          id="btn-always-on-top"
+          class="btn-icon"
+          data-i18n-title="toolbar.alwaysOnTop"
+          title="Mantener siempre visible"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path
+              d="M12 2a1 1 0 0 1 1 1v3.17l3.29 3.3a1 1 0 0 1 .29.7V13a1 1 0 0 1-1 1h-3v6l-1.5 2-1.5-2v-6H6a1 1 0 0 1-1-1v-2.83a1 1 0 0 1 .29-.7L8.58 6.17V3a1 1 0 0 1 1-1z"
+            />
+          </svg>
+        </button>
+        <button id="btn-about" class="btn-icon" data-i18n-title="toolbar.about" title="Acerca de">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path
+              d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2zm0-8h-2V7h2z"
+            />
+          </svg>
+        </button>
+        <label class="lang-picker" data-i18n-title="lang.label">
+          <select id="lang-select">
+            <option value="es">ES</option>
+            <option value="en">EN</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <p class="demo-banner" data-i18n="demo.banner">
+      Esto es una demo de DBV Unreal AI — ver README.md para los próximos pasos.
+    </p>
+
+    <main class="container">
+      <h2 data-i18n="demo.heading">Prueba el comando Rust</h2>
+
+      <input
+        id="demo-input"
+        type="text"
+        data-i18n-placeholder="demo.inputPlaceholder"
+        placeholder="Escribe tu nombre..."
+      />
+      <p id="greet-msg"></p>
+      <p class="dirty-hint" data-i18n="demo.dirtyHint">
+        Tienes cambios sin guardar en memoria — cierra la ventana para probar la confirmación.
+      </p>
+
+      <hr class="demo-divider" />
+
+      <h2 data-i18n="demo.docHeading">Prueba la IA con un documento</h2>
+      <p id="doc-hint" class="dirty-hint"></p>
+      <div class="doc-editor">
+        <!-- La IA en línea (Ctrl+Alt+I) pinta aquí su barra: ver `host.elements.editorOverlay` en main.js -->
+        <div id="editor-overlay"></div>
+        <textarea id="demo-doc" spellcheck="false" aria-label="notas.md"></textarea>
+      </div>
+      <div class="doc-actions">
+        <button id="doc-save" data-i18n="demo.docSave">Guardar</button>
+        <span id="doc-status" role="status"></span>
+      </div>
+    </main>
+
+    <div id="discard-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3 data-i18n="modal.title">¿Cerrar sin guardar?</h3>
+        <p data-i18n="modal.body">
+          Hay texto sin guardar en el campo de la demo. Si cierras ahora, se perderá.
+        </p>
+        <div class="modal-actions">
+          <button id="discard-cancel" data-i18n="modal.cancel">Cancelar</button>
+          <button id="discard-confirm" class="danger" data-i18n="modal.confirm">
+            Cerrar de todas formas
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="about-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3 data-i18n="about.title">Acerca de DBV Unreal AI</h3>
+        <p id="about-version" data-i18n="about.version">Versión</p>
+        <p data-i18n="about.builtWith">Construido con dbv-specs-ops.</p>
+        <hr />
+        <h4 data-i18n="about.updatesTitle">Actualizaciones</h4>
+        <p class="about-updates-hint" data-i18n="about.updatesHint">
+          Este starter no incluye tauri-plugin-updater de fábrica — añádelo cuando tu app real lo
+          necesite (ver NATIVE_DESKTOP_APPS.md §4).
+        </p>
+        <button id="about-check-updates" disabled data-i18n="about.checkUpdates">
+          Buscar actualizaciones
+        </button>
+        <div class="modal-actions">
+          <button id="about-close" data-i18n="about.close">Cerrar</button>
+        </div>
+      </div>
+    </div>
+    <!-- Asistente de IA: lo rellena `src/ai/` al cargarse, no antes -->
+    <aside id="ai-panel-container" class="ai-sidebar hidden"></aside>
+
+    <!-- «Conectar una IA»: el contenido lo pinta la IA al cargarse -->
+    <div id="ai-connect-modal" class="modal-overlay hidden">
+      <div id="ai-connect-backdrop" class="modal-backdrop"></div>
+      <div id="ai-connect-card" class="modal-card ai-connect-card">
+        <button id="ai-connect-close" class="btn-icon" data-i18n-title="action.close" title="Cerrar">✕</button>
+        <h2 data-i18n="ai.connectTitle">Conectar una IA</h2>
+        <div id="ai-connect-body" class="ai-form"></div>
+      </div>
+    </div>
+
+    <!-- Confirmación de la IA (aviso de nube, borrar conversación) -->
+    <div id="ai-confirm-modal" class="modal-overlay hidden">
+      <div id="ai-confirm-backdrop" class="modal-backdrop"></div>
+      <div
+        id="ai-confirm-card"
+        class="modal-card ai-confirm-card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="ai-confirm-title"
+      >
+        <h2 id="ai-confirm-title"></h2>
+        <p id="ai-confirm-text"></p>
+        <div id="ai-confirm-actions" class="ai-confirm-card__actions"></div>
+      </div>
+    </div>
+  </body>
+</html>
