@@ -1,0 +1,13 @@
+{
+	"jsonrpc": "2.0",
+	"id": 5,
+	"result":
+	{
+		"content": [
+			{
+				"type": "text",
+				"text": "{\"name\":\"DBVMCPFirst.MyCustomSceneToolset\",\"version\":\"1.0\",\"description\":\"My Custom Scene Toolset\",\"tools\":[{\"description\":\"Executes a Python script command inside the Unreal Editor and captures stdout, stderr, and return value.\",\"name\":\"DBVMCPFirst.MyCustomSceneToolset.RunPython\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"code\":{\"type\":\"string\",\"description\":\"The Python script code to execute.\"}},\"required\":[\"code\"]},\"outputSchema\":{\"type\":\"object\",\"properties\":{\"returnValue\":{\"type\":\"string\",\"description\":\"A JSON string containing returnValue, stdout, stderr, and success.\"}},\"required\":[\"returnValue\"]}},{\"description\":\"Returns a JSON list of all actors in the active editor world with their name, class, and location.\",\"name\":\"DBVMCPFirst.MyCustomSceneToolset.GetActors\",\"inputSchema\":{\"type\":\"object\"},\"outputSchema\":{\"type\":\"object\",\"properties\":{\"returnValue\":{\"type\":\"string\",\"description\":\"A JSON string containing a list of actors and their basic properties.\"}},\"required\":[\"returnValue\"]}},{\"description\":\"Counts how many actors in the active editor world have names or static meshes matching MeshName.\",\"name\":\"DBVMCPFirst.MyCustomSceneToolset.CountActorsWithMesh\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"meshName\":{\"type\":\"string\",\"description\":\"Name of the static mesh or actor name to count (e.g. \\\"SM_Cube\\\").\"}},\"required\":[\"meshName\"]},\"outputSchema\":{\"type\":\"object\",\"properties\":{\"returnValue\":{\"type\":\"integer\",\"description\":\"The number of matching actors.\"}},\"required\":[\"returnValue\"]}}]}"
+			}
+		]
+	}
+}

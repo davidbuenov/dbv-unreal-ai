@@ -1,4 +1,4 @@
-# Changelog — dbv-unreal-ai
+# Changelog — DBV Unreal AI
 
 **[🇪🇸 Español](./CHANGELOG.md) · 🇬🇧 English**
 

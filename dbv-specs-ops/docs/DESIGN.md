@@ -1,125 +1,114 @@
-# 🎨 Sistema de Diseño: [Nombre del Proyecto]
+# 🎨 Sistema de Diseño: DBV Unreal AI
 
 > **Fase:** `/spec` (Especificación Visual)
-> **Estado:** Borrador / Validado
-> **Última Revisión:** [Fecha]
-> **Aplica a:** Proyectos con interfaz de usuario (web, móvil, desktop). Opcional para proyectos sin UI.
+> **Estado:** Borrador
+> **Última Revisión:** 2026-10-24
+> **Aplica a:** la aplicación de escritorio (Tauri v2, Vanilla JS/CSS sin bundler).
 
 ---
 
-> 📐 Inspirado en el estándar **[design.md](https://github.com/google-labs-code/design.md)** de Google Labs — un formato abierto para describir identidades visuales a agentes de codificación.
+> 📐 Inspirado en el estándar **[design.md](https://github.com/google-labs-code/design.md)** de Google Labs.
 
 ---
 
 ```yaml
-# ────────────────────────────────────────────────
-# DESIGN TOKENS — Legibles por la IA y por máquina
-# ────────────────────────────────────────────────
 version: alpha
-name: "[Nombre del Proyecto]"
-description: "[Breve descripción del estilo visual. Ej: Minimalismo editorial con acento en la claridad y el contraste.]"
+name: "DBV Unreal AI"
+description: "Herramienta profesional de escritorio, densa y oscura, que se siente vecina del editor de Unreal: grises neutros, un único acento azul de acción y colores semánticos reservados para el estado de la conexión, el destino de la IA y el coste."
 
-# COLORES
-# Usa códigos HEX. El campo "on-X" es el color de texto que va sobre el color "X".
-colors:
-  primary:      "#[hex]"   # Color principal de marca
-  secondary:    "#[hex]"   # Color secundario / complementario
-  accent:       "#[hex]"   # Color de llamada a la acción (CTAs, highlights)
-  neutral:      "#[hex]"   # Fondo base neutro
-  surface:      "#[hex]"   # Fondo de tarjetas y contenedores
-  on-primary:   "#[hex]"   # Texto sobre "primary" (suele ser blanco o muy claro)
-  on-surface:   "#[hex]"   # Texto principal sobre "surface"
-  on-neutral:   "#[hex]"   # Texto secundario / mutado
-  error:        "#[hex]"   # Rojo para errores y alertas destructivas
-  success:      "#[hex]"   # Verde para confirmaciones y éxito
-  warning:      "#[hex]"   # Amarillo/naranja para advertencias
+# Tema por defecto: oscuro (como el editor de Unreal). El claro es un tema completo, no un modo secundario.
+colors:            # Tema claro
+  primary:      "#0969da"
+  secondary:    "#57606a"
+  accent:       "#0969da"
+  neutral:      "#ffffff"
+  surface:      "#f6f8fa"
+  on-primary:   "#ffffff"
+  on-surface:   "#1f2328"
+  on-neutral:   "#57606a"
+  error:        "#cf222e"
+  success:      "#1a7f37"
+  warning:      "#9a6700"
 
-# MODO OSCURO (Dark Mode) — Opcional pero recomendado
-# Define los overrides de color. Los tokens no listados aquí heredan los valores de luz.
-dark:
-  primary:      "#[hex]"
-  secondary:    "#[hex]"
-  accent:       "#[hex]"
-  neutral:      "#[hex]"   # Ej: "#111111" — fondo oscuro principal
-  surface:      "#[hex]"   # Ej: "#1E1E1E" — tarjetas sobre fondo oscuro
-  on-primary:   "#[hex]"
-  on-surface:   "#[hex]"
-  on-neutral:   "#[hex]"
+dark:              # Tema oscuro (por defecto)
+  primary:      "#4c9aff"
+  secondary:    "#8b949e"
+  accent:       "#4c9aff"
+  neutral:      "#121314"   # lienzo, cercano al gris del editor de Unreal
+  surface:      "#1b1d1f"   # paneles y tarjetas
+  on-primary:   "#0b0c0d"
+  on-surface:   "#e6e8eb"
+  on-neutral:   "#8b949e"
+  error:        "#f85149"
+  success:      "#3fb950"
+  warning:      "#d29922"
 
-# TIPOGRAFÍA
-# fontFamily: nombre exacto de Google Fonts o fuente del sistema.
+# Tokens semánticos propios del producto (cada tema decide su valor)
+semantic:
+  ai-local:       { dark: "#3fb950", light: "#1a7f37" }   # verde: nada sale del equipo
+  ai-cloud:       { dark: "#d29922", light: "#9a6700" }   # ámbar: sale a un proveedor
+  ai-agent:       { dark: "#a371f7", light: "#8250df" }   # violeta: agente por ACP
+  cost:           { dark: "#e3b341", light: "#7d4e00" }   # créditos / gasto
+  unreal-online:  { dark: "#3fb950", light: "#1a7f37" }
+  unreal-needs-prep: { dark: "#d29922", light: "#9a6700" }
+  unreal-offline: { dark: "#6e7681", light: "#8c959f" }
+  action-modify:  { dark: "#f0883e", light: "#bc4c00" }   # borde de tarjetas de aprobación
+
 typography:
-  heading:
-    fontFamily: "[Ej: Inter]"
-    fontSize:   2rem
-    fontWeight: 700
-    lineHeight: 1.2
-    letterSpacing: "-0.02em"
-  subheading:
-    fontFamily: "[Ej: Inter]"
-    fontSize:   1.25rem
-    fontWeight: 600
-    lineHeight: 1.3
-  body:
-    fontFamily: "[Ej: Inter]"
-    fontSize:   1rem
-    fontWeight: 400
-    lineHeight: 1.6
-  label:
-    fontFamily: "[Ej: Inter]"
-    fontSize:   0.875rem
-    fontWeight: 500
-    letterSpacing: "0.01em"
-  caption:
-    fontFamily: "[Ej: Inter]"
-    fontSize:   0.75rem
-    fontWeight: 400
+  heading:    { fontFamily: "system-ui stack", fontSize: 20px, fontWeight: 600, lineHeight: 1.25 }
+  subheading: { fontFamily: "system-ui stack", fontSize: 15px, fontWeight: 600, lineHeight: 1.3 }
+  body:       { fontFamily: "system-ui stack", fontSize: 13px, fontWeight: 400, lineHeight: 1.55 }
+  label:      { fontFamily: "system-ui stack", fontSize: 12px, fontWeight: 500, letterSpacing: "0.01em" }
+  caption:    { fontFamily: "system-ui stack", fontSize: 11px, fontWeight: 400 }
+  mono:       { fontFamily: "mono stack",      fontSize: 12px, fontWeight: 400 }
 
-# BORDES Y RADIOS
 rounded:
   none: 0px
   sm:   4px
-  md:   8px
-  lg:   16px
-  xl:   24px
+  md:   6px
+  lg:   8px
   full: 9999px
 
-# ESPACIADO (escala base 4px)
 spacing:
   xs:  4px
   sm:  8px
-  md:  16px
-  lg:  24px
-  xl:  48px
-  xxl: 96px
+  md:  12px
+  lg:  16px
+  xl:  24px
+  xxl: 48px
 
-# COMPONENTES — Mapeo de tokens a elementos de UI concretos
-# Usa referencias {ruta.al.token} para garantizar coherencia.
 components:
   button-primary:
     backgroundColor: "{colors.accent}"
     textColor:       "{colors.on-primary}"
     typography:      "{typography.label}"
     rounded:         "{rounded.md}"
-    padding:         "12px 24px"
-  button-primary-hover:
-    backgroundColor: "{colors.primary}"
+    padding:         "6px 14px"
   button-secondary:
     backgroundColor: "transparent"
-    textColor:       "{colors.accent}"
+    textColor:       "{colors.on-surface}"
     rounded:         "{rounded.md}"
-    padding:         "12px 24px"
-    border:          "1.5px solid {colors.accent}"
+    padding:         "6px 14px"
+    border:          "1px solid {colors.secondary}"
   card:
     backgroundColor: "{colors.surface}"
     rounded:         "{rounded.lg}"
     padding:         "{spacing.lg}"
-  input:
+  approval-card:
     backgroundColor: "{colors.surface}"
+    rounded:         "{rounded.lg}"
+    padding:         "{spacing.md}"
+    borderLeft:      "3px solid {semantic.action-modify}"
+  status-pill:
+    rounded:         "{rounded.full}"
+    padding:         "2px 10px"
+    typography:      "{typography.caption}"
+  input:
+    backgroundColor: "{colors.neutral}"
     textColor:       "{colors.on-surface}"
     rounded:         "{rounded.md}"
-    padding:         "10px 14px"
-    border:          "1px solid {colors.on-neutral}"
+    padding:         "8px 10px"
+    border:          "1px solid {colors.secondary}"
   input-focus:
     border:          "2px solid {colors.accent}"
 ```
@@ -128,67 +117,78 @@ components:
 
 ## Visión General
 
-*[2-3 frases que describan la filosofía visual del proyecto. ¿Qué emoción o sensación debe evocar la interfaz? ¿Qué referentes de diseño lo inspiran?]*
-
-> Ejemplo: *"La interfaz combina minimalismo editorial con toques de calidez. Cada elemento comunica claridad y confianza, evocando las mejores herramientas SaaS profesionales. El usuario debe sentir que está usando algo construido para durar."*
+La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo monitor o en media pantalla, durante horas. Debe sentirse como una herramienta más del editor, no como una web: oscura por defecto, densa, tranquila y rápida. El color no decora: dice **dónde está conectada** (Unreal), **a dónde van los datos** (local / nube / agente), **qué va a cambiar** (acciones de modificación) y **cuánto cuesta** (créditos).
 
 ---
 
 ## 🎨 Colores
 
-*Explica el rol de cada color y cómo debe (y no debe) usarse.*
-
-- **Primary (`[hex]`):** [Ej: Azul profundo. Color de marca principal. Úsalo en headers y elementos clave de navegación. Nunca en fondos de página completa.]
-- **Secondary (`[hex]`):** [Ej: Gris azulado. Para elementos de soporte, bordes y estados secundarios.]
-- **Accent (`[hex]`):** [Ej: Coral. El único motor de interacción — todos los CTAs, enlaces y elementos activos usan este color. Resérvalo para acciones, no decoración.]
-- **Neutral (`[hex]`):** [Ej: Blanco cálido. Base de todas las páginas. Más suave que el blanco puro para reducir la fatiga visual.]
-- **Surface (`[hex]`):** [Ej: Gris muy claro. Para tarjetas, modales y paneles que elevan el contenido del fondo.]
-- **Error / Success / Warning:** [Semánticos. Solo para feedback del sistema, nunca como decoración.]
+- **Accent (`#4c9aff` oscuro / `#0969da` claro):** la única señal de acción: botón primario, foco, selección, enlaces. Un solo botón primario por vista.
+- **Neutral / Surface:** grises casi neutros (ligera dominante fría, como el editor de Unreal) para lienzo y paneles. Nunca negro puro.
+- **Semánticos de producto** (`semantic.*`): se usan **solo** para su significado.
+  - `ai-local` / `ai-cloud` / `ai-agent` en la etiqueta de destino de cada petición (`RF-IA-03.2`).
+  - `unreal-*` en la píldora de conexión con el editor.
+  - `action-modify` en el borde de las tarjetas de aprobación (REQ-12).
+  - `cost` en todo importe de créditos o tokens.
+  - Patrón heredado de dbv-typst-editor: si dos cosas deben distinguirse, el token es semántico y cada tema decide su valor.
+- **Error / Success / Warning:** feedback del sistema, nunca decoración.
 
 ### Modo Oscuro
-*[Describe la estrategia del modo oscuro. ¿Es una inversión completa, una paleta propia, o solo algunos colores cambian?]*
 
-- **Estrategia:** [Ej: "Los fondos usan grises profundos (no negro puro) para evitar halos. Los colores de marca se mantienen, pero con mayor luminosidad para cumplir contraste WCAG AA sobre fondos oscuros."]
+- **Estrategia:** el oscuro es el tema por defecto (`:root`). El claro redefine todos los tokens en `[data-theme="light"]`. Todo componente se verifica en ambos. Se respeta `prefers-color-scheme` en el primer arranque.
 
 ---
 
 ## ✍️ Tipografía
 
-*Justifica la elección de fuentes y explica la escala.*
-
-- **Fuente principal:** [Ej: `Inter` — Elegida por su excelente legibilidad en pantalla a todos los tamaños y su amplia familia de pesos.]
-- **Fuente alternativa:** [Ej: `System UI` como fallback para carga instantánea sin layout shift.]
-- **Escala:** La escala tipográfica sigue una progresión modular de 1.25. Los headings usan tracking negativo (-0.02em) para aspecto más premium. El body usa lineHeight 1.6 para máxima legibilidad.
-- **No usar:** [Ej: Nunca mezclar más de 2 familias tipográficas. Nunca usar `font-weight: 300` en textos menores de 16px sobre fondo oscuro.]
+- **Pilas del sistema, sin fuentes de red** (la app funciona sin conexión con modelos locales):
+  - `--font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;`
+  - `--font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, 'SF Mono', Menlo, monospace;`
+- **Escala de escritorio, no de web:** 20 px (título de vista, una vez por pantalla), 15 px (títulos de panel y modal), 13 px (cuerpo y chat), 12 px (controles, etiquetas), 11 px (metadatos).
+- **Monoespaciada = literal y copiable:** código Python, rutas `/Game/...`, nombres de herramientas, `task_id`, puertos y versiones van siempre en `--font-mono`.
 
 ---
 
 ## 🧩 Componentes Clave
 
-*Describe las decisiones de diseño de los componentes más importantes.*
+### Estructura de la ventana
 
-### Botones
-- **Primary:** [Ej: "Fondo accent, texto blanco, radio md. Único por pantalla. Es el grito — solo uno debe gritar."]
-- **Secondary:** [Ej: "Contorno transparente con borde accent. Para acciones importantes pero no primarias."]
-- **Ghost / Text:** [Ej: "Sin borde ni fondo. Para acciones terciarias o en contextos densos de información."]
+- **Barra lateral izquierda (iconos + etiqueta):** Proyecto · Conversación · Generar · Biblioteca · Ajustes.
+- **Barra superior:** píldora de conexión con Unreal (proyecto, versión, puerto, estado), selector de IA con su etiqueta de destino, y gasto acumulado de la sesión (`cost`).
+- **Centro:** la vista activa (conversación por defecto).
+- **Panel derecho plegable:** contexto activo (fichas removibles) y registro de acciones de la sesión (REQ-14).
 
-### Tarjetas (Cards)
-- [Ej: "Surface background, radio lg, sombra suave (`box-shadow: 0 2px 8px rgba(0,0,0,0.08)`). Sin borde. El espacio interno mínimo es spacing.lg (24px)."]
+### Tarjeta de aprobación (REQ-12)
 
-### Formularios
-- [Ej: "Inputs con borde de 1px neutral. En focus, el borde aumenta a 2px y cambia a accent. Nunca uses fondos coloreados en campos de formulario."]
+- Borde izquierdo `action-modify`. Muestra: herramienta, proyecto destino, resumen en una línea y el detalle (código Python con resaltado, o diff, o asset y ruta destino).
+- Acciones: **Permitir** (primario), **Permitir siempre en esta conversación** (secundario), **Denegar** (texto). El código completo se ve sin pulsar nada más si ocupa ≤ 20 líneas; si es más largo, plegado con «ver todo».
+
+### Tarjeta de coste (REQ-15, REQ-18, RNF-04)
+
+- Importe en `cost`, proveedor, parámetros clave y saldo si la API lo da. Confirmar es el botón primario; nunca se confirma con Intro por accidente (el foco inicial va a «Cancelar»).
+
+### Lista de preparación (REQ-04)
+
+- Una fila por comprobación con ✓/✗, explicación en una línea y «¿Por qué?» desplegable. El botón «Preparar» muestra antes el diff de los ficheros.
+
+### Tarjeta de asset (REQ-17)
+
+- Miniatura cuadrada, nombre, proveedor, fecha, coste. Acciones al pasar el cursor: Enviar a Unreal (primario), abrir carpeta, regenerar, borrar.
+
+### Mensajes de la conversación
+
+- Usuario alineado a la derecha sobre `surface`; IA a la izquierda sin fondo. Las llamadas a herramientas se muestran como filas compactas plegables (icono, nombre en mono, duración, resultado).
 
 ---
 
 ## ✨ Movimiento e Interacción
 
-*Define la "física" de la interfaz: velocidades, curvas de animación y principios.*
-
-- **Duración base:** `200ms` para micro-interacciones (hover, focus). `350ms` para transiciones de página o apertura de modales.
-- **Easing:** `cubic-bezier(0.4, 0, 0.2, 1)` (Material Design Standard) para la mayoría de animaciones. `ease-out` para elementos que "caen" en pantalla. `ease-in` para elementos que "salen".
-- **Principio:** [Ej: "Las animaciones son funcionales, no decorativas. Si eliminar una animación no reduce la comprensión, elimínala."]
-- **Reducción de movimiento:** Siempre respeta `prefers-reduced-motion`. Sustituye transiciones por cambios instantáneos o fundidos muy cortos (50ms).
+- `--transition: 120ms ease` para hover, foco y despliegues; nada de animaciones de entrada.
+- El streaming no anima: el texto aparece tal cual llega.
+- Indicador de «el editor está ocupado» (RNF-03) con un pulso discreto en la píldora de conexión, sin bloquear la interfaz.
+- **Reducción de movimiento:** con `prefers-reduced-motion` se eliminan pulsos y transiciones.
+- **Accesibilidad (RNF-07):** todo control alcanzable por teclado, foco visible de 2 px con `accent`, objetivos ≥ 28 px en escritorio, contraste AA comprobado en ambos temas.
 
 ---
 
-**Instrucción para la IA:** Lee y respeta los tokens y decisiones definidos en este fichero. Si necesitas crear un componente no definido aquí, extrapola coherentemente desde los tokens existentes y registra la nueva decisión como "Decisión de Diseño" en este mismo archivo con fecha y justificación. Para proyectos sin UI, este fichero puede omitirse.
+**Instrucción para la IA:** Lee y respeta los tokens y decisiones definidos en este fichero. Si necesitas crear un componente no definido aquí, extrapola coherentemente desde los tokens existentes y registra la nueva decisión como "Decisión de Diseño" en este mismo archivo con fecha y justificación.

@@ -1,0 +1,13 @@
+{
+	"jsonrpc": "2.0",
+	"id": 7,
+	"result":
+	{
+		"content": [
+			{
+				"type": "text",
+				"text": "{\"returnValue\":\"{\\r\\n\\t\\\"returnValue\\\": \\\"None\\\",\\r\\n\\t\\\"stdout\\\": \\\"5.8.2-56702186+++UE5+Release-5.8\\\\r\\\\n\\\\n/Game/DBV/Maps/dbv-unreal-ai.dbv-unreal-ai\\\\r\\\\n\\\\n../../../../../../Programacion/Unreal/DBVMCPFirst/\\\\r\\\\n\\\\n3.11.8 (tags/v3.11.8:db85d51, Feb  6 2024, 22:03:32) [MSC v.1937 64 bit (AMD64)]\\\\r\\\\n\\\\n\\\",\\r\\n\\t\\\"stderr\\\": \\\"<string>:3: DeprecationWarning: EditorLevelLibrary: Function 'get_editor_world' on 'EditorLevelLibrary' is deprecated: The Editor Scripting Utilities Plugin is deprecated - Use the function in Unreal Editor Subsystem\\\\n\\\\n\\\",\\r\\n\\t\\\"success\\\": true\\r\\n}\"}"
+			}
+		]
+	}
+}

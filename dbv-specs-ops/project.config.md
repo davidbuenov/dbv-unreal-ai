@@ -7,9 +7,11 @@
 
 ## Project Identity
 
-- **Name:** dbv-unreal-ai
+- **Name:** DBV Unreal AI (identificador técnico: `dbv-unreal-ai`)
 - **Description:** Copiloto de IA nativo para Unreal Engine 5.8: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo y World Labs directamente en el editor
 - **Author / Company:** David Bueno Vallejo · https://github.com/davidbuenov
+- **Co-author:** David Bueno Carmona
+- **Copyright line (headers & LICENSE):** Copyright (c) [Year] David Bueno Vallejo and David Bueno Carmona
 - **License:** MIT
 - **Documentation language:** Español (con espejo en inglés: `README.en.md`, `CHANGELOG.en.md`)
 - **Git:** Sí

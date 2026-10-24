@@ -1,0 +1,68 @@
+{
+	"jsonrpc": "2.0",
+	"id": 2,
+	"result":
+	{
+		"tools": [
+			{
+				"name": "list_toolsets",
+				"description": "List all available toolsets with names and descriptions.",
+				"inputSchema":
+				{
+					"type": "object",
+					"properties":
+					{
+					}
+				}
+			},
+			{
+				"name": "describe_toolset",
+				"description": "Get detailed information about a toolset including all tool names, descriptions, and input schemas.",
+				"inputSchema":
+				{
+					"type": "object",
+					"properties":
+					{
+						"toolset_name":
+						{
+							"type": "string",
+							"description": "Name of the toolset to describe. Use list_toolsets to see available names."
+						}
+					},
+					"required": [
+						"toolset_name"
+					]
+				}
+			},
+			{
+				"name": "call_tool",
+				"description": "Call a tool by name. Provide toolset_name to call a toolset tool, or omit it to call a top-level MCP tool. Use list_toolsets and describe_toolset to discover available tools and their input schemas.",
+				"inputSchema":
+				{
+					"type": "object",
+					"properties":
+					{
+						"toolset_name":
+						{
+							"type": "string",
+							"description": "Optional. Name of the toolset containing the tool. Omit to call a top-level MCP tool. Use list_toolsets to discover toolset names."
+						},
+						"tool_name":
+						{
+							"type": "string",
+							"description": "Name of the tool to call, without toolset prefix. Use describe_toolset to discover tool names and input schemas."
+						},
+						"arguments":
+						{
+							"type": "object",
+							"description": "Arguments to pass to the tool. Must match the tool's input schema. Defaults to an empty object."
+						}
+					},
+					"required": [
+						"tool_name"
+					]
+				}
+			}
+		]
+	}
+}

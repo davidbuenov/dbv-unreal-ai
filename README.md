@@ -1,4 +1,4 @@
-# dbv-unreal-ai
+# DBV Unreal AI
 
 **🇪🇸 Español · [🇬🇧 English](./README.en.md)**
 
@@ -20,7 +20,7 @@
 
 ## 📌 Sobre el proyecto
 
-**dbv-unreal-ai** es una aplicación de escritorio nativa (Windows, macOS y Linux) que conversa contigo y actúa sobre el proyecto de Unreal Engine 5.8 que tengas abierto. Usa la IA que prefieras —un modelo local, una API en la nube o un agente de suscripción— y la conecta con el editor a través del protocolo MCP. Si el proyecto aún no está preparado para recibir órdenes de una IA, la aplicación lo prepara por ti. Además integra servicios de generación 3D como Tripo y World Labs para enviar los resultados directamente a Unreal y mantenerlos accesibles en una biblioteca de assets.
+**DBV Unreal AI** (`dbv-unreal-ai`) es una aplicación de escritorio nativa (Windows, macOS y Linux) que conversa contigo y actúa sobre el proyecto de Unreal Engine 5.8 que tengas abierto. Usa la IA que prefieras —un modelo local, una API en la nube o un agente de suscripción— y la conecta con el editor a través del protocolo MCP. Si el proyecto aún no está preparado para recibir órdenes de una IA, la aplicación lo prepara por ti. Además integra servicios de generación 3D como Tripo y World Labs para enviar los resultados directamente a Unreal y mantenerlos accesibles en una biblioteca de assets.
 
 **Construido con:** Rust, Tauri v2, HTML/CSS/JavaScript, Unreal Engine 5.8 (MCP + Python + C++).
 
@@ -91,7 +91,7 @@ Ver [CHANGELOG.md](./dbv-specs-ops/CHANGELOG.md).
 
 MIT — ver [LICENSE](./LICENSE).
 
-Copyright (c) 2026 David Bueno Vallejo
+Copyright (c) 2026 David Bueno Vallejo y David Bueno Carmona
 
 ---
 
