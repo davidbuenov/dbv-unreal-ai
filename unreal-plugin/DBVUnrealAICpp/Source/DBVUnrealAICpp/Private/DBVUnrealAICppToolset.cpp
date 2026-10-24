@@ -45,37 +45,37 @@ namespace
 	}
 }
 
-FString UDBVUnrealAICppToolset::RunPython(const FString& Code)
+FString UDBVUnrealAICppToolset::run_python(const FString& code)
 {
-	return CallPython(TEXT("run_python"), { Code });
+	return CallPython(TEXT("run_python"), { code });
 }
 
-FString UDBVUnrealAICppToolset::ValidatePython(const FString& Code)
+FString UDBVUnrealAICppToolset::validate_python(const FString& code)
 {
-	return CallPython(TEXT("validate_python"), { Code });
+	return CallPython(TEXT("validate_python"), { code });
 }
 
-FString UDBVUnrealAICppToolset::DescribePythonApi(const FString& Name)
+FString UDBVUnrealAICppToolset::describe_python_api(const FString& name)
 {
-	return CallPython(TEXT("describe_python_api"), { Name });
+	return CallPython(TEXT("describe_python_api"), { name });
 }
 
-FString UDBVUnrealAICppToolset::GetProjectInfo()
+FString UDBVUnrealAICppToolset::get_project_info()
 {
 	return CallPython(TEXT("get_project_info"), {});
 }
 
-FString UDBVUnrealAICppToolset::ImportModel(const FString& SourceFile, const FString& FolderPath, const FString& AssetName)
+FString UDBVUnrealAICppToolset::import_model(const FString& source_file, const FString& folder_path, const FString& asset_name)
 {
-	return CallPython(TEXT("import_model"), { SourceFile, FolderPath, AssetName });
+	return CallPython(TEXT("import_model"), { source_file, folder_path, asset_name });
 }
 
-FString UDBVUnrealAICppToolset::PlaceAsset(const FString& AssetPath, float Distance, const FString& Folder)
+FString UDBVUnrealAICppToolset::place_asset(const FString& asset_path, float distance, const FString& folder)
 {
-	return CallPython(TEXT("place_asset"), { AssetPath, FString::SanitizeFloat(Distance), Folder });
+	return CallPython(TEXT("place_asset"), { asset_path, FString::SanitizeFloat(distance), folder });
 }
 
-FString UDBVUnrealAICppToolset::GetSceneSummary(const FString& NameFilter, const FString& ClassFilter, int32 Limit)
+FString UDBVUnrealAICppToolset::get_scene_summary(const FString& name_filter, const FString& class_filter, int32 limit)
 {
-	return CallPython(TEXT("get_scene_summary"), { NameFilter, ClassFilter, FString::FromInt(Limit) });
+	return CallPython(TEXT("get_scene_summary"), { name_filter, class_filter, FString::FromInt(limit) });
 }

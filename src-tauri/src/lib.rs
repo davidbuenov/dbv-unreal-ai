@@ -20,6 +20,12 @@ pub mod generation;
 #[cfg(desktop)]
 pub mod library;
 
+// Servidor MCP propio por stdio (`--mcp`) y las carpetas de la app que usa sin Tauri.
+#[cfg(desktop)]
+pub mod mcp_server;
+#[cfg(desktop)]
+pub mod paths;
+
 use std::path::{Path, PathBuf};
 
 use tauri::Manager;
@@ -56,6 +62,15 @@ fn demo_workspace(app: tauri::AppHandle) -> Result<String, String> {
     ensure_demo_workspace(&base.join("demo-workspace")).map(|dir| dir.to_string_lossy().into_owned())
 }
 
+/// Orden con la que un agente ACP lanza el servidor MCP propio de la app (REQ-11, REQ-20):
+/// este mismo ejecutable con `--mcp` y el puerto del editor conectado.
+#[cfg(desktop)]
+#[tauri::command]
+fn app_mcp_command(port: u16) -> Result<serde_json::Value, String> {
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    Ok(serde_json::json!({ "command": exe.to_string_lossy(), "args": ["--mcp", "--port", port.to_string()] }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -74,6 +89,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_greeting_name,
             demo_workspace,
+            #[cfg(desktop)]
+            app_mcp_command,
             #[cfg(desktop)]
             ai::commands::ai_connections,
             #[cfg(desktop)]
