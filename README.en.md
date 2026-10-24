@@ -43,7 +43,16 @@
 - Tripo text-to-model, local library and "Send to Unreal" (glTF import with materials and textures);
 - own MCP server to use all of the above from other agents.
 
-Pending for v0.1: Tripo image-to-model (the v3 API still has to be verified), compiling the C++ toolset variant. Roadmap in [`SPECIFICATIONS.md`](./dbv-specs-ops/docs/SPECIFICATIONS.md).
+New in v0.1.x (built and tested against a simulated Tripo; **still to be tested with the real API and the engine**):
+
+- **the whole Tripo API** for the AI and agents: text or image → model, variants, rig, 101 animations (dances, emotions, sports…), convert, retopology, texture, segmentation, multiview, images and the account balance;
+- a **console** for every job with the exact request sent to Tripo and its progress, also in the conversation when an agent generates;
+- a **3D viewer** in the library and in the conversation;
+- **reference images and documents** attached to the conversation;
+- a library that **imports** your own models, with a **configurable folder** and short meaningful names;
+- Tripo characters in Unreal as a Skeletal Mesh playing their animation.
+
+Roadmap in [`SPECIFICATIONS.md`](./dbv-specs-ops/docs/SPECIFICATIONS.md).
 
 ---
 
@@ -54,8 +63,8 @@ Pending for v0.1: Tripo image-to-model (the v3 API still has to be verified), co
 1. **Project.** The app detects the open Unreal editors and connects by itself to the editor MCP server (`127.0.0.1:8000/mcp`). If the project is missing something, the readiness check says what, item by item.
 2. **Prepare.** "Prepare project…" shows the diff of every file before touching it and saves a backup: it enables the `ModelContextProtocol`, `ToolsetRegistry`, `PythonScriptPlugin`, `EditorToolset`, `AutomationTestToolset` and `SlateInspectorToolset` plugins, turns on the MCP server auto start and installs the **DBV Unreal AI toolset** (a content-only Python plugin: nothing to compile). With the editor closed; once reopened, it is connected.
 3. **Conversation.** The AI discovers the editor tools (more than 280 in a prepared project), queries the scene and acts. Queries run directly; anything that modifies the project shows up in a card with the full detail and waits for your "Allow". Python is first validated against the real API of your engine version: if it uses something missing or deprecated, the AI fixes it without bothering you. Everything is kept in the action log (exportable to Markdown).
-4. **Generate.** Describe an object, accept the Tripo credit cost and the model is downloaded into the library.
-5. **Library.** "Send to Unreal" imports it into `/Game/DBV/Generated` with its material and texture and places it in front of the camera, in the `DBV/Generated` Outliner folder.
+4. **Generate.** Describe an object or choose a reference image, ask for 1 to 4 variants and accept the cost: the card gives the total from Tripo's price list and shows exactly what is sent. Every job has its console and progress; the model is downloaded into the library.
+5. **Library.** Each asset says what it is and where it comes from. A model can be **rigged**, a rig can be **animated** (up to 5 animations at once) and everything can be viewed in 3D. "Send to Unreal" imports it into `/Game/DBV/Generated` with its material and texture and places it in front of the camera, in the `DBV/Generated` Outliner folder; a character arrives as a moving Skeletal Mesh. You can import your own models and choose where the library lives.
 
 ---
 
@@ -102,7 +111,7 @@ The executable itself is a stdio MCP server (no network port). In Claude Code, C
 }
 ```
 
-The **Settings** view gives you this block with the exact path. It offers the bridge to the editor (with Python validation), the library, "Send to Unreal" and Tripo generation (which requires `confirm_cost: true`).
+The **Settings** view gives you this block with the exact path. It offers the bridge to the editor (with Python validation), the library (list, import, rename, "Send to Unreal") and **the whole Tripo API**: `generate_3d_model`, `image_to_3d_model`, `rig_model`, `animate_model`, `tripo_run` (any other operation), `tripo_operations` (catalogue with prices), `tripo_balance` and `generation_jobs`. Anything that costs credits requires `confirm_cost: true` after telling the user the price; jobs run in the background and the app shows their progress.
 
 ---
 

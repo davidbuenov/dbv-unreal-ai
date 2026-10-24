@@ -58,6 +58,6 @@
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
 > **Last update / Última actualización:** 2026-10-24
-> **Exact point / Punto exacto:** v0.1 construida, probada y revisada (`/code-simplify` cerrado, sin Críticos abiertos).
-> **Pending / Pendiente:** revisión del usuario (ADR-V010-001, deuda técnica) y `/ship` v0.1.
-> **Next step / Próximo paso:** leer `memory.md` (ADR-V010-001) y esta deuda; decidir versión y ejecutar `/ship`.
+> **Exact point / Punto exacto:** v0.1.x construida (S12–S17: API completa de Tripo para IA y agentes, consola y progreso de trabajos, variantes, nombres, biblioteca importable y configurable, visor 3D, adjuntos, personajes en Unreal, logo de la comunidad). Tests en verde (Rust, Vitest, Python, E2E).
+> **Pending / Pendiente:** probar con la API real de Tripo (con confirmación de gasto del usuario) y con el editor abierto (S17); `/code-simplify` de la v0.1.x; `/ship`.
+> **Next step / Próximo paso:** el usuario prueba la app; después, verificación en vivo y `/code-simplify`.
