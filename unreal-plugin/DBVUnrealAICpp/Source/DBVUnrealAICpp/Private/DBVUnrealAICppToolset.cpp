@@ -65,6 +65,16 @@ FString UDBVUnrealAICppToolset::GetProjectInfo()
 	return CallPython(TEXT("get_project_info"), {});
 }
 
+FString UDBVUnrealAICppToolset::ImportModel(const FString& SourceFile, const FString& FolderPath, const FString& AssetName)
+{
+	return CallPython(TEXT("import_model"), { SourceFile, FolderPath, AssetName });
+}
+
+FString UDBVUnrealAICppToolset::PlaceAsset(const FString& AssetPath, float Distance, const FString& Folder)
+{
+	return CallPython(TEXT("place_asset"), { AssetPath, FString::SanitizeFloat(Distance), Folder });
+}
+
 FString UDBVUnrealAICppToolset::GetSceneSummary(const FString& NameFilter, const FString& ClassFilter, int32 Limit)
 {
 	return CallPython(TEXT("get_scene_summary"), { NameFilter, ClassFilter, FString::FromInt(Limit) });

@@ -558,7 +558,7 @@ export function createAiApp(deps) {
     }
     const run = async (tools) => {
       const budget = contextBudget(connection);
-      const system = systemPrompt({ lang: getLanguage(), tools });
+      const system = systemPrompt({ lang: getLanguage(), tools, domain: host.promptDomain?.(getLanguage()) ?? '' });
       const context = buildContext(contextSource([...mentioned, ...(options.attachments ?? [])]), Math.max(400, budget - estimateTokens(system) - estimateTokens(text)));
       renderContextPreview(context.items);
       const historyBudget = Math.max(0, budget - estimateTokens(system) - estimateTokens(context.text) - estimateTokens(text));
@@ -571,7 +571,9 @@ export function createAiApp(deps) {
       ];
       const proposal = createProposal();
       const check = makeChecker();
-      const toolset = createTools({
+      // Herramientas propias de la app (Unreal, generación, biblioteca): las aporta el host.
+      const extra = host.extraTools?.({ panel, conversationId: current.id }) ?? [];
+      const toolset = [...createTools({
         listFiles: async () => files,
         readText,
         search: async (query) => {
@@ -581,7 +583,7 @@ export function createAiApp(deps) {
         outline: () => host.getOutline(),
         checkProposal: check,
         getProposal: () => proposal,
-      });
+      }), ...extra];
       const result = await runAgent({
         tools: toolset,
         messages,
@@ -688,6 +690,7 @@ export function createAiApp(deps) {
     backend,
     getRoot: () => projectRoot,
     readText,
+    mcpServers: () => host.mcpServers?.() ?? [],
     askPermission: async (params) => {
       const toRelative = (absolute) => insideProject(projectRoot, absolute);
       const permission = createPermissionCard(params, {

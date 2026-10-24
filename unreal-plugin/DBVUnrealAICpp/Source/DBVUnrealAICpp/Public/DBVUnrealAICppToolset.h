@@ -42,6 +42,14 @@ public:
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString GetProjectInfo();
 
+	/** Import a 3D model file (glTF/GLB, FBX, OBJ) letting the engine choose the importer. Returns JSON (success, imported, primary). */
+	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
+	static FString ImportModel(const FString& SourceFile, const FString& FolderPath, const FString& AssetName);
+
+	/** Spawn an asset in front of the editor camera inside a World Outliner folder. Returns JSON (success, actor, location). */
+	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
+	static FString PlaceAsset(const FString& AssetPath, float Distance, const FString& Folder);
+
 	/** Compact list of the actors of the open level. Returns JSON (total, counts, actors). */
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString GetSceneSummary(const FString& NameFilter, const FString& ClassFilter, int32 Limit);

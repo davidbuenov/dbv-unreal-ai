@@ -14,6 +14,12 @@ pub mod ai;
 #[cfg(desktop)]
 pub mod unreal;
 
+// Generación 3D (Tripo) y biblioteca local de assets generados.
+#[cfg(desktop)]
+pub mod generation;
+#[cfg(desktop)]
+pub mod library;
+
 use std::path::{Path, PathBuf};
 
 use tauri::Manager;
@@ -60,7 +66,8 @@ pub fn run() {
         builder = builder
             .manage(ai::AiState::default())
             .manage(ai::acp::AcpState::default())
-            .manage(unreal::commands::UnrealState::default());
+            .manage(unreal::commands::UnrealState::default())
+            .manage(generation::commands::GenerationState::default());
     }
 
     builder

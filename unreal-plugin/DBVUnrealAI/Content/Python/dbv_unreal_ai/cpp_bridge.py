@@ -41,6 +41,16 @@ def get_project_info() -> str:
     return editor.get_project_info()
 
 
+def import_model(source_file: str, folder_path: str, asset_name: str) -> str:
+    """Ver ``editor.import_model``."""
+    return editor.import_model(_text(source_file), _text(folder_path), _text(asset_name))
+
+
+def place_asset(asset_path: str, distance: str, folder: str) -> str:
+    """Ver ``editor.place_asset``."""
+    return editor.place_asset(_text(asset_path), float(_text(distance) or "300"), _text(folder))
+
+
 def get_scene_summary(name_filter: str, class_filter: str, limit: str) -> str:
     """Ver ``editor.get_scene_summary``."""
     return editor.get_scene_summary(_text(name_filter), _text(class_filter), int(_text(limit) or "200"))

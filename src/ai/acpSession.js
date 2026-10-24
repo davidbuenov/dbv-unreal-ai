@@ -67,8 +67,9 @@ export function sliceLines(text, line, limit) {
  * @param {(params: object) => Promise<string|null>} deps.askPermission optionId elegido, o `null` (cancelado).
  * @param {(relative: string, content: string) => Promise<void>} deps.stageWrite
  * @param {(update: object) => void} deps.onUpdate
+ * @param {() => Promise<Array>|Array} [deps.mcpServers] Servidores MCP que recibe el agente en `session/new`.
  */
-export function createAcpSession({ backend, getRoot, readText, askPermission, stageWrite, onUpdate }) {
+export function createAcpSession({ backend, getRoot, readText, askPermission, stageWrite, onUpdate, mcpServers = () => [] }) {
   let spec = null;
   let sessionId = null;
   let root = null;
@@ -127,9 +128,9 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
       clientInfo: { name: APP_NAME, title: APP_NAME },
     });
     if (!init.ok) throw Object.assign(new Error(init.error.message), { kind: 'network' });
-    // Sin servidor MCP propio (decidido en /spec de la 0.18.0): el agente usa sus propias herramientas
-    // y la app le deja leer y proponer ficheros por el protocolo.
-    const session = await backend.acpRequest('session/new', { cwd: currentRoot, mcpServers: [] });
+    // Servidores MCP para el agente (REQ-11): el del editor de Unreal y el propio de la app, si el host los da.
+    const servers = await mcpServers();
+    const session = await backend.acpRequest('session/new', { cwd: currentRoot, mcpServers: Array.isArray(servers) ? servers : [] });
     if (!session.ok) throw Object.assign(new Error(session.error.message), { kind: session.error.kind === 'badRequest' ? 'auth' : session.error.kind });
     spec = nextSpec;
     root = currentRoot;

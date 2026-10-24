@@ -12,6 +12,7 @@ Cada función devuelve una cadena JSON. @spec REQ-06, REQ-25, REQ-26
 from __future__ import annotations
 
 import json
+import os
 import sys
 from typing import Any
 
@@ -66,6 +67,59 @@ def get_project_info() -> str:
         "toolset_version": TOOLSET_VERSION,
     }
     return _json(info)
+
+
+def _unique_name(folder_path: str, asset_name: str) -> str:
+    """``asset_name``, o ``asset_name_2``, ``_3``… si ya existe en ``folder_path``."""
+    candidate, n = asset_name, 2
+    while unreal.EditorAssetLibrary.does_asset_exist(f"{folder_path}/{candidate}"):
+        candidate, n = f"{asset_name}_{n}", n + 1
+    return candidate
+
+
+def import_model(source_file: str, folder_path: str = "/Game/DBV/Generated", asset_name: str = "") -> str:
+    """Importa un modelo (glTF/GLB, FBX, OBJ) dejando que el motor elija el importador. @spec REQ-19
+
+    ``StaticMeshTools.import_file`` de Epic fuerza ``FbxFactory`` y rechaza los ``.glb`` de Tripo;
+    aquí no se fija fábrica, así que glTF entra por Interchange con sus materiales y texturas.
+    """
+    if not os.path.isfile(source_file):
+        return _json({"success": False, "error": f"file not found: {source_file}"})
+    if not folder_path.startswith("/Game/"):
+        return _json({"success": False, "error": "folder_path must be under /Game/"})
+    if not unreal.EditorAssetLibrary.does_directory_exist(folder_path):
+        unreal.EditorAssetLibrary.make_directory(folder_path)
+    base = asset_name.strip() or os.path.splitext(os.path.basename(source_file))[0]
+    name = _unique_name(folder_path, base)
+    task = unreal.AssetImportTask()
+    task.filename = source_file
+    task.destination_path = folder_path
+    task.destination_name = name
+    task.replace_existing = False
+    task.automated = True
+    task.save = True
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    paths = [str(p) for p in task.get_editor_property("imported_object_paths")]
+    meshes = [p for p in paths if isinstance(unreal.load_asset(p), unreal.StaticMesh)]
+    result = {"success": bool(paths), "imported": paths, "primary": meshes[0] if meshes else (paths[0] if paths else None)}
+    if not paths:
+        result["error"] = "the import produced no assets (unsupported or invalid file)"
+    return _json(result)
+
+
+def place_asset(asset_path: str, distance: float = 300.0, folder: str = "DBV/Generated") -> str:
+    """Coloca ``asset_path`` delante de la cámara del editor, en una carpeta del Outliner. @spec REQ-19"""
+    asset = unreal.load_asset(asset_path)
+    if asset is None:
+        return _json({"success": False, "error": f"asset not found: {asset_path}"})
+    location, rotation = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_level_viewport_camera_info()
+    target = location + rotation.get_forward_vector() * float(distance)
+    with unreal.ScopedEditorTransaction("DBV Unreal AI: place asset"):
+        actor = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).spawn_actor_from_object(asset, target)
+        if actor and folder:
+            actor.set_folder_path(folder)
+    result = {"success": actor is not None, "actor": actor.get_actor_label() if actor else None, "location": _round(target), "folder": folder}
+    return _json(result)
 
 
 def get_scene_summary(name_filter: str = "", class_filter: str = "", limit: int = 200) -> str:

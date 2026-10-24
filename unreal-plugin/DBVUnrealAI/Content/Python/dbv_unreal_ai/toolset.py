@@ -88,6 +88,36 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
 
     @toolset_registry.tool_call
     @staticmethod
+    def import_model(source_file: str, folder_path: str = "/Game/DBV/Generated", asset_name: str = "") -> str:
+        """Import a 3D model file (glTF/GLB, FBX, OBJ) letting the engine choose the importer (Interchange for glTF), with its materials and textures.
+
+        Args:
+            source_file: Absolute path of the file on disk.
+            folder_path: Content Browser folder under /Game/ (created if missing).
+            asset_name: Asset name; a numeric suffix is added if it already exists. Empty to use the file name.
+
+        Returns:
+            JSON with success, imported (asset paths) and primary (the main StaticMesh).
+        """
+        return editor.import_model(source_file, folder_path, asset_name)
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def place_asset(asset_path: str, distance: float = 300.0, folder: str = "DBV/Generated") -> str:
+        """Spawn an asset in the open level in front of the editor camera, inside a World Outliner folder (undoable).
+
+        Args:
+            asset_path: Asset to place (e.g. /Game/DBV/Generated/lantern).
+            distance: Distance from the camera in centimetres.
+            folder: World Outliner folder for the new actor.
+
+        Returns:
+            JSON with success, actor label, location and folder.
+        """
+        return editor.place_asset(asset_path, distance, folder)
+
+    @toolset_registry.tool_call
+    @staticmethod
     def get_scene_summary(name_filter: str = "", class_filter: str = "", limit: int = 200) -> str:
         """Compact list of the actors in the open level: label, class, location (cm), outliner folder.
 

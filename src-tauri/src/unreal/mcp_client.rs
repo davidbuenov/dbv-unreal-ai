@@ -307,7 +307,7 @@ pub fn tool_result(result: &Value) -> ToolResult {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
