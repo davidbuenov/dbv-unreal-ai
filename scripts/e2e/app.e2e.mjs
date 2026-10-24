@@ -43,7 +43,10 @@ function extra(connections, hasKey = false) {
     unreal_readiness: { project: uproject, engine: { version: '5.8.2' }, mcp, checks: [{ id: 'engine', ok: true, detail: '5.8.2' }, { id: 'plugin:ModelContextProtocol', ok: true, detail: '' }, { id: 'autoStart', ok: true, detail: '8000' }, { id: 'toolset', ok: true, detail: '0.1.0' }], toolsetInstalled: '0.1.0', toolsetBundled: '0.1.0', ready: true },
     unreal_connect: [{ name: DBV, description: 'DBV' }, { name: 'editor_toolset.toolsets.scene.SceneTools', description: 'scene' }],
     unreal_list_toolsets: [{ name: DBV, description: 'DBV' }, { name: 'editor_toolset.toolsets.scene.SceneTools', description: 'scene' }],
-    generation_status: { spent: 0, budget: 300, hasKey: { tripo: hasKey, worldlabs: false }, tripoTextToModel: 30 },
+    generation_status: { spent: 0, budget: 300, hasKey: { tripo: hasKey, worldlabs: false } },
+    // Las herramientas de Tripo llegan de Rust (`generation/tools.rs`), las mismas que ve un agente.
+    generation_tool_specs: ['generate_3d_model', 'image_to_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'tripo_operations', 'tripo_balance'].map((name) => ({ name, description: name, inputSchema: { type: 'object', properties: {}, required: [] } })),
+    generation_jobs: [],
     library_list: [entry],
     app_mcp_command: { command: 'C:/Program Files/DBV Unreal AI/dbv-unreal-ai.exe', args: ['--mcp', '--port', '8000'] },
   });
@@ -102,6 +105,7 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     await h.sleep(400);
     const gen = await h.eval(`return { disabled: document.querySelector('#view-generate .btn-primary').disabled, text: document.getElementById('view-generate').textContent }`);
     ok('sin clave de Tripo no se puede generar y se explica', gen.disabled && /clave de Tripo|Tripo key/.test(gen.text));
+    await shot(h, 'generate.png');
 
     await h.eval(`document.querySelector('[data-view="settings"]').click()`);
     await h.sleep(400);
@@ -134,7 +138,7 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     const before = await h.eval(`return window.__calls.filter((c) => c[0] === 'unreal_call_tool').map((c) => c[1].tool)`);
     ok('antes de aprobar solo se ha VALIDADO, no ejecutado', JSON.stringify(before) === '["validate_python"]', JSON.stringify(before));
     const tools = await h.eval(`return (window.__chat[0].request.tools || []).map((t) => t.name)`);
-    ok('el modelo recibe las herramientas de Unreal y de generación', ['unreal_list_toolsets', 'unreal_run_python', 'generate_3d_model', 'library_send_to_unreal'].every((n) => tools.includes(n)), JSON.stringify(tools));
+    ok('el modelo recibe las herramientas de Unreal y de generación', ['unreal_list_toolsets', 'unreal_run_python', 'generate_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'library_send_to_unreal'].every((n) => tools.includes(n)), JSON.stringify(tools));
     const system = await h.eval(`return window.__chat[0].request.messages[0].content`);
     ok('el prompt de sistema es el de Unreal, con el proyecto', system.includes('Unreal Engine assistant') && system.includes('DBVMCPFirst') && system.includes('/Game/DBV'));
     await shot(h, 'approval.png');

@@ -14,7 +14,7 @@ import { mcpClientConfig } from '../../src/app/settingsView.js';
 import { createState } from '../../src/app/state.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 import { createApprovalCard } from '../../src/unreal/approvalCard.js';
-import { confirmCost } from '../../src/app/generateView.js';
+import { confirmCost, formArgs } from '../../src/app/generateView.js';
 
 // jsdom arranca en inglés: las aserciones de texto están escritas en español.
 beforeAll(() => window.DBV_I18N.setLang('es'));
@@ -109,15 +109,25 @@ describe('tarjeta de aprobación (REQ-12)', () => {
 });
 
 describe('privacidad y coste (RNF-IA.2, RNF-04)', () => {
-  it('la tarjeta de coste avisa de que el prompt sale hacia Tripo y deja «Cancelar» con el foco @spec RNF-IA.2, RNF-04, RNF-07', async () => {
+  it('la tarjeta de coste da el total, enseña lo que se envía a Tripo y deja «Cancelar» con el foco @spec RNF-IA.2, RNF-04, RNF-07, REQ-27', async () => {
     let seen = null;
     const accepted = await confirmCost(async (options) => {
       seen = options;
       return 'cancel';
-    }, { name: 'Cofre', prompt: 'chest', cost: 30, spent: 60, budget: 300 });
+    }, { name: 'Cofre', operation: 'text_to_model', endpoint: '/generation/text-to-model', params: { prompt: 'chest', smart_low_poly: true }, variants: 2, total: 60, spent: 60, budget: 300 });
     expect(accepted).toBe(false);
     expect(seen.text).toMatch(/se envía a Tripo/);
-    expect(seen.text).toMatch(/30 créditos/);
+    expect(seen.text).toMatch(/60 créditos/);
+    expect(seen.text).toMatch(/2 variantes/);
+    expect(seen.detail).toBe('POST /generation/text-to-model\n{\n  "prompt": "chest",\n  "smart_low_poly": true\n}');
     expect(seen.choices.at(-1).key).toBe('cancel');
+  });
+
+  it('el formulario de Generar se traduce en la misma herramienta que usa la IA @spec REQ-15, REQ-29, REQ-32', () => {
+    expect(formArgs({ mode: 'text', prompt: ' chest ', name: 'Cofre ', variants: '3', faceLimit: '3000', lowPoly: true, textureQuality: 'detailed' })).toEqual({
+      tool: 'generate_3d_model',
+      args: { prompt: 'chest', name: 'Cofre', variants: 3, options: { texture_quality: 'detailed' }, face_limit: 3000, smart_low_poly: true },
+    });
+    expect(formArgs({ mode: 'image', image: 'C:/refs/barco.png', name: 'Barco', variants: '1', textureQuality: 'standard' })).toEqual({ tool: 'image_to_3d_model', args: { image: 'C:/refs/barco.png', name: 'Barco', variants: 1 } });
   });
 });

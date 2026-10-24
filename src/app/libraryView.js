@@ -30,6 +30,17 @@ export function sendBackend(connection) {
   };
 }
 
+/** Miniatura de un asset (la que trajo el proveedor, o una imagen del propio asset), o su icono. */
+export async function assetThumbnail(entry, className = 'asset-thumb') {
+  const box = el('div', { className, text: '◆' });
+  const image = entry.thumbnail ?? (entry.kind === 'image' ? entry.files?.[0] : null);
+  if (image) {
+    const path = await api.libraryFilePath(entry.id, image);
+    if (path.ok) box.replaceChildren(el('img', { attrs: { src: window.__TAURI__.core.convertFileSrc(path.value), alt: entry.name } }));
+  }
+  return box;
+}
+
 /**
  * @param {HTMLElement} host
  * @param {object} deps `{state, confirm, toast}`.
@@ -39,15 +50,6 @@ export function createLibraryView(host, deps) {
   const search = el('input', { attrs: { type: 'search', placeholder: t('lib.search'), 'aria-label': t('lib.search') } });
   const grid = el('div', { className: 'library-grid' });
   search.addEventListener('input', () => paint());
-
-  async function thumbnail(entry) {
-    const box = el('div', { className: 'asset-thumb', text: '◆' });
-    if (entry.thumbnail) {
-      const path = await api.libraryFilePath(entry.id, entry.thumbnail);
-      if (path.ok) box.replaceChildren(el('img', { attrs: { src: window.__TAURI__.core.convertFileSrc(path.value), alt: entry.name } }));
-    }
-    return box;
-  }
 
   async function send(entry, statusLine) {
     const connection = deps.state.connection;
@@ -65,7 +67,7 @@ export function createLibraryView(host, deps) {
     return el(
       'article',
       { className: 'asset-card' },
-      await thumbnail(entry),
+      await assetThumbnail(entry),
       el('div', { className: 'asset-body' }, el('div', { className: 'asset-name', text: entry.name }), el('div', { className: 'asset-meta', text: `${entry.provider} · ${date}${entry.credits ? ` · ${t('lib.credits', { n: String(entry.credits) })}` : ''}` }), statusLine),
       el(
         'div',

@@ -83,6 +83,15 @@ pub fn run() {
             .manage(generation::commands::GenerationState::default());
     }
 
+    #[cfg(desktop)]
+    {
+        // La sesión de generación empieza con la ventana: el gasto cuenta desde aquí (RNF-04).
+        builder = builder.setup(|app| {
+            generation::commands::begin_session(app.handle());
+            Ok(())
+        });
+    }
+
     builder
         .invoke_handler(tauri::generate_handler![
             #[cfg(desktop)]
@@ -176,9 +185,21 @@ pub fn run() {
             #[cfg(desktop)]
             generation::commands::generation_set_budget,
             #[cfg(desktop)]
-            generation::commands::generation_tripo_start,
+            generation::commands::generation_tool_specs,
+            #[cfg(desktop)]
+            generation::commands::generation_prepare,
+            #[cfg(desktop)]
+            generation::commands::generation_launch,
+            #[cfg(desktop)]
+            generation::commands::generation_operations,
+            #[cfg(desktop)]
+            generation::commands::generation_balance,
+            #[cfg(desktop)]
+            generation::commands::generation_suggest_name,
             #[cfg(desktop)]
             generation::commands::generation_cancel,
+            #[cfg(desktop)]
+            generation::commands::generation_jobs,
             #[cfg(desktop)]
             generation::commands::library_list,
             #[cfg(desktop)]
@@ -187,6 +208,16 @@ pub fn run() {
             generation::commands::library_file_path,
             #[cfg(desktop)]
             generation::commands::library_record_sent,
+            #[cfg(desktop)]
+            generation::commands::library_location,
+            #[cfg(desktop)]
+            generation::commands::library_set_location,
+            #[cfg(desktop)]
+            generation::commands::library_import,
+            #[cfg(desktop)]
+            generation::commands::library_rename,
+            #[cfg(desktop)]
+            generation::commands::library_entry_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

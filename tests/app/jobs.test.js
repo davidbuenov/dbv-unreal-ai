@@ -15,10 +15,10 @@ function fakeTauri({ failImmediately }) {
     event: { listen: vi.fn(async (_name, cb) => (listeners.push(cb), () => {})) },
     core: {
       invoke: vi.fn(async (command) => {
-        if (command !== 'generation_tripo_start') return null;
+        if (command !== 'generation_launch') return null;
         // El backend falla al instante (clave mala) y emite ANTES de que nadie llame a waitJob.
         if (failImmediately) emit({ jobId: 'job-1', stage: 'failed', error: 'invalid api key' });
-        return 'job-1';
+        return ['job-1'];
       }),
     },
   };
@@ -30,8 +30,10 @@ describe('trabajos de generación (REQ-15)', () => {
     vi.resetModules();
     fakeTauri({ failImmediately: true });
     const api = await import('../../src/app/backend.js');
-    const started = await api.startTripo({ prompt: 'x', confirmCost: true });
-    expect(started).toEqual({ ok: true, value: 'job-1' });
+    const started = await api.launch('generate_3d_model', { prompt: 'x', name: 'X' });
+    expect(started).toEqual({ ok: true, value: ['job-1'] });
+    // Solo se lanza ya confirmado: la tarjeta de coste va antes, en quien llama.
+    expect(window.__TAURI__.core.invoke).toHaveBeenCalledWith('generation_launch', { tool: 'generate_3d_model', args: { prompt: 'x', name: 'X' }, confirmCost: true });
     const end = await api.waitJob('job-1', 5000);
     expect(end).toMatchObject({ stage: 'failed', error: 'invalid api key' });
   });
@@ -40,7 +42,7 @@ describe('trabajos de generación (REQ-15)', () => {
     vi.resetModules();
     const { emit } = fakeTauri({ failImmediately: false });
     const api = await import('../../src/app/backend.js');
-    await api.startTripo({ prompt: 'x', confirmCost: true });
+    await api.launch('generate_3d_model', { prompt: 'x', name: 'X' });
     const seen = [];
     const waiting = api.waitJob('job-1', 5000, (p) => seen.push(p.stage));
     emit({ jobId: 'otro', stage: 'done' });

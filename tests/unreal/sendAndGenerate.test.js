@@ -55,44 +55,90 @@ describe('enviar a Unreal (REQ-19)', () => {
   });
 });
 
-describe('herramientas de generación (REQ-15, RNF-04)', () => {
-  const status = async () => ({ ok: true, value: { spent: 0, budget: 300, hasKey: { tripo: true }, tripoTextToModel: 30 } });
+describe('herramientas de generación (REQ-15, REQ-33, RNF-04)', () => {
+  const status = async () => ({ ok: true, value: { spent: 0, budget: 300, hasKey: { tripo: true } } });
+  // Lo que da Rust (`generation_tool_specs`): aquí basta con el nombre y el esquema.
+  const specs = ['generate_3d_model', 'image_to_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'tripo_operations', 'tripo_balance'].map((name) => ({ name, description: name, inputSchema: { type: 'object', properties: {}, required: [] } }));
+  const prepared = { operation: 'text_to_model', endpoint: '/generation/text-to-model', name: 'Linterna', variants: 2, params: { prompt: 'lantern' }, total: 40, pricing: '…' };
+  const tools = (over = {}) => {
+    const deps = {
+      specs,
+      status,
+      prepare: vi.fn(async () => ({ ok: true, value: prepared })),
+      launch: vi.fn(async () => ({ ok: true, value: ['job-1', 'job-2'] })),
+      waitJob: vi.fn(async () => ({ stage: 'done', entry: ENTRY })),
+      showJobs: vi.fn(),
+      operations: vi.fn(async () => ({ ok: true, value: '- rig …' })),
+      balance: vi.fn(async () => ({ ok: true, value: { balance: 2370, frozen: 30 } })),
+      listLibrary: vi.fn(async () => ({ ok: true, value: [ENTRY] })),
+      rename: vi.fn(async (id, name) => ({ ok: true, value: { ...ENTRY, name } })),
+      send: vi.fn(),
+      askApproval: vi.fn(),
+      confirmCost: vi.fn(async () => true),
+      ...over,
+    };
+    const list = createGenerationTools(deps);
+    return { deps, byName: (name) => list.find((tool) => tool.name === name), list };
+  };
 
-  it('sin aceptar el coste no se genera nada @spec REQ-15, RNF-04', async () => {
-    const startTripo = vi.fn();
-    const confirmCost = vi.fn(async () => false);
-    const [generate] = createGenerationTools({ status, startTripo, confirmCost, waitJob: vi.fn(), listLibrary: vi.fn(), send: vi.fn(), askApproval: vi.fn() });
-    expect(await generate.run({ prompt: 'cofre' })).toMatch(/did NOT accept/);
-    expect(confirmCost).toHaveBeenCalledWith(expect.objectContaining({ provider: 'tripo', cost: 30, budget: 300 }));
-    expect(startTripo).not.toHaveBeenCalled();
+  it('publica las herramientas de Rust (las mismas que un agente) y las de la biblioteca @spec REQ-33', () => {
+    const { list } = tools();
+    expect(list.map((tool) => tool.name)).toEqual([...specs.map((spec) => spec.name), 'library_list', 'library_rename', 'library_send_to_unreal']);
   });
 
-  it('aceptado, lanza con confirmCost y espera al trabajo @spec REQ-15', async () => {
-    const startTripo = vi.fn(async () => ({ ok: true, value: 'job-1' }));
-    const waitJob = vi.fn(async () => ({ stage: 'done', entry: ENTRY }));
-    const [generate] = createGenerationTools({ status, startTripo, waitJob, confirmCost: async () => true, listLibrary: vi.fn(), send: vi.fn(), askApproval: vi.fn() });
-    const out = await generate.run({ prompt: 'lantern', name: 'Linterna', face_limit: 3000 });
-    expect(startTripo).toHaveBeenCalledWith({ prompt: 'lantern', name: 'Linterna', faceLimit: 3000, smartLowPoly: undefined, confirmCost: true });
+  it('sin aceptar el coste no se lanza nada @spec REQ-15, RNF-04', async () => {
+    const { deps, byName } = tools({ confirmCost: vi.fn(async () => false) });
+    expect(await byName('generate_3d_model').run({ prompt: 'lantern', name: 'Linterna', variants: 2 })).toMatch(/did NOT accept/);
+    // La tarjeta recibe el TOTAL de las variantes y lo que se enviará (REQ-27, REQ-29).
+    expect(deps.confirmCost).toHaveBeenCalledWith(expect.objectContaining({ total: 40, variants: 2, endpoint: '/generation/text-to-model', params: { prompt: 'lantern' }, budget: 300 }));
+    expect(deps.launch).not.toHaveBeenCalled();
+  });
+
+  it('aceptado, lanza, enseña los trabajos en la conversación y espera a todas las variantes @spec REQ-15, REQ-27, REQ-29', async () => {
+    const { deps, byName } = tools();
+    const out = await byName('generate_3d_model').run({ prompt: 'lantern', name: 'Linterna', variants: 2 });
+    expect(deps.launch).toHaveBeenCalledWith('generate_3d_model', { prompt: 'lantern', name: 'Linterna', variants: 2 });
+    expect(deps.showJobs).toHaveBeenCalledWith(['job-1', 'job-2']);
+    expect(deps.waitJob).toHaveBeenCalledTimes(2);
     expect(out).toMatch(/linterna-1/);
   });
 
+  it('riggear y animar pasan por la misma tarjeta de coste @spec REQ-16, REQ-33', async () => {
+    const { deps, byName } = tools();
+    await byName('rig_model').run({ id: 'linterna-1' });
+    await byName('animate_model').run({ id: 'rig-1', animations: ['dance_01'] });
+    expect(deps.prepare.mock.calls.map(([tool]) => tool)).toEqual(['rig_model', 'animate_model']);
+    expect(deps.confirmCost).toHaveBeenCalledTimes(2);
+  });
+
+  it('un error al preparar (sin nombre, animación inexistente) vuelve al modelo sin enseñar coste @spec REQ-28', async () => {
+    const { deps, byName } = tools({ prepare: vi.fn(async () => ({ ok: false, error: { message: '`name` is required' } })) });
+    expect(await byName('generate_3d_model').run({ prompt: 'x' })).toMatch(/`name` is required/);
+    expect(deps.confirmCost).not.toHaveBeenCalled();
+  });
+
   it('sin clave de Tripo lo dice sin enseñar el coste @spec REQ-15, RNF-IA.4', async () => {
-    const confirmCost = vi.fn();
-    const noKey = async () => ({ ok: true, value: { spent: 0, budget: 300, hasKey: { tripo: false }, tripoTextToModel: 30 } });
-    const [generate] = createGenerationTools({ status: noKey, startTripo: vi.fn(), waitJob: vi.fn(), confirmCost, listLibrary: vi.fn(), send: vi.fn(), askApproval: vi.fn() });
-    expect(await generate.run({ prompt: 'x' })).toMatch(/no Tripo API key/);
-    expect(confirmCost).not.toHaveBeenCalled();
+    const { deps, byName } = tools({ status: async () => ({ ok: true, value: { spent: 0, budget: 300, hasKey: { tripo: false } } }) });
+    expect(await byName('generate_3d_model').run({ prompt: 'x', name: 'X' })).toMatch(/no Tripo API key/);
+    expect(deps.confirmCost).not.toHaveBeenCalled();
+  });
+
+  it('el saldo y el catálogo no cuestan nada @spec REQ-33', async () => {
+    const { deps, byName } = tools();
+    expect(await byName('tripo_balance').run({})).toMatch(/2370 credits available \(30 reserved/);
+    expect(await byName('tripo_operations').run({ operation: 'rig' })).toMatch(/rig/);
+    expect(deps.confirmCost).not.toHaveBeenCalled();
   });
 
   it('enviar a Unreal desde la IA pide permiso @spec REQ-12, REQ-19', async () => {
     const send = vi.fn(async () => ({ ok: true, assetPath: '/Game/DBV/Generated/X.X', actor: 'X' }));
-    const listLibrary = async () => ({ ok: true, value: [ENTRY] });
-    const denyTools = createGenerationTools({ status, startTripo: vi.fn(), waitJob: vi.fn(), confirmCost: vi.fn(), listLibrary, send, askApproval: async () => 'deny' });
-    expect(await denyTools[2].run({ id: 'linterna-1' })).toMatch(/DENIED/);
+    const deny = tools({ send, askApproval: async () => 'deny' });
+    expect(await deny.byName('library_send_to_unreal').run({ id: 'linterna-1' })).toMatch(/DENIED/);
     expect(send).not.toHaveBeenCalled();
-    const allowTools = createGenerationTools({ status, startTripo: vi.fn(), waitJob: vi.fn(), confirmCost: vi.fn(), listLibrary, send, askApproval: async () => 'once' });
-    expect(await allowTools[2].run({ id: 'linterna-1' })).toMatch(/Imported as \/Game\/DBV\/Generated\/X\.X/);
-    expect(await allowTools[1].run({ filter: 'lantern' })).toMatch(/linterna-1/);
-    expect(await allowTools[2].run({ id: 'nope' })).toMatch(/no library asset/);
+    const allow = tools({ send, askApproval: async () => 'once' });
+    expect(await allow.byName('library_send_to_unreal').run({ id: 'linterna-1' })).toMatch(/Imported as \/Game\/DBV\/Generated\/X\.X/);
+    expect(await allow.byName('library_list').run({ filter: 'lantern' })).toMatch(/linterna-1/);
+    expect(await allow.byName('library_send_to_unreal').run({ id: 'nope' })).toMatch(/no library asset/);
+    expect(await allow.byName('library_rename').run({ id: 'linterna-1', name: 'Farol' })).toMatch(/"Farol"/);
   });
 });

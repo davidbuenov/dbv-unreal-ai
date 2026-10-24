@@ -12,7 +12,7 @@
 // file:// Chromium bloquea el `import()` de módulos.
 //
 // Uso: ver `scripts/e2e/*.e2e.mjs` y `npm run test:e2e`.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -45,6 +45,13 @@ export async function launch({ appDir, docPath, docContent, extraInvoke = '{}', 
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const appUrl = `http://127.0.0.1:${server.address().port}/index.html`;
+  // Un navegador de una ejecución anterior que siga escuchando en `port` haría que el banco midiera SU página vieja
+  // (pasó: cientos de Edge sin cerrar daban errores y aciertos de otra ejecución). Mejor fallar claro.
+  const busy = await fetch(`http://127.0.0.1:${port}/json/version`).then(() => true, () => false);
+  if (busy) {
+    server.close();
+    throw new Error(`el puerto de depuración ${port} ya está en uso: cierra los Edge del banco que quedaron abiertos (perfil dbv-harness-*)`);
+  }
   const profile = mkdtempSync(path.join(tmpdir(), 'dbv-harness-'));
   const proc = spawn(EDGE, [
     '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
@@ -144,7 +151,27 @@ export async function launch({ appDir, docPath, docContent, extraInvoke = '{}', 
       const r = await send('Page.captureScreenshot', { format: 'png' });
       writeFileSync(file, Buffer.from(r.data, 'base64'));
     },
-    async close() { try { ws.close(); } catch {} proc.kill(); server.close(); },
+    async close() {
+      try { ws.close(); } catch {}
+      // `msedge.exe` es un lanzador: arranca el navegador como OTRO proceso y termina, así que `proc.kill()` no cerraba
+      // nada (llegó a haber 453 Edge del banco abiertos). Se le pide al navegador que se cierre por CDP y, por si no
+      // responde, se cierran en Windows los procesos que usan este perfil temporal.
+      try {
+        const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
+        const browser = new WebSocket(webSocketDebuggerUrl);
+        await new Promise((resolve) => {
+          browser.onopen = () => browser.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+          browser.onclose = resolve;
+          browser.onerror = resolve;
+          setTimeout(resolve, 3000);
+        });
+      } catch {}
+      if (process.platform === 'win32') {
+        const script = `Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -like '*${path.basename(profile)}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+        spawnSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
+      } else proc.kill();
+      server.close();
+    },
   };
   return api;
 }

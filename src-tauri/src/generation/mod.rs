@@ -12,7 +12,10 @@
 // lanza sin `confirm_cost` ni por encima del tope de gasto de la sesión (RNF-04). Las claves
 // viven en el almacén del sistema con la cuenta `service:<proveedor>` (RNF-IA.4).
 
+pub mod catalog;
 pub mod commands;
+pub mod jobs;
+pub mod tools;
 pub mod tripo;
 
 use std::path::Path;
@@ -20,7 +23,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::library::{now_secs, Library, LibraryEntry};
 use crate::unreal::UnrealError;
@@ -59,8 +62,23 @@ impl Default for Polling {
     }
 }
 
+/// Lo que va ocurriendo en un trabajo, para la consola y el progreso (REQ-27).
+#[derive(Debug, Clone, PartialEq)]
+pub enum JobEvent<'a> {
+    /// La petición exacta que sale hacia el proveedor (sin la clave).
+    Request { endpoint: &'a str, body: &'a Value },
+    /// El proveedor creó la tarea.
+    Task(&'a str),
+    /// Cambio de etapa y progreso.
+    Stage(&'a str, Option<f64>),
+    /// Una línea para la consola (una subida, un aviso).
+    Note(String),
+    /// El proveedor dio la tarea por fallida: Tripo no cobra las tareas fallidas ni canceladas (`/es/docs/billing`).
+    NotCharged,
+}
+
 /// Sondea una tarea hasta que termina bien; cancelación, fallo o tiempo agotado son errores.
-fn wait_for_task(client: &TripoClient, task_id: &str, cancel: &AtomicBool, polling: Polling, report: &mut impl FnMut(&str, Option<f64>)) -> Result<tripo::TripoTask, UnrealError> {
+fn wait_for_task(client: &TripoClient, task_id: &str, cancel: &AtomicBool, polling: Polling, report: &mut impl FnMut(JobEvent)) -> Result<tripo::TripoTask, UnrealError> {
     let started = Instant::now();
     let outcome = loop {
         if cancel.load(Ordering::Relaxed) {
@@ -70,8 +88,9 @@ fn wait_for_task(client: &TripoClient, task_id: &str, cancel: &AtomicBool, polli
             Ok(task) => task,
             Err(error) => break Err(error),
         };
-        report("running", task.progress);
+        report(JobEvent::Stage("running", task.progress));
         if task.is_failed() {
+            report(JobEvent::NotCharged);
             break Err(UnrealError::Protocol(format!("la tarea {task_id} de Tripo terminó como «{}»", task.status)));
         }
         if task.is_success() {
@@ -85,39 +104,162 @@ fn wait_for_task(client: &TripoClient, task_id: &str, cancel: &AtomicBool, polli
     outcome
 }
 
-/// Trabajo completo de texto → modelo con Tripo. Devuelve la entrada de la biblioteca.
-#[allow(clippy::too_many_arguments)]
-pub fn run_tripo_job(client: &TripoClient, request: &TextToModel, name: &str, library: &Library, cancel: &AtomicBool, polling: Polling, mut report: impl FnMut(&str, Option<f64>)) -> Result<LibraryEntry, UnrealError> {
-    report("queued", None);
-    let task_id = client.text_to_model(request)?;
-    // A partir de aquí la tarea existe en Tripo y puede cobrarse: quien lleva el gasto ya no lo devuelve.
-    report("submitted", None);
-    let task = wait_for_task(client, &task_id, cancel, polling, &mut report)?;
-    let model_url = task.model_url.clone().ok_or_else(|| UnrealError::Protocol(format!("la tarea {task_id} terminó sin modelo")))?;
-    report("downloading", Some(100.0));
-    let (id, dir) = library.new_entry_dir(name)?;
-    tripo::download(&model_url, &dir.join("model.glb"))?;
-    // La miniatura es opcional: si falla, el modelo ya está a salvo.
-    let thumbnail = task.image_url.as_deref().and_then(|url| {
-        let file = if url.contains(".png") { "thumbnail.png" } else if url.contains(".jpg") || url.contains(".jpeg") { "thumbnail.jpg" } else { "thumbnail.webp" };
-        tripo::download(url, &dir.join(file)).ok().map(|_| file.to_string())
-    });
-    let entry = LibraryEntry {
-        id,
-        name: name.to_string(),
-        provider: "tripo".into(),
-        kind: "model".into(),
-        prompt: request.prompt.trim().to_string(),
-        parameters: json!(request.body()),
-        task_id,
-        created_at: now_secs(),
-        credits: task.credits.or(Some(tripo::TEXT_TO_MODEL_CREDITS)),
-        files: vec!["model.glb".into()],
-        thumbnail,
-        sent_to: vec![],
+/// Una tarea de Tripo sigue siendo `input` válido de otra durante este tiempo; pasado, se sube el fichero.
+const TASK_REUSE_SECS: u64 = 24 * 3600;
+
+/// Traduce una fuente (`input`, `inputs`, `ref_image`) a lo que entiende Tripo: los `task_…`, `file_…` y enlaces
+/// pasan tal cual; un id de la biblioteca se convierte en su tarea (un rig, siempre: retarget la exige) o se sube
+/// su fichero; una ruta local se sube. Recorre listas y objetos (`inputs: [{"front": …}]`).
+pub fn resolve_sources(value: &Value, client: &TripoClient, library: &Library, report: &mut impl FnMut(JobEvent)) -> Result<Value, UnrealError> {
+    let resolved = match value {
+        Value::Array(items) => Value::Array(items.iter().map(|item| resolve_sources(item, client, library, report)).collect::<Result<_, _>>()?),
+        Value::Object(map) => Value::Object(map.iter().map(|(k, v)| resolve_sources(v, client, library, report).map(|r| (k.clone(), r))).collect::<Result<_, _>>()?),
+        Value::String(text) => Value::String(resolve_source(text, client, library, report)?),
+        other => other.clone(),
     };
-    library.add(entry.clone())?;
-    Ok(entry)
+    Ok(resolved)
+}
+
+fn resolve_source(text: &str, client: &TripoClient, library: &Library, report: &mut impl FnMut(JobEvent)) -> Result<String, UnrealError> {
+    let text = text.trim();
+    if text.starts_with("task_") || text.starts_with("file_") || text.starts_with("https://") || text.starts_with("http://") || text.is_empty() {
+        return Ok(text.to_string());
+    }
+    let upload = |path: &Path, report: &mut dyn FnMut(JobEvent)| -> Result<String, UnrealError> {
+        report(JobEvent::Note(format!("subiendo {} a Tripo…", path.display())));
+        let token = client.upload(path)?;
+        report(JobEvent::Note(format!("subido: {token}")));
+        Ok(token)
+    };
+    let resolved = match library.get(text) {
+        Some(entry) if !entry.task_id.is_empty() && entry.provider == "tripo" && (entry.kind == "rig" || now_secs().saturating_sub(entry.created_at) < TASK_REUSE_SECS) => entry.task_id,
+        Some(entry) => {
+            let file = entry.primary_file().ok_or_else(|| UnrealError::NotFound(format!("el asset {text} no tiene ningún fichero que subir")))?;
+            upload(&library.file_path(&entry.id, &file)?, report)?
+        }
+        None if Path::new(text).is_file() => upload(Path::new(text), report)?,
+        None => return Err(UnrealError::NotFound(format!("«{text}» no es un id de la biblioteca, ni un fichero, ni un enlace, ni un task_/file_ de Tripo"))),
+    };
+    Ok(resolved)
+}
+
+/// Nombre del fichero local de una salida (`model_url` → `model.glb`, `rendered_image_url` → `thumbnail.webp`).
+fn output_file(key: &str, url: &str, produces: &str) -> String {
+    let stem = match key.trim_end_matches("_url") {
+        "rendered_image" | "image" => "thumbnail".to_string(),
+        "pbr_model" | "base_model" => "model".to_string(),
+        other => other.to_string(),
+    };
+    let ext = url.split('?').next().and_then(|path| path.rsplit('/').next()).and_then(|name| name.rsplit_once('.').map(|(_, e)| e.to_lowercase())).filter(|e| !e.is_empty() && e.len() <= 5 && e.chars().all(|c| c.is_ascii_alphanumeric()));
+    let fallback = match (stem.as_str(), produces) {
+        ("thumbnail", _) | (_, "image") | (_, "multiview") => "png",
+        (_, "splat") => "splat",
+        _ => "glb",
+    };
+    format!("{stem}.{}", ext.unwrap_or_else(|| fallback.to_string()))
+}
+
+/// Lo que deja una operación: la entrada nueva (si produce ficheros) y la salida de Tripo.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Outcome {
+    pub entry: Option<LibraryEntry>,
+    pub output: Value,
+    pub task_id: String,
+}
+
+/// Qué pidió quien lanza una operación.
+#[derive(Debug, Clone)]
+pub struct OperationRequest {
+    pub operation: &'static catalog::Operation,
+    /// Parámetros tal como los dio la persona o la IA (las fuentes aún sin resolver).
+    pub params: Value,
+    pub name: String,
+    /// Asset de la biblioteca del que sale este (rig → modelo; animación → rig).
+    pub parent: Option<String>,
+}
+
+/// Trabajo completo de cualquier operación del catálogo: resolver fuentes, crear la tarea, esperarla y bajar
+/// TODAS sus salidas (modelo, vista previa, vistas, …) a una entrada nueva de la biblioteca enlazada con su origen.
+#[allow(clippy::too_many_arguments)]
+pub fn run_operation(client: &TripoClient, request: &OperationRequest, library: &Library, cancel: &AtomicBool, polling: Polling, report: &mut impl FnMut(JobEvent)) -> Result<Outcome, UnrealError> {
+    let op = request.operation;
+    report(JobEvent::Stage("queued", None));
+    catalog::validate(op, &request.params).map_err(UnrealError::Format)?;
+    let mut body = request.params.clone();
+    if let Value::Object(map) = &mut body {
+        for field in catalog::SOURCE_FIELDS {
+            if let Some(value) = map.get(field).cloned() {
+                map.insert(field.to_string(), resolve_sources(&value, client, library, report)?);
+            }
+        }
+    }
+    report(JobEvent::Request { endpoint: op.endpoint, body: &body });
+    let task_id = client.create(op.endpoint, &body)?;
+    // A partir de aquí la tarea existe en Tripo y puede cobrarse.
+    report(JobEvent::Task(&task_id));
+    report(JobEvent::Stage("submitted", None));
+    let task = wait_for_task(client, &task_id, cancel, polling, report)?;
+    let links: Vec<(String, String)> = task
+        .output
+        .as_object()
+        .into_iter()
+        .flat_map(|map| map.iter())
+        .filter_map(|(key, value)| value.as_str().filter(|v| v.starts_with("https://") || (cfg!(test) && v.starts_with("http://127.0.0.1"))).map(|url| (key.clone(), url.to_string())))
+        .collect();
+    let data: serde_json::Map<String, Value> = task.output.as_object().into_iter().flat_map(|map| map.iter()).filter(|(key, value)| !links.iter().any(|(k, _)| k == *key) && !value.is_null()).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let entry = if op.produces == "none" || links.is_empty() {
+        None
+    } else {
+        report(JobEvent::Stage("downloading", Some(100.0)));
+        let (id, dir) = library.new_entry_dir(&request.name)?;
+        let mut files = Vec::new();
+        let mut thumbnail = None;
+        for (key, url) in &links {
+            let file = output_file(key, url, op.produces);
+            if files.contains(&file) {
+                continue;
+            }
+            match tripo::download(url, &dir.join(&file)) {
+                Ok(_) if file.starts_with("thumbnail.") => thumbnail = Some(file),
+                Ok(_) => files.push(file),
+                // Una vista previa que no baja no estropea el resultado; el resultado sí.
+                Err(error) if file.starts_with("thumbnail.") => report(JobEvent::Note(format!("sin vista previa: {error}"))),
+                Err(error) => {
+                    let _ = std::fs::remove_dir_all(&dir);
+                    return Err(error);
+                }
+            }
+        }
+        let entry = LibraryEntry {
+            id,
+            name: request.name.clone(),
+            provider: "tripo".into(),
+            kind: op.produces.into(),
+            prompt: request.params.get("prompt").and_then(Value::as_str).unwrap_or("").trim().to_string(),
+            parameters: json!({ "operation": op.name, "request": body }),
+            task_id: task_id.clone(),
+            created_at: now_secs(),
+            credits: task.credits.or(Some(catalog::estimate(op, &request.params))),
+            files,
+            thumbnail,
+            sent_to: vec![],
+            parent: request.parent.clone(),
+            output: Value::Object(data.clone()),
+        };
+        library.add(entry.clone())?;
+        Some(entry)
+    };
+    Ok(Outcome { entry, output: Value::Object(data), task_id })
+}
+
+/// Texto → modelo (la operación de siempre) con los valores verificados de `TextToModel`.
+pub fn run_tripo_job(client: &TripoClient, request: &TextToModel, name: &str, library: &Library, cancel: &AtomicBool, polling: Polling, report: &mut impl FnMut(JobEvent)) -> Result<LibraryEntry, UnrealError> {
+    if request.prompt.trim().is_empty() {
+        return Err(UnrealError::Format("el prompt está vacío".into()));
+    }
+    let operation = catalog::find("text_to_model").ok_or_else(|| UnrealError::NotFound("text_to_model".into()))?;
+    let outcome = run_operation(client, &OperationRequest { operation, params: request.body(), name: name.to_string(), parent: None }, library, cancel, polling, report)?;
+    outcome.entry.ok_or_else(|| UnrealError::Protocol(format!("la tarea {} terminó sin modelo", outcome.task_id)))
 }
 
 /// ¿Cabe un gasto más en el tope? `budget <= 0` significa «sin tope».
@@ -157,8 +299,19 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let library = Library::new(dir.path().join("library"));
         let mut stages = Vec::new();
-        let entry = run_tripo_job(&client, &request(), "Cofre del tesoro", &library, &AtomicBool::new(false), quick(), |stage, _| stages.push(stage.to_string())).unwrap();
+        let mut sent = Vec::new();
+        let entry = run_tripo_job(&client, &request(), "Cofre del tesoro", &library, &AtomicBool::new(false), quick(), &mut |event| match event {
+            JobEvent::Stage(stage, _) => stages.push(stage.to_string()),
+            JobEvent::Request { endpoint, body } => sent.push((endpoint.to_string(), body.clone())),
+            _ => {}
+        })
+        .unwrap();
         assert_eq!(stages, vec!["queued", "submitted", "running", "downloading"]);
+        // La consola enseña la petición exacta (REQ-27): endpoint y cuerpo, sin clave.
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].0, "/generation/text-to-model");
+        assert_eq!(sent[0].1["prompt"], "cofre del tesoro");
+        assert!(!sent[0].1.to_string().contains("Bearer"));
         assert_eq!(entry.task_id, "t-9");
         assert_eq!(entry.credits, Some(30.0));
         assert_eq!(std::fs::read_to_string(library.file_path(&entry.id, "model.glb").unwrap()).unwrap(), "glTF-binario");
@@ -174,10 +327,10 @@ mod tests {
         let client = TripoClient::with_base_url("k", api.trim_end_matches("/mcp"));
         let dir = tempfile::tempdir().unwrap();
         let library = Library::new(dir.path().join("library"));
-        let failed = run_tripo_job(&client, &request(), "x", &library, &AtomicBool::new(false), quick(), |_, _| {});
+        let failed = run_tripo_job(&client, &request(), "x", &library, &AtomicBool::new(false), quick(), &mut |_| {});
         assert!(failed.unwrap_err().to_string().contains("failed"));
         let (api2, _handle2) = fake_server(vec![http("200 OK", "", r#"{"code":0,"data":{"task_id":"t-2"}}"#)]);
-        let cancelled = run_tripo_job(&TripoClient::with_base_url("k", api2.trim_end_matches("/mcp")), &request(), "x", &library, &AtomicBool::new(true), quick(), |_, _| {});
+        let cancelled = run_tripo_job(&TripoClient::with_base_url("k", api2.trim_end_matches("/mcp")), &request(), "x", &library, &AtomicBool::new(true), quick(), &mut |_| {});
         assert!(cancelled.unwrap_err().to_string().contains("cancelado"));
         assert!(library.list().is_empty());
     }

@@ -302,3 +302,22 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .app-toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; box-shadow: 0 6px 16px var(--shadow); z-index: 400; }
 .app-toast-error { border-color: var(--status-error); color: var(--status-error); }
 .empty { color: var(--text-muted); padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius); }
+
+/* ─── Trabajos de generación (REQ-27) ───────────────────────────────── */
+.job-list { margin-top: 8px; }
+.job-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.job-card[data-stage='failed'] { border-color: var(--status-error-border); }
+.job-card[data-stage='done'] { border-color: color-mix(in srgb, var(--status-ok) 45%, var(--border)); }
+.job-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.job-head .spacer { flex: 1; }
+.job-meta, .job-stage { color: var(--text-secondary); font-size: 12px; }
+.job-card[data-stage='failed'] .job-stage { color: var(--status-error); }
+.job-console summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; }
+.job-console-text { max-height: 220px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin: 6px 0 0; white-space: pre-wrap; word-break: break-word; }
+.job-result { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.job-thumb { width: 140px; aspect-ratio: 1; background: var(--bg-tertiary); border-radius: 6px; overflow: hidden; display: grid; place-items: center; color: var(--text-muted); font-size: 28px; }
+.job-thumb img, .ref-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ref-thumb { width: 140px; aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: var(--bg-tertiary); }
+.confirm-detail { max-height: 240px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+
+.card > .segmented { align-self: flex-start; }

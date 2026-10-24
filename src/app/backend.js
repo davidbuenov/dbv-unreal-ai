@@ -36,12 +36,26 @@ export const generationStatus = () => call('generation_status');
 export const generationSetKey = (service, key) => call('generation_set_key', { service, key });
 export const generationDeleteKey = (service) => call('generation_delete_key', { service });
 export const generationSetBudget = (credits) => call('generation_set_budget', { credits });
-export const generationTripoStart = (start) => call('generation_tripo_start', { start });
+/** Herramientas de Tripo para el asistente integrado: las mismas que ve un agente por MCP (D10). */
+export const generationToolSpecs = () => call('generation_tool_specs');
+/** Qué hará una herramienta y cuánto cuesta, sin gastar (tarjeta de coste). */
+export const generationPrepare = (tool, args) => call('generation_prepare', { tool, args });
+export const generationLaunch = (tool, args) => call('generation_launch', { tool, args, confirmCost: true });
+export const generationOperations = (operation) => call('generation_operations', { operation: operation || null });
+export const generationBalance = () => call('generation_balance');
+export const generationSuggestName = (prompt) => call('generation_suggest_name', { prompt });
+/** Trabajos de la sesión (también los de un agente), con su consola. */
+export const generationJobs = () => call('generation_jobs');
 export const generationCancel = (jobId) => call('generation_cancel', { jobId });
 export const libraryList = () => call('library_list');
 export const libraryRemove = (id) => call('library_remove', { id });
 export const libraryFilePath = (id, file) => call('library_file_path', { id, file });
 export const libraryRecordSent = (id, project, assetPath) => call('library_record_sent', { id, project, assetPath });
+export const libraryLocation = () => call('library_location');
+export const librarySetLocation = (path, copyExisting) => call('library_set_location', { path: path || null, copyExisting: Boolean(copyExisting) });
+export const libraryImport = (paths) => call('library_import', { paths });
+export const libraryRename = (id, name) => call('library_rename', { id, name });
+export const libraryEntryDir = (id) => call('library_entry_dir', { id });
 
 // ─── Progreso de los trabajos ────────────────────────────────────────
 // El oyente se registra ANTES de lanzar un trabajo y guarda lo que llega: un fallo inmediato (una clave
@@ -63,10 +77,10 @@ export function listenJobs() {
   return jobListener;
 }
 
-/** Lanza un texto → modelo con el oyente ya registrado. */
-export async function startTripo(start) {
+/** Lanza una herramienta de generación ya confirmada con el oyente registrado. Devuelve los ids de sus trabajos. */
+export async function launch(tool, args) {
   await listenJobs();
-  return generationTripoStart(start);
+  return generationLaunch(tool, args);
 }
 
 /** Espera el final de un trabajo (`done`, `failed` o `cancelled`), con lo que ya hubiera llegado incluido. */

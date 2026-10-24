@@ -26,9 +26,10 @@ describe('el prompt de un agente (REQ-11)', () => {
    * @spec REQ-11, REQ-20
    */
   it('presenta el editor de Unreal y todas las herramientas del servidor MCP @spec REQ-11, REQ-20', () => {
-    const rust = readFileSync(path.join(root, 'src-tauri', 'src', 'mcp_server.rs'), 'utf8');
-    const published = [...rust.matchAll(/tool\(\s*"([a-z_0-9]+)"/g)].map((m) => m[1]);
-    expect(published.length).toBeGreaterThanOrEqual(8);
+    // Las herramientas de Tripo se definen en `generation/tools.rs` (D10) y el servidor las publica: las dos fuentes.
+    const rust = ['mcp_server.rs', path.join('generation', 'tools.rs')].map((file) => readFileSync(path.join(root, 'src-tauri', 'src', file), 'utf8')).join('\n');
+    const published = [...new Set([...rust.matchAll(/tool\(\s*"([a-z_0-9]+)"/g)].map((m) => m[1]))];
+    expect(published).toEqual(expect.arrayContaining(['rig_model', 'animate_model', 'tripo_run', 'tripo_balance', 'generation_jobs']));
     const prompt = agentPreamble({ lang: 'es', domain: unrealPrompt({ projectName: 'DBVMCPFirst', engineVersion: '5.8.2', agent: true }) });
     for (const name of published) expect(prompt, name).toContain(name);
     expect(prompt).toContain('dbv-unreal-ai');

@@ -22,15 +22,17 @@
 
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
 use crate::ai::secrets::Secrets;
 use crate::generation::commands::GenerationSettings;
-use crate::generation::tripo::{TextToModel, TripoClient, TEXT_TO_MODEL_CREDITS};
-use crate::generation::{key_account, run_tripo_job, settings_path, within_budget, Polling};
-use crate::library::Library;
+use crate::generation::jobs::{describe, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
+use crate::generation::tripo::TripoClient;
+use crate::generation::{key_account, tools, within_budget, Polling};
+use crate::library::{now_secs, Library};
 use crate::unreal::discovery;
 use crate::unreal::mcp_client::{endpoint_url, McpSession, ToolResult, DEFAULT_TIMEOUT};
 use crate::unreal::UnrealError;
@@ -46,6 +48,12 @@ pub struct ServerConfig {
     pub unreal_url: String,
     pub library: Library,
     pub config_dir: PathBuf,
+    /// Carpeta de datos de la app: ahí viven los ficheros de trabajo que lee la ventana (REQ-27).
+    pub data_dir: PathBuf,
+    /// Cómo se espera a Tripo (cambia en los tests).
+    pub polling: Polling,
+    /// Cuánto espera como máximo una llamada a `generate_3d_model` / `generation_jobs` antes de devolver el estado.
+    pub max_wait: Duration,
     /// Clave de un servicio (`tripo`), del almacén del sistema.
     pub key: KeyLookup,
     /// URL de Tripo (cambia en los tests).
@@ -55,8 +63,14 @@ pub struct ServerConfig {
 pub struct McpServer {
     config: ServerConfig,
     session: Option<McpSession>,
-    spent: f64,
+    board: JobBoard,
+    cancels: Cancels,
+    /// Arranque de este proceso: inicio de sesión si la ventana no está abierta.
+    started_at: u64,
 }
+
+/// Espera por defecto de una llamada larga: por debajo del tiempo límite habitual de los clientes MCP.
+pub const DEFAULT_MAX_WAIT: Duration = Duration::from_secs(45);
 
 /// Lee `--flag valor`.
 fn flag(args: &[String], name: &str) -> Option<String> {
@@ -73,11 +87,15 @@ pub fn config_from_args(args: &[String]) -> ServerConfig {
         (None, None) => (discovery::DEFAULT_MCP_PORT, discovery::DEFAULT_MCP_PATH.to_string()),
     };
     let data = crate::paths::data_dir().unwrap_or_else(|| PathBuf::from("."));
+    let config_dir = crate::paths::config_dir().unwrap_or_else(|| PathBuf::from("."));
     let secrets = Secrets::default();
     ServerConfig {
         unreal_url: endpoint_url(port, &path),
-        library: Library::new(crate::library::library_root(&data)),
-        config_dir: crate::paths::config_dir().unwrap_or_else(|| PathBuf::from(".")),
+        library: Library::new(GenerationSettings::load(&config_dir).library_root(&data)),
+        config_dir,
+        data_dir: data,
+        polling: Polling::default(),
+        max_wait: DEFAULT_MAX_WAIT,
         key: Box::new(move |service| secrets.get(&key_account(service))),
         tripo_base: None,
     }
@@ -90,7 +108,7 @@ const fn schema_object() -> &'static str {
 /// Herramientas que publica el servidor.
 pub fn tool_specs() -> Vec<Value> {
     let tool = |name: &str, description: &str, properties: Value, required: Value| json!({ "name": name, "description": description, "inputSchema": { "type": schema_object(), "properties": properties, "required": required } });
-    vec![
+    let mut specs = vec![
         tool("unreal_list_toolsets", "List the toolsets (groups of tools) of the connected Unreal Editor.", json!({}), json!([])),
         tool("unreal_describe_toolset", "Describe one Unreal Editor toolset: its tools and input schemas.", json!({ "toolset": { "type": "string" } }), json!(["toolset"])),
         tool(
@@ -106,7 +124,24 @@ pub fn tool_specs() -> Vec<Value> {
             json!(["code"]),
         ),
         tool("unreal_describe_python_api", "Exact reference of an `unreal` Python API name in this engine version.", json!({ "name": { "type": "string" } }), json!(["name"])),
-        tool("library_list", "List the generated assets of the DBV Unreal AI library.", json!({ "filter": { "type": "string" } }), json!([])),
+        tool(
+            "library_list",
+            "List the assets of the DBV Unreal AI library (generated or imported): id, name, kind (model, rig, animation, image…), source asset, files and prompt. Use the id with rig_model, animate_model, tripo_run or library_send_to_unreal.",
+            json!({ "filter": { "type": "string" } }),
+            json!([]),
+        ),
+        tool(
+            "library_rename",
+            "Give a library asset a short, meaningful name in the user's language.",
+            json!({ "id": { "type": "string" }, "name": { "type": "string" } }),
+            json!(["id", "name"]),
+        ),
+        tool(
+            "library_import",
+            "Copy into the library a model (.glb, .gltf, .fbx, .obj, .usdz) or an image (.png, .jpg, .webp) from a local path, with the files it needs. Use it for models the user already has, then library_send_to_unreal or rig_model.",
+            json!({ "path": { "type": "string" }, "name": { "type": "string" } }),
+            json!(["path"]),
+        ),
         tool(
             "library_send_to_unreal",
             "Import a library asset into the Unreal project under /Game/DBV/Generated and place it in front of the editor camera.",
@@ -114,12 +149,15 @@ pub fn tool_specs() -> Vec<Value> {
             json!(["id"]),
         ),
         tool(
-            "generate_3d_model",
-            "Generate a 3D model with Tripo (costs about 30 credits). Ask the user first and pass confirm_cost=true only after they accept the cost.",
-            json!({ "prompt": { "type": "string" }, "name": { "type": "string" }, "face_limit": { "type": "integer" }, "confirm_cost": { "type": "boolean" } }),
-            json!(["prompt", "confirm_cost"]),
+            "generation_jobs",
+            "Status and progress of the generation jobs of this session (also those started from the app). With wait_seconds it waits for the running ones to finish (up to 45 s per call) and returns their result. Use it after generate_3d_model returned running jobs.",
+            json!({ "job_id": { "type": "string", "description": "Only this job." }, "wait_seconds": { "type": "integer", "minimum": 0, "maximum": 45 } }),
+            json!([]),
         ),
-    ]
+    ];
+    // Las de Tripo vienen de una única definición, compartida con el asistente integrado (D10).
+    specs.extend(tools::specs(true));
+    specs
 }
 
 fn text_result(text: String, is_error: bool) -> Value {
@@ -144,7 +182,8 @@ fn is_dbv(name: &str) -> bool {
 
 impl McpServer {
     pub fn new(config: ServerConfig) -> Self {
-        Self { config, session: None, spent: 0.0 }
+        let board = JobBoard::new(&config.data_dir);
+        Self { config, session: None, board, cancels: Cancels::default(), started_at: now_secs() }
     }
 
     fn session(&mut self) -> Result<McpSession, UnrealError> {
@@ -213,7 +252,7 @@ impl McpServer {
                     .list()
                     .into_iter()
                     .filter(|e| needle.is_empty() || format!("{} {}", e.name, e.prompt).to_lowercase().contains(&needle))
-                    .map(|e| format!("- {}: \"{}\" ({} {}, prompt: \"{}\")", e.id, e.name, e.provider, e.kind, e.prompt))
+                    .map(|e| format!("- {}: \"{}\" ({} {}{}, files: {}, prompt: \"{}\")", e.id, e.name, e.provider, e.kind, e.parent.as_ref().map(|p| format!(" from {p}")).unwrap_or_default(), e.files.join(", "), e.prompt))
                     .collect();
                 if entries.is_empty() {
                     "the library is empty or nothing matches".to_string()
@@ -221,8 +260,20 @@ impl McpServer {
                     entries.join("\n")
                 }
             }
+            "library_rename" => {
+                let entry = self.config.library.rename(&text(args, "id"), &text(args, "name")).map_err(err)?;
+                format!("Renamed {} to \"{}\"", entry.id, entry.name)
+            }
+            "library_import" => {
+                let name = text(args, "name");
+                let entry = self.config.library.import_file(std::path::Path::new(&text(args, "path")), Some(name.as_str()).filter(|n| !n.is_empty())).map_err(err)?;
+                format!("Imported as {} (\"{}\", {}: {})", entry.id, entry.name, entry.kind, entry.files.join(", "))
+            }
             "library_send_to_unreal" => self.send_to_unreal(&text(args, "id"), args.get("place").and_then(Value::as_bool).unwrap_or(true))?,
-            "generate_3d_model" => self.generate(args)?,
+            "generation_jobs" => self.jobs(args)?,
+            "tripo_operations" => tools::operations_text(args)?,
+            "tripo_balance" => self.balance()?,
+            launcher if tools::LAUNCHERS.contains(&launcher) => self.launch(launcher, args)?,
             other => Err(format!("unknown tool: {other}"))?,
         };
         Ok(result)
@@ -266,29 +317,95 @@ impl McpServer {
         Ok(message)
     }
 
-    fn generate(&mut self, args: &Value) -> Result<String, String> {
-        if args.get("confirm_cost").and_then(Value::as_bool) != Some(true) {
-            return Err(format!("not generated: this costs about {TEXT_TO_MODEL_CREDITS} Tripo credits. Ask the user and call again with confirm_cost=true only if they accept."));
+    fn session_spent(&self) -> f64 {
+        self.board.spent_since(self.board.session_start(self.started_at))
+    }
+
+    /// Espera a que los trabajos `ids` terminen (o se acabe `wait`) y devuelve su estado.
+    fn wait_for(&self, ids: &[String], wait: Duration) -> Vec<JobRecord> {
+        let started = Instant::now();
+        loop {
+            let records: Vec<JobRecord> = ids.iter().filter_map(|id| self.board.get(id)).collect();
+            if records.iter().all(|r| !r.is_active()) || started.elapsed() >= wait {
+                break records;
+            }
+            std::thread::sleep(Duration::from_millis(400));
         }
+    }
+
+    /// Texto para el modelo: el estado de cada trabajo y qué hacer a continuación.
+    fn report(&self, records: &[JobRecord]) -> Result<String, String> {
+        let lines: Vec<String> = records.iter().map(|r| describe(r, &self.config.library)).collect();
+        let running = records.iter().any(JobRecord::is_active);
+        let done = records.iter().any(|r| r.stage == "done");
+        let text = if running {
+            format!("Still running (the user sees the progress in the app):\n{}\nCall generation_jobs with wait_seconds=45 to keep waiting.", lines.join("\n"))
+        } else if done {
+            format!("{}\nThe models are in the library. Show them to the user before bringing one into Unreal with library_send_to_unreal.", lines.join("\n"))
+        } else {
+            lines.join("\n")
+        };
+        if running || done { Ok(text) } else { Err(text) }
+    }
+
+    fn client(&self) -> Result<TripoClient, String> {
         let key = (self.config.key)("tripo").ok_or("there is no Tripo API key: add it in the DBV Unreal AI settings")?;
-        let settings: GenerationSettings = std::fs::read_to_string(settings_path(&self.config.config_dir)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-        if !within_budget(self.spent, TEXT_TO_MODEL_CREDITS, settings.budget_credits) {
-            return Err(format!("not generated: it would exceed the session cap of {} credits", settings.budget_credits));
-        }
-        let prompt = args.get("prompt").and_then(Value::as_str).unwrap_or("").to_string();
-        let request = TextToModel { prompt: prompt.clone(), model: None, texture_quality: None, face_limit: args.get("face_limit").and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok()), smart_low_poly: None, pbr: None };
-        let name = args.get("name").and_then(Value::as_str).filter(|n| !n.trim().is_empty()).map(str::to_string).unwrap_or_else(|| prompt.chars().take(40).collect());
-        let client = match &self.config.tripo_base {
+        Ok(match &self.config.tripo_base {
             Some(base) => TripoClient::with_base_url(&key, base),
             None => TripoClient::new(&key),
-        };
-        let mut submitted = false;
-        let outcome = run_tripo_job(&client, &request, &name, &self.config.library, &AtomicBool::new(false), Polling::default(), |stage, _| submitted |= stage == "submitted");
-        // Solo cuenta para el tope lo que llegó a crear una tarea en Tripo.
-        if submitted {
-            self.spent += TEXT_TO_MODEL_CREDITS;
+        })
+    }
+
+    fn balance(&self) -> Result<String, String> {
+        let balance = self.client()?.balance().map_err(|e| e.to_string())?;
+        Ok(format!("Tripo balance: {} credits available ({} reserved by running tasks). This session has used about {} credits.", balance.balance, balance.frozen, self.session_spent()))
+    }
+
+    /// Cualquier herramienta de Tripo que gasta: traduce, exige confirmar el coste TOTAL, respeta el tope y lanza.
+    fn launch(&mut self, tool: &str, args: &Value) -> Result<String, String> {
+        let launch = tools::build(tool, args, &self.config.library)?;
+        let total = launch.total();
+        let free = total <= 0.0;
+        if !free && args.get("confirm_cost").and_then(Value::as_bool) != Some(true) {
+            let each = if launch.variants > 1 { format!(" ({} x {})", launch.variants, total / f64::from(launch.variants)) } else { String::new() };
+            return Err(format!("not run: {} costs about {total} Tripo credits{each}. Tell the user and call again with confirm_cost=true only if they accept.", launch.operation.name));
         }
-        outcome.map(|entry| format!("Generated and saved in the library: {} (\"{}\"). Use library_send_to_unreal to import it.", entry.id, entry.name)).map_err(|e| e.to_string())
+        let client_key = (self.config.key)("tripo").ok_or("there is no Tripo API key: add it in the DBV Unreal AI settings")?;
+        let settings = GenerationSettings::load(&self.config.config_dir);
+        let spent = self.session_spent();
+        if !within_budget(spent, total, settings.budget_credits) {
+            return Err(format!("not run: it would exceed the session cap of {} credits ({spent} already used)", settings.budget_credits));
+        }
+        let context = JobContext {
+            board: self.board.clone(),
+            library: self.config.library.clone(),
+            key: client_key,
+            base_url: self.config.tripo_base.clone(),
+            polling: self.config.polling,
+            cancels: self.cancels.clone(),
+            hook: Arc::new(|_| {}),
+            source: "agent".into(),
+        };
+        let ids = start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone());
+        self.report(&self.wait_for(&ids, self.config.max_wait))
+    }
+
+    fn jobs(&mut self, args: &Value) -> Result<String, String> {
+        let wait = Duration::from_secs(args.get("wait_seconds").and_then(Value::as_u64).unwrap_or(0).min(self.config.max_wait.as_secs()));
+        let since = self.board.session_start(self.started_at);
+        let ids: Vec<String> = match args.get("job_id").and_then(Value::as_str) {
+            Some(id) => vec![id.to_string()],
+            None => self.board.list().into_iter().filter(|r| r.started_at >= since).map(|r| r.id).take(20).collect(),
+        };
+        if ids.is_empty() {
+            return Ok("no generation jobs in this session".into());
+        }
+        let records = self.wait_for(&ids, wait);
+        if records.is_empty() {
+            return Err(format!("no job {}", ids.join(", ")));
+        }
+        // Aquí un fallo no es un error de la herramienta: es el estado que se pidió.
+        self.report(&records).or_else(Ok)
     }
 
     /// Respuesta a una línea JSON-RPC, o `None` si no toca responder (notificaciones, líneas vacías).
@@ -355,6 +472,9 @@ mod tests {
             unreal_url: "http://127.0.0.1:1/mcp".into(),
             library: Library::new(dir.join("library")),
             config_dir: dir.to_path_buf(),
+            data_dir: dir.to_path_buf(),
+            polling: Polling { interval: Duration::from_millis(1), max_wait: Duration::from_secs(5) },
+            max_wait: Duration::from_secs(5),
             key: Box::new(|_| None),
             tripo_base: None,
         })
@@ -374,7 +494,9 @@ mod tests {
         assert_eq!(init["result"]["serverInfo"]["name"], "dbv-unreal-ai");
         let tools = rpc(&mut s, "tools/list", json!({}));
         let names: Vec<&str> = tools["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert!(names.contains(&"unreal_run_python") && names.contains(&"generate_3d_model") && names.contains(&"library_send_to_unreal"));
+        for expected in ["unreal_run_python", "generate_3d_model", "image_to_3d_model", "rig_model", "animate_model", "tripo_run", "tripo_operations", "tripo_balance", "generation_jobs", "library_send_to_unreal"] {
+            assert!(names.contains(&expected), "{expected}");
+        }
     }
 
     /// @spec REQ-20
@@ -397,11 +519,15 @@ mod tests {
     fn generar_exige_confirmar_el_coste_y_una_clave() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre" } }));
+        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "variants": 3 } }));
         assert_eq!(call["result"]["isError"], true);
-        assert!(call["result"]["content"][0]["text"].as_str().unwrap().contains("confirm_cost=true"));
-        let no_key = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "confirm_cost": true } }));
+        let text = call["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("confirm_cost=true") && text.contains("60") && text.contains("3 x 20"), "avisa del coste TOTAL de las variantes: {text}");
+        let no_key = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "confirm_cost": true } }));
         assert!(no_key["result"]["content"][0]["text"].as_str().unwrap().contains("no Tripo API key"));
+        // REQ-28: sin nombre no se genera; el modelo debe dar uno corto, no el prompt.
+        let nameless = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "confirm_cost": true } }));
+        assert!(nameless["result"]["content"][0]["text"].as_str().unwrap().contains("`name` is required"));
     }
 
     /// @spec REQ-20, REQ-17
@@ -409,7 +535,7 @@ mod tests {
     fn lista_la_biblioteca_y_explica_un_editor_apagado() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        s.config.library.add(LibraryEntry { id: "cofre-1".into(), name: "Cofre".into(), provider: "tripo".into(), kind: "model".into(), prompt: "treasure chest".into(), parameters: Value::Null, task_id: "t".into(), created_at: 1, credits: None, files: vec!["model.glb".into()], thumbnail: None, sent_to: vec![] }).unwrap();
+        s.config.library.add(LibraryEntry { id: "cofre-1".into(), name: "Cofre".into(), provider: "tripo".into(), kind: "model".into(), prompt: "treasure chest".into(), parameters: Value::Null, task_id: "t".into(), created_at: 1, credits: None, files: vec!["model.glb".into()], thumbnail: None, sent_to: vec![], parent: None, output: Value::Null }).unwrap();
         let listed = rpc(&mut s, "tools/call", json!({ "name": "library_list", "arguments": { "filter": "chest" } }));
         assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("cofre-1"));
         let offline = rpc(&mut s, "tools/call", json!({ "name": "unreal_list_toolsets", "arguments": {} }));
@@ -427,11 +553,115 @@ mod tests {
         let mut s = server(dir.path());
         s.config.key = Box::new(|_| Some("sk-mala".into()));
         s.config.tripo_base = Some(api.trim_end_matches("/mcp").to_string());
-        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "confirm_cost": true } }));
+        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "confirm_cost": true } }));
         assert_eq!(call["result"]["isError"], true);
         assert!(call["result"]["content"][0]["text"].as_str().unwrap().contains("invalid api key"));
-        assert_eq!(s.spent, 0.0);
+        assert_eq!(s.session_spent(), 0.0);
         handle.join().unwrap();
+    }
+
+    /// El agente lanza variantes: los trabajos quedan en ficheros con la petición exacta (la ventana los muestra),
+    /// la herramienta devuelve el estado y `generation_jobs` sigue esperando. @spec REQ-27, REQ-29, REQ-33
+    /// Tripo simulado que responde según la petición y no por orden de llegada: con variantes, los hilos
+    /// consultan en cualquier orden. `POST` crea una tarea; `GET /tasks/…` la da por terminada; `GET /m.glb` sirve el modelo.
+    fn fake_tripo(connections: usize) -> (String, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let model_url = format!("{base}/m.glb");
+        let handle = std::thread::spawn(move || {
+            for n in 0..connections {
+                let (mut socket, _) = listener.accept().unwrap();
+                // La petición entera (cabeceras + cuerpo): responder antes de leerla cierra la conexión a medias.
+                let mut received = Vec::new();
+                let mut buffer = [0u8; 8192];
+                loop {
+                    let read = socket.read(&mut buffer).unwrap_or(0);
+                    received.extend_from_slice(&buffer[..read]);
+                    let text = String::from_utf8_lossy(&received).to_string();
+                    let complete = text.find("\r\n\r\n").is_some_and(|end| {
+                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
+                        received.len() >= end + 4 + length
+                    });
+                    if complete || read == 0 {
+                        break;
+                    }
+                }
+                let request = String::from_utf8_lossy(&received).to_string();
+                let body = if request.starts_with("POST") {
+                    format!(r#"{{"code":0,"data":{{"task_id":"t-{n}"}}}}"#)
+                } else if request.starts_with("GET /m.glb") {
+                    "glb".to_string()
+                } else {
+                    format!(r#"{{"code":0,"data":{{"status":"success","progress":100,"output":{{"model_url":"{model_url}"}}}}}}"#)
+                };
+                let _ = write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            }
+        });
+        (base, handle)
+    }
+
+    #[test]
+    fn genera_variantes_en_segundo_plano_y_deja_la_consola_en_ficheros() {
+        // Dos variantes: dos POST, dos GET de estado y dos descargas.
+        let (api, api_handle) = fake_tripo(6);
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        s.config.key = Box::new(|_| Some("sk-ok".into()));
+        s.config.tripo_base = Some(api);
+        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "stylized pirate in T-pose", "name": "Pirata", "variants": 2, "confirm_cost": true } }));
+        let text = call["result"]["content"][0]["text"].as_str().unwrap().to_string();
+        assert_eq!(call["result"]["isError"], false, "{text}");
+        assert!(text.contains("\"Pirata\"") && text.contains("\"Pirata 2\""), "{text}");
+        assert_eq!(s.config.library.list().len(), 2);
+        let jobs = s.board.list();
+        assert_eq!(jobs.len(), 2);
+        assert!(jobs.iter().all(|j| j.source == "agent" && j.stage == "done" && j.request["prompt"] == "stylized pirate in T-pose" && j.log.iter().any(|l| l.contains("POST /generation/text-to-model"))));
+        assert!(!serde_json::to_string(&jobs).unwrap().contains("sk-ok"), "la clave nunca llega a los ficheros de trabajo");
+        assert_eq!(s.session_spent(), 40.0, "2 × 20 (texto con textura, tabla oficial)");
+        let listed = rpc(&mut s, "tools/call", json!({ "name": "generation_jobs", "arguments": {} }));
+        assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("[done"));
+        api_handle.join().unwrap();
+    }
+
+    /// Lo que el agente no podía hacer: riggear el pirata y ponerlo a bailar. Cada paso usa la tarea de Tripo de su
+    /// origen, cuesta lo de la tabla y deja un asset enlazado al anterior. @spec REQ-16, REQ-33
+    #[test]
+    fn riggea_y_anima_un_modelo_de_la_biblioteca() {
+        // Tres operaciones: POST + GET de estado + descarga en cada una.
+        let (api, api_handle) = fake_tripo(9);
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        s.config.key = Box::new(|_| Some("sk-ok".into()));
+        s.config.tripo_base = Some(api);
+        let call = |s: &mut McpServer, name: &str, args: Value| {
+            let response = rpc(s, "tools/call", json!({ "name": name, "arguments": args }));
+            (response["result"]["isError"] == true, response["result"]["content"][0]["text"].as_str().unwrap_or("").to_string())
+        };
+        let (_, made) = call(&mut s, "generate_3d_model", json!({ "prompt": "pirate in T-pose", "name": "Pirata", "confirm_cost": true }));
+        let model = s.config.library.list()[0].clone();
+        assert!(made.contains(&model.id));
+
+        let (refused, price) = call(&mut s, "rig_model", json!({ "id": model.id }));
+        assert!(refused && price.contains("25"), "sin confirmar no gasta y dice el precio: {price}");
+        let (failed, rigged) = call(&mut s, "rig_model", json!({ "id": model.id, "confirm_cost": true }));
+        assert!(!failed, "{rigged}");
+        let rig = s.config.library.list().into_iter().find(|e| e.kind == "rig").unwrap();
+        assert_eq!((rig.name.as_str(), rig.parent.as_deref()), ("Pirata (rig)", Some(model.id.as_str())));
+
+        let (failed, danced) = call(&mut s, "animate_model", json!({ "id": rig.id, "animations": ["dance_01", "wave_goodbye_01"], "confirm_cost": true }));
+        assert!(!failed, "{danced}");
+        let animation = s.config.library.list().into_iter().find(|e| e.kind == "animation").unwrap();
+        assert_eq!(animation.parent.as_deref(), Some(rig.id.as_str()));
+        let jobs = s.board.list();
+        let rig_job = jobs.iter().find(|j| j.kind == "rig").unwrap();
+        assert_eq!(rig_job.request["input"], model.task_id, "el rig usa la tarea del modelo");
+        assert_eq!(rig_job.request["spec"], "tripo");
+        let retarget = jobs.iter().find(|j| j.kind == "retarget").unwrap();
+        assert_eq!(retarget.request["input"], rig.task_id, "las animaciones usan la tarea del rig");
+        assert_eq!(retarget.request["animations"], json!(["preset:biped:dance_01", "preset:biped:wave_goodbye_01"]));
+        assert_eq!(s.session_spent(), 20.0 + 25.0 + 20.0);
+        api_handle.join().unwrap();
     }
 
     #[test]

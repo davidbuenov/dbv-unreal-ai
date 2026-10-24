@@ -16,12 +16,13 @@ import { createApprovalCard } from '../unreal/approvalCard.js';
 import { createPermissionMemory } from '../unreal/permissions.js';
 import { createUnrealTools, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
 import { sendToUnreal } from '../unreal/sendToUnreal.js';
+import { createChatJobs } from '../generation/chatJobs.js';
 import { createGenerationTools } from '../generation/generationTools.js';
 import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
-import { dirName, el } from './dom.js';
+import { button, dirName, el } from './dom.js';
 import { confirmCost, createGenerateView } from './generateView.js';
-import { createLibraryView, sendBackend } from './libraryView.js';
+import { assetThumbnail, createLibraryView, sendBackend } from './libraryView.js';
 import { createProjectView } from './projectView.js';
 import { createSettingsView } from './settingsView.js';
 import { createState } from './state.js';
@@ -63,6 +64,9 @@ export function start() {
       const actions = $('#ai-confirm-actions');
       $('#ai-confirm-title').textContent = options.title || '';
       $('#ai-confirm-text').textContent = options.text || '';
+      // Lo que se enviará (REQ-27): siempre como texto, nunca como HTML.
+      $('#ai-confirm-detail').textContent = options.detail || '';
+      $('#ai-confirm-detail').classList.toggle('hidden', !options.detail);
       actions.replaceChildren();
       const onKey = (event) => {
         if (event.key !== 'Escape') return;
@@ -118,7 +122,29 @@ export function start() {
   for (const item of document.querySelectorAll('.nav-item')) item.addEventListener('click', () => show(item.dataset.view));
 
   views.project = createProjectView($('#view-project'), { state, toast, openModal, closeModal });
-  views.generate = createGenerateView($('#view-generate'), { confirm, toast, onSpent: refreshSpent, openLibrary: () => show('library') });
+  /** Lo que se ve de un trabajo terminado: la miniatura y el camino a la biblioteca. */
+  async function renderJobResult(record, slot) {
+    const listed = record.entryId ? await api.libraryList() : null;
+    const entry = listed?.ok ? listed.value.find((e) => e.id === record.entryId) : null;
+    if (entry) slot.replaceChildren(await assetThumbnail(entry, 'job-thumb'), el('div', { className: 'row' }, button(t('gen.openLibrary'), () => show('library'), 'btn-ghost')));
+  }
+
+  /** Nombre corto para un asset con la IA conectada (local o de nube); `null` si no hay o no responde. */
+  async function suggestName(text) {
+    if (!aiApp) return null;
+    const language = t('gen.nameLanguage');
+    const reply = await aiApp.complete([
+      { role: 'system', content: `Reply with ONLY a short name (1 to 4 words) in ${language} for the 3D asset described by the user. No quotes, no punctuation at the end, no explanations.` },
+      { role: 'user', content: text },
+    ]);
+    const name = String(reply ?? '').split('\n').map((line) => line.trim()).find(Boolean) ?? '';
+    return name.replace(/^["'«“]+|["'»”.]+$/g, '').slice(0, 60) || null;
+  }
+
+  views.generate = createGenerateView($('#view-generate'), { confirm, toast, onSpent: refreshSpent, openLibrary: () => show('library'), suggestName, renderResult: renderJobResult });
+  const chatJobs = createChatJobs({ list: api.generationJobs, renderResult: renderJobResult });
+  // Herramientas de Tripo de Rust (las mismas que ve un agente): se piden una vez al cargar la IA.
+  let generationSpecs = [];
   views.library = createLibraryView($('#view-library'), { state, confirm, toast });
   views.settings = createSettingsView($('#view-settings'), { toast, state, openConnect: () => loadAi().then((app) => app.openConnect()) });
 
@@ -197,9 +223,15 @@ export function start() {
         };
         const unreal = state.connection?.status === 'online' ? createUnrealTools({ backend: unrealBackend(), askApproval, onAction: log.add, permissions: memories.get(conversationId) }) : [];
         const generation = createGenerationTools({
+          specs: generationSpecs,
           status: api.generationStatus,
-          startTripo: (start) => api.startTripo(start).finally(refreshSpent),
-          waitJob: (jobId, timeout) => api.waitJob(jobId, timeout, (p) => panel.addStep(t(`gen.stage.${p.stage}`, { progress: String(Math.round(p.progress ?? 0)), error: p.error ?? '' }))),
+          prepare: api.generationPrepare,
+          launch: (tool, args) => api.launch(tool, args).finally(refreshSpent),
+          waitJob: (jobId, timeout) => api.waitJob(jobId, timeout).finally(refreshSpent),
+          showJobs: (ids) => chatJobs.track(panel, ids),
+          operations: api.generationOperations,
+          balance: api.generationBalance,
+          rename: api.libraryRename,
           listLibrary: api.libraryList,
           send: (entry) => (state.connection?.status === 'online' ? sendToUnreal({ backend: sendBackend(state.connection) }, entry, { project: state.connection.projectPath }) : Promise.resolve({ ok: false, error: 'no Unreal project connected' })),
           askApproval,
@@ -207,6 +239,8 @@ export function start() {
         });
         return [...unreal, ...generation];
       },
+      // Un agente genera en su propio proceso (`--mcp`): sus trabajos aparecen en la conversación (REQ-27).
+      onTurnStart: ({ panel, agent, isBusy }) => agent && chatJobs.follow(panel, isBusy),
       mcpServers: async () => {
         const command = await api.appMcpCommand(state.connection?.endpoint?.port ?? 8000);
         return command.ok ? [{ name: 'dbv-unreal-ai', command: command.value.command, args: command.value.args, env: [] }] : [];
@@ -216,8 +250,11 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js')])
-        .then(([entry, markdown]) => entry.createAi(buildHost(markdown.renderMarkdown)))
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs()])
+        .then(([entry, markdown, specs]) => {
+          generationSpecs = specs.ok ? specs.value : [];
+          return entry.createAi(buildHost(markdown.renderMarkdown));
+        })
         .then((app) => {
           aiApp = app;
           if (state.connection?.projectPath) app.onRootChanged(dirName(state.connection.projectPath));

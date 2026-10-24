@@ -11,9 +11,12 @@
 // compatible (REJECTED-01):
 //   POST /generation/text-to-model → {code: 0, data: {task_id}}
 //   GET  /tasks/{id}               → {code: 0, data: {status, progress, output: {model_url, …}}}
+//   POST /<operación>              → cualquier otra tarea del catálogo (`catalog.rs`), mismo contrato
+//   POST /files (multipart `file`) → {code: 0, data: {file_token}} (imágenes JPEG/PNG ≤ 20 MB, modelos ≤ 150 MB)
+//   GET  /account/balance          → {code: 0, data: {balance, frozen}}
 // La URL del modelo es un enlace firmado que CADUCA A LOS 5 MINUTOS: se descarga en cuanto la
-// tarea termina. `face_limit` es orientativo (pedir 3 000 dio 4 358 triángulos).
-// Imagen → modelo NO está verificado en v3: queda fuera hasta probarlo con una clave real.
+// tarea termina. `face_limit` es orientativo (pedir 3 000 dio 4 358 triángulos). Documentación leída el
+// 2026-10-24 (developers.tripo3d.ai/es/docs); lo que no sea texto → modelo aún no se ha probado con Tripo real.
 
 use std::io::Read;
 use std::path::Path;
@@ -25,10 +28,10 @@ use serde_json::{json, Map, Value};
 use crate::unreal::{io_error, UnrealError};
 
 pub const BASE_URL: &str = "https://openapi.tripo3d.ai/v3";
+/// Punto de la API de texto → modelo (relativo a `BASE_URL`).
+pub const TEXT_TO_MODEL_ENDPOINT: &str = "/generation/text-to-model";
 /// Modelo verificado.
 pub const DEFAULT_MODEL: &str = "v3.1-20260211";
-/// Coste observado de un texto → modelo (créditos). Es una estimación para avisar ANTES de gastar.
-pub const TEXT_TO_MODEL_CREDITS: f64 = 30.0;
 /// Tope de una descarga (un GLB con texturas 4K ronda las decenas de MB).
 pub const MAX_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
 /// Estados finales que no son éxito.
@@ -79,8 +82,20 @@ pub struct TripoTask {
     pub progress: Option<f64>,
     pub model_url: Option<String>,
     pub image_url: Option<String>,
-    /// Campos que parecen créditos (`consumed_credit`…), para el registro del gasto.
+    /// Campos que parecen créditos (`credits_consumed`…), para el registro del gasto.
     pub credits: Option<f64>,
+    /// `output` tal cual: según la operación trae enlaces (`front_view_url`…) o datos (`riggable`, `rig_type`).
+    pub output: Value,
+}
+
+/// Saldo de la cuenta de Tripo.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Balance {
+    /// Créditos disponibles.
+    pub balance: f64,
+    /// Créditos reservados por tareas en curso (se devuelven si fallan).
+    pub frozen: f64,
 }
 
 impl TripoTask {
@@ -107,6 +122,7 @@ pub fn parse_task(data: &Value) -> TripoTask {
         model_url: pick(&["model_url", "pbr_model", "model", "base_model"]),
         image_url: pick(&["rendered_image_url", "rendered_image", "image_url"]),
         credits,
+        output,
     }
 }
 
@@ -155,17 +171,57 @@ impl TripoClient {
         if request.prompt.trim().is_empty() {
             return Err(UnrealError::Format("el prompt está vacío".into()));
         }
-        let url = format!("{}/generation/text-to-model", self.base_url);
+        self.create(TEXT_TO_MODEL_ENDPOINT, &request.body())
+    }
+
+    /// Crea una tarea de cualquier operación (`endpoint` relativo, p. ej. `/animations/rig`) y devuelve su `task_id`.
+    pub fn create(&self, endpoint: &str, body: &Value) -> Result<String, UnrealError> {
+        let url = format!("{}{endpoint}", self.base_url);
         let mut response = Self::agent()
             .post(&url)
             .header("Authorization", &format!("Bearer {}", self.key))
             .header("Content-Type", "application/json")
-            .send_json(request.body())
+            .send_json(body)
             .map_err(|error| UnrealError::Unreachable(format!("no se pudo conectar con Tripo: {error}")))?;
         let status = response.status().as_u16();
         let text = response.body_mut().read_to_string().unwrap_or_default();
         let data = Self::data(status, &text)?;
         data.get("task_id").and_then(Value::as_str).map(str::to_string).ok_or_else(|| UnrealError::Protocol("Tripo respondió sin task_id".into()))
+    }
+
+    /// Sube un fichero local (imagen o modelo) y devuelve su `file_token` para usarlo como `input`.
+    pub fn upload(&self, path: &Path) -> Result<String, UnrealError> {
+        let bytes = std::fs::read(path).map_err(|error| io_error(path, &error))?;
+        let file_name = path.file_name().map(|n| n.to_string_lossy().replace('"', "")).unwrap_or_else(|| "file".into());
+        let boundary = format!("dbv-unreal-ai-{}", crate::library::now_secs());
+        let mut body = format!("--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\nContent-Type: {}\r\n\r\n", mime_of(path)).into_bytes();
+        body.extend_from_slice(&bytes);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        let agent = ureq::Agent::config_builder().http_status_as_error(false).timeout_connect(Some(Duration::from_secs(15))).timeout_global(Some(Duration::from_secs(300))).build().new_agent();
+        let mut response = agent
+            .post(&format!("{}/files", self.base_url))
+            .header("Authorization", &format!("Bearer {}", self.key))
+            .header("Content-Type", &format!("multipart/form-data; boundary={boundary}"))
+            .send(&body[..])
+            .map_err(|error| UnrealError::Unreachable(format!("no se pudo subir el fichero a Tripo: {error}")))?;
+        let status = response.status().as_u16();
+        let text = response.body_mut().read_to_string().unwrap_or_default();
+        let data = Self::data(status, &text)?;
+        data.get("file_token").and_then(Value::as_str).map(str::to_string).ok_or_else(|| UnrealError::Protocol("Tripo respondió sin file_token".into()))
+    }
+
+    /// Saldo de la cuenta (disponible y reservado).
+    pub fn balance(&self) -> Result<Balance, UnrealError> {
+        let mut response = Self::agent()
+            .get(&format!("{}/account/balance", self.base_url))
+            .header("Authorization", &format!("Bearer {}", self.key))
+            .call()
+            .map_err(|error| UnrealError::Unreachable(format!("no se pudo consultar el saldo de Tripo: {error}")))?;
+        let status = response.status().as_u16();
+        let text = response.body_mut().read_to_string().unwrap_or_default();
+        let data = Self::data(status, &text)?;
+        let number = |key: &str| data.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+        Ok(Balance { balance: number("balance"), frozen: number("frozen") })
     }
 
     /// Estado de una tarea.
@@ -179,6 +235,18 @@ impl TripoClient {
         let status = response.status().as_u16();
         let text = response.body_mut().read_to_string().unwrap_or_default();
         Ok(parse_task(&Self::data(status, &text)?))
+    }
+}
+
+/// Tipo MIME de una subida, por la extensión (lo que admite `/v3/files`).
+fn mime_of(path: &Path) -> &'static str {
+    match path.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("glb") => "model/gltf-binary",
+        Some("gltf") => "model/gltf+json",
+        _ => "application/octet-stream",
     }
 }
 
@@ -251,6 +319,26 @@ mod tests {
         assert!(seen[0].starts_with("POST /generation/text-to-model"));
         assert!(seen[0].to_lowercase().contains("authorization: bearer sk-test"));
         assert!(seen[1].starts_with("GET /tasks/t-1"));
+    }
+
+    /// @spec REQ-32, REQ-33
+    #[test]
+    fn sube_ficheros_en_multipart_y_lee_el_saldo() {
+        let (url, handle) = fake_server(vec![
+            http("200 OK", "", r#"{"code":0,"data":{"file_token":"file_abc"}}"#),
+            http("200 OK", "", r#"{"code":0,"data":{"balance":2370.5,"frozen":30}}"#),
+        ]);
+        let client = TripoClient::with_base_url("sk-test", url.trim_end_matches("/mcp"));
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("pirata.png");
+        std::fs::write(&image, b"PNG-bytes").unwrap();
+        assert_eq!(client.upload(&image).unwrap(), "file_abc");
+        assert_eq!(client.balance().unwrap(), Balance { balance: 2370.5, frozen: 30.0 });
+        let seen = handle.join().unwrap();
+        assert!(seen[0].starts_with("POST /files"));
+        assert!(seen[0].contains("multipart/form-data; boundary="));
+        assert!(seen[0].contains("name=\"file\"; filename=\"pirata.png\"") && seen[0].contains("Content-Type: image/png") && seen[0].contains("PNG-bytes"));
+        assert!(seen[1].starts_with("GET /account/balance"));
     }
 
     /// @spec REQ-15

@@ -770,6 +770,8 @@ export function createAiApp(deps) {
     try {
       const spec = { id: agentId(connection) };
       panel.addStep(t('ai.agentStarting').replace('{agent}', providerName(connection)));
+      // El agente trabaja en su propio proceso: el host sigue desde aquí lo que lance (p. ej. trabajos de Tripo).
+      host.onTurnStart?.({ panel, agent: true, isBusy: () => busy });
       const session = await acp.ensureSession(spec);
       const active = activeSource();
       const context = [
@@ -857,6 +859,20 @@ export function createAiApp(deps) {
     },
   });
 
+  /**
+   * Una respuesta suelta del modelo conectado (local o de nube), fuera de la conversación: por ejemplo, el nombre
+   * corto de un asset (REQ-28). `null` sin conexión, con un agente (no hay llamada suelta) o si no se acepta la nube.
+   */
+  async function completeOnce(messages) {
+    const connection = activeConnection();
+    let text = null;
+    if (connection && connection.provider !== 'agent' && (await confirmCloud(connection))) {
+      const response = await client.call(connection.id, { messages, tools: [] }, {});
+      text = response.text;
+    }
+    return text;
+  }
+
   refreshVisibility();
   renderConnections();
   renderConversation();
@@ -874,6 +890,7 @@ export function createAiApp(deps) {
     readText,
     panel,
     inline,
+    complete: completeOnce,
     refreshContext: () => projectRoot && renderContextPreview(),
     /** Tras cambiar «Mostrar las funciones de IA» o las conexiones desde fuera. */
     setFile: (next) => {

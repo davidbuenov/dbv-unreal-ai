@@ -27,10 +27,20 @@
 - [x] **`/code-simplify`** — 2 Críticos y 5 Importantes resueltos (ver CHANGELOG); clippy con unwrap/expect prohibidos, regla de un solo return; todo en verde y eval 5/5.
 - [ ] **`/ship` v0.1** — con el usuario: versión, `walkthrough.md`, `docs/IA.md`, tag.
 
+## v0.1.x — Ampliación tras la primera prueba (REQ-27..REQ-33; plan en `implementation_plan.md` §4)
+
+- [x] **S12 · Trabajos, consola y progreso** (REQ-27, REQ-28, REQ-29) — ficheros de trabajo compartidos, consola en Generar y en la conversación (también del agente), variantes, nombres.
+- [ ] **S13 · Biblioteca: ubicación e importación** (REQ-30) — backend y herramientas MCP hechos; falta la interfaz (Ajustes y Biblioteca).
+- [x] **S14 · Superficie completa de Tripo en el MCP** (REQ-33, REQ-16) — 18 operaciones, herramientas únicas para MCP y asistente, saldo. **Sin verificar con Tripo real** salvo texto → modelo: imagen → modelo, subida de ficheros, rig, retarget y el resto solo contra un Tripo simulado según la documentación.
+- [ ] **S15 · Visor 3D** (REQ-31)
+- [ ] **S16 · Referencias adjuntas** (REQ-32)
+- [ ] **S17 · Esqueletos y animaciones en Unreal** (REQ-16, REQ-19)
+
+
 ## Deuda Técnica
 *Mejoras detectadas fuera del foco de la tarea actual, para abordarlas después.*
 
-- **Imagen → modelo con Tripo (REQ-15):** no implementado; el endpoint v3 no está verificado (necesita una clave real).
+- **Operaciones de Tripo sin probar con la API real:** imagen → modelo, `/v3/files`, rig, retarget, convert y el resto (solo contra un servidor simulado, según la documentación del 2026-10-24). Probar con la clave del usuario y su confirmación de gasto.
 - **Generación real con Tripo:** solo probada contra un servidor simulado; falta una prueba con clave (≈30 créditos).
 - **Variante C++ del toolset (REQ-06, D8):** el usuario la instaló desde la interfaz en su proyecto y el editor arrancó bien (2026-10-24); falta verificar en otro proyecto y en CI con UBT.
 - **Preparar un proyecto real (REQ-05):** el usuario lo ha ejecutado con su proyecto y el editor arrancó bien (2026-10-24); falta el ciclo con un proyecto de plantilla de Epic y la reversión.
@@ -38,7 +48,7 @@
 - **REQ-25 (guías conceptuales):** la referencia sintáctica sale del motor; la búsqueda en las guías de MCPCLiente (D2) no está conectada.
 - **REQ-13 (captura del viewport para modelos multimodales):** las herramientas de Epic `CaptureViewport` se pueden llamar, pero la imagen no se pasa al modelo.
 - **El MCP propio no tiene «run_python» sin el toolset DBV** (la app sí usa el `RunPython` del proyecto como alternativa): decidir si se iguala.
-- **Banco E2E intermitente:** 1 de 4 ejecuciones falló al importar `app/app.js` (ver Lecciones en `memory.md`).
+- **Banco E2E intermitente:** probablemente causado por los Edge que el banco dejaba abiertos (corregido el 2026-10-24); vigilar.
 - **macOS y Linux:** sin probar en máquina real (solo compilan en CI cuando haya remoto).
 - **Regla de un solo `return` en JS/Rust:** el linter solo la verifica en Python; revisada a mano en `/code-simplify`.
 
