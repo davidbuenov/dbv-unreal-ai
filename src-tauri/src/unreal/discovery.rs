@@ -365,4 +365,21 @@ mod tests {
         assert!(port_listening(port));
         drop(listener);
     }
+
+    /// @spec RNF-01
+    #[test]
+    fn el_ejecutable_y_la_carpeta_de_ajustes_dependen_de_la_plataforma() {
+        let editor = editor_executable(Path::new("UE_5.8")).to_string_lossy().replace('\\', "/");
+        let settings = user_settings_ini(Path::new("P")).to_string_lossy().replace('\\', "/");
+        if cfg!(target_os = "windows") {
+            assert!(editor.ends_with("Engine/Binaries/Win64/UnrealEditor.exe"), "{editor}");
+            assert!(settings.ends_with("Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini"), "{settings}");
+        } else if cfg!(target_os = "macos") {
+            assert!(editor.ends_with("Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor"), "{editor}");
+            assert!(settings.contains("MacEditor"));
+        } else {
+            assert!(editor.ends_with("Engine/Binaries/Linux/UnrealEditor"), "{editor}");
+            assert!(settings.contains("LinuxEditor"));
+        }
+    }
 }

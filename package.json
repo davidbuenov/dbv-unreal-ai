@@ -10,7 +10,8 @@
     "test:e2e": "node scripts/e2e/run-all.mjs",
     "test:python": "python -I -m unittest discover -s tests/python",
     "lint": "python dbv-specs-ops/scripts/dbv-lint.py unreal-plugin tests/python",
-    "test:all": "npm test && npm run test:ai && npm run test:python && npm run lint"
+    "test:all": "npm test && npm run test:ai && npm run test:python && npm run lint",
+    "eval:unreal": "node scripts/eval/unreal-eval.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

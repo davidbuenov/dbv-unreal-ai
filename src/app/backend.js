@@ -28,6 +28,8 @@ export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_p
 export const unrealPrepareApply = (path, variant, port) => call('unreal_prepare_apply', { path, variant, port: port ?? null });
 export const unrealPrepareRevert = (path, backup) => call('unreal_prepare_revert', { path, backup });
 export const appMcpCommand = (port) => call('app_mcp_command', { port });
+/** Diagnóstico sin secretos para una incidencia (RNF-08). */
+export const appDiagnostics = () => call('app_diagnostics');
 
 // ─── Generación y biblioteca ─────────────────────────────────────────
 export const generationStatus = () => call('generation_status');

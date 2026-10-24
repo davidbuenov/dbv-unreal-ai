@@ -2,40 +2,50 @@
 
 ## Contexto del Proyecto (Context Snapshot)
 
-* **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: `/spec` v1.1 validado (P-01..P-04 resueltas); listo para `/plan`.
-* **Última decisión técnica**: v0.1 = MVP + MCP propio (REQ-20); toolset en dos variantes (Python por defecto, C++ opcional); splats con plugin de terceros (v0.2); nombre visible «DBV Unreal AI»; coautor David Bueno Carmona.
-* **Próximo paso**: `/plan` de la v0.1 con el spike del toolset Python sobre un editor real (R-02) y la decisión de distribución (P-05).
+* **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo directamente en el editor (World Labs en v0.2).
+* **Estado actual**: v0.1 construida, probada y revisada (`/build` → `/test` → `/code-simplify` encadenados con autorización del usuario, ausente). Sin publicar: falta `/ship`.
+* **Última decisión técnica**: decisiones D1–D8 de `implementation_plan.md` tomadas SIN el usuario (ADR-V010-001 en `memory.md`), para revisar.
+* **Próximo paso**: el usuario revisa ADR-V010-001 y la deuda técnica de abajo; después `/ship` v0.1.
 
 ## Checklist de Tareas
 
 - [x] **Bootstrap** — framework v3.1.0, configuración, activadores, LICENSE, README, git (commit `9fc9b6c`).
-- [x] **`/spec` v1.0** — `SPECIFICATIONS.md`, `DESIGN.md`, `ARCHITECTURE.md` (borrador) tras analizar DBVMCPFirst, el motor 5.8.2, dbv-typst-editor, dbv-tauri-starter, Wordsmith y Holo-Companion.
-- [x] **Cerrar preguntas abiertas** — P-01 MVP + MCP propio, P-02 Python + C++, P-03 plugin de terceros, P-04 «DBV Unreal AI». P-05 (distribución) pasa a `/plan`.
-- [x] **`/spec` v1.2** — incorporado MCPCLiente (lecciones, skill de API, puente) y verificación en vivo contra DBVMCPFirst (protocolo, 22 toolsets, `RunPython`); nuevos REQ-25 (base de conocimiento de la API) y REQ-26 (comprobación del Python antes de ejecutar); respuestas reales guardadas en `tests/fixtures/unreal-mcp/ue-5.8.2/`.
-- [x] **`/plan` v0.1** — Architect Review y desglose en `implementation_plan.md` (decisiones D1–D8).
-- [ ] **S1 · Andamiaje** — código de dbv-tauri-starter con la identidad de DBV Unreal AI; tests en verde.
-- [ ] **S2 · Descubrimiento** (REQ-01, REQ-03) — `.uproject`, instalaciones de Epic, procesos del editor, puerto MCP, recientes.
-- [ ] **S3 · Cliente MCP** (REQ-02) — sesión, tools/list, tools/call, texto/JSON/SSE, `returnValue`, tiempo límite.
-- [ ] **S4 · Toolset DBV en Python** (REQ-06, REQ-25, REQ-26) — `run_python`, `validate_python`, `describe_python_api`, `get_project_info`, `get_scene_summary`; spike en vivo.
-- [ ] **S5 · Diagnóstico y preparación** (REQ-04, REQ-05) — comprobaciones, diff, copia de seguridad, aplicar, revertir.
-- [ ] **S6 · Herramientas de Unreal y permisos** (REQ-10, REQ-12, REQ-13, REQ-26) — bucle de herramientas, lista blanca de lectura, tarjeta de aprobación.
-- [ ] **S7 · Tripo v3 y biblioteca** (REQ-15, REQ-17, RNF-04) — cliente con sondeo y descarga inmediata; catálogo local.
-- [ ] **S8 · Enviar a Unreal** (REQ-19) — importar, colocar delante de la cámara, carpeta del Outliner.
-- [ ] **S9 · MCP propio** (REQ-20, REQ-11) — `--mcp` por stdio y servidores MCP para los agentes ACP.
-- [ ] **S10 · Interfaz** (REQ-08, REQ-14, REQ-24) — barra lateral, conexión, preparación, registro, ES/EN.
-- [ ] **S11 · CI y documentación** — workflow multiplataforma, README, CHANGELOG.
+- [x] **`/spec` v1.0–v1.2** — `SPECIFICATIONS.md`, `DESIGN.md`, `ARCHITECTURE.md`; MCPCLiente y verificación en vivo contra DBVMCPFirst; REQ-25 y REQ-26.
+- [x] **`/plan` v0.1** — Architect Review y `implementation_plan.md` (D1–D8).
+- [x] **S1 · Andamiaje** — código de dbv-tauri-starter con la identidad de DBV Unreal AI.
+- [x] **S2 · Descubrimiento** (REQ-01, REQ-03).
+- [x] **S3 · Cliente MCP** (REQ-02) — verificado en vivo.
+- [x] **S4 · Toolset DBV en Python** (REQ-06, REQ-25, REQ-26) — registrado, probado y retirado en vivo; plantilla C++ sin compilar.
+- [x] **S5 · Diagnóstico y preparación** (REQ-04, REQ-05) — probado sobre proyectos temporales; se niega con el editor abierto.
+- [x] **S6 · Herramientas de Unreal y permisos** (REQ-10, REQ-12, REQ-13, REQ-26).
+- [x] **S7 · Tripo v3 y biblioteca** (REQ-15, REQ-17, RNF-04) — texto → modelo contra servidor simulado (sin gastar créditos).
+- [x] **S8 · Enviar a Unreal** (REQ-19) — GLB real de Tripo importado y colocado en vivo, y limpiado.
+- [x] **S9 · MCP propio** (REQ-20, REQ-11) — verificado en vivo por stdio.
+- [x] **S10 · Interfaz** (REQ-08, REQ-14, REQ-24) — banco E2E en Edge headless.
+- [x] **S11 · CI y documentación** — workflows CI y Release (sin ejecutar aún en GitHub: no hay remoto).
+- [x] **`/test`** — 116 Rust, 193 Vitest, 13 Python, E2E, evals `qwen3:8b` 5/5 ×3 con cero modificaciones sin aprobación; RNF-08 «Copiar diagnóstico».
+- [ ] **`/ship` v0.1** — con el usuario: versión, `walkthrough.md`, `docs/IA.md`, tag.
 
 ## Deuda Técnica
 *Mejoras detectadas fuera del foco de la tarea actual, para abordarlas después.*
 
-- [Ninguna por ahora]
+- **Imagen → modelo con Tripo (REQ-15):** no implementado; el endpoint v3 no está verificado (necesita una clave real).
+- **Generación real con Tripo:** solo probada contra un servidor simulado; falta una prueba con clave (≈30 créditos).
+- **Variante C++ del toolset (REQ-06, D8):** plantilla sin compilar; verificar con UBT en un proyecto con código.
+- **Preparar un proyecto real (REQ-05):** probado en proyectos temporales; falta el ciclo completo con un proyecto de plantilla de Epic y reinicio del editor.
+- **RNF-08:** hecho «Copiar diagnóstico»; falta el log local rotativo.
+- **REQ-25 (guías conceptuales):** la referencia sintáctica sale del motor; la búsqueda en las guías de MCPCLiente (D2) no está conectada.
+- **REQ-13 (captura del viewport para modelos multimodales):** las herramientas de Epic `CaptureViewport` se pueden llamar, pero la imagen no se pasa al modelo.
+- **El MCP propio no tiene «run_python» sin el toolset DBV** (la app sí usa el `RunPython` del proyecto como alternativa): decidir si se iguala.
+- **Banco E2E intermitente:** 1 de 4 ejecuciones falló al importar `app/app.js` (ver Lecciones en `memory.md`).
+- **macOS y Linux:** sin probar en máquina real (solo compilan en CI cuando haya remoto).
+- **Regla de un solo `return` en JS/Rust:** el linter solo la verifica en Python; revisada a mano en `/code-simplify`.
 
 ---
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
 > **Last update / Última actualización:** 2026-10-24
-> **Exact point / Punto exacto:** `/spec` v1.1 cerrado con las respuestas del usuario.
-> **Pending / Pendiente:** `/plan` v0.1 (P-05 distribución y P-06 base de conocimiento incluidas).
-> **Next step / Próximo paso:** `/plan`: Architect Review, spike del toolset Python con un proyecto de UE 5.8 abierto (pedir al usuario que active el MCP) y desglose en slices.
+> **Exact point / Punto exacto:** v0.1 construida y probada; `/code-simplify` en curso o hecho (ver último commit).
+> **Pending / Pendiente:** revisión del usuario (ADR-V010-001, deuda técnica) y `/ship` v0.1.
+> **Next step / Próximo paso:** leer `memory.md` (ADR-V010-001) y esta deuda; decidir versión y ejecutar `/ship`.

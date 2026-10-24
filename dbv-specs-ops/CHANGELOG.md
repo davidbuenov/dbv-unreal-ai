@@ -25,8 +25,13 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - Servidor MCP propio (REQ-20): `dbv-unreal-ai --mcp [--port n] [--project ruta]` por stdio, sin puerto de red; puente al MCP del editor (con validación obligatoria del Python), biblioteca, enviar a Unreal y generación con Tripo (exige `confirm_cost: true` y respeta el tope); verificado en vivo contra el editor. La plantilla C++ del toolset pasa a nombres `snake_case` para compartir contrato con la variante Python.
 - Interfaz de DBV Unreal AI (REQ-08, REQ-14, REQ-24, DESIGN.md): barra lateral (Proyecto · Conversación · Generar · Biblioteca · Ajustes), píldora de conexión con Unreal, conexión automática con el editor que tiene el servidor MCP activo, diagnóstico con el porqué de cada punto, «Preparar» con diff por fichero y «Revertir», registro de acciones exportable a Markdown, tarjeta de coste con el foco en «Cancelar», tema oscuro por defecto y claro, ES/EN. El asistente de IA se carga al abrir la Conversación, con las herramientas de Unreal y de generación y los servidores MCP para los agentes ACP.
 - CI y publicación (ADR-V010-001 D1): verificación en cada push (Rust, Vitest, toolset Python, linter) y Release en borrador con binarios de Windows, macOS universal y Linux al subir un tag.
+- «Copiar diagnóstico» en Ajustes (RNF-08): versión, sistema, instalaciones de Unreal y editores abiertos, sin claves ni prompts.
+- Evals con un modelo real contra el editor real (`npm run eval:unreal -- --model qwen3:8b --toolset unreal-plugin/DBVUnrealAI/Content/Python`): el mismo bucle y las mismas herramientas que la app, con la verdad calculada preguntando al editor. Con `qwen3:8b`: 5/5 en tres ejecuciones y cero modificaciones sin aprobación.
+- Cuando una API está obsoleta, la validación y la referencia de la API dan la llamada equivalente en el subsistema del editor (`unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()`), y el prompt de sistema explica el patrón de subsistemas de Unreal 5.8.
+- Tests etiquetados para todos los requisitos de la v0.1 (REQ-11 con servidores MCP en `session/new`, REQ-13, RNF-01, RNF-05 con la latencia medida, RNF-06, RNF-07, RNF-IA.2).
 
 ### Fixed
 
 - La píldora de conexión volvía a «Sin editor» al cargarse el asistente de IA: `applyTranslations()` reescribía su texto porque llevaba `data-i18n` (detectado con el banco de interfaz en Edge headless).
 - El diff de la preparación no marcaba con «…» las líneas omitidas al principio y al final.
+- Con un modelo de 8B, contar actores con Python agotaba los 12 pasos: el aviso de API obsoleta («usa el subsistema») no decía cuál y el modelo no encontraba la alternativa (detectado por la eval; de 14 llamadas al editor a 4).

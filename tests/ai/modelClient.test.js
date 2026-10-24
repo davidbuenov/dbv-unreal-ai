@@ -5,6 +5,8 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
+// @spec REQ-09, RF-IA-03 — requisitos del catálogo de IA (SPECIFICATIONS.md §3.5) que cubre este fichero.
+//
 
 import { describe, expect, it, vi } from 'vitest';
 import { createModelClient, reduceEvent } from '../../src/ai/modelClient.js';

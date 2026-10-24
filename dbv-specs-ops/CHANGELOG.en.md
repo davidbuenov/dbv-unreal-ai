@@ -25,8 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Own MCP server (REQ-20): `dbv-unreal-ai --mcp [--port n] [--project path]` over stdio, no network port; bridge to the editor MCP (with mandatory Python validation), library, send to Unreal and Tripo generation (requires `confirm_cost: true` and honours the cap); verified live against the editor. The C++ toolset template switches to `snake_case` names to share the contract with the Python variant.
 - DBV Unreal AI UI (REQ-08, REQ-14, REQ-24, DESIGN.md): sidebar (Project · Conversation · Generate · Library · Settings), Unreal connection pill, automatic connection to the editor running the MCP server, readiness check explaining each item, "Prepare" with a per-file diff and "Revert", action log exportable to Markdown, cost card with focus on "Cancel", dark theme by default plus light, ES/EN. The AI assistant loads when the Conversation opens, with the Unreal and generation tools and the MCP servers for ACP agents.
 - CI and release (ADR-V010-001 D1): verification on every push (Rust, Vitest, Python toolset, linter) and a draft Release with Windows, universal macOS and Linux binaries when a tag is pushed.
+- "Copy diagnostics" in Settings (RNF-08): version, system, Unreal installations and open editors, without keys or prompts.
+- Evals with a real model against the real editor (`npm run eval:unreal -- --model qwen3:8b --toolset unreal-plugin/DBVUnrealAI/Content/Python`): the same loop and tools as the app, with the ground truth computed by querying the editor. With `qwen3:8b`: 5/5 in three runs and zero modifications without approval.
+- When an API is deprecated, the validation and the API reference give the equivalent editor subsystem call (`unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()`), and the system prompt explains the Unreal 5.8 subsystem pattern.
+- Tagged tests for every v0.1 requirement (REQ-11 with MCP servers in `session/new`, REQ-13, RNF-01, RNF-05 with measured latency, RNF-06, RNF-07, RNF-IA.2).
 
 ### Fixed
 
 - The connection pill went back to "No editor" when the AI assistant loaded: `applyTranslations()` rewrote its text because it carried `data-i18n` (caught by the headless Edge UI bench).
 - The preparation diff did not mark lines skipped at the start and the end with "…".
+- With an 8B model, counting actors with Python ran out of its 12 steps: the deprecated-API warning ("use the subsystem") did not say which one and the model could not find the alternative (caught by the eval; from 14 editor calls down to 4).

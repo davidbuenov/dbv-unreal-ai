@@ -35,6 +35,32 @@ fn app_mcp_command(port: u16) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "command": exe.to_string_lossy(), "args": ["--mcp", "--port", port.to_string()] }))
 }
 
+/// Diagnóstico para una incidencia (RNF-08): versión, sistema, instalaciones de Unreal y editores
+/// abiertos. Nunca lleva claves, prompts ni contenido de proyectos.
+#[cfg(desktop)]
+pub fn diagnostics(engines: &[unreal::discovery::EngineInstall], editors: &[unreal::commands::EditorStatus]) -> serde_json::Value {
+    serde_json::json!({
+        "app": "DBV Unreal AI",
+        "version": env!("CARGO_PKG_VERSION"),
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "engines": engines.iter().map(|e| serde_json::json!({ "version": e.version, "root": e.root, "editorExists": e.editor_exists })).collect::<Vec<_>>(),
+        "editors": editors.iter().map(|e| serde_json::json!({ "project": e.editor.project, "port": e.mcp.as_ref().map(|m| m.port), "autoStart": e.mcp.as_ref().and_then(|m| m.auto_start), "listening": e.listening })).collect::<Vec<_>>(),
+    })
+}
+
+/// @spec RNF-08
+#[cfg(desktop)]
+#[tauri::command]
+async fn app_diagnostics() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let editors: Vec<unreal::commands::EditorStatus> = unreal::discovery::running_editors().into_iter().map(unreal::commands::editor_status).collect();
+        diagnostics(&unreal::discovery::find_engines(), &editors)
+    })
+    .await
+    .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -53,6 +79,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             #[cfg(desktop)]
             app_mcp_command,
+            #[cfg(desktop)]
+            app_diagnostics,
             #[cfg(desktop)]
             ai::commands::ai_connections,
             #[cfg(desktop)]
@@ -134,4 +162,26 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(all(test, desktop))]
+mod tests {
+    use super::*;
+    use unreal::commands::EditorStatus;
+    use unreal::discovery::{EngineInstall, McpSettings, RunningEditor};
+
+    /// @spec RNF-08
+    #[test]
+    fn el_diagnostico_no_lleva_secretos_y_describe_el_entorno() {
+        let engines = vec![EngineInstall { version: "5.8.2".into(), major: 5, minor: 8, patch: 2, root: "D:/UE_5.8".into(), editor: "D:/UE_5.8/x.exe".into(), editor_exists: true }];
+        let editors = vec![EditorStatus { editor: RunningEditor { pid: 1, executable: "x".into(), project: Some("D:/P/P.uproject".into()) }, project: None, mcp: Some(McpSettings { port: 8000, path: "/mcp".into(), auto_start: Some(true) }), listening: true }];
+        let report = diagnostics(&engines, &editors);
+        assert_eq!(report["engines"][0]["version"], "5.8.2");
+        assert_eq!(report["editors"][0]["port"], 8000);
+        assert_eq!(report["os"], std::env::consts::OS);
+        let text = report.to_string().to_lowercase();
+        for secret in ["key", "token", "prompt", "password"] {
+            assert!(!text.contains(secret), "{secret} en el diagnóstico");
+        }
+    }
 }

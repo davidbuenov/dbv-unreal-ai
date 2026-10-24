@@ -9,8 +9,8 @@
 
 ## 🎯 Contexto Activo
 
-- **Estado actual del desarrollo:** Bootstrap hecho (2026-10-24). `/spec` v1.1 validado (`SPECIFICATIONS.md` REQ-01..24, RNF-01..08, catálogo RNF-IA/RF-IA adaptado; `DESIGN.md`; `ARCHITECTURE.md` en borrador). Aún no hay código: la base será el código de dbv-tauri-starter.
-- **Foco inmediato:** `/plan` de la v0.1, empezando por un spike del toolset en Python sobre un editor real (R-02).
+- **Estado actual del desarrollo:** v0.1 construida y probada (2026-10-24), sin publicar: S1–S11 de `implementation_plan.md`. Tests: 116 Rust, 193 Vitest, 13 Python, banco E2E en Edge headless y evals con `qwen3:8b` contra el editor real (5/5). Verificado en vivo contra UE 5.8.2 (DBVMCPFirst): cliente MCP, toolset Python (registro temporal y retirada), importación GLB + colocación, MCP propio por stdio.
+- **Foco inmediato:** revisión del usuario de las decisiones tomadas sin él (ADR-V010-001) y de la deuda de `task.md`; después `/ship` v0.1.
 
 ## 🏗️ Log de Decisiones Técnicas (ADR Ligero)
 *Registro de por qué se tomaron ciertas rutas (ej. cambios en librerías, arquitectura o patrones). Formato: `- **AAAA-MM-DD - Título:** decisión y motivo.`*
@@ -38,6 +38,11 @@
 - **2026-10-24 — Un toolset C++ propio no se registra solo** (lección de MCPCLiente/`EventoUnrealMCP`): `UToolsetRegistry::RegisterToolsetClass` en `OnPostEngineInit` del módulo del proyecto. Los Python se registran desde `init_unreal.py`.
 - **2026-10-24 — El protocolo MCP no puede obligar a un modelo a consultar la documentación antes de actuar** (MCPCLiente). Como esta app es el host, sí puede: REQ-26 comprueba el Python antes de ejecutarlo. En vivo, `EditorLevelLibrary.get_editor_world` dio `DeprecationWarning`: la IA tiende a usar APIs obsoletas.
 - **2026-10-24 — Convención del usuario:** todo lo creado por IA en Unreal va bajo `/Game/DBV/<TipoDeAsset>` y los actores relacionados en carpetas del Outliner (MCPCLiente, Paso 7 de su guía; el nivel de pruebas es `/Game/DBV/Maps/dbv-unreal-ai`).
+- **2026-10-24 — Toolset Python de Unreal: tres detalles que solo se ven en vivo.** (1) `Registration` se importa de `toolset_registry.registration`, no del paquete raíz. (2) `toolset_registry.tool_call` genera las `UFunction` de las anotaciones: con `from __future__ import annotations` serían cadenas, así que `toolset.py` es la excepción a ese estándar. (3) El nombre que publica el registro es `PythonTypes.<Clase>` y lleva un sufijo `_0x…` si la clase se redefine en la misma sesión: se busca por la clase (`isDbvToolset`), nunca por el nombre exacto.
+- **2026-10-24 — `StaticMeshTools.import_file` de Epic fuerza `FbxFactory` y rechaza los `.glb`.** Un `AssetImportTask` sin fábrica deja que el motor use Interchange: el GLB de Tripo entra con malla, material y textura, a escala correcta (100 cm). Por eso existe `import_model` en el toolset DBV.
+- **2026-10-24 — Un elemento con `data-i18n` cuyo texto pinta el JS se pisa en cada `applyTranslations()`** (y los módulos perezosos la llaman al registrar sus textos). La píldora de conexión volvía a «Sin editor» al cargar la IA. Lo vio el banco E2E por captura, no los tests unitarios.
+- **2026-10-24 — «Usa la función del Unreal Editor Subsystem» no basta para un modelo de 8B.** La eval con `qwen3:8b` agotaba 12 pasos buscando la alternativa. Dar la llamada concreta (mismo nombre de miembro en un `*EditorSubsystem`) lo bajó de 14 llamadas a 4 y 5/5 estable. Una eval con el editor real como juez encontró lo que ningún test determinista habría visto.
+- **2026-10-24 — El banco E2E falló 1 de 4 veces con «Failed to fetch dynamically imported module: app/app.js»** aunque el resto de comprobaciones pasaron en esa misma ejecución. Sin diagnosticar (deuda técnica): no se añadieron reintentos que lo taparan.
 - **2026-10-24 — Synology Drive no sincroniza ficheros ocultos** (`.git`, `.github/`, `.claude/`…): MCPCLiente perdió su `.git` en otro equipo. Tener remoto desde el principio.
 - **2026-10-24 — Tripo:** usar la API **v3** (`openapi.tripo3d.ai/v3`), no la v2 de Wordsmith (incompatible). La URL del GLB caduca a los 5 minutos: descargar al momento. `face_limit` es orientativo. El rig `v1.0-20240301` da un esqueleto Mixamo limpio en bípedos; `v2.5-20260210` es para criaturas (fuente: memoria de Holo-Companion).
 - **2026-10-24 — World Labs:** los Gaussian Splats no tienen triángulos; para colisiones y suelo hay que usar la malla de colisión que entrega World Labs (lección de Wordsmith).

@@ -5,6 +5,8 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
+// @spec REQ-09, RF-IA-01 — requisitos del catálogo de IA (SPECIFICATIONS.md §3.5) que cubre este fichero.
+//
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerTranslations } from '../../src/ai/i18nBridge.js';

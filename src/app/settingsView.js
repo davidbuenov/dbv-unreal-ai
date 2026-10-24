@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec RNF-IA.4, RNF-04, REQ-20
+// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08
 //
 // La clave de Tripo solo viaja de ida: el campo nunca se rellena con la guardada, solo se dice
 // si hay una (RNF-IA.4).
@@ -61,6 +61,17 @@ export function createSettingsView(host, deps) {
         })),
       ),
       el('div', { className: 'card stack' }, el('h3', { text: t('settings.mcp') }), el('p', { className: 'hint', text: t('settings.mcpHint') }), command.ok ? el('pre', { className: 'diff', text: mcpClientConfig(command.value) }) : null),
+      el(
+        'div',
+        { className: 'card stack' },
+        el('p', { className: 'hint', text: t('settings.diagnosticsHint') }),
+        el('div', { className: 'row' }, button(t('settings.diagnostics'), async () => {
+          const report = await api.appDiagnostics();
+          if (!report.ok) return deps.toast(report.error.message, 'error');
+          await navigator.clipboard.writeText(JSON.stringify(report.value, null, 2));
+          return deps.toast(t('settings.diagnosticsCopied'));
+        })),
+      ),
     );
   }
   return { render };

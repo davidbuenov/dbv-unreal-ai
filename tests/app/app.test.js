@@ -14,6 +14,7 @@ import { mcpClientConfig } from '../../src/app/settingsView.js';
 import { createState } from '../../src/app/state.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 import { createApprovalCard } from '../../src/unreal/approvalCard.js';
+import { confirmCost } from '../../src/app/generateView.js';
 
 // jsdom arranca en inglés: las aserciones de texto están escritas en español.
 beforeAll(() => window.DBV_I18N.setLang('es'));
@@ -83,7 +84,7 @@ describe('biblioteca, registro y ajustes (REQ-14, REQ-17, REQ-20)', () => {
 });
 
 describe('tarjeta de aprobación (REQ-12)', () => {
-  it('enseña el código entero como texto y resuelve con la elección @spec REQ-12', async () => {
+  it('enseña el código entero como texto y resuelve con la elección; el foco empieza en «Denegar» @spec REQ-12, RNF-07', async () => {
     const code = '<img src=x onerror=alert(1)>\nprint(1)';
     const card = createApprovalCard({ kind: 'python', toolset: 'DBV', tool: 'run_python', code, purpose: 'Probar', validated: true, findings: { findings: [{ kind: 'deprecated', line: 1, message: 'old' }] } });
     document.body.append(card.node);
@@ -104,5 +105,19 @@ describe('tarjeta de aprobación (REQ-12)', () => {
     expect(card.node.textContent).toMatch(/no se ha podido validar/);
     card.node.querySelector('.btn-link').click();
     expect(card.node.querySelector('pre').textContent).toBe(code);
+  });
+});
+
+describe('privacidad y coste (RNF-IA.2, RNF-04)', () => {
+  it('la tarjeta de coste avisa de que el prompt sale hacia Tripo y deja «Cancelar» con el foco @spec RNF-IA.2, RNF-04, RNF-07', async () => {
+    let seen = null;
+    const accepted = await confirmCost(async (options) => {
+      seen = options;
+      return 'cancel';
+    }, { name: 'Cofre', prompt: 'chest', cost: 30, spent: 60, budget: 300 });
+    expect(accepted).toBe(false);
+    expect(seen.text).toMatch(/se envía a Tripo/);
+    expect(seen.text).toMatch(/30 créditos/);
+    expect(seen.choices.at(-1).key).toBe('cancel');
   });
 });

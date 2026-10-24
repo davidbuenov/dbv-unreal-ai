@@ -5,6 +5,8 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
+// @spec RF-IA-04 — requisitos del catálogo de IA (SPECIFICATIONS.md §3.5) que cubre este fichero.
+//
 
 import { describe, expect, it } from 'vitest';
 import { applyRegions, countChanges, diffRegions, rebase } from '../../src/ai/diff.js';

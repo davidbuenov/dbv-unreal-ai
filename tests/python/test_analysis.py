@@ -45,11 +45,20 @@ class EditorLevelLibrary:
         return None
 
 
+class UnrealEditorSubsystem:
+    """Subsistema del editor que sustituye a EditorLevelLibrary."""
+
+    def get_editor_world(self):  # noqa: ANN201
+        """X.get_editor_world() -> World"""
+        return None
+
+
 def fake_unreal() -> types.ModuleType:
     """Módulo ``unreal`` mínimo para los tests."""
     module = types.ModuleType("unreal")
     module.EditorAssetLibrary = EditorAssetLibrary
     module.EditorLevelLibrary = EditorLevelLibrary
+    module.UnrealEditorSubsystem = UnrealEditorSubsystem
     module.log = lambda message: print(f"LOG {message}")
     return module
 
@@ -87,6 +96,8 @@ class ValidateCodeTests(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual(report["findings"][0]["kind"], "deprecated")
         self.assertIn("Unreal Editor Subsystem", report["findings"][0]["message"])
+        # La alternativa concreta, no solo «usa un subsistema» (eval con qwen3:8b del 2026-10-24).
+        self.assertEqual(report["findings"][0]["suggestions"], ["unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()"])
 
     def test_sigue_los_alias_y_los_from_import(self) -> None:
         """@spec REQ-26"""
@@ -122,7 +133,10 @@ class DescribeNameTests(unittest.TestCase):
         cls = analysis.describe_name("EditorAssetLibrary", unreal)
         self.assertEqual(cls["kind"], "class")
         self.assertIn("does_directory_exist", cls["members"])
-        self.assertTrue(analysis.describe_name("EditorLevelLibrary.get_editor_world", unreal)["deprecated"])
+        old = analysis.describe_name("EditorLevelLibrary.get_editor_world", unreal)
+        self.assertTrue(old["deprecated"])
+        self.assertEqual(old["alternatives"], ["unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()"])
+        self.assertEqual(analysis.describe_name("EditorAssetLibrary.load_asset", unreal)["alternatives"], [])
 
     def test_un_nombre_que_no_existe_trae_sugerencias(self) -> None:
         """@spec REQ-25"""

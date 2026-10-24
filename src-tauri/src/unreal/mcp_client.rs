@@ -451,6 +451,26 @@ pub(crate) mod tests {
         assert!(matches!(McpSession::connect(&endpoint_url(port, "/mcp")), Err(UnrealError::Unreachable(_))));
     }
 
+    /// Latencia que añade el cliente a una llamada (serializar, HTTP local, interpretar y desenvolver): < 50 ms.
+    /// @spec RNF-05
+    #[test]
+    fn el_cliente_anade_menos_de_50_ms_por_llamada() {
+        const CALLS: usize = 20;
+        let init = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18"}}"#;
+        let call = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"content":[{"type":"text","text":"{\"returnValue\":\"{\\\"n\\\": 3}\"}"}]}}"#;
+        let mut responses = vec![http("200 OK", "Mcp-Session-Id: s\r\n", init), http("202 Accepted", "", "")];
+        responses.extend((0..CALLS).map(|_| http("200 OK", "", call)));
+        let (url, handle) = fake_server(responses);
+        let session = McpSession::connect(&url).unwrap();
+        let started = std::time::Instant::now();
+        for _ in 0..CALLS {
+            assert_eq!(session.call_toolset_tool("T", "x", json!({}), DEFAULT_TIMEOUT).unwrap().value, Some(json!({"n": 3})));
+        }
+        let average = started.elapsed() / CALLS as u32;
+        handle.join().unwrap();
+        assert!(average < Duration::from_millis(50), "media por llamada: {average:?}");
+    }
+
     /// Contra el editor real (no corre por defecto): `DBV_UNREAL_MCP_PORT=8000 cargo test -- --ignored en_vivo`.
     /// @spec REQ-02
     #[test]

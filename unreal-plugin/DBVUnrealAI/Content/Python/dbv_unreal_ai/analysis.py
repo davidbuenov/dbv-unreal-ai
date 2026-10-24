@@ -64,6 +64,22 @@ def _deprecation_note(obj: Any) -> str:
     return result[:300]
 
 
+def subsystem_alternatives(name: str, module: Any) -> list[str]:
+    """Llamadas equivalentes en los subsistemas del editor para un miembro obsoleto.
+
+    Unreal 5.8 marca obsoleto ``EditorLevelLibrary`` («Use the function in Unreal Editor Subsystem»)
+    sin decir cuál; casi siempre es un subsistema con un miembro del MISMO nombre
+    (``get_editor_world`` → ``UnrealEditorSubsystem``, ``get_all_level_actors`` → ``EditorActorSubsystem``,
+    comprobado en vivo). Sin esto, un modelo de 8B no encontraba la alternativa (eval del 2026-10-24).
+    """
+    found: list[str] = []
+    for candidate in sorted(n for n in dir(module) if n.endswith("Subsystem") and "Editor" in n):
+        owner = getattr(module, candidate, None)
+        if isinstance(owner, type) and hasattr(owner, name):
+            found.append(f"unreal.get_editor_subsystem(unreal.{candidate}).{name}()")
+    return found[:3]
+
+
 def _aliases(tree: ast.AST) -> tuple[set[str], dict[str, str]]:
     """Nombres con los que el código se refiere a ``unreal`` y a sus miembros importados.
 
@@ -109,7 +125,7 @@ def _resolve(module: Any, start: str, parts: list[str], line: int) -> Optional[F
             finding = Finding("unknown", line, dotted, f"{dotted} does not exist in this engine version", difflib.get_close_matches(name, candidates, n=3))
             break
         if is_deprecated(nxt):
-            finding = Finding("deprecated", line, dotted, f"{dotted}: {_deprecation_note(nxt)}")
+            finding = Finding("deprecated", line, dotted, f"{dotted}: {_deprecation_note(nxt)}", subsystem_alternatives(name, module))
             break
         # Más allá de una clase (instancias, valores devueltos) ya no se puede resolver sin ejecutar.
         if not isinstance(nxt, type) and getattr(nxt, "__module__", None) not in (None, "unreal", "_unreal_core"):
@@ -209,11 +225,13 @@ def describe_name(name: str, module: Any) -> dict[str, Any]:
         doc = getattr(current, "__doc__", None) or ""
         kind = "class" if isinstance(current, type) else ("callable" if callable(current) else type(current).__name__)
         members = sorted(n for n in dir(current) if not n.startswith("_"))[:MEMBER_LIMIT] if isinstance(current, type) else []
+        deprecated = is_deprecated(current)
         result = {
             "exists": True,
             "name": "unreal." + ".".join(walked),
             "kind": kind,
-            "deprecated": is_deprecated(current),
+            "deprecated": deprecated,
+            "alternatives": subsystem_alternatives(walked[-1], module) if deprecated else [],
             "doc": _clip(doc, 3000),
             "members": members,
         }

@@ -287,7 +287,8 @@ mod tests {
         assert!(!same_path("D:/A/A.uproject", "D:/B/A.uproject"));
     }
 
-    /// @spec REQ-02
+    /// La app solo habla con 127.0.0.1: el frontend da puerto y ruta, nunca un host.
+    /// @spec REQ-02, RNF-06
     #[test]
     fn el_endpoint_siempre_apunta_a_localhost() {
         let endpoint = Endpoint { port: 8100, path: None };

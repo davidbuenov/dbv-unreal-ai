@@ -196,5 +196,25 @@ describe('formato y prompt', () => {
     expect(prompt).toMatch(/DBVMCPFirst/);
     expect(prompt).toMatch(/\/Game\/DBV/);
     expect(prompt).toMatch(/unreal_describe_python_api/);
+    expect(prompt).toMatch(/EditorActorSubsystem\)\.get_all_level_actors\(\)/);
+  });
+});
+
+describe('contexto del proyecto y del editor (REQ-13)', () => {
+  it('el resumen de escena y la info del proyecto son de lectura y van al toolset DBV @spec REQ-13', async () => {
+    const backend = fakeBackend({ responses: { get_scene_summary: { text: '', isError: false, value: { total: 2, counts: { DirectionalLight: 1, SkyLight: 1 } } }, get_project_info: { text: '', isError: false, value: { engine_version: '5.8.2' } } } });
+    const askApproval = vi.fn();
+    const tools = createUnrealTools({ backend, askApproval });
+    expect(await tool(tools, 'unreal_scene_summary').run({ class_filter: 'Light', limit: 5 })).toBe('{"total":2,"counts":{"DirectionalLight":1,"SkyLight":1}}');
+    expect(await tool(tools, 'unreal_project_info').run({})).toMatch(/5\.8\.2/);
+    expect(backend.calls[0]).toMatchObject({ tool: 'get_scene_summary', args: { name_filter: '', class_filter: 'Light', limit: 5 } });
+    expect(askApproval).not.toHaveBeenCalled();
+  });
+
+  it('sin toolset DBV, el resumen de escena usa el GetActors del proyecto @spec REQ-13', async () => {
+    const toolsets = [{ name: 'DBVMCPFirst.MyCustomSceneToolset', description: '' }];
+    const described = { 'DBVMCPFirst.MyCustomSceneToolset': { name: 'DBVMCPFirst.MyCustomSceneToolset', tools: [{ name: 'RunPython', description: '', inputSchema: {} }, { name: 'GetActors', description: '', inputSchema: {} }] } };
+    const backend = fakeBackend({ toolsets, described, responses: { GetActors: { text: '', isError: false, value: { actors: [] } } } });
+    expect(await tool(createUnrealTools({ backend, askApproval: vi.fn() }), 'unreal_scene_summary').run({})).toBe('{"actors":[]}');
   });
 });

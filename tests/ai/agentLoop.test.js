@@ -5,6 +5,8 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
+// @spec REQ-08, REQ-10 — requisitos del catálogo de IA (SPECIFICATIONS.md §3.5) que cubre este fichero.
+//
 
 import { describe, expect, it, vi } from 'vitest';
 import { diagnoseResponse, extractTextToolCalls, parseArguments, proposeNudge, runAgent } from '../../src/ai/agentLoop.js';

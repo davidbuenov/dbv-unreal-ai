@@ -5,6 +5,8 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
+// @spec REQ-09, REQ-11, RF-IA-02 — requisitos del catálogo de IA (SPECIFICATIONS.md §3.5) que cubre este fichero.
+//
 
 import { describe, expect, it, vi } from 'vitest';
 import { createAcpSession, describeUpdate, insideProject, sliceLines } from '../../src/ai/acpSession.js';
@@ -51,6 +53,7 @@ function setup(overrides = {}) {
     askPermission: overrides.askPermission ?? (async (params) => params.options[0].optionId),
     stageWrite: async (relative, content) => staged.push({ relative, content }),
     onUpdate: (update) => updates.push(update),
+    ...(overrides.mcpServers ? { mcpServers: overrides.mcpServers } : {}),
   });
   return { backend, session, updates, staged };
 }
@@ -174,5 +177,20 @@ describe('tarjetas de permiso y de cambios', () => {
     );
     [...card.querySelectorAll('button')].at(-1).click();
     await vi.waitFor(() => expect(undo).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('servidores MCP para el agente (DBV Unreal AI)', () => {
+  it('session/new recibe el servidor MCP propio de la app @spec REQ-11, REQ-20', async () => {
+    const server = { name: 'dbv-unreal-ai', command: 'C:/app/dbv-unreal-ai.exe', args: ['--mcp', '--port', '8000'], env: [] };
+    const { backend, session } = setup({ mcpServers: async () => [server] });
+    await session.ensureSession({ id: 'claude' });
+    expect(backend.sent.find((m) => m.method === 'session/new').params.mcpServers).toEqual([server]);
+  });
+
+  it('si el host no da una lista válida, se manda una vacía @spec REQ-11', async () => {
+    const { backend, session } = setup({ mcpServers: async () => null });
+    await session.ensureSession({ id: 'claude' });
+    expect(backend.sent.find((m) => m.method === 'session/new').params.mcpServers).toEqual([]);
   });
 });

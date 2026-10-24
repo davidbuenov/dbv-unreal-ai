@@ -5,6 +5,8 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
+// @spec RF-IA-04 — requisitos del catálogo de IA (SPECIFICATIONS.md §3.5) que cubre este fichero.
+//
 // La regla que se protege: el documento ABIERTO se cambia en el editor (deshacible,
 // «Modificado») y NUNCA se escribe en disco por detrás de él; los demás
 // documentos se escriben tras la revisión; un documento nuevo se deshace
