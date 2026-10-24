@@ -13,6 +13,12 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+_Nada todavía._
+
+## [0.1.0] - 2026-10-24
+
+Primera versión: conexión con Unreal 5.8 por MCP, preparación del proyecto, conversación con IA local, de nube o agentes con permisos, toda la API de Tripo con consola y coste, biblioteca con visor 3D y envío a Unreal, y servidor MCP propio.
+
 ### Added
 
 - Bootstrap del proyecto con el framework SDD dbv-specs-ops v3.1.0: identidad del proyecto, activadores para los asistentes de IA, licencia MIT y README inicial.

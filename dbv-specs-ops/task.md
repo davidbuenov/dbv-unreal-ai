@@ -25,7 +25,7 @@
 - [x] **S11 · CI y documentación** — workflows CI y Release (sin ejecutar aún en GitHub: no hay remoto).
 - [x] **`/test`** — 116 Rust, 193 Vitest, 13 Python, E2E, evals `qwen3:8b` 5/5 ×3 con cero modificaciones sin aprobación; RNF-08 «Copiar diagnóstico».
 - [x] **`/code-simplify`** — 2 Críticos y 5 Importantes resueltos (ver CHANGELOG); clippy con unwrap/expect prohibidos, regla de un solo return; todo en verde y eval 5/5.
-- [ ] **`/ship` v0.1** — con el usuario: versión, `walkthrough.md`, `docs/IA.md`, tag.
+- [x] **`/ship` v0.1.0** (2026-10-24) — versión elegida por el usuario, `walkthrough.md`, `docs/IA.md`/`IA.en.md`, CHANGELOG publicado, tag `v0.1.0`.
 
 ## v0.1.x — Ampliación tras la primera prueba (REQ-27..REQ-33; plan en `implementation_plan.md` §4)
 
@@ -58,6 +58,6 @@
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
 > **Last update / Última actualización:** 2026-10-24
-> **Exact point / Punto exacto:** v0.1.x construida (S12–S17: API completa de Tripo para IA y agentes, consola y progreso de trabajos, variantes, nombres, biblioteca importable y configurable, visor 3D, adjuntos, personajes en Unreal, logo de la comunidad). Tests en verde (Rust, Vitest, Python, E2E).
-> **Pending / Pendiente:** probar con la API real de Tripo (con confirmación de gasto del usuario) y con el editor abierto (S17); `/code-simplify` de la v0.1.x; `/ship`.
-> **Next step / Próximo paso:** el usuario prueba la app; después, verificación en vivo y `/code-simplify`.
+> **Exact point / Punto exacto:** v0.1.0 publicada en local (commit de release + tag `v0.1.0`; sin remoto). Revisión de la v0.1.x cerrada sin Críticos.
+> **Pending / Pendiente:** verificar con la API real de Tripo y con el editor abierto (S17); crear el remoto de GitHub y subir (`git push origin master --tags`) para que el workflow de Release compile los instaladores.
+> **Next step / Próximo paso:** el usuario prueba la v0.1.0; los hallazgos entran como `[Sin publicar]` de la próxima versión.

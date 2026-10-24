@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.1.0] - 2026-10-24
+
+First release: connection to Unreal 5.8 through MCP, project preparation, conversation with a local or cloud AI or agents with permissions, the whole Tripo API with console and cost, a library with 3D viewer and send to Unreal, and the app's own MCP server.
+
 ### Added
 
 - Project bootstrap with the dbv-specs-ops v3.1.0 SDD framework: project identity, activation files for AI assistants, MIT license and initial README.

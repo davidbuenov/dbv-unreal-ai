@@ -14,6 +14,7 @@
 - [Requisitos](#requirements)
 - [Cómo ejecutar](#usage)
 - [Usarlo desde otros agentes (MCP)](#mcp)
+- [Qué IA usar](./docs/IA.md)
 - [Tests](#tests)
 - [Estructura del proyecto](#structure)
 - [Changelog](#changelog)
@@ -35,7 +36,7 @@
 
 ## 🚧 Estado
 
-**v0.1 en desarrollo** (sin publicar). Funciona y está verificado en vivo contra Unreal 5.8.2:
+**v0.1.0** (2026-10-24, primera versión). Funciona y está verificado en vivo contra Unreal 5.8.2:
 
 - conexión con el editor por MCP, diagnóstico y preparación del proyecto con diff y «Revertir»;
 - conversación con IA local, en la nube o agentes de suscripción, con las herramientas del editor;
@@ -43,7 +44,7 @@
 - Tripo texto → modelo, biblioteca local y «Enviar a Unreal» (importación glTF con materiales y texturas);
 - servidor MCP propio para usar todo lo anterior desde otros agentes.
 
-Nuevo en v0.1.x (construido y probado contra un Tripo simulado; **falta probarlo con la API real y con el motor**):
+También en v0.1.0, construido y probado contra un Tripo simulado (**falta probarlo con la API real de Tripo y con el motor**):
 
 - **toda la API de Tripo** para la IA y los agentes: texto o imagen → modelo, variantes, rig, 101 animaciones (bailes, emociones, deportes…), convertir, retopología, texturizar, segmentar, multivista, imágenes y saldo de la cuenta;
 - **consola** de cada trabajo con la petición exacta que se envía a Tripo y su progreso, también en la conversación cuando genera un agente;
@@ -94,6 +95,10 @@ npm run tauri build
 ```
 
 Al subir un tag `vX.Y.Z`, GitHub Actions compila Windows, macOS (universal) y Linux y los adjunta a una Release en borrador.
+
+---
+
+¿Qué IA conectar (local, con clave de API o tu suscripción) y qué necesitas para cada una? Lo explica la guía [`docs/IA.md`](./docs/IA.md).
 
 ---
 

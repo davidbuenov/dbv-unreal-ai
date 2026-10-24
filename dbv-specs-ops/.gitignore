@@ -36,8 +36,8 @@ logs/
 # Temporales e IA Artifacts
 *.tmp
 *.bak
-implementation_plan.md
-walkthrough.md
+# DBV Unreal AI: el plan y el walkthrough SÍ se versionan aquí (son la documentación de cada entrega);
+# el repositorio del framework los ignora porque allí son artefactos de trabajo.
 
 # Ficheros de evaluación interna (no versionar)
 docs/EvaluacionChatGPT.md
