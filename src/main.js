@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // DBV Unreal AI — Arranque de la ventana
 // Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
 // Licensed under the MIT License. See LICENSE for details.
