@@ -1,0 +1,34 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "DBV Unreal AI Toolset (C++)",
+	"Description": "C++ registration of the DBV Unreal AI toolset for projects with C++ code. Same tools as the Python variant, which it delegates to.",
+	"Category": "Scripting",
+	"CreatedBy": "David Bueno Vallejo, David Bueno Carmona",
+	"CreatedByURL": "https://github.com/davidbuenov/dbv-unreal-ai",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "DBVUnrealAICpp",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "DBVUnrealAI",
+			"Enabled": true
+		},
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": true
+		},
+		{
+			"Name": "ToolsetRegistry",
+			"Enabled": true
+		}
+	]
+}

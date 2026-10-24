@@ -1,0 +1,9 @@
+# Normalizar los ficheros de texto a LF en el repositorio
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.png binary
+*.ico binary
+*.icns binary
+*.glb binary
+*.uasset binary

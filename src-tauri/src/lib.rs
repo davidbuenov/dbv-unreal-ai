@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // DBV Unreal AI — Punto de entrada de la aplicación Tauri
 // Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
 // Licensed under the MIT License. See LICENSE for details.
@@ -9,6 +9,10 @@
 // hijos para los agentes ACP. Sin ninguna IA conectada no se carga nada (cero huella).
 #[cfg(desktop)]
 pub mod ai;
+
+// Conexión con Unreal Engine: descubrimiento, cliente MCP del editor y preparación de proyectos.
+#[cfg(desktop)]
+pub mod unreal;
 
 use std::path::{Path, PathBuf};
 
@@ -49,11 +53,14 @@ fn demo_workspace(app: tauri::AppHandle) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_dialog::init());
 
     #[cfg(desktop)]
     {
-        builder = builder.manage(ai::AiState::default()).manage(ai::acp::AcpState::default());
+        builder = builder
+            .manage(ai::AiState::default())
+            .manage(ai::acp::AcpState::default())
+            .manage(unreal::commands::UnrealState::default());
     }
 
     builder
@@ -110,6 +117,34 @@ pub fn run() {
             ai::acp::acp_snapshot,
             #[cfg(desktop)]
             ai::acp::acp_changes,
+            #[cfg(desktop)]
+            unreal::commands::unreal_engines,
+            #[cfg(desktop)]
+            unreal::commands::unreal_read_project,
+            #[cfg(desktop)]
+            unreal::commands::unreal_editors,
+            #[cfg(desktop)]
+            unreal::commands::unreal_recent_projects,
+            #[cfg(desktop)]
+            unreal::commands::unreal_remember_project,
+            #[cfg(desktop)]
+            unreal::commands::unreal_open_project,
+            #[cfg(desktop)]
+            unreal::commands::unreal_connect,
+            #[cfg(desktop)]
+            unreal::commands::unreal_list_toolsets,
+            #[cfg(desktop)]
+            unreal::commands::unreal_describe_toolset,
+            #[cfg(desktop)]
+            unreal::commands::unreal_call_tool,
+            #[cfg(desktop)]
+            unreal::commands::unreal_readiness,
+            #[cfg(desktop)]
+            unreal::commands::unreal_prepare_plan,
+            #[cfg(desktop)]
+            unreal::commands::unreal_prepare_apply,
+            #[cfg(desktop)]
+            unreal::commands::unreal_prepare_revert,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

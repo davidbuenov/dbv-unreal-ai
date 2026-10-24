@@ -1,0 +1,28 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "DBV Unreal AI Toolset",
+	"Description": "AI toolset installed by DBV Unreal AI: Python execution with undo, Python validation against the running engine and live API reference, exposed through the Unreal MCP server.",
+	"Category": "Scripting",
+	"CreatedBy": "David Bueno Vallejo, David Bueno Carmona",
+	"CreatedByURL": "https://github.com/davidbuenov/dbv-unreal-ai",
+	"DocsURL": "https://github.com/davidbuenov/dbv-unreal-ai",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Plugins": [
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": true
+		},
+		{
+			"Name": "ToolsetRegistry",
+			"Enabled": true
+		},
+		{
+			"Name": "EditorToolset",
+			"Enabled": true
+		}
+	]
+}

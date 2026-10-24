@@ -21,7 +21,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order`: reescribir un `.uproject` sin reordenar sus claves (diff revisable, REQ-05).
+serde_json = { version = "1", features = ["preserve_order"] }
 
 # IA integrada y OPCIONAL (docs/IA.md): solo escritorio. En móvil no hay `keyring` ni procesos hijos
 # para los agentes ACP, y `src/ai/` no se usa.
@@ -34,6 +35,10 @@ ureq = { version = "3", features = ["json"] }
 tokio = { version = "1", features = ["sync", "time"] }
 # Listar y buscar ficheros de la carpeta de trabajo y la foto de restauración de los agentes.
 walkdir = "2.5"
+# Procesos del editor de Unreal y su línea de comandos (REQ-01, ADR-V010-001 D7).
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+# Elegir un `.uproject` con el diálogo nativo (REQ-03).
+tauri-plugin-dialog = "2"
 
 [dev-dependencies]
 tempfile = "3"
