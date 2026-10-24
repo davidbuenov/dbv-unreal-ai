@@ -23,7 +23,8 @@ use super::AiError;
 
 /// Extensiones de los documentos con los que trabaja la IA (las mismas que abre la app).
 /// ADAPTAR a tu app (docs/IA.md, «Qué adaptar»): es la barrera de verdad; `src/ai/paths.js` es solo la primera.
-pub const TEXT_EXTENSIONS: [&str; 3] = ["md", "markdown", "txt"];
+// DBV Unreal AI: además del Markdown, el código y la configuración de un proyecto de Unreal (REQ-13).
+pub const TEXT_EXTENSIONS: [&str; 14] = ["md", "markdown", "txt", "ini", "py", "h", "hpp", "cpp", "cs", "uproject", "uplugin", "json", "usf", "ush"];
 /// Tope de lectura de un fichero.
 pub const MAX_READ_BYTES: u64 = 2 * 1024 * 1024;
 /// Niveles de carpeta que se recorren como máximo al listar o buscar.
@@ -42,7 +43,8 @@ pub fn is_text_document(path: &Path) -> bool {
 
 /// Carpetas que no se recorren: ocultas (`.git`, `.obsidian`…) y de dependencias.
 pub fn is_skipped_dir(name: &str) -> bool {
-    name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build")
+    // Unreal: carpetas de binarios, cachés y assets (`.uasset`) que no tienen texto que leer y pesan mucho.
+    name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "Intermediate" | "DerivedDataCache" | "Binaries" | "Saved" | "Content")
 }
 
 /// Normaliza una ruta relativa del frontend: barras `/`, sin vacíos ni `.`.

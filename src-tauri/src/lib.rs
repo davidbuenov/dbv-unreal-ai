@@ -5,8 +5,8 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 
-// IA integrada y OPCIONAL (ver docs/IA.md). Solo escritorio: en móvil no hay `keyring`, ni procesos
-// hijos para los agentes ACP. Sin ninguna IA conectada no se carga nada (cero huella).
+// IA integrada de tres niveles (local, nube, agentes ACP). Solo escritorio: en móvil no hay `keyring`
+// ni procesos hijos. El frontend la carga de forma perezosa al abrir la Conversación (RNF-IA.1).
 #[cfg(desktop)]
 pub mod ai;
 
@@ -25,42 +25,6 @@ pub mod library;
 pub mod mcp_server;
 #[cfg(desktop)]
 pub mod paths;
-
-use std::path::{Path, PathBuf};
-
-use tauri::Manager;
-
-// Ejemplo mínimo pero real de comando Tauri: Guard Clause + flujo de salida único
-// (ver dbv-specs-ops/docs/MASTER_PROMPT.md, Estándares de Codificación §1). Devuelve datos, no una
-// frase ya construida — la presentación (con i18n) vive en el frontend, no aquí.
-#[tauri::command]
-fn get_greeting_name(name: &str) -> String {
-    name.trim().to_string()
-}
-
-/// Texto de la nota de ejemplo que se crea la primera vez (en español, como la demo).
-const DEMO_NOTE: &str = "# Notas de la demo\n\nEste es el documento de ejemplo de DBV Unreal AI. \
-Conecta una IA (botón ✨) y pídele, por ejemplo, «corrige la ortografía» o «resume este texto».\n\n\
-Hay un erorr de ortografia a proposito para probarlo.\n";
-
-/// Crea (si no existe) la carpeta de trabajo de la demo y su nota de ejemplo, y la devuelve.
-/// Sustituye esto por la carpeta o el documento real de tu aplicación.
-fn ensure_demo_workspace(dir: &Path) -> Result<PathBuf, String> {
-    std::fs::create_dir_all(dir).map_err(|e| format!("no se pudo crear la carpeta de la demo: {e}"))?;
-    let note = dir.join("notas.md");
-    if !note.exists() {
-        std::fs::write(&note, DEMO_NOTE).map_err(|e| format!("no se pudo crear notas.md: {e}"))?;
-    }
-    Ok(dir.to_path_buf())
-}
-
-/// Carpeta de trabajo de la demo (en los datos de la aplicación, nunca junto al ejecutable). El
-/// frontend la usa como «carpeta del documento» de la IA: ahí es donde la IA puede leer y proponer.
-#[tauri::command]
-fn demo_workspace(app: tauri::AppHandle) -> Result<String, String> {
-    let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    ensure_demo_workspace(&base.join("demo-workspace")).map(|dir| dir.to_string_lossy().into_owned())
-}
 
 /// Orden con la que un agente ACP lanza el servidor MCP propio de la app (REQ-11, REQ-20):
 /// este mismo ejecutable con `--mcp` y el puerto del editor conectado.
@@ -87,8 +51,6 @@ pub fn run() {
 
     builder
         .invoke_handler(tauri::generate_handler![
-            get_greeting_name,
-            demo_workspace,
             #[cfg(desktop)]
             app_mcp_command,
             #[cfg(desktop)]
@@ -172,31 +134,4 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn trims_surrounding_whitespace() {
-        assert_eq!(get_greeting_name("  David  "), "David");
-    }
-
-    #[test]
-    fn empty_input_returns_empty_string() {
-        assert_eq!(get_greeting_name("   "), "");
-    }
-
-    #[test]
-    fn demo_workspace_creates_the_sample_note_once() {
-        let base = tempfile::tempdir().unwrap();
-        let dir = base.path().join("demo-workspace");
-        ensure_demo_workspace(&dir).unwrap();
-        assert!(std::fs::read_to_string(dir.join("notas.md")).unwrap().contains("Notas de la demo"));
-        // Una segunda llamada no pisa lo que el usuario haya escrito.
-        std::fs::write(dir.join("notas.md"), "mío").unwrap();
-        ensure_demo_workspace(&dir).unwrap();
-        assert_eq!(std::fs::read_to_string(dir.join("notas.md")).unwrap(), "mío");
-    }
 }

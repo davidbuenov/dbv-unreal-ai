@@ -23,3 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Tripo v3 and library (REQ-15, REQ-17, RNF-04): text-to-model with mandatory cost confirmation and a per-session credit cap, immediate GLB download (links expire after 5 minutes) and a local library shared across projects. Image-to-model pending verification with a real key.
 - Send to Unreal (REQ-19): Interchange import through the DBV toolset `import_model` (Epic's `import_file` forces FBX and rejects GLB) and placement in front of the camera under `DBV/Generated`; verified live with a real Tripo GLB (correct scale, material and texture).
 - Own MCP server (REQ-20): `dbv-unreal-ai --mcp [--port n] [--project path]` over stdio, no network port; bridge to the editor MCP (with mandatory Python validation), library, send to Unreal and Tripo generation (requires `confirm_cost: true` and honours the cap); verified live against the editor. The C++ toolset template switches to `snake_case` names to share the contract with the Python variant.
+- DBV Unreal AI UI (REQ-08, REQ-14, REQ-24, DESIGN.md): sidebar (Project · Conversation · Generate · Library · Settings), Unreal connection pill, automatic connection to the editor running the MCP server, readiness check explaining each item, "Prepare" with a per-file diff and "Revert", action log exportable to Markdown, cost card with focus on "Cancel", dark theme by default plus light, ES/EN. The AI assistant loads when the Conversation opens, with the Unreal and generation tools and the MCP servers for ACP agents.
+- CI and release (ADR-V010-001 D1): verification on every push (Rust, Vitest, Python toolset, linter) and a draft Release with Windows, universal macOS and Linux binaries when a tag is pushed.
+
+### Fixed
+
+- The connection pill went back to "No editor" when the AI assistant loaded: `applyTranslations()` rewrote its text because it carried `data-i18n` (caught by the headless Edge UI bench).
+- The preparation diff did not mark lines skipped at the start and the end with "…".

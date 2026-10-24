@@ -1,84 +1,70 @@
-﻿// i18n mínima sin librería — mismo patrón que dbv-md-reader (ver dbv-specs-ops/docs/NATIVE_DESKTOP_APPS.md
+// =============================================================================
+// DBV Unreal AI — Idiomas de la interfaz (ES / EN)
+// Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
+// Licensed under the MIT License. See LICENSE for details.
+// Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+// =============================================================================
+//
+// i18n mínima sin librería — mismo patrón que dbv-md-reader (ver dbv-specs-ops/docs/NATIVE_DESKTOP_APPS.md
 // §4, lección 7): dos objetos planos, sustitución simple de {placeholder}, sin dependencia nueva.
 //
 // IIFE obligatoria (NATIVE_DESKTOP_APPS.md §3): los scripts clásicos comparten el ámbito global —
 // sin este cierre, cualquier nombre declarado aquí (t, currentLang...) colisionaría con main.js
 // y el SyntaxError resultante mataría el script entero en silencio.
 //
-// Expone `window.dbvI18n` (la API de la demo) y `window.DBV_I18N` (la que esperan los módulos de la
+// Expone `window.dbvI18n` (la API de `main.js`) y `window.DBV_I18N` (la que esperan los módulos de la
 // IA de `src/ai/`: `t`, `getLang`, `setLang`, `applyTranslations`, `register`). Los textos de la IA
 // no viven aquí: se registran con `register()` al cargarla (carga perezosa, `src/ai/translations.js`).
 (function () {
+  // Solo los textos de la ventana; los de cada vista llegan con su módulo (`src/app/translations.js`).
   const translations = {
     es: {
       "app.title": "DBV Unreal AI",
-      "demo.banner": "Esto es una demo de DBV Unreal AI — ver README.md para los próximos pasos.",
-      "demo.heading": "Prueba el comando Rust",
-      "demo.inputPlaceholder": "Escribe tu nombre...",
-      "demo.greetingEmpty": "Escribe tu nombre para ver un saludo generado desde Rust.",
-      "demo.greetingHello": "¡Hola, {name}! Este saludo viene de un comando #[tauri::command].",
-      "demo.dirtyHint": "Tienes cambios sin guardar en memoria — cierra la ventana para probar la confirmación.",
-      "demo.docHeading": "Prueba la IA con un documento",
-      "demo.docHint": "Documento de ejemplo ({name}). Pulsa ✨ para conectar una IA y pedirle cambios; los revisas antes de aplicarlos.",
-      "demo.docSave": "Guardar",
-      "demo.docSaved": "Guardado.",
-      "demo.docFailed": "No se pudo abrir o guardar el documento de la demo: {error}",
-      "modal.title": "¿Cerrar sin guardar?",
-      "modal.body": "Hay texto sin guardar en el campo de la demo o en el documento. Si cierras ahora, se perderá.",
-      "modal.confirm": "Cerrar de todas formas",
-      "modal.cancel": "Cancelar",
+      "app.theme": "Tema claro/oscuro",
+      "nav.project": "Proyecto",
+      "nav.chat": "Conversación",
+      "nav.generate": "Generar",
+      "nav.library": "Biblioteca",
+      "nav.settings": "Ajustes",
+      "unreal.pill.offline": "Sin editor",
+      "log.toggle": "Registro de acciones",
+      "gen.spentTitle": "Créditos gastados en esta sesión",
       "lang.label": "Idioma",
-      "ai.button": "Asistente de IA (Ctrl+Mayús+I)",
-      "ai.connectTitle": "Conectar una IA",
-      "ai.loadFailed": "No se pudo cargar la IA. Reinicia la aplicación e inténtalo de nuevo.",
-      "action.close": "Cerrar",
-      "action.copy": "Copiar",
-      "action.copyDenied": "El sistema no permitió acceder al portapapeles.",
-      "toolbar.alwaysOnTop": "Mantener siempre visible",
-      "toolbar.alwaysOnTopActive": "Siempre visible (activado)",
       "toolbar.about": "Acerca de",
       "about.title": "Acerca de DBV Unreal AI",
       "about.version": "Versión {version}",
+      "about.authors": "David Bueno Vallejo y David Bueno Carmona · MIT",
       "about.builtWith": "Construido con dbv-specs-ops.",
-      "about.updatesTitle": "Actualizaciones",
-      "about.updatesHint": "Este starter no incluye tauri-plugin-updater de fábrica — añádelo cuando tu app real lo necesite (ver NATIVE_DESKTOP_APPS.md §4).",
-      "about.checkUpdates": "Buscar actualizaciones",
       "about.close": "Cerrar",
+      "action.close": "Cerrar",
+      "action.copy": "Copiar",
+      "action.copyDenied": "No se pudo copiar al portapapeles",
+      "ai.connectTitle": "Conectar una IA",
+      "ai.loadFailed": "No se pudo cargar el asistente de IA",
     },
     en: {
       "app.title": "DBV Unreal AI",
-      "demo.banner": "This is a DBV Unreal AI demo — see README.md for the next steps.",
-      "demo.heading": "Try the Rust command",
-      "demo.inputPlaceholder": "Type your name...",
-      "demo.greetingEmpty": "Type your name to see a greeting generated from Rust.",
-      "demo.greetingHello": "Hello, {name}! This greeting comes from a #[tauri::command].",
-      "demo.dirtyHint": "You have unsaved in-memory changes — close the window to test the confirmation.",
-      "demo.docHeading": "Try the AI with a document",
-      "demo.docHint": "Sample document ({name}). Press ✨ to connect an AI and ask it for changes; you review them before they are applied.",
-      "demo.docSave": "Save",
-      "demo.docSaved": "Saved.",
-      "demo.docFailed": "Could not open or save the demo document: {error}",
-      "modal.title": "Close without saving?",
-      "modal.body": "There's unsaved text in the demo field or the document. Closing now will discard it.",
-      "modal.confirm": "Close anyway",
-      "modal.cancel": "Cancel",
+      "app.theme": "Light/dark theme",
+      "nav.project": "Project",
+      "nav.chat": "Conversation",
+      "nav.generate": "Generate",
+      "nav.library": "Library",
+      "nav.settings": "Settings",
+      "unreal.pill.offline": "No editor",
+      "log.toggle": "Action log",
+      "gen.spentTitle": "Credits spent in this session",
       "lang.label": "Language",
-      "ai.button": "AI assistant (Ctrl+Shift+I)",
-      "ai.connectTitle": "Connect an AI",
-      "ai.loadFailed": "Could not load the AI. Restart the app and try again.",
-      "action.close": "Close",
-      "action.copy": "Copy",
-      "action.copyDenied": "The system did not allow access to the clipboard.",
-      "toolbar.alwaysOnTop": "Keep always on top",
-      "toolbar.alwaysOnTopActive": "Always on top (active)",
       "toolbar.about": "About",
       "about.title": "About DBV Unreal AI",
       "about.version": "Version {version}",
+      "about.authors": "David Bueno Vallejo and David Bueno Carmona · MIT",
       "about.builtWith": "Built with dbv-specs-ops.",
-      "about.updatesTitle": "Updates",
-      "about.updatesHint": "This starter doesn't ship tauri-plugin-updater by default — add it when your real app needs it (see NATIVE_DESKTOP_APPS.md §4).",
-      "about.checkUpdates": "Check for updates",
       "about.close": "Close",
+      "action.close": "Close",
+      "action.copy": "Copy",
+      "action.copyDenied": "Could not copy to the clipboard",
+      "ai.connectTitle": "Connect an AI",
+      "ai.loadFailed": "Could not load the AI assistant",
     },
   };
 

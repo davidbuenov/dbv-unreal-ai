@@ -71,7 +71,7 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   const newButton = button('＋', () => callbacks.onNewConversation(), 'icon-button icon-button--small', t('ai.newConversation'));
   const deleteButton = button('🗑', () => callbacks.onDeleteConversation(), 'icon-button icon-button--small', t('ai.deleteConversation'));
   const settingsButton = button('⚙', () => callbacks.onOpenSettings(), 'icon-button icon-button--small', t('ai.settings'));
-  const closeButton = button('✕', () => callbacks.onClose(), 'icon-button icon-button--small', t('action.close'));
+  const closeButton = button('✕', () => callbacks.onClose(), 'icon-button icon-button--small ai-panel__close', t('action.close'));
   const headerRow = el('div', 'ai-panel__row');
   headerRow.append(title, settingsButton, closeButton);
   const selectorsRow = el('div', 'ai-panel__row');
@@ -94,7 +94,7 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   const mentionList = el('div', 'ai-panel__mentions hidden');
   mentionList.setAttribute('role', 'listbox');
   const composerActions = el('div', 'ai-panel__composer-actions');
-  const attachSection = button(t('ai.attachSection'), () => callbacks.onAttachSection(), 'button button--compact button--ghost');
+  const attachSection = button(t('ai.attachSection'), () => callbacks.onAttachSection(), 'button button--compact button--ghost ai-panel__attach');
   const attachments = el('span', 'ai-panel__attachments');
   const usage = el('span', 'ai-panel__usage');
   const speed = el('span', 'ai-panel__usage ai-panel__speed');

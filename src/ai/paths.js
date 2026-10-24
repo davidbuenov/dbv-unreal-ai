@@ -11,7 +11,8 @@
 //
 
 /** Extensiones de los documentos con los que trabaja la IA (las mismas que abre la app). */
-export const DOCUMENT_EXTENSIONS = ['md', 'markdown', 'txt'];
+// DBV Unreal AI: las mismas que `TEXT_EXTENSIONS` de `src-tauri/src/ai/files.rs` (código y configuración de Unreal).
+export const DOCUMENT_EXTENSIONS = ['md', 'markdown', 'txt', 'ini', 'py', 'h', 'hpp', 'cpp', 'cs', 'uproject', 'uplugin', 'json', 'usf', 'ush'];
 
 /** ¿Es una ruta relativa que no sale de la carpeta del documento? */
 export function isSafeRelativePath(value) {

@@ -1,0 +1,88 @@
+# =============================================================================
+# DBV Unreal AI — Binarios de Windows, macOS y Linux en una Release en borrador
+# Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
+# Licensed under the MIT License. See LICENSE for details.
+# Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+# =============================================================================
+#
+# ADR-V010-001 D1 y NATIVE_APPS_RELEASE_CI.md: cada plataforma compila en su propio runner (no hay
+# compilación cruzada fiable) y adjunta sus instaladores a un BORRADOR de Release del tag, que el
+# mantenedor publica a mano. La versión se lee de tauri.conf.json (§3), así se puede relanzar con
+# workflow_dispatch. Sin firma ni auto-actualización en v0.1 (§8): llegan con las tiendas en v0.2.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: >
+          "true" (normal): crea/usa un borrador para esa versión. "false": la Release de esa
+          versión ya está PUBLICADA y solo quieres añadirle artefactos.
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+          - platform: ubuntu-22.04
+            args: ""
+          # Los runners de macOS son Apple Silicon (§5): binario universal para Intel y ARM.
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Leer versión de tauri.conf.json
+        id: version
+        shell: bash
+        run: echo "tag=v$(node -p "require('./src-tauri/tauri.conf.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Borrador o publicada
+        id: draft
+        shell: bash
+        run: echo "value=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.draft || 'true' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Dependencias del sistema (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependencias de Node
+        run: npm ci
+
+      - name: Build y Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ steps.version.outputs.tag }}
+          releaseName: DBV Unreal AI ${{ steps.version.outputs.tag }}
+          releaseDraft: ${{ steps.draft.outputs.value }}
+          prerelease: false
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}

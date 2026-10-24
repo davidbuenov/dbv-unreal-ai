@@ -5,62 +5,11 @@
    Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
    =============================================================================
    Se descarga con la IA (`entry.js`), no con el paquete inicial: sin ninguna IA conectada, este fichero
-   no se pide. Es AUTOCONTENIDO: define sus propios tokens (claro/oscuro, según `prefers-color-scheme`).
-   ADAPTAR (docs/IA.md): si tu app ya tiene tokens con estos nombres, borra el bloque `:root` de abajo y
-   deja que la IA use los tuyos. Las reglas del panel, la revisión, el asistente de conexión y la IA en
+   no se pide. Usa los tokens de la app (`src/styles.css`, DESIGN.md). Las reglas del panel, la revisión, el asistente de conexión y la IA en
    línea vienen de dbv-md-reader (`src/ai/ai.css`).
    ============================================================================= */
 
-:root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f3f4f6;
-  --bg-tertiary: #e5e7eb;
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #6b7280;
-  --border: #d1d5db;
-  --accent: #396cd8;
-  --accent-hover: #2f5bbd;
-  --accent-subtle: #eff6ff;
-  --code-bg: #f8fafc;
-  --quote-bg: #f3f4f6;
-  --shadow: rgba(0, 0, 0, 0.18);
-  --radius: 8px;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  --status-ok: #15803d;
-  --status-warn: #b45309;
-  --status-warning: #b45309;
-  --status-error: #b91c1c;
-  --status-ok-bg: color-mix(in srgb, var(--status-ok) 12%, transparent);
-  --status-warn-bg: color-mix(in srgb, var(--status-warn) 12%, transparent);
-  --status-error-bg: color-mix(in srgb, var(--status-error) 12%, transparent);
-  --status-error-border: color-mix(in srgb, var(--status-error) 45%, transparent);
-  --alert-tip: var(--status-ok);
-  --alert-warning: var(--status-warn);
-  --alert-caution: var(--status-error);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-primary: #1e1e1e;
-    --bg-secondary: #262626;
-    --bg-tertiary: #333333;
-    --text-primary: #f3f4f6;
-    --text-secondary: #d1d5db;
-    --text-muted: #9ca3af;
-    --border: #404040;
-    --accent: #24c8db;
-    --accent-hover: #4fd6e6;
-    --accent-subtle: #172554;
-    --code-bg: #141414;
-    --quote-bg: #262626;
-    --shadow: rgba(0, 0, 0, 0.55);
-    --status-ok: #4ade80;
-    --status-warn: #fbbf24;
-    --status-warning: #fbbf24;
-    --status-error: #f87171;
-  }
-}
+/* DBV Unreal AI: los tokens (--bg-primary, --accent…) los define `src/styles.css` con la paleta de DESIGN.md. */
 
 /* ─── Panel lateral que aloja el Asistente ─────────────────────────────────── */
 .ai-sidebar {

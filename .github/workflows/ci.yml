@@ -1,0 +1,61 @@
+# =============================================================================
+# DBV Unreal AI — Verificación en cada push y pull request
+# Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
+# Licensed under the MIT License. See LICENSE for details.
+# Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+# =============================================================================
+#
+# Lo mismo que se ejecuta en local antes de un commit: tests de Rust, del frontend (Vitest),
+# del toolset de Unreal en Python y el linter del framework. Sin claves reales: Tripo y el
+# editor de Unreal se simulan (R-06).
+
+name: CI
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar dependencias del sistema (WebKitGTK)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Caché de cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependencias de Node
+        run: npm ci
+
+      - name: Tests de Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - name: Tests del frontend (Vitest)
+        run: npm run test:ai
+
+      - name: Tests del toolset de Unreal (Python)
+        run: python3 -I -m unittest discover -s tests/python
+
+      - name: Linter de dbv-specs-ops
+        run: python3 dbv-specs-ops/scripts/dbv-lint.py unreal-plugin tests/python
