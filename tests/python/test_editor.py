@@ -1,0 +1,196 @@
+# =============================================================================
+# DBV Unreal AI — Tests de importar y colocar modelos (también con esqueleto)
+# Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
+# Licensed under the MIT License. See LICENSE for details.
+# Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+# =============================================================================
+"""Tests de ``editor.import_model`` y ``editor.play_animation`` con un módulo ``unreal`` simulado.
+
+Lo que se protege: un rig de Tripo se importa como Skeletal Mesh (no se toma su esqueleto ni una animación por
+la malla principal) y sus animaciones vuelven para reproducirlas. La verificación con el motor real está pendiente
+(``task.md``). Ejecutar: ``python -I -m unittest discover -s tests/python -v``.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import json
+import sys
+import tempfile
+import types
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "unreal-plugin" / "DBVUnrealAI" / "Content" / "Python"))
+
+
+class StaticMesh:
+    """Malla estática."""
+
+
+class SkeletalMesh:
+    """Malla con esqueleto."""
+
+
+class Skeleton:
+    """Esqueleto."""
+
+
+class AnimSequence:
+    """Animación."""
+
+
+ASSETS: dict[str, object] = {}
+IMPORTED: list[str] = []
+
+
+class AssetImportTask:
+    """Tarea de importación: devuelve lo que el test haya puesto en ``IMPORTED``."""
+
+    def get_editor_property(self, name):  # noqa: ANN001, ANN201 — imita la API de Unreal
+        """Propiedad de la tarea."""
+        return list(IMPORTED) if name == "imported_object_paths" else None
+
+
+class AssetTools:
+    """Herramientas de assets."""
+
+    def import_asset_tasks(self, tasks):  # noqa: ANN001, ANN201
+        """Importa (nada que hacer en el simulado)."""
+        return tasks
+
+
+class SkeletalMeshComponent:
+    """Componente que guarda lo que se le pide."""
+
+    def __init__(self) -> None:
+        self.mode = None
+        self.data = None
+
+    def set_animation_mode(self, mode):  # noqa: ANN001, ANN201
+        """Modo de animación."""
+        self.mode = mode
+
+    def override_animation_data(self, animation, looping, playing, position, rate):  # noqa: ANN001, ANN201, PLR0913
+        """Animación del editor."""
+        self.data = (animation, looping, playing, position, rate)
+
+
+class Actor:
+    """Actor del nivel."""
+
+    def __init__(self, label: str, component: SkeletalMeshComponent | None) -> None:
+        self.label = label
+        self.component = component
+
+    def get_actor_label(self) -> str:
+        """Etiqueta."""
+        return self.label
+
+    def get_component_by_class(self, cls):  # noqa: ANN001, ANN201
+        """Componente de esa clase."""
+        return self.component
+
+
+ACTORS: list[Actor] = []
+
+
+class EditorActorSubsystem:
+    """Subsistema de actores."""
+
+    def get_all_level_actors(self):  # noqa: ANN201
+        """Actores del nivel."""
+        return ACTORS
+
+
+def fake_unreal() -> types.ModuleType:
+    """Módulo ``unreal`` con lo que usan ``import_model`` y ``play_animation``."""
+    module = types.ModuleType("unreal")
+    module.StaticMesh, module.SkeletalMesh, module.Skeleton, module.AnimSequence = StaticMesh, SkeletalMesh, Skeleton, AnimSequence
+    module.SkeletalMeshComponent = SkeletalMeshComponent
+    module.EditorActorSubsystem = EditorActorSubsystem
+    module.AssetImportTask = AssetImportTask
+    module.AssetToolsHelpers = types.SimpleNamespace(get_asset_tools=AssetTools)
+    module.EditorAssetLibrary = types.SimpleNamespace(does_directory_exist=lambda path: True, make_directory=lambda path: True, does_asset_exist=lambda path: False)
+    module.load_asset = ASSETS.get
+    module.get_editor_subsystem = lambda cls: cls()
+    module.AnimationMode = types.SimpleNamespace(ANIMATION_SINGLE_NODE="single-node")
+    module.ScopedEditorTransaction = lambda description: contextlib.nullcontext()
+    return module
+
+
+sys.modules["unreal"] = fake_unreal()
+
+from dbv_unreal_ai import editor  # noqa: E402
+
+
+class ImportModelTests(unittest.TestCase):
+    """Importar modelos estáticos y riggeados."""
+
+    def setUp(self) -> None:
+        self.file = tempfile.NamedTemporaryFile(suffix=".glb", delete=False)  # noqa: SIM115 — se borra en tearDown
+        self.file.close()
+        ASSETS.clear()
+        IMPORTED.clear()
+
+    def tearDown(self) -> None:
+        Path(self.file.name).unlink(missing_ok=True)
+
+    def run_import(self) -> dict:
+        """``import_model`` del fichero temporal, como diccionario."""
+        return json.loads(editor.import_model(self.file.name, "/Game/DBV/Generated", "Pirata"))
+
+    def test_un_rig_con_animaciones_da_el_skeletal_mesh_y_sus_clips(self) -> None:
+        """@spec REQ-16, REQ-19 — el esqueleto y la animación no se toman por la malla principal."""
+        found = {"/Game/DBV/Generated/Pirata_Skeleton": Skeleton(), "/Game/DBV/Generated/Anim_dance_01": AnimSequence(), "/Game/DBV/Generated/Pirata": SkeletalMesh(), "/Game/DBV/Generated/M_Pirata": object()}
+        ASSETS.update(found)
+        IMPORTED.extend(found)
+        report = self.run_import()
+        self.assertEqual(report["primary"], "/Game/DBV/Generated/Pirata")
+        self.assertEqual(report["kind"], "skeletal")
+        self.assertEqual(report["skeleton"], "/Game/DBV/Generated/Pirata_Skeleton")
+        self.assertEqual(report["animations"], ["/Game/DBV/Generated/Anim_dance_01"])
+
+    def test_un_modelo_estatico_sigue_como_antes(self) -> None:
+        """@spec REQ-19"""
+        ASSETS.update({"/Game/DBV/Generated/M_Linterna": object(), "/Game/DBV/Generated/Linterna": StaticMesh()})
+        IMPORTED.extend(["/Game/DBV/Generated/M_Linterna", "/Game/DBV/Generated/Linterna"])
+        report = self.run_import()
+        self.assertEqual((report["primary"], report["kind"], report["animations"]), ("/Game/DBV/Generated/Linterna", "static", []))
+
+    def test_sin_nada_importado_es_un_error(self) -> None:
+        """@spec REQ-19"""
+        report = self.run_import()
+        self.assertFalse(report["success"])
+        self.assertIn("no assets", report["error"])
+
+
+class PlayAnimationTests(unittest.TestCase):
+    """Reproducir una animación en el viewport del editor."""
+
+    def setUp(self) -> None:
+        ASSETS.clear()
+        ACTORS.clear()
+
+    def test_pone_el_componente_en_una_sola_animacion_en_bucle(self) -> None:
+        """@spec REQ-16 — sin Animation Blueprint, como hace falta para revisar un baile de Tripo."""
+        dance = AnimSequence()
+        ASSETS["/Game/DBV/Generated/Anim_dance_01"] = dance
+        component = SkeletalMeshComponent()
+        ACTORS.append(Actor("Pirata", component))
+        report = json.loads(editor.play_animation("Pirata", "/Game/DBV/Generated/Anim_dance_01"))
+        self.assertTrue(report["success"])
+        self.assertEqual(component.mode, "single-node")
+        self.assertEqual(component.data, (dance, True, True, 0.0, 1.0))
+
+    def test_explica_lo_que_falta(self) -> None:
+        """@spec REQ-16"""
+        ASSETS["/Game/x"] = StaticMesh()
+        self.assertIn("not an animation", json.loads(editor.play_animation("Pirata", "/Game/x"))["error"])
+        ASSETS["/Game/anim"] = AnimSequence()
+        ACTORS.append(Actor("Linterna", None))
+        self.assertIn("no skeletal mesh actor", json.loads(editor.play_animation("Linterna", "/Game/anim"))["error"])
+
+
+if __name__ == "__main__":
+    unittest.main()

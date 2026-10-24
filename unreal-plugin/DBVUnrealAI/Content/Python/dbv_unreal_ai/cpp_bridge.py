@@ -51,6 +51,11 @@ def place_asset(asset_path: str, distance: str, folder: str) -> str:
     return editor.place_asset(_text(asset_path), float(_text(distance) or "300"), _text(folder))
 
 
+def play_animation(actor_label: str, animation_path: str, looping: str) -> str:
+    """Ver ``editor.play_animation``."""
+    return editor.play_animation(_text(actor_label), _text(animation_path), _text(looping).lower() != "false")
+
+
 def get_scene_summary(name_filter: str, class_filter: str, limit: str) -> str:
     """Ver ``editor.get_scene_summary``."""
     return editor.get_scene_summary(_text(name_filter), _text(class_filter), int(_text(limit) or "200"))

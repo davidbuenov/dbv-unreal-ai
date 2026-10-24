@@ -12,7 +12,7 @@ import { createGenerationTools } from '../../src/generation/generationTools.js';
 const ENTRY = { id: 'linterna-1', name: 'Linterna mágica', provider: 'tripo', kind: 'model', prompt: 'lantern', files: ['model.glb'], sentTo: [] };
 const DBV = 'PythonTypes.DBVUnrealAIToolset_0x3D7D6EDD';
 
-function backend({ toolsets = [{ name: DBV, description: '' }], importResult } = {}) {
+function backend({ toolsets = [{ name: DBV, description: '' }], importResult, playResult } = {}) {
   const calls = [];
   return {
     calls,
@@ -22,6 +22,7 @@ function backend({ toolsets = [{ name: DBV, description: '' }], importResult } =
     callTool: async (toolset, tool, args, timeout) => {
       calls.push({ toolset, tool, args, timeout });
       if (tool === 'import_model') return { ok: true, value: { text: '', isError: false, value: importResult ?? { success: true, imported: ['/Game/DBV/Generated/Linterna_magica/StaticMeshes/Linterna_magica.Linterna_magica'], primary: '/Game/DBV/Generated/Linterna_magica/StaticMeshes/Linterna_magica.Linterna_magica' } } };
+      if (tool === 'play_animation') return playResult ?? { ok: true, value: { text: '', isError: false, value: { success: true } } };
       return { ok: true, value: { text: '', isError: false, value: { success: true, actor: 'Linterna_magica' } } };
     },
   };
@@ -31,10 +32,27 @@ describe('enviar a Unreal (REQ-19)', () => {
   it('importa el GLB en /Game/DBV/Generated, lo coloca y lo anota en la biblioteca @spec REQ-19, REQ-17', async () => {
     const b = backend();
     const out = await sendToUnreal({ backend: b }, ENTRY, { project: 'D:/P/P.uproject' });
-    expect(out).toEqual({ ok: true, assetPath: '/Game/DBV/Generated/Linterna_magica/StaticMeshes/Linterna_magica.Linterna_magica', actor: 'Linterna_magica' });
+    expect(out).toEqual({ ok: true, assetPath: '/Game/DBV/Generated/Linterna_magica/StaticMeshes/Linterna_magica.Linterna_magica', actor: 'Linterna_magica', kind: 'static', animations: [], playing: null });
     expect(b.calls[0]).toMatchObject({ toolset: DBV, tool: 'import_model', args: { source_file: 'C:/data/library/linterna-1/model.glb', folder_path: GENERATED_FOLDER, asset_name: 'Linterna_magica' }, timeout: 300 });
     expect(b.calls[1]).toMatchObject({ tool: 'place_asset', args: { folder: 'DBV/Generated', distance: 300 } });
     expect(b.libraryRecordSent).toHaveBeenCalledWith('linterna-1', 'D:/P/P.uproject', out.assetPath);
+  });
+
+  it('un personaje de Tripo se coloca reproduciendo su primera animación @spec REQ-16, REQ-19', async () => {
+    const rigged = { success: true, imported: ['/Game/DBV/Generated/Pirata', '/Game/DBV/Generated/Pirata_Skeleton', '/Game/DBV/Generated/dance_01'], primary: '/Game/DBV/Generated/Pirata', kind: 'skeletal', skeleton: '/Game/DBV/Generated/Pirata_Skeleton', animations: ['/Game/DBV/Generated/dance_01'] };
+    const b = backend({ importResult: rigged });
+    const out = await sendToUnreal({ backend: b }, { ...ENTRY, kind: 'animation' }, { project: 'p' });
+    expect(out).toMatchObject({ ok: true, kind: 'skeletal', animations: ['/Game/DBV/Generated/dance_01'], playing: '/Game/DBV/Generated/dance_01' });
+    expect(b.calls.map((c) => c.tool)).toEqual(['import_model', 'place_asset', 'play_animation']);
+    expect(b.calls[2].args).toEqual({ actor_label: 'Linterna_magica', animation_path: '/Game/DBV/Generated/dance_01', looping: true });
+  });
+
+  it('con un toolset anterior a 0.2.0 el personaje se importa igual y se avisa de actualizarlo @spec REQ-16, REQ-05', async () => {
+    const rigged = { success: true, imported: ['/Game/A'], primary: '/Game/A', kind: 'skeletal', animations: ['/Game/anim'] };
+    const old = backend({ importResult: rigged, playResult: { ok: true, value: { text: 'unknown tool play_animation', isError: true, value: null } } });
+    const out = await sendToUnreal({ backend: old }, ENTRY, { project: 'p' });
+    expect(out).toMatchObject({ ok: true, playing: null, note: 'toolsetOutdated' });
+    expect(old.libraryRecordSent).toHaveBeenCalled();
   });
 
   it('sin colocar, sin toolset o con una importación fallida lo explica y no anota nada @spec REQ-19', async () => {

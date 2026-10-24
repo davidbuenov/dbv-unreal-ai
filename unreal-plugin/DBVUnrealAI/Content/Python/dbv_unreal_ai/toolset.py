@@ -97,7 +97,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             asset_name: Asset name; a numeric suffix is added if it already exists. Empty to use the file name.
 
         Returns:
-            JSON with success, imported (asset paths) and primary (the main StaticMesh).
+            JSON with success, imported (asset paths), primary (the SkeletalMesh of a rigged model, else the StaticMesh), kind (skeletal|static|other), skeleton and animations (AnimSequence paths).
         """
         return editor.import_model(source_file, folder_path, asset_name)
 
@@ -115,6 +115,21 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             JSON with success, actor label, location and folder.
         """
         return editor.place_asset(asset_path, distance, folder)
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def play_animation(actor_label: str, animation_path: str, looping: bool = True) -> str:
+        """Make a skeletal mesh actor of the open level play an animation in the editor viewport (single-node mode, undoable).
+
+        Args:
+            actor_label: Label of the actor in the World Outliner (as returned by place_asset).
+            animation_path: AnimSequence asset (e.g. one of the animations returned by import_model).
+            looping: Loop the animation.
+
+        Returns:
+            JSON with success, actor and animation.
+        """
+        return editor.play_animation(actor_label, animation_path, looping)
 
     @toolset_registry.tool_call
     @staticmethod

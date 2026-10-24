@@ -73,7 +73,9 @@ export function createLibraryView(host, deps) {
     if (connection?.status !== 'online') return deps.toast(t('lib.noProject'), 'error');
     statusLine.textContent = t('lib.sending');
     const result = await sendToUnreal({ backend: sendBackend(connection) }, entry, { project: connection.projectPath });
-    statusLine.textContent = result.ok ? t('lib.sent', { path: result.assetPath }) : '';
+    const extra = result.ok && result.animations?.length ? ` · ${t(result.playing ? 'lib.sentPlaying' : 'lib.sentAnimations', { n: String(result.animations.length) })}` : '';
+    statusLine.textContent = result.ok ? `${t('lib.sent', { path: result.assetPath })}${extra}` : '';
+    if (result.note === 'toolsetOutdated') deps.toast(t('lib.toolsetOutdated'), 'error');
     if (!result.ok) deps.toast(t(`lib.error.${result.error}`) === `lib.error.${result.error}` ? result.error : t(`lib.error.${result.error}`), 'error');
     return null;
   }

@@ -54,6 +54,10 @@ public:
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString place_asset(const FString& asset_path, float distance, const FString& folder);
 
+	/** Make a skeletal mesh actor play an animation in the editor viewport (single-node mode). Returns JSON (success, actor, animation). */
+	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
+	static FString play_animation(const FString& actor_label, const FString& animation_path, bool looping);
+
 	/** Compact list of the actors of the open level. Returns JSON (total, counts, actors). */
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString get_scene_summary(const FString& name_filter, const FString& class_filter, int32 limit);

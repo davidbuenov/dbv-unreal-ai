@@ -306,11 +306,23 @@ impl McpServer {
         let import_args = json!({ "source_file": path.to_string_lossy(), "folder_path": "/Game/DBV/Generated", "asset_name": name.trim_matches('_') });
         let imported = self.editor(|s| s.call_toolset_tool(&dbv, "import_model", import_args.clone(), std::time::Duration::from_secs(300))).map_err(err)?;
         let primary = imported.value.as_ref().and_then(|v| v.get("primary")).and_then(Value::as_str).map(str::to_string).ok_or_else(|| format!("import failed: {}", format(&imported)))?;
+        let report = imported.value.clone().unwrap_or(Value::Null);
+        let animations: Vec<String> = report.get("animations").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
         let mut message = format!("Imported as {primary}");
         if place {
             let place_args = json!({ "asset_path": primary, "distance": 300.0, "folder": "DBV/Generated" });
             let placed = self.editor(|s| s.call_toolset_tool(&dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
             message.push_str(&format!(" and placed: {}", format(&placed)));
+            // Un personaje de Tripo con animaciones se pone a reproducir la primera en el viewport (toolset 0.2.0).
+            let actor = placed.value.as_ref().and_then(|v| v.get("actor")).and_then(Value::as_str).map(str::to_string);
+            if let (Some(actor), Some(first), true) = (actor, animations.first(), report.get("kind").and_then(Value::as_str) == Some("skeletal")) {
+                let play_args = json!({ "actor_label": actor, "animation_path": first, "looping": true });
+                let played = self.editor(|s| s.call_toolset_tool(&dbv, "play_animation", play_args.clone(), DEFAULT_TIMEOUT));
+                message.push_str(&match played {
+                    Ok(result) if !result.is_error => format!(". Skeletal mesh with {} animation(s); playing {first}", animations.len()),
+                    _ => format!(". Skeletal mesh with {} animation(s); the project's DBV toolset is outdated, so it is not playing: ask the user to prepare the project again in the app", animations.len()),
+                });
+            }
         }
         let project = self.editor(|s| s.call_toolset_tool(&dbv, "get_project_info", json!({}), DEFAULT_TIMEOUT)).ok().and_then(|r| r.value).and_then(|v| v.get("project_dir").and_then(Value::as_str).map(str::to_string)).unwrap_or_default();
         let _ = self.config.library.record_sent(id, &project, &primary);

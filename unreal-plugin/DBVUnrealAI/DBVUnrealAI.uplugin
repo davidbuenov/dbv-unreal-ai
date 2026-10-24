@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "0.1.0",
+	"Version": 2,
+	"VersionName": "0.2.0",
 	"FriendlyName": "DBV Unreal AI Toolset",
 	"Description": "AI toolset installed by DBV Unreal AI: Python execution with undo, Python validation against the running engine and live API reference, exposed through the Unreal MCP server.",
 	"Category": "Scripting",

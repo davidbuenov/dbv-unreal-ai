@@ -134,7 +134,9 @@ export function createGenerationTools(deps) {
         text = 'The user DENIED importing this asset. It was not imported.';
       } else {
         const sent = await deps.send(entry);
-        text = sent.ok ? `Imported as ${sent.assetPath}${sent.actor ? ` and placed as actor "${sent.actor}"` : ''}.` : `error: ${sent.error}`;
+        const anims = sent.ok && sent.animations?.length ? ` It is a skeletal mesh with ${sent.animations.length} animation(s)${sent.playing ? `; the actor plays ${sent.playing} in the editor` : ''}.` : '';
+        const outdated = sent.note === 'toolsetOutdated' ? ' The DBV toolset of the project is outdated, so the animation is not playing: tell the user to prepare the project again in the app.' : '';
+        text = sent.ok ? `Imported as ${sent.assetPath}${sent.actor ? ` and placed as actor "${sent.actor}"` : ''}.${anims}${outdated}` : `error: ${sent.error}`;
       }
       return text;
     },

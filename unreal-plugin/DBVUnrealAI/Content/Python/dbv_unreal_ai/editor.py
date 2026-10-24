@@ -21,7 +21,7 @@ import unreal
 from dbv_unreal_ai import analysis
 
 #: Versión del contrato de herramientas (la app la compara con la que trae).
-TOOLSET_VERSION = "0.1.0"
+TOOLSET_VERSION = "0.2.0"
 
 
 def _json(value: Any) -> str:
@@ -77,11 +77,25 @@ def _unique_name(folder_path: str, asset_name: str) -> str:
     return candidate
 
 
+def _classify(paths: list[str]) -> dict[str, list[str]]:
+    """Separa lo importado por tipo: mallas estáticas, esqueléticas, esqueletos y animaciones."""
+    kinds: dict[str, list[str]] = {"static": [], "skeletal": [], "skeleton": [], "animation": []}
+    for path in paths:
+        asset = unreal.load_asset(path)
+        for kind, cls in (("skeletal", unreal.SkeletalMesh), ("static", unreal.StaticMesh), ("skeleton", unreal.Skeleton), ("animation", unreal.AnimSequence)):
+            if isinstance(asset, cls):
+                kinds[kind].append(path)
+                break
+    return kinds
+
+
 def import_model(source_file: str, folder_path: str = "/Game/DBV/Generated", asset_name: str = "") -> str:
-    """Importa un modelo (glTF/GLB, FBX, OBJ) dejando que el motor elija el importador. @spec REQ-19
+    """Importa un modelo (glTF/GLB, FBX, OBJ) dejando que el motor elija el importador. @spec REQ-19, REQ-16
 
     ``StaticMeshTools.import_file`` de Epic fuerza ``FbxFactory`` y rechaza los ``.glb`` de Tripo;
-    aquí no se fija fábrica, así que glTF entra por Interchange con sus materiales y texturas.
+    aquí no se fija fábrica, así que glTF entra por Interchange con sus materiales y texturas. Un GLB con
+    esqueleto (un rig de Tripo) da un Skeletal Mesh con su Skeleton y, si trae clips, sus Animation Sequences:
+    entonces el principal es el Skeletal Mesh y se devuelven las animaciones para reproducirlas al colocarlo.
     """
     if not os.path.isfile(source_file):
         return _json({"success": False, "error": f"file not found: {source_file}"})
@@ -100,8 +114,16 @@ def import_model(source_file: str, folder_path: str = "/Game/DBV/Generated", ass
     task.save = True
     unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
     paths = [str(p) for p in task.get_editor_property("imported_object_paths")]
-    meshes = [p for p in paths if isinstance(unreal.load_asset(p), unreal.StaticMesh)]
-    result = {"success": bool(paths), "imported": paths, "primary": meshes[0] if meshes else (paths[0] if paths else None)}
+    kinds = _classify(paths)
+    primary = (kinds["skeletal"] or kinds["static"] or paths or [None])[0]
+    result = {
+        "success": bool(paths),
+        "imported": paths,
+        "primary": primary,
+        "kind": "skeletal" if kinds["skeletal"] else "static" if kinds["static"] else "other",
+        "skeleton": (kinds["skeleton"] or [None])[0],
+        "animations": kinds["animation"],
+    }
     if not paths:
         result["error"] = "the import produced no assets (unsupported or invalid file)"
     return _json(result)
@@ -120,6 +142,25 @@ def place_asset(asset_path: str, distance: float = 300.0, folder: str = "DBV/Gen
             actor.set_folder_path(folder)
     result = {"success": actor is not None, "actor": actor.get_actor_label() if actor else None, "location": _round(target), "folder": folder}
     return _json(result)
+
+
+def play_animation(actor_label: str, animation_path: str, looping: bool = True) -> str:
+    """Pone a ``actor_label`` (un Skeletal Mesh del nivel) a reproducir ``animation_path`` en el editor. @spec REQ-16, REQ-19
+
+    Modo «una sola animación» del componente: se ve en el viewport sin Animation Blueprint, que es lo que hace
+    falta para revisar un baile de Tripo; para un personaje jugable se crea luego su Animation Blueprint.
+    """
+    animation = unreal.load_asset(animation_path)
+    if not isinstance(animation, unreal.AnimSequence):
+        return _json({"success": False, "error": f"not an animation: {animation_path}"})
+    actors = [a for a in unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors() if a.get_actor_label() == actor_label]
+    component = actors[0].get_component_by_class(unreal.SkeletalMeshComponent) if actors else None
+    if component is None:
+        return _json({"success": False, "error": f"no skeletal mesh actor labelled {actor_label}"})
+    with unreal.ScopedEditorTransaction("DBV Unreal AI: play animation"):
+        component.set_animation_mode(unreal.AnimationMode.ANIMATION_SINGLE_NODE)
+        component.override_animation_data(animation, bool(looping), True, 0.0, 1.0)
+    return _json({"success": True, "actor": actor_label, "animation": animation_path, "looping": bool(looping)})
 
 
 def get_scene_summary(name_filter: str = "", class_filter: str = "", limit: int = 200) -> str:

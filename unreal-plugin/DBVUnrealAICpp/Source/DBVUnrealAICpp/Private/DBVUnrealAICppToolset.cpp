@@ -75,6 +75,11 @@ FString UDBVUnrealAICppToolset::place_asset(const FString& asset_path, float dis
 	return CallPython(TEXT("place_asset"), { asset_path, FString::SanitizeFloat(distance), folder });
 }
 
+FString UDBVUnrealAICppToolset::play_animation(const FString& actor_label, const FString& animation_path, bool looping)
+{
+	return CallPython(TEXT("play_animation"), { actor_label, animation_path, looping ? TEXT("true") : TEXT("false") });
+}
+
 FString UDBVUnrealAICppToolset::get_scene_summary(const FString& name_filter, const FString& class_filter, int32 limit)
 {
 	return CallPython(TEXT("get_scene_summary"), { name_filter, class_filter, FString::FromInt(limit) });
