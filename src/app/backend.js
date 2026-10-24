@@ -43,20 +43,51 @@ export const libraryRemove = (id) => call('library_remove', { id });
 export const libraryFilePath = (id, file) => call('library_file_path', { id, file });
 export const libraryRecordSent = (id, project, assetPath) => call('library_record_sent', { id, project, assetPath });
 
-/** Espera el final de un trabajo de generación (`done`, `failed` o `cancelled`). */
+// ─── Progreso de los trabajos ────────────────────────────────────────
+// El oyente se registra ANTES de lanzar un trabajo y guarda lo que llega: un fallo inmediato (una clave
+// mala) emite «failed» en milisegundos, y si nadie escuchaba aún la interfaz se quedaba «En cola…»
+// hasta el tiempo límite (hallazgo Crítico de `/code-simplify`).
+const FINAL_STAGES = ['done', 'failed', 'cancelled'];
+const jobHistory = new Map();
+const jobWaiters = new Map();
+let jobListener = null;
+
+/** Escucha `generation-progress` una sola vez para toda la app. */
+export function listenJobs() {
+  jobListener ??= on('generation-progress', (progress) => {
+    const history = jobHistory.get(progress.jobId) ?? [];
+    history.push(progress);
+    jobHistory.set(progress.jobId, history);
+    for (const waiter of jobWaiters.get(progress.jobId) ?? []) waiter(progress);
+  });
+  return jobListener;
+}
+
+/** Lanza un texto → modelo con el oyente ya registrado. */
+export async function startTripo(start) {
+  await listenJobs();
+  return generationTripoStart(start);
+}
+
+/** Espera el final de un trabajo (`done`, `failed` o `cancelled`), con lo que ya hubiera llegado incluido. */
 export function waitJob(jobId, timeoutMs, onProgress = () => {}) {
   return new Promise((resolve) => {
-    let unlisten = null;
-    const timer = setTimeout(() => finish({ stage: 'failed', error: 'timeout' }), timeoutMs);
+    const waiters = jobWaiters.get(jobId) ?? [];
+    let settled = false;
+    const timer = setTimeout(() => finish({ jobId, stage: 'failed', error: 'timeout' }), timeoutMs);
     function finish(result) {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      Promise.resolve(unlisten).then((stop) => stop?.());
+      jobWaiters.set(jobId, (jobWaiters.get(jobId) ?? []).filter((w) => w !== receive));
       resolve(result);
     }
-    unlisten = on('generation-progress', (progress) => {
-      if (progress.jobId !== jobId) return;
+    function receive(progress) {
       onProgress(progress);
-      if (['done', 'failed', 'cancelled'].includes(progress.stage)) finish(progress);
-    });
+      if (FINAL_STAGES.includes(progress.stage)) finish(progress);
+    }
+    jobWaiters.set(jobId, [...waiters, receive]);
+    listenJobs();
+    for (const past of jobHistory.get(jobId) ?? []) receive(past);
   });
 }

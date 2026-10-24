@@ -37,6 +37,8 @@ pub enum UnrealError {
     Timeout(String),
     /// Lo pedido no existe (proyecto, toolset, herramienta, copia de seguridad).
     NotFound(String),
+    /// La sesión MCP ya no existe en el editor (se reinició): se reabre sola una vez.
+    Expired(String),
     /// Una ruta que se sale de la carpeta del proyecto.
     Outside(String),
 }
@@ -50,6 +52,7 @@ impl std::fmt::Display for UnrealError {
             | Self::Protocol(m)
             | Self::Timeout(m)
             | Self::NotFound(m)
+            | Self::Expired(m)
             | Self::Outside(m) => m,
         };
         write!(f, "{message}")

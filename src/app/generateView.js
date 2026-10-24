@@ -53,7 +53,7 @@ export function createGenerateView(host, deps) {
         const current = await api.generationStatus();
         const ok = await confirmCost(deps.confirm, { name: name.value.trim(), prompt: text, cost: current.value?.tripoTextToModel ?? 30, spent: current.value?.spent ?? 0, budget: current.value?.budget ?? 0 });
         if (!ok) return null;
-        const started = await api.generationTripoStart({ prompt: text, name: name.value.trim() || null, faceLimit: Number(faces.value) || null, smartLowPoly: lowPoly.checked || null, confirmCost: true });
+        const started = await api.startTripo({ prompt: text, name: name.value.trim() || null, faceLimit: Number(faces.value) || null, smartLowPoly: lowPoly.checked || null, confirmCost: true });
         if (!started.ok) return deps.toast(started.error.message, 'error');
         jobId = started.value;
         start.disabled = true;

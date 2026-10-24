@@ -5,6 +5,12 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 
+// Un `panic` cierra toda la app: fuera de los tests, nada de `unwrap`/`expect` (MASTER_PROMPT.md §2).
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+// El estándar del proyecto guarda el resultado en una variable y la devuelve en la última línea (un solo
+// return, MASTER_PROMPT.md §1): es justo lo que este lint de estilo desaconseja.
+#![allow(clippy::let_and_return)]
+
 // IA integrada de tres niveles (local, nube, agentes ACP). Solo escritorio: en móvil no hay `keyring`
 // ni procesos hijos. El frontend la carga de forma perezosa al abrir la Conversación (RNF-IA.1).
 #[cfg(desktop)]
@@ -62,6 +68,8 @@ async fn app_diagnostics() -> Result<serde_json::Value, String> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+// Arranque: si Tauri no puede abrir la ventana no hay nada que recuperar (excepción permitida por el estándar).
+#[allow(clippy::expect_used)]
 pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default().plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_dialog::init());

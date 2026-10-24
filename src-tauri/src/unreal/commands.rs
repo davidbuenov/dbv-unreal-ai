@@ -146,7 +146,7 @@ fn session_for(state: &UnrealState, url: &str, fresh: bool) -> Result<McpSession
 pub fn with_session<T>(state: &UnrealState, url: &str, work: impl Fn(&McpSession) -> Result<T, UnrealError>) -> Result<T, UnrealError> {
     let first = work(&session_for(state, url, false)?);
     match first {
-        Err(UnrealError::NotFound(message)) if message.contains("sesión MCP") => work(&session_for(state, url, true)?),
+        Err(UnrealError::Expired(_)) => work(&session_for(state, url, true)?),
         other => other,
     }
 }

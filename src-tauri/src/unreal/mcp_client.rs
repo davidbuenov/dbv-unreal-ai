@@ -108,10 +108,11 @@ pub fn parse_rpc_body(body: &str, content_type: &str, id: u64) -> Result<Value, 
         serde_json::from_str::<Value>(body).map(|v| vec![v]).map_err(|error| UnrealError::Protocol(format!("respuesta no JSON del editor: {error}")))?
     };
     let response = candidates.into_iter().find(|message| message.get("id").and_then(Value::as_u64) == Some(id)).ok_or_else(|| UnrealError::Protocol("el editor no devolvió la respuesta pedida".into()))?;
-    if let Some(error) = response.get("error") {
-        return Err(UnrealError::Protocol(error.get("message").and_then(Value::as_str).unwrap_or("error del servidor MCP").to_string()));
-    }
-    Ok(response.get("result").cloned().unwrap_or(Value::Null))
+    let result = match response.get("error") {
+        Some(error) => Err(UnrealError::Protocol(error.get("message").and_then(Value::as_str).unwrap_or("error del servidor MCP").to_string())),
+        None => Ok(response.get("result").cloned().unwrap_or(Value::Null)),
+    };
+    result
 }
 
 fn classify_transport(url: &str, error: &ureq::Error) -> UnrealError {
@@ -141,10 +142,7 @@ impl McpSession {
         let session_id = response.headers().get("Mcp-Session-Id").and_then(|v| v.to_str().ok()).map(str::to_string);
         let content_type = response.headers().get("Content-Type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
         let text = response.body_mut().read_to_string().unwrap_or_default();
-        if status >= 400 {
-            return Err(UnrealError::Protocol(format!("initialize respondió HTTP {status}")));
-        }
-        let result = parse_rpc_body(&text, &content_type, id)?;
+        let result = if status >= 400 { Err(UnrealError::Protocol(format!("initialize respondió HTTP {status}"))) } else { parse_rpc_body(&text, &content_type, id) }?;
         let session = McpSession {
             url: url.to_string(),
             session_id,
@@ -172,23 +170,20 @@ impl McpSession {
 
     fn notify(&self, method: &str) -> Result<(), UnrealError> {
         let (status, _, _) = self.post(&json!({ "jsonrpc": "2.0", "method": method }), CONNECT_TIMEOUT)?;
-        if status >= 400 {
-            return Err(UnrealError::Protocol(format!("{method} respondió HTTP {status}")));
-        }
-        Ok(())
+        let result = if status >= 400 { Err(UnrealError::Protocol(format!("{method} respondió HTTP {status}"))) } else { Ok(()) };
+        result
     }
 
-    /// Petición JSON-RPC. Un 404 significa sesión caducada (el editor se reinició): `NotFound`.
+    /// Petición JSON-RPC. Un 404 significa sesión caducada (el editor se reinició): `Expired`.
     pub fn request(&self, method: &str, params: Value, timeout: Duration) -> Result<Value, UnrealError> {
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let (status, content_type, text) = self.post(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }), timeout)?;
-        if status == 404 {
-            return Err(UnrealError::NotFound("la sesión MCP ya no existe (¿se reinició el editor?)".into()));
-        }
-        if status >= 400 {
-            return Err(UnrealError::Protocol(format!("{method} respondió HTTP {status}: {}", text.chars().take(300).collect::<String>())));
-        }
-        parse_rpc_body(&text, &content_type, id)
+        let result = match status {
+            404 => Err(UnrealError::Expired("la sesión MCP ya no existe (¿se reinició el editor?)".into())),
+            400.. => Err(UnrealError::Protocol(format!("{method} respondió HTTP {status}: {}", text.chars().take(300).collect::<String>()))),
+            _ => parse_rpc_body(&text, &content_type, id),
+        };
+        result
     }
 
     /// `tools/list`.
@@ -212,10 +207,8 @@ impl McpSession {
     /// Herramientas de un toolset (`describe_toolset`).
     pub fn describe_toolset(&self, toolset: &str) -> Result<ToolsetInfo, UnrealError> {
         let result = self.call("describe_toolset", json!({ "toolset_name": toolset }), DEFAULT_TIMEOUT)?;
-        if result.is_error {
-            return Err(UnrealError::NotFound(result.text));
-        }
-        parse_toolset_info(&result.text)
+        let info = if result.is_error { Err(UnrealError::NotFound(result.text)) } else { parse_toolset_info(&result.text) };
+        info
     }
 
     /// Llama a una herramienta de un toolset (`call_tool`).
@@ -419,7 +412,7 @@ pub(crate) mod tests {
         let (url, handle) = fake_server(vec![http("200 OK", "Mcp-Session-Id: abc123\r\n", init), http("202 Accepted", "", ""), http("404 Not Found", "", "")]);
         let session = McpSession::connect(&url).unwrap();
         assert_eq!(session.session_id.as_deref(), Some("abc123"));
-        assert!(matches!(session.list_tools(), Err(UnrealError::NotFound(_))));
+        assert!(matches!(session.list_tools(), Err(UnrealError::Expired(_))));
         let seen = handle.join().unwrap();
         assert!(seen[1].contains("notifications/initialized"));
         assert!(seen[1].to_lowercase().contains("mcp-session-id: abc123"));

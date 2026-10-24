@@ -24,6 +24,7 @@
 - [x] **S10 · Interfaz** (REQ-08, REQ-14, REQ-24) — banco E2E en Edge headless.
 - [x] **S11 · CI y documentación** — workflows CI y Release (sin ejecutar aún en GitHub: no hay remoto).
 - [x] **`/test`** — 116 Rust, 193 Vitest, 13 Python, E2E, evals `qwen3:8b` 5/5 ×3 con cero modificaciones sin aprobación; RNF-08 «Copiar diagnóstico».
+- [x] **`/code-simplify`** — 2 Críticos y 5 Importantes resueltos (ver CHANGELOG); clippy con unwrap/expect prohibidos, regla de un solo return; todo en verde y eval 5/5.
 - [ ] **`/ship` v0.1** — con el usuario: versión, `walkthrough.md`, `docs/IA.md`, tag.
 
 ## Deuda Técnica
@@ -46,6 +47,6 @@
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
 > **Last update / Última actualización:** 2026-10-24
-> **Exact point / Punto exacto:** v0.1 construida y probada; `/code-simplify` en curso o hecho (ver último commit).
+> **Exact point / Punto exacto:** v0.1 construida, probada y revisada (`/code-simplify` cerrado, sin Críticos abiertos).
 > **Pending / Pendiente:** revisión del usuario (ADR-V010-001, deuda técnica) y `/ship` v0.1.
 > **Next step / Próximo paso:** leer `memory.md` (ADR-V010-001) y esta deuda; decidir versión y ejecutar `/ship`.

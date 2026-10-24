@@ -35,3 +35,9 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - La píldora de conexión volvía a «Sin editor» al cargarse el asistente de IA: `applyTranslations()` reescribía su texto porque llevaba `data-i18n` (detectado con el banco de interfaz en Edge headless).
 - El diff de la preparación no marcaba con «…» las líneas omitidas al principio y al final.
 - Con un modelo de 8B, contar actores con Python agotaba los 12 pasos: el aviso de API obsoleta («usa el subsistema») no decía cuál y el modelo no encontraba la alternativa (detectado por la eval; de 14 llamadas al editor a 4).
+- [Crítico] «Preparar» dejaba el proyecto a medias y sin forma de revertirlo si una escritura fallaba (el manifiesto de la copia se escribía al final). Ahora es todo o nada: manifiesto antes de escribir y, si algo falla, se deshace solo.
+- [Crítico] Un trabajo de Tripo que fallaba al instante (clave mala) dejaba la interfaz «En cola…» hasta el tiempo límite: el evento llegaba antes de que hubiera oyente. Ahora el oyente se registra antes de lanzar y guarda lo que llega.
+- [Importante] El tope de créditos de la sesión se consumía aunque Tripo rechazara la petición sin crear tarea; ahora solo cuenta lo que llega a crear una tarea (nueva etapa «Enviado a Tripo…»), también en el MCP propio.
+- [Importante] La descarga de modelos solo admite HTTPS (antes aceptaba `http://127.0.0.1`, pensado para los tests).
+- [Importante] La sesión MCP caducada tiene su propio tipo de error en vez de reconocerse por el texto del mensaje.
+- [Importante] `#![deny(clippy::unwrap_used, clippy::expect_used)]` en toda la crate (salvo el arranque) y regla de un solo `return` aplicada al cliente MCP, Tripo, el trabajo de generación, la preparación, el MCP propio y las herramientas de Unreal.

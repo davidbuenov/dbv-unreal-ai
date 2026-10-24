@@ -198,7 +198,7 @@ export function start() {
         const unreal = state.connection?.status === 'online' ? createUnrealTools({ backend: unrealBackend(), askApproval, onAction: log.add, permissions: memories.get(conversationId) }) : [];
         const generation = createGenerationTools({
           status: api.generationStatus,
-          startTripo: (start) => api.generationTripoStart(start).finally(refreshSpent),
+          startTripo: (start) => api.startTripo(start).finally(refreshSpent),
           waitJob: (jobId, timeout) => api.waitJob(jobId, timeout, (p) => panel.addStep(t(`gen.stage.${p.stage}`, { progress: String(Math.round(p.progress ?? 0)), error: p.error ?? '' }))),
           listLibrary: api.libraryList,
           send: (entry) => (state.connection?.status === 'online' ? sendToUnreal({ backend: sendBackend(state.connection) }, entry, { project: state.connection.projectPath }) : Promise.resolve({ ok: false, error: 'no Unreal project connected' })),

@@ -236,11 +236,11 @@ fn plugin_files(source: &Path, plugin: &str) -> Result<Vec<(String, PathBuf)>, U
 
 fn read_optional(path: &Path) -> Result<Option<String>, UnrealError> {
     let result = match std::fs::read_to_string(path) {
-        Ok(text) => Some(text),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-        Err(error) => return Err(io_error(path, &error)),
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(io_error(path, &error)),
     };
-    Ok(result)
+    result
 }
 
 fn relative_of(dir: &Path, path: &Path) -> String {
@@ -300,13 +300,44 @@ fn backup_id(project: &str) -> String {
     format!("{millis}-{name}")
 }
 
-/// Aplica el plan tras guardar copia de seguridad de lo que toca; devuelve el id de la copia (REQ-05).
+/// Carpetas que tendrá que crear el plan, de fuera hacia dentro y sin repetir (las quita «Revertir»).
+fn missing_dirs(dir: &Path, targets: &[PathBuf]) -> Vec<String> {
+    let mut created: Vec<String> = Vec::new();
+    for target in targets {
+        let mut missing: Vec<PathBuf> = target.ancestors().skip(1).take_while(|a| *a != dir && !a.exists()).map(Path::to_path_buf).collect();
+        missing.reverse();
+        for folder in missing.iter().map(|d| relative_of(dir, d)) {
+            if !created.contains(&folder) {
+                created.push(folder);
+            }
+        }
+    }
+    created
+}
+
+/// Escribe los ficheros del plan (las copias y el manifiesto ya están guardados).
+fn write_changes(plan: &PreparePlan, targets: &[PathBuf]) -> Result<(), UnrealError> {
+    for (change, target) in plan.changes.iter().zip(targets) {
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| io_error(parent, &error))?;
+        }
+        std::fs::write(target, &change.after).map_err(|error| io_error(target, &error))?;
+    }
+    Ok(())
+}
+
+/// Aplica el plan TODO O NADA y devuelve el id de la copia de seguridad (REQ-05).
+///
+/// Orden: copias de lo que existe → manifiesto → escrituras. Si una escritura falla a mitad, se
+/// revierte sola con ese mismo manifiesto y se devuelve el error (antes el manifiesto se escribía
+/// al final y un fallo a mitad dejaba el proyecto a medias y sin forma de revertirlo).
 pub fn apply(uproject: &Path, plan: &PreparePlan, backups: &Path) -> Result<String, UnrealError> {
     let dir = project_dir(uproject);
     let targets: Vec<PathBuf> = plan.changes.iter().map(|c| inside(dir, &c.relative)).collect::<Result<_, _>>()?;
     let id = backup_id(uproject.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default().as_str());
     let store = backups.join(&id);
-    let mut manifest = Manifest { project_dir: dir.to_string_lossy().into_owned(), files: Vec::new(), created_dirs: Vec::new() };
+    std::fs::create_dir_all(&store).map_err(|error| io_error(&store, &error))?;
+    let mut manifest = Manifest { project_dir: dir.to_string_lossy().into_owned(), files: Vec::new(), created_dirs: missing_dirs(dir, &targets) };
     for (change, target) in plan.changes.iter().zip(&targets) {
         let existed = target.is_file();
         if existed {
@@ -316,20 +347,16 @@ pub fn apply(uproject: &Path, plan: &PreparePlan, backups: &Path) -> Result<Stri
         }
         manifest.files.push(BackedUp { relative: change.relative.clone(), existed });
     }
-    std::fs::create_dir_all(&store).map_err(|error| io_error(&store, &error))?;
-    for (change, target) in plan.changes.iter().zip(&targets) {
-        // Carpetas que crea esta preparación, de fuera hacia dentro: «Revertir» las quita.
-        let mut missing: Vec<PathBuf> = target.ancestors().skip(1).take_while(|a| *a != dir && !a.exists()).map(Path::to_path_buf).collect();
-        missing.reverse();
-        manifest.created_dirs.extend(missing.iter().map(|d| relative_of(dir, d)));
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent).map_err(|error| io_error(parent, &error))?;
-        }
-        std::fs::write(target, &change.after).map_err(|error| io_error(target, &error))?;
-    }
     let text = serde_json::to_string_pretty(&manifest).map_err(|error| UnrealError::Format(error.to_string()))?;
     std::fs::write(store.join("manifest.json"), text).map_err(|error| io_error(&store, &error))?;
-    Ok(id)
+    let result = match write_changes(plan, &targets) {
+        Ok(()) => Ok(id),
+        Err(error) => Err(match revert(uproject, backups, &id) {
+            Ok(()) => UnrealError::Io(format!("{error} — no se cambió nada: la preparación se deshizo sola")),
+            Err(rollback) => UnrealError::Io(format!("{error} — y no se pudo deshacer ({rollback}): revierte con la copia {id}")),
+        }),
+    };
+    result
 }
 
 /// Deshace una preparación: restaura lo que existía, borra lo creado y sus carpetas (REQ-05).
@@ -453,6 +480,22 @@ mod tests {
             assert!(matches!(inside(dir.path(), bad), Err(UnrealError::Outside(_))) || cfg!(not(windows)) && bad == "C:\\x", "{bad}");
         }
         assert!(inside(dir.path(), "Plugins/DBVUnrealAI/x.py").is_ok());
+    }
+
+    /// Un fallo de escritura a mitad no deja el proyecto a medias (hallazgo Crítico de `/code-simplify`).
+    /// @spec REQ-05
+    #[test]
+    fn si_una_escritura_falla_a_mitad_se_deshace_todo() {
+        let (dir, path) = project();
+        let backups = tempfile::tempdir().unwrap();
+        let plan = plan(&path, &source(), Variant::Python, Some(8123)).unwrap();
+        // Una carpeta donde va un fichero del plan: esa escritura fallará después de que otras hayan funcionado.
+        let blocked = dir.path().join("Plugins").join("DBVUnrealAI").join("Content").join("Python").join("init_unreal.py");
+        std::fs::create_dir_all(&blocked).unwrap();
+        let before = snapshot(dir.path());
+        let error = apply(&path, &plan, backups.path()).unwrap_err();
+        assert!(error.to_string().contains("se deshizo sola"), "{error}");
+        assert_eq!(snapshot(dir.path()), before, "el proyecto queda exactamente como estaba");
     }
 
     /// @spec REQ-05

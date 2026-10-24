@@ -152,9 +152,17 @@ pub fn generation_tripo_start(app: AppHandle, ai: State<'_, AiState>, state: Sta
             let _ = app.emit("generation-progress", progress);
         };
         let client = TripoClient::new(&key);
+        let mut submitted = false;
         let result = run_tripo_job(&client, &start.request, &name, &library, &cancel, Polling::default(), |stage, progress| {
+            submitted |= stage == "submitted";
             emit(Progress { job_id: id.clone(), stage: stage.to_string(), progress, entry: None, error: None });
         });
+        // Si Tripo rechazó la petición (clave, red), no se creó tarea ni se gastó nada: se devuelve al tope.
+        if result.is_err() && !submitted {
+            if let Ok(mut spent) = app.state::<GenerationState>().spent.lock() {
+                *spent = (*spent - TEXT_TO_MODEL_CREDITS).max(0.0);
+            }
+        }
         let cancelled = cancel.load(Ordering::Relaxed);
         match result {
             Ok(entry) => emit(Progress { job_id: id.clone(), stage: "done".into(), progress: Some(100.0), entry: Some(entry), error: None }),

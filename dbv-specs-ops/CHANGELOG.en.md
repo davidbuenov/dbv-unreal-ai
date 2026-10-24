@@ -35,3 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The connection pill went back to "No editor" when the AI assistant loaded: `applyTranslations()` rewrote its text because it carried `data-i18n` (caught by the headless Edge UI bench).
 - The preparation diff did not mark lines skipped at the start and the end with "…".
 - With an 8B model, counting actors with Python ran out of its 12 steps: the deprecated-API warning ("use the subsystem") did not say which one and the model could not find the alternative (caught by the eval; from 14 editor calls down to 4).
+- [Critical] "Prepare" left the project half-changed and impossible to revert if a write failed (the backup manifest was written last). It is now all-or-nothing: manifest before writing and automatic rollback on failure.
+- [Critical] A Tripo job that failed instantly (bad key) left the UI "Queued…" until the timeout: the event arrived before anyone listened. The listener is now registered before starting and keeps what arrives.
+- [Important] The session credit cap was consumed even when Tripo rejected the request without creating a task; now only jobs that create a task count (new "Sent to Tripo…" stage), also in the own MCP server.
+- [Important] Model downloads only accept HTTPS (they used to accept `http://127.0.0.1`, meant for tests).
+- [Important] An expired MCP session has its own error type instead of being recognised by its message text.
+- [Important] `#![deny(clippy::unwrap_used, clippy::expect_used)]` crate-wide (except startup) and the single-`return` rule applied to the MCP client, Tripo, the generation job, preparation, the own MCP server and the Unreal tools.

@@ -38,13 +38,16 @@ use crate::unreal::UnrealError;
 /// Versión del protocolo MCP que anunciamos si el cliente no pide otra.
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
 
+/// Clave de un servicio (`tripo`) del almacén del sistema.
+pub type KeyLookup = Box<dyn Fn(&str) -> Option<String>>;
+
 /// Configuración del servidor (se calcula de los argumentos; los tests la montan a mano).
 pub struct ServerConfig {
     pub unreal_url: String,
     pub library: Library,
     pub config_dir: PathBuf,
     /// Clave de un servicio (`tripo`), del almacén del sistema.
-    pub key: Box<dyn Fn(&str) -> Option<String>>,
+    pub key: KeyLookup,
     /// URL de Tripo (cambia en los tests).
     pub tripo_base: Option<String>,
 }
@@ -157,7 +160,7 @@ impl McpServer {
     fn editor<T>(&mut self, work: impl Fn(&McpSession) -> Result<T, UnrealError>) -> Result<T, UnrealError> {
         let first = work(&self.session()?);
         match first {
-            Err(UnrealError::NotFound(m)) if m.contains("sesión MCP") => {
+            Err(UnrealError::Expired(_)) => {
                 self.session = None;
                 work(&self.session()?)
             }
@@ -191,9 +194,10 @@ impl McpServer {
                 let arguments = args.get("arguments").cloned().unwrap_or_else(|| json!({}));
                 let result = self.editor(|s| s.call_toolset_tool(&full, &tool, arguments.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
                 if result.is_error {
-                    return Err(format(&result));
+                    Err(format(&result))?
+                } else {
+                    format(&result)
                 }
-                format(&result)
             }
             "unreal_run_python" => self.run_python(&text(args, "code"))?,
             "unreal_describe_python_api" => {
@@ -219,7 +223,7 @@ impl McpServer {
             }
             "library_send_to_unreal" => self.send_to_unreal(&text(args, "id"), args.get("place").and_then(Value::as_bool).unwrap_or(true))?,
             "generate_3d_model" => self.generate(args)?,
-            other => return Err(format!("unknown tool: {other}")),
+            other => Err(format!("unknown tool: {other}"))?,
         };
         Ok(result)
     }
@@ -233,11 +237,12 @@ impl McpServer {
         let code_value = json!({ "code": code });
         let report = self.editor(|s| s.call_toolset_tool(&dbv, "validate_python", code_value.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
         let blocking = report.value.as_ref().is_some_and(|v| v.get("ok") == Some(&json!(false)));
-        if blocking {
-            return Err(format!("NOT run: the code does not pass the check against this engine version. Fix it and retry: {}", format(&report)));
-        }
-        let ran = self.editor(|s| s.call_toolset_tool(&dbv, "run_python", code_value.clone(), std::time::Duration::from_secs(180))).map_err(err)?;
-        Ok(format(&ran))
+        let result = if blocking {
+            Err(format!("NOT run: the code does not pass the check against this engine version. Fix it and retry: {}", format(&report)))
+        } else {
+            self.editor(|s| s.call_toolset_tool(&dbv, "run_python", code_value.clone(), std::time::Duration::from_secs(180))).map(|ran| format(&ran)).map_err(err)
+        };
+        result
     }
 
     fn send_to_unreal(&mut self, id: &str, place: bool) -> Result<String, String> {
@@ -277,9 +282,13 @@ impl McpServer {
             Some(base) => TripoClient::with_base_url(&key, base),
             None => TripoClient::new(&key),
         };
-        self.spent += TEXT_TO_MODEL_CREDITS;
-        let entry = run_tripo_job(&client, &request, &name, &self.config.library, &AtomicBool::new(false), Polling::default(), |_, _| {}).map_err(|e| e.to_string())?;
-        Ok(format!("Generated and saved in the library: {} (\"{}\"). Use library_send_to_unreal to import it.", entry.id, entry.name))
+        let mut submitted = false;
+        let outcome = run_tripo_job(&client, &request, &name, &self.config.library, &AtomicBool::new(false), Polling::default(), |stage, _| submitted |= stage == "submitted");
+        // Solo cuenta para el tope lo que llegó a crear una tarea en Tripo.
+        if submitted {
+            self.spent += TEXT_TO_MODEL_CREDITS;
+        }
+        outcome.map(|entry| format!("Generated and saved in the library: {} (\"{}\"). Use library_send_to_unreal to import it.", entry.id, entry.name)).map_err(|e| e.to_string())
     }
 
     /// Respuesta a una línea JSON-RPC, o `None` si no toca responder (notificaciones, líneas vacías).
@@ -406,6 +415,23 @@ mod tests {
         let offline = rpc(&mut s, "tools/call", json!({ "name": "unreal_list_toolsets", "arguments": {} }));
         assert_eq!(offline["result"]["isError"], true);
         assert!(offline["result"]["content"][0]["text"].as_str().unwrap().contains("no se pudo conectar"));
+    }
+
+    /// Si Tripo rechaza la petición no se crea tarea: el tope de la sesión no se consume (hallazgo de `/code-simplify`).
+    /// @spec RNF-04
+    #[test]
+    fn un_rechazo_de_tripo_no_consume_el_tope() {
+        use crate::unreal::mcp_client::tests::{fake_server, http};
+        let (api, handle) = fake_server(vec![http("401 Unauthorized", "", r#"{"code":1002,"message":"invalid api key"}"#)]);
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        s.config.key = Box::new(|_| Some("sk-mala".into()));
+        s.config.tripo_base = Some(api.trim_end_matches("/mcp").to_string());
+        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "confirm_cost": true } }));
+        assert_eq!(call["result"]["isError"], true);
+        assert!(call["result"]["content"][0]["text"].as_str().unwrap().contains("invalid api key"));
+        assert_eq!(s.spent, 0.0);
+        handle.join().unwrap();
     }
 
     #[test]

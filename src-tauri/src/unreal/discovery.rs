@@ -183,7 +183,7 @@ pub fn engines_from(roots: Vec<PathBuf>) -> Vec<EngineInstall> {
             });
         }
     }
-    engines.sort_by(|a, b| (b.major, b.minor, b.patch).cmp(&(a.major, a.minor, a.patch)));
+    engines.sort_by_key(|e| std::cmp::Reverse((e.major, e.minor, e.patch)));
     engines
 }
 

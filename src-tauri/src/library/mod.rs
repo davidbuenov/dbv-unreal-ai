@@ -102,7 +102,7 @@ impl Library {
     /// Entradas, la más reciente primero. Un índice ilegible se trata como vacío (no se pierde nada en disco).
     pub fn list(&self) -> Vec<LibraryEntry> {
         let mut entries: Vec<LibraryEntry> = std::fs::read_to_string(self.root.join(INDEX)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-        entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        entries.sort_by_key(|e| std::cmp::Reverse(e.created_at));
         entries
     }
 

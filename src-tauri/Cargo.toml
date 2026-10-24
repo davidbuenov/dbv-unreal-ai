@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "dbv-unreal-ai"
 version = "0.1.0"
 description = "DBV Unreal AI — copiloto de IA nativo para Unreal Engine 5.8"

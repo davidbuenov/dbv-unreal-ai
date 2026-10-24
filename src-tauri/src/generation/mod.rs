@@ -39,7 +39,7 @@ pub const SERVICES: [&str; 2] = ["tripo", "worldlabs"];
 #[serde(rename_all = "camelCase")]
 pub struct Progress {
     pub job_id: String,
-    /// `queued`, `running`, `downloading`, `done`, `failed`, `cancelled`.
+    /// `queued`, `submitted` (la tarea ya existe en Tripo), `running`, `downloading`, `done`, `failed`, `cancelled`.
     pub stage: String,
     pub progress: Option<f64>,
     pub entry: Option<LibraryEntry>,
@@ -59,29 +59,40 @@ impl Default for Polling {
     }
 }
 
+/// Sondea una tarea hasta que termina bien; cancelación, fallo o tiempo agotado son errores.
+fn wait_for_task(client: &TripoClient, task_id: &str, cancel: &AtomicBool, polling: Polling, report: &mut impl FnMut(&str, Option<f64>)) -> Result<tripo::TripoTask, UnrealError> {
+    let started = Instant::now();
+    let outcome = loop {
+        if cancel.load(Ordering::Relaxed) {
+            break Err(UnrealError::Protocol("cancelado por el usuario (Tripo puede cobrar la tarea igualmente)".into()));
+        }
+        let task = match client.task(task_id) {
+            Ok(task) => task,
+            Err(error) => break Err(error),
+        };
+        report("running", task.progress);
+        if task.is_failed() {
+            break Err(UnrealError::Protocol(format!("la tarea {task_id} de Tripo terminó como «{}»", task.status)));
+        }
+        if task.is_success() {
+            break Ok(task);
+        }
+        if started.elapsed() > polling.max_wait {
+            break Err(UnrealError::Timeout(format!("la tarea {task_id} de Tripo no terminó en {} s", polling.max_wait.as_secs())));
+        }
+        std::thread::sleep(polling.interval);
+    };
+    outcome
+}
+
 /// Trabajo completo de texto → modelo con Tripo. Devuelve la entrada de la biblioteca.
 #[allow(clippy::too_many_arguments)]
 pub fn run_tripo_job(client: &TripoClient, request: &TextToModel, name: &str, library: &Library, cancel: &AtomicBool, polling: Polling, mut report: impl FnMut(&str, Option<f64>)) -> Result<LibraryEntry, UnrealError> {
     report("queued", None);
     let task_id = client.text_to_model(request)?;
-    let started = Instant::now();
-    let task = loop {
-        if cancel.load(Ordering::Relaxed) {
-            return Err(UnrealError::Protocol("cancelado por el usuario (Tripo puede cobrar la tarea igualmente)".into()));
-        }
-        let task = client.task(&task_id)?;
-        report("running", task.progress);
-        if task.is_success() || task.is_failed() {
-            break task;
-        }
-        if started.elapsed() > polling.max_wait {
-            return Err(UnrealError::Timeout(format!("la tarea {task_id} de Tripo no terminó en {} s", polling.max_wait.as_secs())));
-        }
-        std::thread::sleep(polling.interval);
-    };
-    if task.is_failed() {
-        return Err(UnrealError::Protocol(format!("la tarea {task_id} de Tripo terminó como «{}»", task.status)));
-    }
+    // A partir de aquí la tarea existe en Tripo y puede cobrarse: quien lleva el gasto ya no lo devuelve.
+    report("submitted", None);
+    let task = wait_for_task(client, &task_id, cancel, polling, &mut report)?;
     let model_url = task.model_url.clone().ok_or_else(|| UnrealError::Protocol(format!("la tarea {task_id} terminó sin modelo")))?;
     report("downloading", Some(100.0));
     let (id, dir) = library.new_entry_dir(name)?;
@@ -147,7 +158,7 @@ mod tests {
         let library = Library::new(dir.path().join("library"));
         let mut stages = Vec::new();
         let entry = run_tripo_job(&client, &request(), "Cofre del tesoro", &library, &AtomicBool::new(false), quick(), |stage, _| stages.push(stage.to_string())).unwrap();
-        assert_eq!(stages, vec!["queued", "running", "downloading"]);
+        assert_eq!(stages, vec!["queued", "submitted", "running", "downloading"]);
         assert_eq!(entry.task_id, "t-9");
         assert_eq!(entry.credits, Some(30.0));
         assert_eq!(std::fs::read_to_string(library.file_path(&entry.id, "model.glb").unwrap()).unwrap(), "glTF-binario");

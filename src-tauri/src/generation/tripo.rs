@@ -143,11 +143,11 @@ impl TripoClient {
     fn data(status: u16, text: &str) -> Result<Value, UnrealError> {
         let parsed: Option<Value> = serde_json::from_str(text).ok();
         let ok = (200..300).contains(&status) && parsed.as_ref().is_some_and(|v| v.get("code").and_then(Value::as_i64).unwrap_or(0) == 0);
-        if !ok {
-            return Err(tripo_error(status, text));
-        }
-        let value = parsed.unwrap_or(Value::Null);
-        Ok(value.get("data").cloned().unwrap_or(value))
+        let result = match parsed {
+            Some(value) if ok => Ok(value.get("data").cloned().unwrap_or(value)),
+            _ => Err(tripo_error(status, text)),
+        };
+        result
     }
 
     /// Lanza un texto → modelo y devuelve el `task_id`.
@@ -184,23 +184,26 @@ impl TripoClient {
 
 /// Descarga un enlace firmado (sin cabecera de autorización) a `target`, con tope de tamaño.
 pub fn download(url: &str, target: &Path) -> Result<u64, UnrealError> {
-    if !url.starts_with("https://") && !url.starts_with("http://127.0.0.1") {
+    // Solo HTTPS: el enlace lo da Tripo, y uno manipulado no debe poder apuntar a un servicio local.
+    // Los tests sirven el fichero desde un servidor simulado en 127.0.0.1.
+    let allowed = url.starts_with("https://") || (cfg!(test) && url.starts_with("http://127.0.0.1"));
+    if !allowed {
         return Err(UnrealError::Protocol(format!("enlace de descarga no admitido: {url}")));
     }
     let agent = ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(Duration::from_secs(300))).build().new_agent();
     let response = agent.get(url).call().map_err(|error| UnrealError::Unreachable(format!("no se pudo descargar el modelo: {error}")))?;
     let status = response.status().as_u16();
-    if status != 200 {
-        return Err(UnrealError::Protocol(format!("la descarga respondió HTTP {status} (¿caducó el enlace de 5 minutos?)")));
-    }
-    let mut reader = response.into_body().into_reader().take(MAX_DOWNLOAD_BYTES + 1);
-    let mut bytes = Vec::new();
-    reader.read_to_end(&mut bytes).map_err(|error| io_error(target, &error))?;
-    if bytes.len() as u64 > MAX_DOWNLOAD_BYTES {
-        return Err(UnrealError::Protocol("el fichero descargado supera el tope de 512 MB".into()));
-    }
+    let bytes = if status == 200 { read_limited(response, target) } else { Err(UnrealError::Protocol(format!("la descarga respondió HTTP {status} (¿caducó el enlace de 5 minutos?)"))) }?;
     std::fs::write(target, &bytes).map_err(|error| io_error(target, &error))?;
     Ok(bytes.len() as u64)
+}
+
+/// Cuerpo de una descarga, como mucho `MAX_DOWNLOAD_BYTES`.
+fn read_limited(response: ureq::http::Response<ureq::Body>, target: &Path) -> Result<Vec<u8>, UnrealError> {
+    let mut bytes = Vec::new();
+    response.into_body().into_reader().take(MAX_DOWNLOAD_BYTES + 1).read_to_end(&mut bytes).map_err(|error| io_error(target, &error))?;
+    let result = if bytes.len() as u64 > MAX_DOWNLOAD_BYTES { Err(UnrealError::Protocol("el fichero descargado supera el tope de 512 MB".into())) } else { Ok(bytes) };
+    result
 }
 
 #[cfg(test)]

@@ -194,10 +194,9 @@ export function createUnrealTools(deps) {
       if (/^run_?python$/i.test(String(tool))) return 'error: use the unreal_run_python tool to run Python (it validates the code first).';
       const kind = classifyTool(tool);
       const safeArgs = args && typeof args === 'object' ? args : {};
-      if (kind === 'modify' && !(await approved({ kind: 'tool', toolset: resolved.name, tool, args: safeArgs, purpose }))) {
-        return 'The user DENIED this action. It was not executed. Do not retry it; ask the user what to do instead.';
-      }
-      return formatResult(await invoke(resolved.name, tool, safeArgs, kind));
+      const allowed = kind === 'read' || (await approved({ kind: 'tool', toolset: resolved.name, tool, args: safeArgs, purpose }));
+      const text = allowed ? formatResult(await invoke(resolved.name, tool, safeArgs, kind)) : 'The user DENIED this action. It was not executed. Do not retry it; ask the user what to do instead.';
+      return text;
     },
   };
 
@@ -213,22 +212,22 @@ export function createUnrealTools(deps) {
       const dbv = await dbvToolset();
       const target = dbv ? { toolset: dbv, tool: 'run_python' } : await findFallbackPython();
       if (!target) return 'error: no tool in this project can run Python. Tell the user to use «Prepare project» in the app.';
-      let findings = null;
-      if (dbv) {
-        const report = valueOf(await invoke(dbv, 'validate_python', { code: source }, 'read'));
-        const blocking = report && (!report.ok || report.syntax_error);
-        if (blocking && pythonFixes < MAX_PYTHON_FIXES) {
-          pythonFixes += 1;
-          return `The code was NOT run: it does not pass the check against this engine version. Fix it and call unreal_run_python again (use unreal_describe_python_api to check names):\n${describeFindings(report)}`;
-        }
-        findings = report;
+      const findings = dbv ? valueOf(await invoke(dbv, 'validate_python', { code: source }, 'read')) : null;
+      // Lo que no existe vuelve al modelo sin molestar al usuario, como mucho MAX_PYTHON_FIXES veces seguidas.
+      const sendBack = Boolean(findings && (!findings.ok || findings.syntax_error)) && pythonFixes < MAX_PYTHON_FIXES;
+      let text;
+      if (sendBack) {
+        pythonFixes += 1;
+        text = `The code was NOT run: it does not pass the check against this engine version. Fix it and call unreal_run_python again (use unreal_describe_python_api to check names):\n${describeFindings(findings)}`;
+      } else if (!(await approved({ kind: 'python', toolset: target.toolset, tool: target.tool, code: source, purpose, findings, validated: Boolean(dbv) }))) {
+        text = 'The user DENIED running this code. It was not executed. Do not retry the same code; ask the user what they want.';
+      } else {
+        pythonFixes = 0;
+        const result = await invoke(target.toolset, target.tool, { code: source }, 'modify', PYTHON_TIMEOUT_SECS);
+        const warnings = findings?.findings?.length ? `\nNote from the pre-check:\n${describeFindings(findings)}` : '';
+        text = `${formatResult(result)}${warnings}`;
       }
-      const request = { kind: 'python', toolset: target.toolset, tool: target.tool, code: source, purpose, findings, validated: Boolean(dbv) };
-      if (!(await approved(request))) return 'The user DENIED running this code. It was not executed. Do not retry the same code; ask the user what they want.';
-      pythonFixes = 0;
-      const result = await invoke(target.toolset, target.tool, { code: source }, 'modify', PYTHON_TIMEOUT_SECS);
-      const warnings = findings?.findings?.length ? `\nNote from the pre-check:\n${describeFindings(findings)}` : '';
-      return `${formatResult(result)}${warnings}`;
+      return text;
     },
   };
 
