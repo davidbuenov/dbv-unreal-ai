@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Meaningful names (REQ-28):** the tool requires a short name; in Generate, "Suggest" asks the connected AI (or a heuristic without AI).
 - **Tripo balance** (`GET /v3/account/balance`) in Generate and for the AI.
 - **Library (REQ-30, backend):** configurable location (shared with `--mcp`), import `.glb/.gltf/.fbx/.obj/.usdz` models with their buffers, `.mtl` and textures, or images, or folders of another library without duplicates; rename.
+- Unreal Dev Community Málaga logo as the app icon (Windows, macOS, Linux), in the top bar, in About and in the READMEs; transparent outer background.
 
 ### Fixed
 

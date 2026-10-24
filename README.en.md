@@ -1,3 +1,5 @@
+<p align="center"><img src="src/assets/logo.png" alt="Unreal Dev Community Málaga" width="128" height="128"></p>
+
 # DBV Unreal AI
 
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
