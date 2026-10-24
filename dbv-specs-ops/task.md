@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo directamente en el editor (World Labs en v0.2).
-* **Estado actual**: v0.1 construida, probada y revisada (`/build` → `/test` → `/code-simplify` encadenados con autorización del usuario, ausente). Sin publicar: falta `/ship`.
-* **Última decisión técnica**: decisiones D1–D8 de `implementation_plan.md` tomadas SIN el usuario (ADR-V010-001 en `memory.md`), para revisar.
-* **Próximo paso**: el usuario revisa ADR-V010-001 y la deuda técnica de abajo; después `/ship` v0.1.
+* **Estado actual**: **v0.1.0 publicada** el 2026-10-24 (tag `v0.1.0`, en local: no hay remoto). Incluye la v0.1 (S1–S11) y la ampliación tras la primera prueba del usuario (S12–S17).
+* **Última decisión técnica**: D9–D12 de `implementation_plan.md` §4 (trabajos compartidos por ficheros, herramientas de Tripo con una sola definición, biblioteca configurable, Three.js incluido). D1–D8 se tomaron sin el usuario (ADR-V010-001 en `memory.md`), para revisar.
+* **Próximo paso**: el usuario prueba la v0.1.0; verificar con la API real de Tripo y con el editor abierto (ver «Deuda técnica»).
 
 ## Checklist de Tareas
 
@@ -25,7 +25,6 @@
 - [x] **S11 · CI y documentación** — workflows CI y Release (sin ejecutar aún en GitHub: no hay remoto).
 - [x] **`/test`** — 116 Rust, 193 Vitest, 13 Python, E2E, evals `qwen3:8b` 5/5 ×3 con cero modificaciones sin aprobación; RNF-08 «Copiar diagnóstico».
 - [x] **`/code-simplify`** — 2 Críticos y 5 Importantes resueltos (ver CHANGELOG); clippy con unwrap/expect prohibidos, regla de un solo return; todo en verde y eval 5/5.
-- [x] **`/ship` v0.1.0** (2026-10-24) — versión elegida por el usuario, `walkthrough.md`, `docs/IA.md`/`IA.en.md`, CHANGELOG publicado, tag `v0.1.0`.
 
 ## v0.1.x — Ampliación tras la primera prueba (REQ-27..REQ-33; plan en `implementation_plan.md` §4)
 
@@ -36,13 +35,16 @@
 - [x] **S16 · Referencias adjuntas** (REQ-32) — conversación (modelo con/sin visión, agente ACP) y Generar (imagen → modelo). Falta pasar la captura del viewport de Unreal a los modelos con visión (deuda REQ-13).
 - [x] **S17 · Esqueletos y animaciones en Unreal** (REQ-16, REQ-19) — `import_model` distingue Skeletal Mesh/Skeleton/AnimSequence; `play_animation`; toolset 0.2.0. **Sin verificar contra el motor real** (el editor no estaba abierto): probar con `D:/Programacion/Tripo/jupiterBueno2/glbs/raw/pumuki_anim_dance_01.glb` (animación sin geometría: puede necesitar el esqueleto del rig) y con un rig nuevo de Tripo.
 
+- [x] **`/test` v0.1.x** — 137 Rust, 236 Vitest, 25 Python, E2E con visor 3D y adjuntos; el banco E2E ya cierra los Edge que abre.
+- [x] **`/code-simplify` v0.1.x** — 1 Crítico (subida a Tripo de cualquier fichero local con una ruta escrita por la IA) y 2 Importantes resueltos, 3 Nits anotados (ver CHANGELOG); lint sin errores.
+- [x] **`/ship` v0.1.0** (2026-10-24) — versión elegida por el usuario, `walkthrough.md`, `docs/IA.md`/`IA.en.md`, CHANGELOG publicado, tag `v0.1.0`.
+
 
 ## Deuda Técnica
 *Mejoras detectadas fuera del foco de la tarea actual, para abordarlas después.*
 
 - **Personajes en Unreal (S17) sin probar en el motor:** importar un GLB riggeado de Tripo por Interchange, el Skeletal Mesh resultante, `override_animation_data` en el editor y la variante C++ recompilada con `play_animation`.
-- **Operaciones de Tripo sin probar con la API real:** imagen → modelo, `/v3/files`, rig, retarget, convert y el resto (solo contra un servidor simulado, según la documentación del 2026-10-24). Probar con la clave del usuario y su confirmación de gasto.
-- **Generación real con Tripo:** solo probada contra un servidor simulado; falta una prueba con clave (≈30 créditos).
+- **Tripo sin probar con la API real:** todo se ha probado solo contra un servidor simulado según la documentación del 2026-10-24, incluido texto → modelo con la app (Holo-Companion sí lo usó en real). Probar con la clave del usuario y su confirmación de gasto: texto → modelo (20 créditos), imagen → modelo con `/v3/files` (30), rig (25), una animación (10); y comprobar que el coste real (`credits_consumed`) cuadra con la estimación y con el saldo.
 - **Variante C++ del toolset (REQ-06, D8):** el usuario la instaló desde la interfaz en su proyecto y el editor arrancó bien (2026-10-24); falta verificar en otro proyecto y en CI con UBT.
 - **Preparar un proyecto real (REQ-05):** el usuario lo ha ejecutado con su proyecto y el editor arrancó bien (2026-10-24); falta el ciclo con un proyecto de plantilla de Epic y la reversión.
 - **RNF-08:** hecho «Copiar diagnóstico»; falta el log local rotativo.
