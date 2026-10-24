@@ -14,6 +14,7 @@
 // Android no hay Modo Edición, ni `keyring`, ni procesos hijos.
 
 pub mod acp;
+pub mod attachments;
 pub mod check;
 pub mod commands;
 pub mod connections;

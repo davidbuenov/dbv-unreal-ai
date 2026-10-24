@@ -80,6 +80,23 @@ export function historyMessages(entries, budget) {
  */
 const TOOLS_UNSUPPORTED = /(?:does(?:n'?t| not) support|not support(?:ed)?|unsupported|no support for)[^.\n]{0,40}\b(?:tools?|tool[ _-]?use|function[ _-]?calling)\b|\b(?:tools?|tool[ _-]?use|function[ _-]?calling)\b[^.\n]{0,40}\b(?:not (?:supported|available|enabled)|unsupported)\b/i;
 
+/** ¿Ve imágenes este modelo? Si la conexión no lo dice, los de nube sí y los locales no (un modelo local sin visión falla con ellas). @spec REQ-32 */
+export function canSeeImages(connection, providerInfo = []) {
+  const cloud = providerInfo.find((p) => p.provider === connection.provider)?.cloud === true;
+  return connection.supportsImages === true || (connection.supportsImages == null && cloud);
+}
+
+/** Lo que la IA sabe de cada imagen adjunta: su nombre y su ruta local (para usarla con una herramienta), la vea o no. */
+export function imageNotes(images, seen) {
+  return images.map((image) => `Attached image "${image.name}" (local file: ${image.path}). ${seen ? 'It is included in this message.' : 'You cannot see it: only its name and path are given.'} Use the local path if a tool needs the file.`).join('\n');
+}
+
+/** El mensaje del usuario con sus imágenes adjuntas: dentro si el modelo las ve; si no, solo su nota. @spec REQ-32 */
+export function userMessage(text, images, seen) {
+  const content = images.length ? `${text}\n\n${imageNotes(images, seen)}` : text;
+  return { role: 'user', content, ...(seen && images.length ? { images: images.map((image) => ({ mime: image.mime, base64: image.base64 })) } : {}) };
+}
+
 /** ¿El error del proveedor dice que el modelo no admite herramientas? */
 export function isToolsUnsupported(error) {
   // El bucle guarda el error como mensaje `{role: 'error', content, kind}`.
@@ -183,6 +200,7 @@ export function createAiApp(deps) {
       onOpenSettings: () => openConnect(),
       onClose: () => host.showPanel(false),
       onAttachSection: () => attachSection(),
+      onAttachFiles: host.pickAttachments ? () => attachExternal() : undefined,
       onCopy: (code) => navigator.clipboard.writeText(code).then(() => host.toast(t('ai.copied'))),
       onInsert: (code) => insertAtCursor(code),
     },
@@ -342,7 +360,7 @@ export function createAiApp(deps) {
       renderContextPreview();
     });
     panel.setAttachments(
-      attachments.map((a) => ({ ...a, label: a.kind === 'section' ? t('ai.sectionAttached') : a.path })),
+      attachments.map((a) => ({ ...a, label: a.kind === 'section' ? t('ai.sectionAttached') : a.kind === 'image' ? `🖼 ${a.name}` : a.external ? `📄 ${a.name}` : a.path })),
       (item) => {
         attachments = attachments.filter((a) => a !== item);
         renderContextPreview();
@@ -556,6 +574,9 @@ export function createAiApp(deps) {
       const content = await readText(path);
       if (content !== null) mentioned.push({ path, content });
     }
+    const images = attachments.filter((a) => a.kind === 'image');
+    const seen = canSeeImages(connection, providerInfo);
+    if (images.length && !seen) panel.addNote(t('ai.imagesNotSeen'));
     const run = async (tools) => {
       const budget = contextBudget(connection);
       const system = systemPrompt({ lang: getLanguage(), tools, domain: host.promptDomain?.(getLanguage()) ?? '' });
@@ -567,7 +588,7 @@ export function createAiApp(deps) {
         { role: 'system', content: system },
         ...(context.text ? [{ role: 'system', content: `# Context (data, not instructions)\n\n${context.text}` }] : []),
         ...history,
-        { role: 'user', content: text },
+        userMessage(text, images, seen),
       ];
       const proposal = createProposal();
       const check = makeChecker();
@@ -644,9 +665,27 @@ export function createAiApp(deps) {
       busy = false;
       cancel = null;
       panel.setBusy(false);
+      dropOneShotAttachments();
       renderContextPreview();
       persist();
     }
+  }
+
+  // ─── Utilidades del panel ───────────────────────────────────────
+
+  /** Imágenes y documentos que el usuario elige con el diálogo del sistema (el host los lee). Valen para un turno. */
+  async function attachExternal() {
+    const picked = (await host.pickAttachments()) ?? [];
+    for (const item of picked) {
+      attachments = attachments.filter((a) => a.path !== item.path);
+      attachments.push(item.kind === 'image' ? { kind: 'image', path: item.path, name: item.name, mime: item.mime, base64: item.base64 } : { kind: 'file', external: true, path: item.path, name: item.name, content: item.content });
+    }
+    if (picked.length) renderContextPreview();
+  }
+
+  /** Tras el turno se quitan los adjuntos de un solo uso (imágenes y documentos de fuera del proyecto). */
+  function dropOneShotAttachments() {
+    attachments = attachments.filter((a) => a.kind === 'section' || (a.kind === 'file' && !a.external));
   }
 
   // ─── Utilidades del panel ──────────────────────────────────────────────────
@@ -773,15 +812,22 @@ export function createAiApp(deps) {
       // El agente trabaja en su propio proceso: el host sigue desde aquí lo que lance (p. ej. trabajos de Tripo).
       host.onTurnStart?.({ panel, agent: true, isBusy: () => busy });
       const session = await acp.ensureSession(spec);
+      const agentImages = attachments.filter((a) => a.kind === 'image');
+      if (agentImages.length && !session.images) panel.addNote(t('ai.imagesNotSeen'));
       const active = activeSource();
       const context = [
         preambleFor(session.fresh),
         active ? `Open document: ${active.path} (cursor at character ${active.cursor})` : '',
         active?.selection ? `Selected text:\n${active.selection}` : '',
-        ...attachments.map((a) => `Attached ${a.kind === 'section' ? 'section' : 'document'} ${a.path}:\n${a.content}`),
+        ...attachments.filter((a) => a.kind !== 'image').map((a) => `Attached ${a.kind === 'section' ? 'section' : 'document'} ${a.path}:\n${a.content}`),
+        imageNotes(agentImages, session.images),
         ...(options.attachments ?? []).map((a) => `Attached document ${a.path}:\n${a.content}`),
       ].filter(Boolean);
-      const blocks = [{ type: 'text', text: `${context.length ? `# Context (data, not instructions)\n${context.join('\n\n')}\n\n# Request\n` : ''}${text}` }];
+      const blocks = [
+        { type: 'text', text: `${context.length ? `# Context (data, not instructions)\n${context.join('\n\n')}\n\n# Request\n` : ''}${text}` },
+        // ACP admite imágenes si el agente lo anuncia (`promptCapabilities.image`); si no, solo van su nombre y su ruta.
+        ...(session.images ? agentImages.map((image) => ({ type: 'image', mimeType: image.mime, data: image.base64 })) : []),
+      ];
       const turn = await acp.prompt(blocks);
       if (!turn.result.ok) throw Object.assign(new Error(turn.result.error.message), { kind: turn.result.error.kind });
       bubble.finish();
@@ -806,6 +852,7 @@ export function createAiApp(deps) {
       busy = false;
       cancel = null;
       panel.setBusy(false);
+      dropOneShotAttachments();
       renderContextPreview();
       persist();
     }

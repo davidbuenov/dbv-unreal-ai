@@ -95,12 +95,15 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   mentionList.setAttribute('role', 'listbox');
   const composerActions = el('div', 'ai-panel__composer-actions');
   const attachSection = button(t('ai.attachSection'), () => callbacks.onAttachSection(), 'button button--compact button--ghost ai-panel__attach');
+  // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): solo si el host sabe elegirlos.
+  const attachFiles = button('📎', () => callbacks.onAttachFiles?.(), 'button button--compact button--ghost ai-panel__attach-files', t('ai.attachFiles'));
+  if (!callbacks.onAttachFiles) attachFiles.classList.add('hidden');
   const attachments = el('span', 'ai-panel__attachments');
   const usage = el('span', 'ai-panel__usage');
   const speed = el('span', 'ai-panel__usage ai-panel__speed');
   const stopButton = button(t('ai.stop'), () => callbacks.onStop(), 'button button--compact hidden');
   const sendButton = button(t('ai.send'), () => send(), 'button button--primary button--compact');
-  composerActions.append(attachSection, attachments, speed, usage, stopButton, sendButton);
+  composerActions.append(attachFiles, attachSection, attachments, speed, usage, stopButton, sendButton);
   composer.append(mentionList, input, composerActions);
   host.append(header, destination, warning, contextBar, messages, composer);
 

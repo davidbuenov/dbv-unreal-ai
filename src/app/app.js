@@ -273,6 +273,19 @@ export function start() {
         });
         return [...unreal, ...generation];
       },
+      // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): el diálogo del sistema y Rust los leen.
+      pickAttachments: async () => {
+        const picked = await window.__TAURI__.dialog.open({
+          multiple: true,
+          filters: [
+            { name: t('ai.attachKinds'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'md', 'txt', 'json', 'csv', 'py', 'ini', 'cpp', 'h', 'cs'] },
+            { name: '*', extensions: ['*'] },
+          ],
+        });
+        const read = await Promise.all([picked ?? []].flat().map((path) => api.aiReadAttachment(String(path))));
+        for (const failed of read.filter((r) => !r.ok)) toast(failed.error.message, 'error');
+        return read.filter((r) => r.ok).map((r) => r.value);
+      },
       // Un agente genera en su propio proceso (`--mcp`): sus trabajos aparecen en la conversación (REQ-27).
       onTurnStart: ({ panel, agent, isBusy }) => agent && chatJobs.follow(panel, isBusy),
       mcpServers: async () => {

@@ -62,6 +62,7 @@ const customInvoke = `((cmd, args) => {
     if (args.tool === 'run_python') return { text: '', isError: false, value: { success: true, stdout: '42\\n', stderr: '', warnings: [], error: null, result: 42 } };
     return { text: '{}', isError: false, value: {} };
   }
+  if (cmd === 'ai_read_attachment') return { kind: 'image', path: 'C:/refs/barco.png', name: 'barco.png', mime: 'image/png', base64: 'iVBORw==', bytes: 4 };
   if (cmd !== 'ai_chat') return undefined;
   window.__chat.push(args);
   const n = window.__chat.length;
@@ -160,6 +161,18 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     ok('la IA termina la respuesta', after.text.includes('Hecho: 42.'), after.text);
     ok('el registro guarda la validación y la ejecución', after.log === 2, String(after.log));
     await shot(h, 'chat.png');
+
+    // Adjuntar una imagen de referencia (REQ-32): un modelo local sin visión recibe su nombre y su ruta, y se avisa.
+    await h.eval(`window.__TAURI__.dialog = { open: async () => ['C:/refs/barco.png'] }; document.querySelector('.ai-panel__attach-files').click()`);
+    await h.sleep(400);
+    ok('📎 adjunta la imagen y la enseña como etiqueta', (await h.eval(`return document.querySelector('.ai-panel__attachments').textContent`)).includes('🖼 barco.png'));
+    await h.eval(`const i = document.querySelector('.ai-panel__input'); i.focus(); i.value = 'Haz un barco como este'; i.dispatchEvent(new Event('input', { bubbles: true }));`);
+    await h.key('Enter', 'Enter', 13);
+    await h.sleep(1200);
+    const attached = await h.eval(`const m = window.__chat.at(-1).request.messages.filter((x) => x.role === 'user').at(-1); return { text: m.content, images: (m.images || []).length, note: [...document.querySelectorAll('.ai-note')].map((n) => n.textContent).join(' '), chips: document.querySelector('.ai-panel__attachments').textContent }`);
+    ok('el modelo recibe la ruta de la imagen para usarla con Tripo', attached.text.includes('local file: C:/refs/barco.png') && attached.images === 0, JSON.stringify(attached));
+    ok('se avisa de que este modelo no ve imágenes', /no ve imágenes/.test(attached.note), attached.note);
+    ok('el adjunto vale para un turno', !attached.chips.includes('barco.png'), attached.chips);
     const errs = h.errors();
     ok('sin excepciones ni console.error', errs.length === 0, JSON.stringify(errs.slice(0, 3)));
   } finally {

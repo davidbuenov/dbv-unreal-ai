@@ -28,6 +28,8 @@ export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_p
 export const unrealPrepareApply = (path, variant, port) => call('unreal_prepare_apply', { path, variant, port: port ?? null });
 export const unrealPrepareRevert = (path, backup) => call('unreal_prepare_revert', { path, backup });
 export const appMcpCommand = (port) => call('app_mcp_command', { port });
+/** Imagen (base64) o documento que el usuario eligió para adjuntar a la conversación (REQ-32). */
+export const aiReadAttachment = (path) => call('ai_read_attachment', { path });
 /** Diagnóstico sin secretos para una incidencia (RNF-08). */
 export const appDiagnostics = () => call('app_diagnostics');
 

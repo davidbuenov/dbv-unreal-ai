@@ -136,6 +136,8 @@ export function createGenerateView(host, deps) {
           const picked = await window.__TAURI__.dialog.open({ multiple: false, filters: [{ name: t('gen.images'), extensions: ['png', 'jpg', 'jpeg', 'webp'] }] });
           if (!picked) return;
           image = String(picked);
+          // El protocolo `asset` solo abre la biblioteca: la imagen elegida se abre aquí para poder verla.
+          await api.generationAllowReference(image);
           imageName.textContent = baseName(image);
           imageThumb.replaceChildren(el('img', { attrs: { src: window.__TAURI__.core.convertFileSrc(image), alt: baseName(image) } }));
           imageThumb.classList.remove('hidden');

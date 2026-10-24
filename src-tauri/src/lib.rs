@@ -125,6 +125,8 @@ pub fn run() {
             #[cfg(desktop)]
             ai::commands::ai_project_state_save,
             #[cfg(desktop)]
+            ai::attachments::ai_read_attachment,
+            #[cfg(desktop)]
             ai::files::ai_list_files,
             #[cfg(desktop)]
             ai::files::ai_read_file,
