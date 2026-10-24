@@ -28,10 +28,15 @@ beforeEach(() => {
         if (command === 'app_mcp_command') return { command: 'C:/app/dbv-unreal-ai.exe', args: ['--mcp', '--port', '8000'] };
         if (command === 'app_diagnostics') return DIAGNOSTICS;
         if (command === 'generation_set_key') return 'system';
+        if (command === 'generation_balance') return { balance: 2370, frozen: 30 };
+        if (command === 'library_location') return { current: 'C:/Users/u/AppData/Roaming/app/library', default: 'C:/Users/u/AppData/Roaming/app/library', isDefault: true };
+        if (command === 'library_set_location') return { current: args.path, default: 'C:/x', isDefault: false };
         return null;
       }),
     },
   };
+  window.__TAURI__.dialog = { open: vi.fn(async () => 'D:/Compartida/Assets') };
+  window.__TAURI__.opener = { revealItemInDir: vi.fn() };
   Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => {}) } });
 });
 
@@ -59,5 +64,21 @@ describe('Ajustes', () => {
     await vi.waitFor(() => expect(invoked.some(([c]) => c === 'generation_set_key')).toBe(true));
     expect(invoked.find(([c]) => c === 'generation_set_key')[1]).toEqual({ service: 'tripo', key: 'sk-secreta' });
     expect(input.value).toBe('');
+  });
+
+  /**
+   * La biblioteca puede vivir en una carpeta compartida con otras apps; por defecto se copia lo que ya había.
+   * @spec REQ-30
+   */
+  it('cambia la carpeta de la biblioteca copiando lo que había, y enseña el saldo de Tripo', async () => {
+    const host = document.createElement('div');
+    const toast = vi.fn();
+    await createSettingsView(host, { toast, openConnect: vi.fn(), state: { connection: null } }).render();
+    expect(host.textContent).toContain('C:/Users/u/AppData/Roaming/app/library');
+    await vi.waitFor(() => expect(host.textContent).toContain('Saldo de Tripo: 2370 créditos (30 reservados)'));
+    buttonWithText(host, 'Cambiar carpeta…').click();
+    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'library_set_location')).toBe(true));
+    expect(invoked.find(([c]) => c === 'library_set_location')[1]).toEqual({ path: 'D:/Compartida/Assets', copyExisting: true });
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledWith('La biblioteca está en la carpeta nueva'));
   });
 });

@@ -145,7 +145,19 @@ export function start() {
   const chatJobs = createChatJobs({ list: api.generationJobs, renderResult: renderJobResult });
   // Herramientas de Tripo de Rust (las mismas que ve un agente): se piden una vez al cargar la IA.
   let generationSpecs = [];
-  views.library = createLibraryView($('#view-library'), { state, confirm, toast });
+  // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
+  views.library = createLibraryView($('#view-library'), {
+    state,
+    confirm,
+    toast,
+    openModal,
+    closeModal,
+    onLaunched: () => {
+      refreshSpent();
+      show('generate');
+      views.generate.watch();
+    },
+  });
   views.settings = createSettingsView($('#view-settings'), { toast, state, openConnect: () => loadAi().then((app) => app.openConnect()) });
 
   function paintPill() {

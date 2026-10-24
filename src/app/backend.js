@@ -44,6 +44,7 @@ export const generationLaunch = (tool, args) => call('generation_launch', { tool
 export const generationOperations = (operation) => call('generation_operations', { operation: operation || null });
 export const generationBalance = () => call('generation_balance');
 export const generationSuggestName = (prompt) => call('generation_suggest_name', { prompt });
+export const generationPresets = () => call('generation_presets');
 /** Trabajos de la sesión (también los de un agente), con su consola. */
 export const generationJobs = () => call('generation_jobs');
 export const generationCancel = (jobId) => call('generation_cancel', { jobId });

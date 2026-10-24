@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08
+// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08, REQ-30
 //
 // La clave de Tripo solo viaja de ida: el campo nunca se rellena con la guardada, solo se dice
 // si hay una (RNF-IA.4).
@@ -29,7 +29,37 @@ export function createSettingsView(host, deps) {
     const key = el('input', { attrs: { type: 'password', autocomplete: 'off', 'aria-label': t('settings.tripo') } });
     const budget = el('input', { attrs: { type: 'number', min: '0', step: '10', value: String(status.ok ? status.value.budget : 300), 'aria-label': t('settings.budget') } });
     const port = deps.state.connection?.endpoint?.port ?? 8000;
-    const command = await api.appMcpCommand(port);
+    const [command, location] = await Promise.all([api.appMcpCommand(port), api.libraryLocation()]);
+    const hasKey = status.ok && status.value.hasKey?.tripo;
+    const balance = el('p', { className: 'hint' });
+    if (hasKey) api.generationBalance().then((result) => (balance.textContent = result.ok && result.value ? t('gen.balance', { balance: String(result.value.balance), frozen: String(result.value.frozen) }) : (result.error?.message ?? '')));
+    const copyExisting = el('input', { attrs: { type: 'checkbox', checked: '' } });
+    async function moveLibrary(path) {
+      const moved = await api.librarySetLocation(path, copyExisting.checked);
+      if (!moved.ok) return deps.toast(moved.error.message, 'error');
+      deps.toast(t('settings.libraryMoved'));
+      return render();
+    }
+    const libraryCard = location.ok && location.value
+      ? el(
+          'div',
+          { className: 'card stack' },
+          el('h3', { text: t('settings.library') }),
+          el('p', { className: 'hint', text: t('settings.libraryHint') }),
+          el('p', { className: 'mono', text: location.value.current }),
+          el('label', { className: 'row' }, copyExisting, t('settings.libraryCopy')),
+          el(
+            'div',
+            { className: 'row' },
+            button(t('settings.libraryChange'), async () => {
+              const folder = await window.__TAURI__.dialog.open({ directory: true, defaultPath: location.value.current });
+              return folder ? moveLibrary(String(folder)) : null;
+            }),
+            location.value.isDefault ? null : button(t('settings.libraryDefault'), () => moveLibrary(null), 'btn-ghost'),
+            button(t('lib.reveal'), () => window.__TAURI__.opener.revealItemInDir(location.value.current), 'btn-ghost'),
+          ),
+        )
+      : null;
     host.replaceChildren(
       el('div', { className: 'view-header' }, el('h2', { text: t('settings.title') })),
       el('div', { className: 'card stack' }, el('h3', { text: t('settings.ai') }), el('div', { className: 'row' }, button(t('settings.aiConnect'), deps.openConnect, 'btn-primary'))),
@@ -37,7 +67,8 @@ export function createSettingsView(host, deps) {
         'div',
         { className: 'card stack' },
         el('h3', { text: 'Tripo' }),
-        el('p', { className: 'hint', text: status.ok && status.value.hasKey?.tripo ? t('settings.keyPresent') : t('settings.keyMissing') }),
+        el('p', { className: 'hint', text: hasKey ? t('settings.keyPresent') : t('settings.keyMissing') }),
+        balance,
         el('label', {}, t('settings.tripo'), key),
         el(
           'div',
@@ -62,6 +93,7 @@ export function createSettingsView(host, deps) {
           deps.toast(saved.ok ? t('settings.budgetSaved') : saved.error.message, saved.ok ? 'info' : 'error');
         })),
       ),
+      libraryCard,
       el('div', { className: 'card stack' }, el('h3', { text: t('settings.mcp') }), el('p', { className: 'hint', text: t('settings.mcpHint') }), command.ok ? el('pre', { className: 'diff', text: mcpClientConfig(command.value) }) : null),
       el(
         'div',

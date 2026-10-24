@@ -159,7 +159,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .segmented-btn { background: transparent; border-color: transparent; color: var(--text-muted); padding: 2px 8px; min-height: 0; line-height: 1.4; white-space: nowrap; }
 .segmented-btn:hover:not(:disabled) { color: var(--text-primary); border-color: transparent; }
 .segmented-btn[aria-pressed='true'] { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-input[type='text'], input[type='password'], input[type='number'], textarea, select {
+input[type='text'], input[type='password'], input[type='number'], input[type='search'], textarea, select {
   font: inherit;
   color: var(--text-primary);
   background: var(--bg-primary);
@@ -325,3 +325,13 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 /* Logo de la Unreal Dev Community Málaga */
 .app-logo { display: block; margin-right: -4px; }
 .about-logo { display: block; margin: 0 auto 8px; }
+
+/* ─── Biblioteca: acciones y animaciones (REQ-16, REQ-30) ───────────── */
+.asset-actions { flex-wrap: wrap; }
+.preset-list { max-height: 55vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.preset-group { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.preset-group legend { color: var(--text-secondary); font-size: 12px; padding: 0 4px; }
+.preset { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; text-transform: capitalize; }
+.modal-actions .spacer { flex: 1; }
+.asset-actions .btn-ghost { padding: 3px 6px; min-height: 0; font-size: 11px; }
+.asset-actions > .btn-primary, .asset-actions > button:not(.btn-ghost) { flex: 1 1 auto; }

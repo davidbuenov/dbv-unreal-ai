@@ -47,6 +47,7 @@ function extra(connections, hasKey = false) {
     // Las herramientas de Tripo llegan de Rust (`generation/tools.rs`), las mismas que ve un agente.
     generation_tool_specs: ['generate_3d_model', 'image_to_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'tripo_operations', 'tripo_balance'].map((name) => ({ name, description: name, inputSchema: { type: 'object', properties: {}, required: [] } })),
     generation_jobs: [],
+    library_location: { current: 'C:/Users/u/AppData/Roaming/com.davidbuenov.dbv-unreal-ai/library', default: 'C:/Users/u/AppData/Roaming/com.davidbuenov.dbv-unreal-ai/library', isDefault: true },
     library_list: [entry],
     app_mcp_command: { command: 'C:/Program Files/DBV Unreal AI/dbv-unreal-ai.exe', args: ['--mcp', '--port', '8000'] },
   });

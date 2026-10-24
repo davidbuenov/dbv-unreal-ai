@@ -37,6 +37,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - **Saldo de Tripo** (`GET /v3/account/balance`) en Generar y para la IA.
 - **Biblioteca (REQ-30, backend):** ubicación configurable (la comparte el `--mcp`), importar modelos `.glb/.gltf/.fbx/.obj/.usdz` con sus búferes, `.mtl` y texturas, o imágenes, o carpetas de otra biblioteca sin duplicar; renombrar.
 - Logo de la Unreal Dev Community Málaga como icono de la app (Windows, macOS, Linux), en la barra superior, en «Acerca de» y en los README; fondo exterior transparente.
+- **Biblioteca (REQ-30, REQ-16, interfaz):** cada asset dice qué es (modelo, rig, animación, imagen) y de cuál sale, y ofrece el paso siguiente con su tarjeta de coste: «Riggear…» un modelo, «Animar…» un rig (selector por grupos —bailes, emociones, deportes…—, máximo 5) y «Generar 3D…» una imagen. «Importar…» modelos e imágenes propios e «Importar biblioteca…» de otra carpeta; renombrar; la carpeta de cada asset. En Ajustes, la carpeta de la biblioteca (compartible con otras apps, con copia de lo que había) y el saldo de Tripo.
 
 ### Fixed
 

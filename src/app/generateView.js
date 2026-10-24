@@ -33,6 +33,27 @@ export async function confirmCost(confirm, request) {
   return choice === 'accept';
 }
 
+/**
+ * Prepara una herramienta de generación, enseña la tarjeta de coste y, si se acepta, la lanza. La usan Generar y la
+ * Biblioteca (riggear, animar, imagen → 3D). Devuelve los ids de los trabajos, o `null` si no se lanzó.
+ * @param {object} deps `{confirm, toast}`.
+ */
+export async function confirmAndLaunch(deps, tool, args) {
+  const prepared = await api.generationPrepare(tool, args);
+  let ids = null;
+  if (!prepared.ok) deps.toast(prepared.error.message, 'error');
+  else {
+    const status = await api.generationStatus();
+    if (status.ok && !status.value.hasKey?.tripo) deps.toast(t('gen.noKey'), 'error');
+    else if (await confirmCost(deps.confirm, { ...prepared.value, spent: status.value?.spent ?? 0, budget: status.value?.budget ?? 0 })) {
+      const launched = await api.launch(tool, args);
+      if (launched.ok) ids = launched.value;
+      else deps.toast(launched.error.message, 'error');
+    }
+  }
+  return ids;
+}
+
 /** Argumentos de la herramienta a partir del formulario. */
 export function formArgs({ mode, prompt, image, name, variants, faceLimit, lowPoly, textureQuality }) {
   const options = textureQuality && textureQuality !== 'standard' ? { texture_quality: textureQuality } : undefined;
@@ -148,15 +169,11 @@ export function createGenerateView(host, deps) {
         if (mode === 'image' && !image) return deps.toast(t('gen.noImage'), 'error');
         if (!name.value.trim()) await suggest();
         const { tool, args } = formArgs(values());
-        const prepared = await api.generationPrepare(tool, args);
-        if (!prepared.ok) return deps.toast(prepared.error.message, 'error');
-        const current = await api.generationStatus();
-        const ok = await confirmCost(deps.confirm, { ...prepared.value, spent: current.value?.spent ?? 0, budget: current.value?.budget ?? 0 });
-        if (!ok) return null;
-        const launched = await api.launch(tool, args);
-        if (!launched.ok) return deps.toast(launched.error.message, 'error');
-        deps.onSpent();
-        watcher.poke();
+        const ids = await confirmAndLaunch(deps, tool, args);
+        if (ids) {
+          deps.onSpent();
+          watcher.poke();
+        }
         return null;
       },
       'btn-primary',
@@ -184,5 +201,5 @@ export function createGenerateView(host, deps) {
     );
     watcher.poke();
   }
-  return { render };
+  return { render, watch: () => watcher.poke() };
 }

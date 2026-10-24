@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Tripo balance** (`GET /v3/account/balance`) in Generate and for the AI.
 - **Library (REQ-30, backend):** configurable location (shared with `--mcp`), import `.glb/.gltf/.fbx/.obj/.usdz` models with their buffers, `.mtl` and textures, or images, or folders of another library without duplicates; rename.
 - Unreal Dev Community Málaga logo as the app icon (Windows, macOS, Linux), in the top bar, in About and in the READMEs; transparent outer background.
+- **Library (REQ-30, REQ-16, interface):** each asset says what it is (model, rig, animation, image) and where it comes from, and offers the next step with its cost card: "Rig…" a model, "Animate…" a rig (picker by groups —dances, emotions, sports…—, at most 5) and "Make 3D…" an image. "Import…" your own models and images and "Import library…" from another folder; rename; each asset's folder. In Settings, the library folder (shareable with other apps, copying what was there) and the Tripo balance.
 
 ### Fixed
 

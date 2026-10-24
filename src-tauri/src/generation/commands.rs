@@ -353,3 +353,14 @@ pub fn library_entry_dir(app: AppHandle, id: String) -> Result<String, UnrealErr
 pub fn generation_suggest_name(prompt: String) -> String {
     crate::library::suggest_name(&prompt)
 }
+
+/// Animaciones de Tripo por tipo de rig, para elegirlas en la Biblioteca: las 101 del rig v1.0 por grupos y las
+/// 16 de los rigs v2/v3. @spec REQ-16
+#[tauri::command]
+pub fn generation_presets() -> serde_json::Value {
+    use super::catalog::{BIPED_PRESETS, GENERIC_PRESETS};
+    serde_json::json!({
+        "biped": BIPED_PRESETS.iter().map(|(group, list)| serde_json::json!({ "group": group, "names": list.split(' ').collect::<Vec<_>>() })).collect::<Vec<_>>(),
+        "generic": GENERIC_PRESETS,
+    })
+}

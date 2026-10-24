@@ -197,6 +197,8 @@ pub fn run() {
             #[cfg(desktop)]
             generation::commands::generation_suggest_name,
             #[cfg(desktop)]
+            generation::commands::generation_presets,
+            #[cfg(desktop)]
             generation::commands::generation_cancel,
             #[cfg(desktop)]
             generation::commands::generation_jobs,

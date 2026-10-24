@@ -30,7 +30,7 @@
 ## v0.1.x — Ampliación tras la primera prueba (REQ-27..REQ-33; plan en `implementation_plan.md` §4)
 
 - [x] **S12 · Trabajos, consola y progreso** (REQ-27, REQ-28, REQ-29) — ficheros de trabajo compartidos, consola en Generar y en la conversación (también del agente), variantes, nombres.
-- [ ] **S13 · Biblioteca: ubicación e importación** (REQ-30) — backend y herramientas MCP hechos; falta la interfaz (Ajustes y Biblioteca).
+- [x] **S13 · Biblioteca: ubicación e importación** (REQ-30) — Ajustes (carpeta, copia, saldo) y Biblioteca (importar, renombrar, riggear, animar, imagen → 3D).
 - [x] **S14 · Superficie completa de Tripo en el MCP** (REQ-33, REQ-16) — 18 operaciones, herramientas únicas para MCP y asistente, saldo. **Sin verificar con Tripo real** salvo texto → modelo: imagen → modelo, subida de ficheros, rig, retarget y el resto solo contra un Tripo simulado según la documentación.
 - [ ] **S15 · Visor 3D** (REQ-31)
 - [ ] **S16 · Referencias adjuntas** (REQ-32)
