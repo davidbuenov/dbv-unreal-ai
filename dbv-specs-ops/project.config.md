@@ -13,7 +13,8 @@
 - **Co-author:** David Bueno Carmona
 - **Copyright line (headers & LICENSE):** Copyright (c) [Year] David Bueno Vallejo and David Bueno Carmona
 - **License:** MIT
-- **Documentation language:** Español (con espejo en inglés: `README.en.md`, `CHANGELOG.en.md`)
+- **Documentation language:** Español **e inglés, siempre en dos ficheros distintos** (regla del usuario, 2026-10-24): `README.md` / `README.en.md`, `dbv-specs-ops/CHANGELOG.md` / `CHANGELOG.en.md`, notas de cada versión `dbv-specs-ops/releases/vX.Y.Z.md` / `vX.Y.Z.en.md` (`python scripts/release/notes.py vX.Y.Z` en `/ship`) y `docs/IA.md` / `IA.en.md`. Toda entrada nueva se escribe en los dos idiomas en el mismo commit.
+- **GitHub Release:** Automático (`.github/workflows/release.yml` al subir el tag): binarios de Windows, macOS y Linux, cuerpo con las notas en inglés y en español, y los dos ficheros de notas adjuntos.
 - **Git:** Sí
 - **Languages:** Rust, JavaScript, HTML, CSS, Python (scripts dentro de Unreal), C++ (toolset de Unreal)
 - **Technologies / Stack:** Tauri v2 (WebView nativo del SO) + Vanilla JS/HTML/CSS sin bundler, partiendo de dbv-tauri-starter; motor de IA de tres niveles (local / nube con llavero del SO / agentes ACP) como en dbv-typst-editor; Unreal Engine 5.8 vía su servidor MCP integrado (ModelContextProtocol + ToolsetRegistry + PythonScriptPlugin) y un toolset C++ de preparación como en DBVMCPFirst; APIs de Tripo 3D y World Labs

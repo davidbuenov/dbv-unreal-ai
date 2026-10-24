@@ -164,6 +164,8 @@ Contra un editor real abierto (solo lectura): `DBV_UNREAL_MCP_PORT=8000 cargo te
 
 Ver [CHANGELOG.md](./dbv-specs-ops/CHANGELOG.md).
 
+Las notas de cada versión están en dos ficheros, [`dbv-specs-ops/releases/vX.Y.Z.md`](./dbv-specs-ops/releases/) (español) y `vX.Y.Z.en.md` (inglés), y la Release de GitHub las lleva las dos.
+
 ---
 
 <a name="license"></a>

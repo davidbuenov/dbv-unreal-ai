@@ -9,6 +9,8 @@
 # compilación cruzada fiable) y adjunta sus instaladores a un BORRADOR de Release del tag, que el
 # mantenedor publica a mano. La versión se lee de tauri.conf.json (§3), así se puede relanzar con
 # workflow_dispatch. Sin firma ni auto-actualización en v0.1 (§8): llegan con las tiendas en v0.2.
+# Notas de la versión en DOS ficheros, español e inglés (regla del proyecto, project.config.md): las genera
+# `scripts/release/notes.py` de los dos CHANGELOG; la Release lleva las dos en su cuerpo y las adjunta.
 
 name: Release
 
@@ -75,6 +77,18 @@ jobs:
       - name: Instalar dependencias de Node
         run: npm ci
 
+      - name: Instalar Python (notas de la versión)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Notas de la versión en español e inglés
+        id: notes
+        shell: bash
+        run: |
+          python scripts/release/notes.py "${{ steps.version.outputs.tag }}" --out release-notes --body release-notes/body.md
+          { echo "body<<DBV_NOTES_EOF"; cat release-notes/body.md; echo "DBV_NOTES_EOF"; } >> "$GITHUB_OUTPUT"
+
       - name: Build y Release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -82,7 +96,18 @@ jobs:
         with:
           tagName: ${{ steps.version.outputs.tag }}
           releaseName: DBV Unreal AI ${{ steps.version.outputs.tag }}
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: ${{ steps.draft.outputs.value }}
           prerelease: false
           includeUpdaterJson: false
           args: ${{ matrix.args }}
+
+      # Una sola vez (no en las tres plataformas): los dos ficheros de notas como adjuntos de la Release.
+      - name: Adjuntar las notas en español e inglés
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          gh release upload "$TAG" "release-notes/$TAG.md" "release-notes/$TAG.en.md" --clobber
