@@ -1,0 +1,38 @@
+# Tauri / Rust build artifacts
+target/
+src-tauri/target/
+# Esquemas de capabilities generados por tauri-build en cada compilación
+src-tauri/gen/schemas/
+
+# Node dependencies & dist
+node_modules/
+dist/
+
+# Python (scripts de apoyo y tests)
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# OS temporary files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment / IDE settings (nunca versionar secretos ni claves de API)
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.claude/*
+!.claude/commands/
+
+# Claves de firma: NUNCA se versionan
+*.key
+
+# Assets generados en pruebas locales (GLB/FBX/texturas descargados de Tripo o World Labs)
+generated/
+
+# Logs
+*.log
