@@ -374,6 +374,21 @@ impl Library {
         Ok(added)
     }
 
+    /// Guarda una miniatura PNG hecha por el visor 3D de la app para un asset que no la traía (REQ-31).
+    pub fn save_thumbnail(&self, id: &str, png: &[u8]) -> Result<LibraryEntry, UnrealError> {
+        const PNG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+        if !png.starts_with(&PNG) || png.len() > 4 * 1024 * 1024 {
+            return Err(UnrealError::Format("la miniatura no es un PNG o pasa de 4 MB".into()));
+        }
+        let path = self.file_path(id, "thumbnail.png")?;
+        self.update(|entries| {
+            let entry = entries.iter_mut().find(|e| e.id == id).ok_or_else(|| UnrealError::NotFound(format!("no existe el asset {id}")))?;
+            std::fs::write(&path, png).map_err(|error| io_error(&path, &error))?;
+            entry.thumbnail = Some("thumbnail.png".into());
+            Ok(entry.clone())
+        })
+    }
+
     /// Anota que `id` se envió a un proyecto.
     pub fn record_sent(&self, id: &str, project: &str, asset_path: &str) -> Result<LibraryEntry, UnrealError> {
         self.update(|entries| {
@@ -461,6 +476,11 @@ mod tests {
         assert!(library.file_path(&barrel.id, "barril.mtl").unwrap().is_file() && library.file_path(&barrel.id, "barril_color.jpg").unwrap().is_file());
         assert!(library.import_file(&src.join("notas.txt"), None).is_err());
         assert_eq!(library.rename(&barrel.id, "Barril de roble").unwrap().name, "Barril de roble");
+        // La miniatura que hace el visor (REQ-31): solo PNG.
+        assert!(library.save_thumbnail(&barrel.id, b"GIF89a").is_err());
+        let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3];
+        assert_eq!(library.save_thumbnail(&barrel.id, &png).unwrap().thumbnail.as_deref(), Some("thumbnail.png"));
+        assert_eq!(std::fs::read(library.file_path(&barrel.id, "thumbnail.png").unwrap()).unwrap(), png);
 
         let other = Library::new(dir.path().join("otra"));
         other.import_file(&src.join("barril.obj"), Some("Otro barril")).unwrap();

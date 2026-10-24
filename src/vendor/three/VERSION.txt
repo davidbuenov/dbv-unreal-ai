@@ -1,0 +1,1 @@
+three 0.180.0 (MIT) — copiado de node_modules/three: build/three.module.min.js, build/three.core.min.js, examples/jsm/{loaders/GLTFLoader,controls/OrbitControls,utils/BufferGeometryUtils}.js. Sin cambios.

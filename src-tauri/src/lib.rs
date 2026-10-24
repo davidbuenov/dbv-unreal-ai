@@ -199,6 +199,10 @@ pub fn run() {
             #[cfg(desktop)]
             generation::commands::generation_presets,
             #[cfg(desktop)]
+            generation::commands::generation_allow_reference,
+            #[cfg(desktop)]
+            generation::commands::library_save_thumbnail,
+            #[cfg(desktop)]
             generation::commands::generation_cancel,
             #[cfg(desktop)]
             generation::commands::generation_jobs,

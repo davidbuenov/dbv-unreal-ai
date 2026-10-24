@@ -47,6 +47,8 @@ function extra(connections, hasKey = false) {
     // Las herramientas de Tripo llegan de Rust (`generation/tools.rs`), las mismas que ve un agente.
     generation_tool_specs: ['generate_3d_model', 'image_to_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'tripo_operations', 'tripo_balance'].map((name) => ({ name, description: name, inputSchema: { type: 'object', properties: {}, required: [] } })),
     generation_jobs: [],
+    // El visor 3D carga este GLB de prueba (lo sirve el banco desde tests/fixtures).
+    library_file_path: '/__fixtures/models/cubo.glb',
     library_location: { current: 'C:/Users/u/AppData/Roaming/com.davidbuenov.dbv-unreal-ai/library', default: 'C:/Users/u/AppData/Roaming/com.davidbuenov.dbv-unreal-ai/library', isDefault: true },
     library_list: [entry],
     app_mcp_command: { command: 'C:/Program Files/DBV Unreal AI/dbv-unreal-ai.exe', args: ['--mcp', '--port', '8000'] },
@@ -101,6 +103,13 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     await h.sleep(500);
     ok('la biblioteca enseña el asset', (await h.eval(`return document.querySelector('.asset-name')?.textContent`)) === 'Linterna');
     await shot(h, 'library.png');
+    await h.eval(`[...document.querySelectorAll('.asset-card button')].find((b) => b.textContent === 'Ver en 3D').click()`);
+    await h.sleep(2500);
+    const viewer = await h.eval(`return { canvas: Boolean(document.querySelector('#app-modal-card .viewer-stage canvas')), error: document.querySelector('#app-modal-card .check-fail')?.textContent ?? '', open: !document.getElementById('app-modal').classList.contains('hidden'), text: document.getElementById('app-modal-card').textContent }`);
+    ok('«Ver en 3D» pinta el modelo con WebGL (REQ-31)', viewer.open && viewer.canvas && !viewer.error && !viewer.text.includes('null'), JSON.stringify(viewer));
+    await shot(h, 'viewer.png');
+    await h.eval(`document.getElementById('app-modal').click()`);
+    ok('al cerrar el visor se libera el lienzo', (await h.eval(`return document.querySelectorAll('.viewer-stage canvas').length`)) === 0);
 
     await h.eval(`document.querySelector('[data-view="generate"]').click()`);
     await h.sleep(400);

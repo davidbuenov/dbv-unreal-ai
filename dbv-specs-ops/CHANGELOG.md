@@ -38,6 +38,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - **Biblioteca (REQ-30, backend):** ubicación configurable (la comparte el `--mcp`), importar modelos `.glb/.gltf/.fbx/.obj/.usdz` con sus búferes, `.mtl` y texturas, o imágenes, o carpetas de otra biblioteca sin duplicar; renombrar.
 - Logo de la Unreal Dev Community Málaga como icono de la app (Windows, macOS, Linux), en la barra superior, en «Acerca de» y en los README; fondo exterior transparente.
 - **Biblioteca (REQ-30, REQ-16, interfaz):** cada asset dice qué es (modelo, rig, animación, imagen) y de cuál sale, y ofrece el paso siguiente con su tarjeta de coste: «Riggear…» un modelo, «Animar…» un rig (selector por grupos —bailes, emociones, deportes…—, máximo 5) y «Generar 3D…» una imagen. «Importar…» modelos e imágenes propios e «Importar biblioteca…» de otra carpeta; renombrar; la carpeta de cada asset. En Ajustes, la carpeta de la biblioteca (compartible con otras apps, con copia de lo que había) y el saldo de Tripo.
+- **Visor 3D (REQ-31):** Three.js 0.180 incluido en la app (sin red). «Ver en 3D» en la Biblioteca (órbita, zoom, giro y lista de animaciones si el GLB trae clips); en la conversación, el modelo recién generado y el que la IA va a llevar a Unreal se ven girando antes de aprobarlo. Si un asset no traía miniatura (los importados), la hace el visor.
 
 ### Fixed
 
@@ -64,3 +65,4 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - Dos variantes que terminaban a la vez perdían una entrada de la biblioteca (las dos leían el índice y la segunda pisaba a la primera). El índice tiene ahora un candado en el proceso y entre procesos.
 - El coste estimado era un 30 fijo; ahora sigue la tabla oficial (texto con textura 20, +10 low poly, rig 25, animación 10 cada una…).
 - El banco E2E dejaba vivos los Edge que lanzaba (`msedge.exe` es un lanzador: `kill()` no cerraba nada). Llegó a haber 453 procesos y el banco medía la página vieja de otra ejecución. Ahora cierra el navegador por CDP y por perfil, y se niega a empezar si el puerto de depuración está ocupado. Probablemente es la causa del «E2E intermitente» anotado como deuda.
+- Con la carpeta de biblioteca elegida por el usuario, las miniaturas y modelos no se habrían visto: el protocolo `asset` solo abría la carpeta de siempre. Ahora se abre en tiempo de ejecución la carpeta elegida (y cada imagen de referencia que se elija).

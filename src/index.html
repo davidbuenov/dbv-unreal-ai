@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="styles.css" />
     <title>DBV Unreal AI</title>
     <!-- Scripts clásicos en IIFE (NATIVE_DESKTOP_APPS.md §3); `main.js` carga con import() los módulos de app/, unreal/, generation/ y ai/ -->
+    <!-- Three.js copiado en vendor/ (visor 3D, REQ-31): el visor lo importa como «three». -->
+    <script type="importmap">{ "imports": { "three": "./vendor/three/build/three.module.min.js" } }</script>
     <script src="i18n.js" defer></script>
     <script src="main.js" defer></script>
   </head>

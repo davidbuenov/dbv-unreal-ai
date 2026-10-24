@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Library (REQ-30, backend):** configurable location (shared with `--mcp`), import `.glb/.gltf/.fbx/.obj/.usdz` models with their buffers, `.mtl` and textures, or images, or folders of another library without duplicates; rename.
 - Unreal Dev Community Málaga logo as the app icon (Windows, macOS, Linux), in the top bar, in About and in the READMEs; transparent outer background.
 - **Library (REQ-30, REQ-16, interface):** each asset says what it is (model, rig, animation, image) and where it comes from, and offers the next step with its cost card: "Rig…" a model, "Animate…" a rig (picker by groups —dances, emotions, sports…—, at most 5) and "Make 3D…" an image. "Import…" your own models and images and "Import library…" from another folder; rename; each asset's folder. In Settings, the library folder (shareable with other apps, copying what was there) and the Tripo balance.
+- **3D viewer (REQ-31):** Three.js 0.180 bundled in the app (no network). "View in 3D" in the Library (orbit, zoom, spin and the list of animations if the GLB has clips); in the conversation, the freshly generated model and the one the AI is about to bring into Unreal spin before you approve. If an asset had no thumbnail (imported ones), the viewer makes it.
 
 ### Fixed
 
@@ -64,3 +65,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Two variants finishing at the same time lost a library entry (both read the index and the second overwrote the first). The index now has an in-process and cross-process lock.
 - The estimated cost was a fixed 30; it now follows the official price list (text with texture 20, +10 low poly, rig 25, 10 per animation…).
 - The E2E bench left the Edge instances it launched alive (`msedge.exe` is a launcher: `kill()` closed nothing). There were up to 453 processes and the bench measured another run's stale page. It now closes the browser through CDP and by profile, and refuses to start if the debugging port is taken. Probably the cause of the "flaky E2E" noted as debt.
+- With a user-chosen library folder, thumbnails and models would not have shown: the `asset` protocol only opened the default folder. The chosen folder (and every picked reference image) is now opened at runtime.

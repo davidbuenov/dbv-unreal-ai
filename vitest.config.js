@@ -1,20 +1,19 @@
 // =============================================================================
-// DBV Unreal AI — Lector y editor nativo de Markdown (.md) para Windows, Linux y macOS
+// DBV Unreal AI — Configuración de los tests del frontend (Vitest)
 // Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
 // Licensed under the MIT License. See LICENSE for details.
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// Tests del frontend de la IA (`tests/ai/*.test.js`), con `jsdom` porque parte de
-// los módulos pintan DOM (el panel, la revisión, la IA en línea). Viven FUERA de
-// `src/` a propósito: `frontendDist` es `../src` y Tauri embebe en el ejecutable todo
-// lo que haya dentro. Los tests de
-// la lógica sin DOM del lector (sincronización, exportación a Typst) son
-// scripts de Node aparte: `npm run test:sync`, `npm run test:typst-export`.
+// Tests del frontend (`tests/**/*.test.js`) con `jsdom`, porque parte de los módulos pintan DOM (el panel, las
+// vistas, las tarjetas). Viven FUERA de `src/` a propósito: `frontendDist` es `../src` y Tauri embebe en el
+// ejecutable todo lo que haya dentro. `three` se resuelve como en la app (mapa de importación de `index.html`).
 
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: { alias: { three: fileURLToPath(new URL('./src/vendor/three/build/three.module.min.js', import.meta.url)) } },
   test: {
     include: ['tests/**/*.test.js'],
     environment: 'jsdom',

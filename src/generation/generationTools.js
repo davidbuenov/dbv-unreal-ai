@@ -128,6 +128,7 @@ export function createGenerationTools(deps) {
       const listed = await deps.listLibrary();
       const entry = listed.ok ? listed.value.find((e) => e.id === id) : null;
       let text;
+      if (entry) await deps.showPreview?.(entry);
       if (!entry) text = `error: no library asset with id "${id}". Call library_list.`;
       else if ((await deps.askApproval({ kind: 'tool', toolset: 'DBV Unreal AI', tool: 'library_send_to_unreal', args: { id, name: entry.name }, purpose })) === 'deny') {
         text = 'The user DENIED importing this asset. It was not imported.';

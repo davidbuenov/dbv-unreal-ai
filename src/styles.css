@@ -335,3 +335,11 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .modal-actions .spacer { flex: 1; }
 .asset-actions .btn-ghost { padding: 3px 6px; min-height: 0; font-size: 11px; }
 .asset-actions > .btn-primary, .asset-actions > button:not(.btn-ghost) { flex: 1 1 auto; }
+
+/* ─── Visor 3D (REQ-31) ─────────────────────────────────────────────── */
+.modal-card--wide { width: min(880px, 92vw); }
+.viewer-stage { width: 100%; height: min(60vh, 520px); background: radial-gradient(circle at 50% 40%, var(--bg-tertiary), var(--bg-primary)); border-radius: var(--radius); overflow: hidden; display: grid; place-items: center; }
+.viewer-stage canvas { display: block; width: 100% !important; height: 100% !important; touch-action: none; }
+.viewer-stage--inline { height: 260px; max-width: 420px; }
+.job-view { width: 100%; }
+

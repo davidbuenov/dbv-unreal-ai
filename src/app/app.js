@@ -18,6 +18,7 @@ import { createUnrealTools, pythonNudge, unrealPrompt } from '../unreal/unrealTo
 import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import { createChatJobs } from '../generation/chatJobs.js';
 import { createGenerationTools } from '../generation/generationTools.js';
+import { mountInlineViewer, viewableFile } from '../generation/preview.js';
 import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
 import { button, dirName, el } from './dom.js';
@@ -89,11 +90,21 @@ export function start() {
     });
   }
 
-  const openModal = (children) => {
+  // `onClose`: lo que hay que liberar al cerrar (el contexto WebGL del visor 3D). `wide`: ventana ancha.
+  let modalClosed = null;
+  const openModal = (children, { onClose, wide = false } = {}) => {
+    modalClosed?.();
+    modalClosed = onClose ?? null;
     $('#app-modal-card').replaceChildren(...children);
+    $('#app-modal-card').classList.toggle('modal-card--wide', wide);
     $('#app-modal').classList.remove('hidden');
   };
-  const closeModal = () => $('#app-modal').classList.add('hidden');
+  const closeModal = () => {
+    $('#app-modal').classList.add('hidden');
+    const closed = modalClosed;
+    modalClosed = null;
+    closed?.();
+  };
   $('#app-modal').addEventListener('click', (event) => event.target.id === 'app-modal' && closeModal());
 
   // ─── Registro de acciones y gasto ──────────────────────────────────
@@ -122,11 +133,15 @@ export function start() {
   for (const item of document.querySelectorAll('.nav-item')) item.addEventListener('click', () => show(item.dataset.view));
 
   views.project = createProjectView($('#view-project'), { state, toast, openModal, closeModal });
-  /** Lo que se ve de un trabajo terminado: la miniatura y el camino a la biblioteca. */
+  /** Lo que se ve de un trabajo terminado: el modelo girando (o su miniatura) y el camino a la biblioteca (REQ-31). */
   async function renderJobResult(record, slot) {
     const listed = record.entryId ? await api.libraryList() : null;
     const entry = listed?.ok ? listed.value.find((e) => e.id === record.entryId) : null;
-    if (entry) slot.replaceChildren(await assetThumbnail(entry, 'job-thumb'), el('div', { className: 'row' }, button(t('gen.openLibrary'), () => show('library'), 'btn-ghost')));
+    if (!entry) return;
+    const view = el('div', { className: 'job-view' });
+    slot.replaceChildren(view, el('div', { className: 'row' }, button(t('gen.openLibrary'), () => show('library'), 'btn-ghost')));
+    if (viewableFile(entry)) await mountInlineViewer(view, entry, (e) => assetThumbnail(e, 'job-thumb'));
+    else view.replaceChildren(await assetThumbnail(entry, 'job-thumb'));
   }
 
   /** Nombre corto para un asset con la IA conectada (local o de nube); `null` si no hay o no responde. */
@@ -241,6 +256,13 @@ export function start() {
           launch: (tool, args) => api.launch(tool, args).finally(refreshSpent),
           waitJob: (jobId, timeout) => api.waitJob(jobId, timeout).finally(refreshSpent),
           showJobs: (ids) => chatJobs.track(panel, ids),
+          // Antes de pedir permiso para llevarlo a Unreal, el modelo se ve girando en la conversación (REQ-31).
+          showPreview: async (entry) => {
+            if (!viewableFile(entry)) return;
+            const slot = el('div', { className: 'job-card' });
+            panel.addNode(slot);
+            await mountInlineViewer(slot, entry, (e) => assetThumbnail(e, 'job-thumb'));
+          },
           operations: api.generationOperations,
           balance: api.generationBalance,
           rename: api.libraryRename,

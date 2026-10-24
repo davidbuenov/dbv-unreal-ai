@@ -17,6 +17,7 @@ import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import * as api from './backend.js';
 import { button, el } from './dom.js';
 import { confirmAndLaunch } from './generateView.js';
+import { openPreview, viewableFile } from '../generation/preview.js';
 
 /** Extensiones que se pueden importar (`library::MODEL_EXTENSIONS` e imágenes). */
 export const IMPORT_EXTENSIONS = ['glb', 'gltf', 'fbx', 'obj', 'usdz', 'png', 'jpg', 'jpeg', 'webp'];
@@ -170,6 +171,7 @@ export function createLibraryView(host, deps) {
         'div',
         { className: 'asset-actions' },
         canSend ? button(t('lib.send'), () => send(entry, statusLine), 'btn-primary') : null,
+        viewableFile(entry) ? button(t('preview.open'), () => openPreview(entry, { openModal: deps.openModal, closeModal: deps.closeModal, onSend: canSend ? (e) => (deps.closeModal(), send(e, statusLine)) : null })) : null,
         nextStep(entry),
         button(t('lib.rename'), () => rename(entry), 'btn-ghost'),
         button(t('lib.reveal'), async () => {

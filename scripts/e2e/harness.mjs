@@ -34,10 +34,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function launch({ appDir, docPath, docContent, extraInvoke = '{}', customInvoke = '(() => undefined)', width = 1400, height = 900, port = 9333 }) {
   // Se sirve src/ por HTTP, como lo sirve la app real (tauri://localhost): desde file:// Chromium bloquea import() de módulos.
-  const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.md': 'text/markdown', '.svg': 'image/svg+xml', '.png': 'image/png' };
+  const MIME = { '.glb': 'model/gltf-binary', '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.md': 'text/markdown', '.svg': 'image/svg+xml', '.png': 'image/png' };
   const server = http.createServer(async (req, res) => {
     try {
-      const file = path.join(appDir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
+      // `/__fixtures/…` sirve los ficheros de prueba (un GLB para el visor) sin meterlos en `src/`, que va en la app.
+      const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+      const fixtures = path.join(appDir, '..', 'tests', 'fixtures');
+      const file = pathname.startsWith('/__fixtures/') ? path.join(fixtures, pathname.slice('/__fixtures/'.length)) : path.join(appDir, pathname);
       const body = await readFile(file);
       res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
       res.end(body);

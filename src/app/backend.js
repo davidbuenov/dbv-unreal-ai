@@ -57,6 +57,8 @@ export const librarySetLocation = (path, copyExisting) => call('library_set_loca
 export const libraryImport = (paths) => call('library_import', { paths });
 export const libraryRename = (id, name) => call('library_rename', { id, name });
 export const libraryEntryDir = (id) => call('library_entry_dir', { id });
+export const librarySaveThumbnail = (id, png) => call('library_save_thumbnail', { id, png });
+export const generationAllowReference = (path) => call('generation_allow_reference', { path });
 
 // ─── Progreso de los trabajos ────────────────────────────────────────
 // El oyente se registra ANTES de lanzar un trabajo y guarda lo que llega: un fallo inmediato (una clave

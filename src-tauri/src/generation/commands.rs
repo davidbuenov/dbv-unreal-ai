@@ -103,6 +103,15 @@ pub fn begin_session(app: &AppHandle) {
         board.prune();
         app.state::<GenerationState>().session_start.store(started, Ordering::Relaxed);
     }
+    if let Ok(library) = library(app) {
+        allow_assets(app, &library.root);
+    }
+}
+
+/// La interfaz lee miniaturas y modelos con `convertFileSrc` (protocolo `asset`). `tauri.conf.json` solo abre la
+/// biblioteca de siempre; una carpeta elegida por el usuario (REQ-30) se abre aquí, en tiempo de ejecución.
+fn allow_assets(app: &AppHandle, dir: &std::path::Path) {
+    let _ = app.asset_protocol_scope().allow_directory(dir, true);
 }
 
 /// Créditos de la sesión, sumando también lo que lanzaron los agentes.
@@ -311,6 +320,7 @@ pub fn library_set_location(app: AppHandle, path: Option<String>, copy_existing:
         target.merge_from(&previous.root)?;
     }
     settings.save(&dir)?;
+    allow_assets(&app, &target.root);
     library_location(app)
 }
 
@@ -363,4 +373,21 @@ pub fn generation_presets() -> serde_json::Value {
         "biped": BIPED_PRESETS.iter().map(|(group, list)| serde_json::json!({ "group": group, "names": list.split(' ').collect::<Vec<_>>() })).collect::<Vec<_>>(),
         "generic": GENERIC_PRESETS,
     })
+}
+
+/// Deja ver en la interfaz una imagen de referencia elegida por el usuario (solo imágenes). @spec REQ-32
+#[tauri::command]
+pub fn generation_allow_reference(app: AppHandle, path: String) -> Result<(), UnrealError> {
+    let file = PathBuf::from(&path);
+    let ext = file.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !crate::library::IMAGE_EXTENSIONS.contains(&ext.as_str()) || !file.is_file() {
+        return Err(UnrealError::Format(format!("{path} no es una imagen (png, jpg, webp)")));
+    }
+    app.asset_protocol_scope().allow_file(&file).map_err(|error| UnrealError::Io(error.to_string()))
+}
+
+/// Miniatura hecha por el visor 3D para un asset que no la traía (los importados). @spec REQ-31
+#[tauri::command]
+pub fn library_save_thumbnail(app: AppHandle, id: String, png: Vec<u8>) -> Result<crate::library::LibraryEntry, UnrealError> {
+    library(&app)?.save_thumbnail(&id, &png)
 }
