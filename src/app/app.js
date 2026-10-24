@@ -14,7 +14,7 @@
 import { registerTranslations, t } from '../ai/i18nBridge.js';
 import { createApprovalCard } from '../unreal/approvalCard.js';
 import { createPermissionMemory } from '../unreal/permissions.js';
-import { createUnrealTools, unrealPrompt } from '../unreal/unrealTools.js';
+import { createUnrealTools, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
 import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import { createGenerationTools } from '../generation/generationTools.js';
 import { createActionLog } from './actionLog.js';
@@ -165,7 +165,6 @@ export function start() {
       isOpenDocument: () => false,
       getOpenText: () => '',
       isDirty: () => false,
-      getOutline: () => [],
       getVisibleSection: () => null,
       openDocument() {},
       applyToEditor: () => false,
@@ -183,9 +182,10 @@ export function start() {
       },
       onVisibilityChanged() {},
       // ── Extensiones de DBV Unreal AI ──
-      promptDomain: () => {
+      followUp: (reply) => (state.connection?.status === 'online' ? pythonNudge(reply) : null),
+      promptDomain: (_language, { agent = false } = {}) => {
         const connection = state.connection;
-        const base = unrealPrompt({ projectName: connection?.projectName ?? '', engineVersion: connection?.engineVersion ?? '' });
+        const base = unrealPrompt({ projectName: connection?.projectName ?? '', engineVersion: connection?.engineVersion ?? '', agent });
         return connection?.status === 'online' ? base : `${base}\n\nNo Unreal project is connected right now: if the user asks to act on Unreal, tell them to connect one in the Project view.`;
       },
       extraTools: ({ panel, conversationId }) => {

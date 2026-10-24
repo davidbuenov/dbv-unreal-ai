@@ -207,6 +207,8 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
     /** Elementos del contexto: cada uno se puede quitar. */
     setContext(items, onRemove) {
       contextBar.replaceChildren(el('span', 'ai-panel__context-label', t('ai.contextTitle')));
+      // Sin nada que enseñar, ni la etiqueta «Contexto:» sola.
+      contextBar.classList.toggle('hidden', !items.length);
       for (const item of items) {
         const chip = el('span', `ai-chip${item.included ? '' : ' ai-chip--out'}${item.trimmed && item.included ? ' ai-chip--trimmed' : ''}`);
         chip.title = item.included ? (item.trimmed ? t('ai.chipTrimmed') : `~${item.tokens} tokens`) : t('ai.chipOut');

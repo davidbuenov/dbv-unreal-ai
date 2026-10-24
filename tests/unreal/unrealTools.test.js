@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { classifyTool, createPermissionMemory, firstWord } from '../../src/unreal/permissions.js';
-import { createUnrealTools, formatResult, isDbvToolset, resolveToolset, unrealPrompt } from '../../src/unreal/unrealTools.js';
+import { createUnrealTools, formatResult, isDbvToolset, pythonNudge, resolveToolset, unrealPrompt } from '../../src/unreal/unrealTools.js';
 
 const TOOLSETS = [
   { name: 'ToolsetRegistry.AgentSkillToolset', description: 'skills' },
@@ -182,6 +182,16 @@ describe('Python con validación previa (REQ-26)', () => {
     const backend = fakeBackend({ toolsets: [TOOLSETS[2]] });
     const out = await tool(createUnrealTools({ backend, askApproval: vi.fn() }), 'unreal_describe_python_api').run({ name: 'EditorAssetLibrary' });
     expect(out).toMatch(/Prepare project/);
+  });
+});
+
+describe('modelos que no llaman a la herramienta (REQ-10, REQ-26)', () => {
+  it('recuerda ejecutar el Python que el modelo solo escribió en su respuesta @spec REQ-10, REQ-26', () => {
+    const reply = "Here's the corrected code:\n```python\nimport unreal\nx = 1\n```";
+    expect(pythonNudge(reply)).toMatch(/unreal_run_python/);
+    expect(pythonNudge('Hay 2 luces en el nivel.')).toBeNull();
+    expect(pythonNudge('```python\nprint("hola")\n```')).toBeNull();
+    expect(pythonNudge(undefined)).toBeNull();
   });
 });
 

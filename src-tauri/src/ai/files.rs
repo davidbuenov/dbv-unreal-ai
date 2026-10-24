@@ -41,6 +41,11 @@ pub fn is_text_document(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| TEXT_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
 }
 
+/// ¿Es Markdown? Solo a estos se les aplican las comprobaciones de la propuesta (`check.rs`).
+pub fn is_markdown(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "md" | "markdown"))
+}
+
 /// Carpetas que no se recorren: ocultas (`.git`, `.obsidian`…) y de dependencias.
 pub fn is_skipped_dir(name: &str) -> bool {
     // Unreal: carpetas de binarios, cachés y assets (`.uasset`) que no tienen texto que leer y pesan mucho.

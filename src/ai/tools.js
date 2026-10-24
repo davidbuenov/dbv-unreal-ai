@@ -76,7 +76,7 @@ export function createTools(deps) {
   return [
     {
       name: 'list_files',
-      description: 'List the Markdown documents of the folder of the open document (relative paths).',
+      description: 'List the text files of the project folder (documents, configuration and Python/C++ sources) as relative paths.',
       parameters: object({}),
       label: () => t('ai.step.listing'),
       run: async () => {
@@ -87,7 +87,7 @@ export function createTools(deps) {
     },
     {
       name: 'read_file',
-      description: 'Read a Markdown document of the folder (with unsaved editor changes). Optional 1-based line range.',
+      description: 'Read a text file of the project folder (with unsaved editor changes if it is open). Optional 1-based line range.',
       parameters: object({ path: { type: 'string' }, start_line: { type: 'integer' }, end_line: { type: 'integer' } }, ['path']),
       label: (args) => t('ai.step.reading').replace('{path}', args.path ?? ''),
       run: async ({ path, start_line: start, end_line: end }) => {
@@ -104,7 +104,7 @@ export function createTools(deps) {
     },
     {
       name: 'search_files',
-      description: 'Search text (case-insensitive) in all Markdown documents of the folder. Returns file:line: text.',
+      description: 'Search text (case-insensitive) in all the text files of the project folder. Returns file:line: text.',
       parameters: object({ query: { type: 'string' } }, ['query']),
       label: (args) => t('ai.step.searching').replace('{query}', args.query ?? ''),
       run: async ({ query }) => {
@@ -113,20 +113,25 @@ export function createTools(deps) {
         return hits.slice(0, HIT_LIMIT).map((hit) => `${hit.relative}:${hit.line}: ${hit.text.trim()}`).join('\n');
       },
     },
-    {
-      name: 'get_outline',
-      description: 'Headings (outline) of the open document.',
-      parameters: object({}),
-      label: () => t('ai.step.outline'),
-      run: async () => {
-        const outline = deps.outline();
-        return outline.length ? outline.map((h) => `${'  '.repeat(Math.max(0, h.level - 1))}- ${h.text}`).join('\n') : 'no headings';
-      },
-    },
+    // El esquema solo tiene sentido si la app tiene un documento abierto (DBV Unreal AI no lo tiene).
+    ...(deps.outline
+      ? [
+          {
+            name: 'get_outline',
+            description: 'Headings (outline) of the open document.',
+            parameters: object({}),
+            label: () => t('ai.step.outline'),
+            run: async () => {
+              const outline = deps.outline();
+              return outline.length ? outline.map((h) => `${'  '.repeat(Math.max(0, h.level - 1))}- ${h.text}`).join('\n') : 'no headings';
+            },
+          },
+        ]
+      : []),
     {
       name: 'propose_changes',
       description:
-        'Propose changes to Markdown documents for the user to review (nothing is written until accepted). Actions: "edit" (exact `search` text → `replace`), "create" (new document with `content`), "replace_all" (whole `content`). the app checks the proposal (unclosed code blocks, unpaired $$, broken relative links) and reports new problems.',
+        'Propose changes to text files of the project (Python, C++, configuration, documents) for the user to review (nothing is written until accepted). Actions: "edit" (exact `search` text → `replace`), "create" (new file with `content`), "replace_all" (whole `content`). For Markdown the app checks the proposal (unclosed code blocks, unpaired $$, broken relative links) and reports new problems.',
       parameters: object(
         {
           summary: { type: 'string', description: 'One sentence describing the change for the user.' },

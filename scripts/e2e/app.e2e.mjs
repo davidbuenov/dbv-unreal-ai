@@ -113,6 +113,9 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     await h.eval(`document.querySelector('[data-view="chat"]').click()`);
     await h.sleep(1500);
     ok('la Conversación abre el asistente (hay una IA conectada)', await h.eval(`return !!document.querySelector('.ai-panel__input') && document.getElementById('ai-connect-modal').classList.contains('hidden')`));
+    const start = await h.eval(`return { suggestions: [...document.querySelectorAll('.ai-panel__suggestion')].map((b) => b.textContent), contextHidden: document.querySelector('.ai-panel__context')?.classList.contains('hidden') ?? null, placeholder: document.querySelector('.ai-panel__input')?.placeholder }`);
+    ok('las sugerencias de la conversación son de Unreal, no de un editor de texto', start.suggestions.length === 3 && start.suggestions.join(' ').includes('nivel') && !/documento|ortograf|tabla/i.test(start.suggestions.join(' ')), JSON.stringify(start.suggestions));
+    ok('el campo de texto habla del proyecto de Unreal', /Unreal/.test(start.placeholder ?? ''), start.placeholder);
     ok('cargar la IA no borra el estado de la conexión de la píldora', (await h.eval(`return document.getElementById('unreal-pill').textContent`)) === 'DBVMCPFirst · UE 5.8 · :8000');
     await h.eval(`const i = document.querySelector('.ai-panel__input'); i.value = '¿Cuánto es la respuesta?'; i.dispatchEvent(new Event('input', { bubbles: true }));`);
     await h.key('Enter', 'Enter', 13);

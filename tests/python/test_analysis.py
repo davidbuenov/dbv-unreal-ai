@@ -53,12 +53,41 @@ class UnrealEditorSubsystem:
         return None
 
 
+class Level:
+    """Nivel sin ``get_actors``."""
+
+
+class World:
+    """Mundo sin ``get_all_actors`` (el método vive en un subsistema)."""
+
+
+class EditorActorSubsystem:
+    """Subsistema con ``get_all_level_actors``."""
+
+    def get_all_level_actors(self):  # noqa: ANN201
+        """X.get_all_level_actors() -> Array[Actor]"""
+        return []
+
+
+class LevelEditorSubsystem:
+    """Subsistema al que se movió ``EditorLevelLibrary.get_current_level``."""
+
+    def get_current_level(self):  # noqa: ANN201
+        """X.get_current_level() -> Level"""
+        return None
+
+
 def fake_unreal() -> types.ModuleType:
     """Módulo ``unreal`` mínimo para los tests."""
     module = types.ModuleType("unreal")
     module.EditorAssetLibrary = EditorAssetLibrary
     module.EditorLevelLibrary = EditorLevelLibrary
     module.UnrealEditorSubsystem = UnrealEditorSubsystem
+    module.get_editor_subsystem = lambda kind: None
+    module.LevelEditorSubsystem = LevelEditorSubsystem
+    module.EditorActorSubsystem = EditorActorSubsystem
+    module.World = World
+    module.Level = Level
     module.log = lambda message: print(f"LOG {message}")
     return module
 
@@ -83,6 +112,31 @@ class ValidateCodeTests(unittest.TestCase):
         finding = report["findings"][0]
         self.assertEqual((finding["kind"], finding["line"], finding["name"]), ("unknown", 2, "unreal.EditorAsetLibrary"))
         self.assertIn("EditorAssetLibrary", finding["suggestions"])
+
+    def test_un_nombre_de_la_api_antigua_se_busca_en_los_subsistemas(self) -> None:
+        """@spec REQ-26 — la eval con qwen3:8b usaba ``EditorLevelLibrary.get_current_level``, que se movió."""
+        report = analysis.validate_code("import unreal\nlevel = unreal.EditorLevelLibrary.get_current_level()\n", self.unreal)
+        finding = report["findings"][0]
+        self.assertEqual(finding["kind"], "unknown")
+        self.assertEqual(finding["suggestions"][0], "unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).get_current_level()")
+
+    def test_get_editor_subsystem_con_algo_que_no_es_un_subsistema(self) -> None:
+        """@spec REQ-26 — pasa el análisis de nombres y fallaba al ejecutar con un TypeError (eval con qwen3:8b)."""
+        wrong = "import unreal\nlevel = unreal.get_editor_subsystem(unreal.EditorLevelLibrary).get_current_level()\n"
+        report = analysis.validate_code(wrong, self.unreal)
+        self.assertFalse(report["ok"])
+        finding = report["findings"][0]
+        self.assertEqual((finding["kind"], finding["line"]), ("misuse", 2))
+        self.assertIn("is not an editor subsystem", finding["message"])
+        self.assertEqual(finding["suggestions"], ["unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).get_current_level()"])
+        right = "import unreal\nlevel = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).get_current_level()\n"
+        self.assertEqual(analysis.validate_code(right, self.unreal)["findings"], [])
+        self.assertTrue(analysis.validate_code(right, self.unreal)["ok"])
+
+    def test_get_editor_subsystem_sin_metodo_sugiere_los_subsistemas_habituales(self) -> None:
+        """@spec REQ-26"""
+        report = analysis.validate_code("import unreal\nx = unreal.get_editor_subsystem(unreal.EditorAssetLibrary)\n", self.unreal)
+        self.assertEqual(report["findings"][0]["suggestions"], ["unreal.EditorActorSubsystem", "unreal.LevelEditorSubsystem", "unreal.UnrealEditorSubsystem"])
 
     def test_detecta_miembro_inexistente(self) -> None:
         """@spec REQ-26"""
@@ -138,6 +192,23 @@ class DescribeNameTests(unittest.TestCase):
         self.assertEqual(old["alternatives"], ["unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()"])
         self.assertEqual(analysis.describe_name("EditorAssetLibrary.load_asset", unreal)["alternatives"], [])
 
+    def test_acepta_una_expresion_con_llamadas_y_encuentra_donde_se_movio(self) -> None:
+        """@spec REQ-25 — los modelos pasan expresiones como ``unreal.get_editor_subsystem(X).metodo()``."""
+        unreal = fake_unreal()
+        unreal.get_editor_subsystem = lambda kind: None
+        self.assertTrue(analysis.describe_name("unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()", unreal)["exists"])
+        moved = analysis.describe_name("EditorLevelLibrary.get_current_level", unreal)
+        self.assertFalse(moved["exists"])
+        self.assertEqual(moved["suggestions"][0], "unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).get_current_level()")
+
+    def test_un_miembro_que_falta_se_busca_aproximadamente_en_los_subsistemas(self) -> None:
+        """@spec REQ-25 — `Level.get_actors` no existe; `EditorActorSubsystem.get_all_level_actors` es lo que se quería."""
+        missing = analysis.describe_name("Level.get_actors", fake_unreal())
+        self.assertFalse(missing["exists"])
+        self.assertEqual(missing["suggestions"][0], "unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()")
+        # Un nombre de primer nivel no se busca en los subsistemas.
+        self.assertNotIn("get_editor_subsystem", " ".join(analysis.describe_name("EditorAsetLibrary", fake_unreal())["suggestions"]))
+
     def test_un_nombre_que_no_existe_trae_sugerencias(self) -> None:
         """@spec REQ-25"""
         missing = analysis.describe_name("EditorAssetLibrary.load_asets", fake_unreal())
@@ -157,6 +228,27 @@ class RunCodeTests(unittest.TestCase):
         self.assertEqual(report["stdout"], "hola\n")
         self.assertEqual(report["result"], {"n": 2})
         self.assertTrue(report["warnings"][0].startswith("DeprecationWarning: vieja"))
+
+    def test_devuelve_el_valor_de_la_ultima_expresion_como_una_consola(self) -> None:
+        """@spec REQ-06 — el código corría bien pero llegaba `result: null` y el modelo creía que había fallado."""
+        self.assertEqual(analysis.run_code("n = 2\nn * 21\n", fake_unreal())["result"], 42)
+        self.assertEqual(analysis.run_code("n = [x for x in range(3)]\nlen(n)\n", fake_unreal())["result"], 3)
+        self.assertEqual(analysis.run_code("result = 1\n2 + 2\n", fake_unreal())["result"], 1, "`result` explícito manda")
+        self.assertIsNone(analysis.run_code("print('hola')\n", fake_unreal())["result"])
+        self.assertIsNone(analysis.run_code("x = 3\n", fake_unreal())["result"], "una asignación no es una expresión")
+        report = analysis.run_code("a = 1\n1 / 0\n", fake_unreal())
+        self.assertFalse(report["success"])
+        self.assertFalse(analysis.run_code("def f(:\n", fake_unreal())["success"], "un error de sintaxis sigue siendo un error")
+
+    def test_un_attribute_error_de_ejecucion_trae_una_pista_concreta(self) -> None:
+        """@spec REQ-26 — ``world.get_all_actors()`` no se ve estáticamente; el método existe en un subsistema."""
+        report = analysis.run_code("w = unreal.World()\nw.get_all_actors()\n", fake_unreal())
+        self.assertFalse(report["success"])
+        self.assertIn("AttributeError", report["error"])
+        self.assertIn("unreal.World has no 'get_all_actors'", report["hint"])
+        self.assertIn("unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()", report["hint"])
+        self.assertIsNone(analysis.run_code("x = 1 / 0\n", fake_unreal())["hint"], "solo los AttributeError llevan pista")
+        self.assertIsNone(analysis.run_code("print(1)\n", fake_unreal())["hint"])
 
     def test_un_fallo_vuelve_como_dato_con_su_traza(self) -> None:
         """@spec REQ-06"""

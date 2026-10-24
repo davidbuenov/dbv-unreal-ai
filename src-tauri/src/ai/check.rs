@@ -23,7 +23,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::files::{clean_relative, is_text_document};
+use super::files::{clean_relative, is_markdown, is_text_document};
 use super::AiError;
 
 /// Un fichero con su contenido (sin guardar o propuesto).
@@ -187,7 +187,11 @@ pub fn check(root: &str, files: &[FileContent]) -> Result<CheckOutcome, AiError>
             }
         };
         if !is_text_document(Path::new(&relative)) {
-            diagnostics.push(problem(&relative, None, "error", "solo se pueden proponer documentos de texto (.md, .markdown, .txt)"));
+            diagnostics.push(problem(&relative, None, "error", "solo se pueden proponer ficheros de texto del proyecto (documentos, configuración y código)"));
+            continue;
+        }
+        // Las reglas de abajo son de Markdown: aplicadas a código (`a[0](x)`, comillas triples, `$$`) darían falsos errores.
+        if !is_markdown(Path::new(&relative)) {
             continue;
         }
 
@@ -247,6 +251,16 @@ mod tests {
     #[test]
     fn un_documento_limpio_no_da_problemas() {
         assert!(run(&[("a.md", "# Título\n\ntexto con [enlace](existe.md) y ![i](img.png)\n\n```js\ncode\n```\n")]).is_empty());
+    }
+
+    /// El código y la configuración de Unreal no se miran con reglas de Markdown (`a[0](x)`, ``` y `$$` son normales).
+    /// @spec REQ-22, RF-IA-04
+    #[test]
+    fn el_codigo_y_la_configuracion_no_se_comprueban_como_markdown() {
+        let python = "x = lista[0](dato)\ndoc = \"\"\"```\nsin cerrar\"\"\"\nprecio = '$$'\n";
+        assert!(run(&[("Plugins/X/init_unreal.py", python), ("Config/DefaultEngine.ini", "[A]\nB=```\n"), ("Source/X.cpp", "auto f = v[0](1); // $$")]).is_empty());
+        assert!(!run(&[("a.md", "```js\nsin cerrar\n")]).is_empty(), "Markdown sigue comprobándose");
+        assert!(!run(&[("imagen.uasset", "x")]).is_empty(), "un tipo no permitido sigue siendo un error");
     }
 
     #[test]

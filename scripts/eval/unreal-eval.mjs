@@ -15,7 +15,7 @@
 // (tiene que ser 0). Lecciones de dbv-typst-editor: guardado tras cada tarea, tiempo límite por
 // petición y parada tras tres fallos de conexión seguidos.
 //
-// Uso: node scripts/eval/unreal-eval.mjs -- --model qwen3:8b [--port 8000] [--out resultados.json] [--toolset <ruta>] [--only <tarea>]
+// Uso: node scripts/eval/unreal-eval.mjs -- --model qwen3:8b [--port 8000] [--out resultados.json] [--toolset <ruta>] [--only <tarea>] [--prompt full|domain]
 //   --toolset: registra el toolset DBV (Python) en la sesión del editor durante la eval y lo retira al acabar.
 
 import { writeFileSync } from 'node:fs';
@@ -23,7 +23,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAgent } from '../../src/ai/agentLoop.js';
 import { classifyTool } from '../../src/unreal/permissions.js';
-import { createUnrealTools, isDbvToolset, unrealPrompt } from '../../src/unreal/unrealTools.js';
+import { systemPrompt } from '../../src/ai/context.js';
+import { createUnrealTools, isDbvToolset, pythonNudge, unrealPrompt } from '../../src/unreal/unrealTools.js';
 
 const args = process.argv.slice(2).filter((a) => a !== '--');
 for (const a of args) if (a.startsWith('-') && !a.startsWith('--')) throw new Error(`argumento no válido: ${a}`);
@@ -36,6 +37,8 @@ const PORT = Number(option('port', '8000'));
 const OUT = option('out', path.join(process.cwd(), `unreal-eval-${Date.now()}.json`));
 const TOOLSET_DIR = option('toolset', null);
 const ONLY = option('only', null);
+// `full`: el prompt de sistema completo de la app; `domain`: solo las instrucciones de Unreal (sirve para comparar).
+const PROMPT = option('prompt', 'full');
 const REQUEST_TIMEOUT_MS = 240_000;
 
 // ─── Cliente MCP mínimo (mismo protocolo que src-tauri/src/unreal/mcp_client.rs) ─────────────
@@ -184,7 +187,7 @@ async function main() {
       const started = Date.now();
       let run;
       try {
-        run = await runAgent({ callModel, tools, messages: [{ role: 'system', content: unrealPrompt({ projectName: 'DBVMCPFirst', engineVersion: truth.version }) }, { role: 'user', content: task.prompt }], maxSteps: 12 });
+        run = await runAgent({ callModel, tools, followUp: pythonNudge, messages: [{ role: 'system', content: PROMPT === 'domain' ? unrealPrompt({ projectName: 'DBVMCPFirst', engineVersion: truth.version }) : systemPrompt({ lang: 'en', tools: true, domain: unrealPrompt({ projectName: 'DBVMCPFirst', engineVersion: truth.version }) }) }, { role: 'user', content: task.prompt }], maxSteps: 12 });
         networkFailures = 0;
       } catch (error) {
         networkFailures += 1;

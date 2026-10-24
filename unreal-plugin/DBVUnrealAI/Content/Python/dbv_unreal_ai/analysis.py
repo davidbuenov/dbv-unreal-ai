@@ -20,6 +20,7 @@ import ast
 import contextlib
 import difflib
 import io
+import re
 import traceback
 import warnings
 from dataclasses import dataclass, field
@@ -64,7 +65,7 @@ def _deprecation_note(obj: Any) -> str:
     return result[:300]
 
 
-def subsystem_alternatives(name: str, module: Any) -> list[str]:
+def subsystem_alternatives(name: str, module: Any, fuzzy: bool = False) -> list[str]:
     """Llamadas equivalentes en los subsistemas del editor para un miembro obsoleto.
 
     Unreal 5.8 marca obsoleto ``EditorLevelLibrary`` («Use the function in Unreal Editor Subsystem»)
@@ -72,12 +73,32 @@ def subsystem_alternatives(name: str, module: Any) -> list[str]:
     (``get_editor_world`` → ``UnrealEditorSubsystem``, ``get_all_level_actors`` → ``EditorActorSubsystem``,
     comprobado en vivo). Sin esto, un modelo de 8B no encontraba la alternativa (eval del 2026-10-24).
     """
-    found: list[str] = []
+    exact: list[str] = []
+    approximate: list[str] = []
     for candidate in sorted(n for n in dir(module) if n.endswith("Subsystem") and "Editor" in n):
         owner = getattr(module, candidate, None)
-        if isinstance(owner, type) and hasattr(owner, name):
-            found.append(f"unreal.get_editor_subsystem(unreal.{candidate}).{name}()")
-    return found[:3]
+        if not isinstance(owner, type):
+            continue
+        if hasattr(owner, name):
+            exact.append(f"unreal.get_editor_subsystem(unreal.{candidate}).{name}()")
+        elif fuzzy:
+            close = difflib.get_close_matches(name, [m for m in dir(owner) if not m.startswith("_")], n=1, cutoff=0.6)
+            approximate.extend(f"unreal.get_editor_subsystem(unreal.{candidate}).{m}()" for m in close)
+    return [*exact, *approximate][:3]
+
+
+def _suggestions(name: str, candidates: list[str], module: Any, in_class: bool = True) -> list[str]:
+    """Qué probar en lugar de ``name``: dónde se MOVIÓ (subsistemas del editor) y luego nombres parecidos.
+
+    Los modelos usan nombres de la API antigua (``EditorLevelLibrary.get_current_level``) que en 5.8 viven en un
+    subsistema (``LevelEditorSubsystem``, comprobado en vivo). Ofrecer solo nombres parecidos de la clase obsoleta
+    llevó a un modelo de 8B hasta ``save_current_level``, que además modifica el proyecto (eval del 2026-10-24).
+    """
+    # Un miembro de clase que falta puede haberse movido a un subsistema (aunque con otro nombre: `get_all_actors` →
+    # `get_all_level_actors`); un nombre de primer nivel (`EditorAsetLibrary`) no tiene sentido buscarlo allí.
+    moved = subsystem_alternatives(name, module, fuzzy=True) if in_class else []
+    similar = [n for n in difflib.get_close_matches(name, candidates, n=3) if n not in moved]
+    return [*moved, *similar]
 
 
 def _aliases(tree: ast.AST) -> tuple[set[str], dict[str, str]]:
@@ -122,7 +143,7 @@ def _resolve(module: Any, start: str, parts: list[str], line: int) -> Optional[F
         dotted = ".".join([*path, name])
         if nxt is None and not hasattr(current, name):
             candidates = [n for n in dir(current) if not n.startswith("_")]
-            finding = Finding("unknown", line, dotted, f"{dotted} does not exist in this engine version", difflib.get_close_matches(name, candidates, n=3))
+            finding = Finding("unknown", line, dotted, f"{dotted} does not exist in this engine version", _suggestions(name, candidates, module, current is not module))
             break
         if is_deprecated(nxt):
             finding = Finding("deprecated", line, dotted, f"{dotted}: {_deprecation_note(nxt)}", subsystem_alternatives(name, module))
@@ -134,6 +155,51 @@ def _resolve(module: Any, start: str, parts: list[str], line: int) -> Optional[F
             current = nxt
         path.append(name)
     return finding
+
+
+#: Subsistemas del editor que más se necesitan, para sugerir cuando no se sabe qué método se quería.
+_COMMON_SUBSYSTEMS = ("EditorActorSubsystem", "LevelEditorSubsystem", "UnrealEditorSubsystem", "EditorAssetSubsystem")
+
+
+def _is_get_editor_subsystem(func: ast.AST, module_aliases: set[str], imported: dict[str, str]) -> bool:
+    """¿``func`` es ``unreal.get_editor_subsystem`` (o su ``from unreal import``)?"""
+    chain = _chain(func) if isinstance(func, ast.Attribute) else None
+    named = isinstance(func, ast.Name) and imported.get(func.id) == "get_editor_subsystem"
+    return named or bool(chain and chain[0] in module_aliases and chain[1] == ["get_editor_subsystem"])
+
+
+def _is_editor_subsystem(name: str, module: Any) -> bool:
+    """¿``unreal.<name>`` es una clase de subsistema del editor?"""
+    target = getattr(module, name, None)
+    base = getattr(module, "EditorSubsystem", None)
+    result = isinstance(target, type) and (issubclass(target, base) if isinstance(base, type) else name.endswith("Subsystem"))
+    return result
+
+
+def _subsystem_misuse(tree: ast.AST, module: Any, module_aliases: set[str], imported: dict[str, str]) -> list[Finding]:
+    """``get_editor_subsystem(unreal.X)`` con una ``X`` que NO es un subsistema.
+
+    Pasa la validación de nombres (los dos existen) y falla al ejecutar con un ``TypeError``. Es el error más repetido
+    de los modelos con esta API: una eval con ``qwen3:8b`` lo repitió tres veces seguidas ignorando el traceback.
+    """
+    parents = {id(child): parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    findings: list[Finding] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and node.args and _is_get_editor_subsystem(node.func, module_aliases, imported)):
+            continue
+        chain = _chain(node.args[0]) if isinstance(node.args[0], ast.Attribute) else None
+        if not chain or chain[0] not in module_aliases or len(chain[1]) != 1:
+            continue
+        name = chain[1][0]
+        if not hasattr(module, name) or _is_editor_subsystem(name, module):
+            continue
+        parent = parents.get(id(node))
+        method = parent.attr if isinstance(parent, ast.Attribute) else ""
+        options = subsystem_alternatives(method, module) if method else []
+        options = options or [f"unreal.{n}" for n in _COMMON_SUBSYSTEMS if hasattr(module, n)]
+        message = f"unreal.{name} is not an editor subsystem: get_editor_subsystem() needs a subsystem class such as unreal.EditorActorSubsystem, unreal.LevelEditorSubsystem or unreal.UnrealEditorSubsystem"
+        findings.append(Finding("misuse", getattr(node, "lineno", 0), f"unreal.get_editor_subsystem(unreal.{name})", message, options))
+    return findings
 
 
 def _parse(code: str) -> tuple[Optional[ast.AST], Optional[dict[str, Any]]]:
@@ -150,7 +216,8 @@ def validate_code(code: str, module: Any) -> dict[str, Any]:
     """Analiza ``code`` sin ejecutarlo. @spec REQ-26
 
     Returns:
-        ``{"ok": bool, "syntax_error": {...}|None, "findings": [...], "checked": n}``.
+        ``{"ok": bool, "syntax_error": {...}|None, "findings": [...], "checked": n}``. ``ok`` es falso con un
+        nombre inexistente (``unknown``) o un uso que fallaría al ejecutar (``misuse``); lo obsoleto solo avisa.
     """
     if not isinstance(code, str) or not code.strip():
         return {"ok": False, "syntax_error": {"line": 0, "message": "empty code"}, "findings": [], "checked": 0}
@@ -189,9 +256,10 @@ def validate_code(code: str, module: Any) -> dict[str, Any]:
         problem = _resolve(module, target[0], target[1], getattr(node, "lineno", 0))
         if problem and not any(f.name == problem.name and f.line == problem.line for f in findings):
             findings.append(problem)
+    findings.extend(_subsystem_misuse(tree, module, module_aliases, imported))
     findings.sort(key=lambda f: (f.line, f.name))
     result = {
-        "ok": not any(f.kind == "unknown" for f in findings),
+        "ok": not any(f.kind in ("unknown", "misuse") for f in findings),
         "syntax_error": None,
         "findings": [{"kind": f.kind, "line": f.line, "name": f.name, "message": f.message, "suggestions": f.suggestions} for f in findings],
         "checked": checked,
@@ -201,7 +269,7 @@ def validate_code(code: str, module: Any) -> dict[str, Any]:
 
 def describe_name(name: str, module: Any) -> dict[str, Any]:
     """Referencia de ``unreal.<name>`` sacada del motor en marcha. @spec REQ-25"""
-    clean = (name or "").strip().removeprefix("unreal.")
+    clean = (name or "").strip().split("(")[0].strip().rstrip(".").removeprefix("unreal.")
     if not clean:
         return {"exists": False, "name": name, "message": "empty name"}
     current: Any = module
@@ -219,7 +287,7 @@ def describe_name(name: str, module: Any) -> dict[str, Any]:
             "exists": False,
             "name": ".".join(["unreal", *walked, missing]),
             "message": "not found in this engine version",
-            "suggestions": difflib.get_close_matches(missing, candidates, n=5),
+            "suggestions": _suggestions(missing, candidates, module, bool(walked))[:6],
         }
     else:
         doc = getattr(current, "__doc__", None) or ""
@@ -238,28 +306,67 @@ def describe_name(name: str, module: Any) -> dict[str, Any]:
     return result
 
 
+_ATTRIBUTE_ERROR = re.compile(r"'(\w+)' object has no attribute '(\w+)'")
+
+
+def runtime_hint(error: BaseException, module: Any) -> Optional[str]:
+    """Qué probar tras un ``AttributeError`` de ejecución, o ``None``.
+
+    La validación estática no ve el tipo de lo que DEVUELVE una llamada (``world.get_all_actors()``), así que ese error solo
+    aparece al ejecutar. El mensaje trae la clase y el miembro que faltan: se busca el miembro (o uno parecido) en los
+    subsistemas del editor y en la propia clase. Una eval con ``qwen3:8b`` repitió ``world.get_all_actors()`` hasta agotar
+    los pasos: el método existe como ``EditorActorSubsystem.get_all_level_actors``.
+    """
+    match = _ATTRIBUTE_ERROR.search(str(error)) if isinstance(error, AttributeError) else None
+    options: list[str] = []
+    if match:
+        cls, attr = match.groups()
+        owner = getattr(module, cls, None)
+        similar = difflib.get_close_matches(attr, [n for n in dir(owner) if not n.startswith("_")], n=3) if isinstance(owner, type) else []
+        options = [*subsystem_alternatives(attr, module, fuzzy=True), *[f"{cls}.{n}" for n in similar]]
+    return f"unreal.{match.group(1)} has no '{match.group(2)}'. Try: " + "; ".join(options) if match and options else None
+
+
+def _compile_with_tail(code: str) -> tuple[Any, Any]:
+    """Compila ``code`` separando la última expresión suelta (``static_mesh_actor_count``), si la hay.
+
+    ``exec`` no devuelve el valor de una expresión final, como sí hace una consola. Casi todos los modelos escriben así
+    el resultado, y el código se ejecutaba bien pero llegaba ``result: null``: el modelo creía que había fallado (eval
+    con ``qwen3:8b``, 2026-10-24). Devuelve (cuerpo, expresión final o ``None``).
+    """
+    tree = ast.parse(code, "<dbv-unreal-ai>")
+    tail = ast.Expression(tree.body.pop().value) if tree.body and isinstance(tree.body[-1], ast.Expr) else None
+    return compile(tree, "<dbv-unreal-ai>", "exec"), (compile(tail, "<dbv-unreal-ai>", "eval") if tail else None)
+
+
 def run_code(code: str, module: Any, transaction: Optional[Callable[[], Any]] = None) -> dict[str, Any]:
     """Ejecuta ``code`` capturando su salida. @spec REQ-06
 
-    El código se ejecuta en un espacio de nombres nuevo con ``unreal`` ya importado. Si
-    define una variable ``result`` serializable, se devuelve en ``result``. ``transaction``
-    crea el contexto de deshacer del editor (``unreal.ScopedEditorTransaction``).
+    El código se ejecuta en un espacio de nombres nuevo con ``unreal`` ya importado. Se devuelve en ``result`` la variable
+    ``result`` si el código la define, o el valor de su última expresión (como en una consola). ``transaction`` crea el
+    contexto de deshacer del editor (``unreal.ScopedEditorTransaction``).
     """
     if not isinstance(code, str) or not code.strip():
         return {"success": False, "stdout": "", "stderr": "", "warnings": [], "error": "empty code", "result": None}
     stdout, stderr = io.StringIO(), io.StringIO()
     namespace: dict[str, Any] = {"__name__": "__dbv_unreal_ai__", "unreal": module}
     error: Optional[str] = None
+    hint: Optional[str] = None
     caught: list[str] = []
     scope = transaction() if transaction else contextlib.nullcontext()
     with warnings.catch_warnings(record=True) as recorded:
         warnings.simplefilter("always")
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             try:
+                body, tail = _compile_with_tail(code)
                 with scope:
-                    exec(compile(code, "<dbv-unreal-ai>", "exec"), namespace)  # noqa: S102 — ejecutar es la herramienta (REQ-06, aprobada en REQ-12)
-            except Exception:  # noqa: BLE001 — frontera: cualquier fallo del código del usuario se devuelve como dato
+                    exec(body, namespace)  # noqa: S102 — ejecutar es la herramienta (REQ-06, aprobada en REQ-12)
+                    if tail is not None:
+                        last = eval(tail, namespace)  # noqa: S307 — la última expresión del mismo código
+                        namespace["result"] = namespace.get("result") if namespace.get("result") is not None else last
+            except Exception as failure:  # noqa: BLE001 — frontera: cualquier fallo del código del usuario se devuelve como dato
                 error = traceback.format_exc(limit=8)
+                hint = runtime_hint(failure, module)
         caught = [f"{w.category.__name__}: {w.message} (line {w.lineno})" for w in recorded]
     value = namespace.get("result")
     if value is not None and not isinstance(value, (str, int, float, bool, list, dict)):
@@ -270,6 +377,7 @@ def run_code(code: str, module: Any, transaction: Optional[Callable[[], Any]] = 
         "stderr": _clip(stderr.getvalue()),
         "warnings": caught[:50],
         "error": error,
+        "hint": hint,
         "result": value,
     }
     return result

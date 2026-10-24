@@ -40,7 +40,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
     def run_python(code: str) -> str:
         """Run Python inside the Unreal Editor (``unreal`` is already imported) inside one undoable editor transaction.
 
-        Validate it first with ``validate_python``. Set a variable named ``result`` to return a value.
+        Validate it first with ``validate_python``. To return a value, end the code with an expression (like a console) or set a variable named ``result``.
 
         Args:
             code: Python source code to execute.

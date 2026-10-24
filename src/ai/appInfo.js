@@ -14,4 +14,4 @@
 export const APP_NAME = 'DBV Unreal AI';
 
 /** Con qué trabaja el usuario, en inglés (las instrucciones a los modelos van en inglés). */
-export const DOCUMENT_KIND = 'Markdown (.md) documents';
+export const DOCUMENT_KIND = 'Unreal Engine 5.8 projects';
