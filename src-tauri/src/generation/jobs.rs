@@ -223,9 +223,10 @@ pub fn variant_name(name: &str, index: u32) -> String {
     }
 }
 
+/// Id único también entre procesos: la ventana y el `--mcp` de un agente pueden lanzar en el mismo milisegundo.
 fn new_id(index: u32) -> String {
     let millis = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    format!("job-{millis}-{index}")
+    format!("job-{millis}-{}-{index}", std::process::id())
 }
 
 fn publish(context: &JobContext, record: &JobRecord) {

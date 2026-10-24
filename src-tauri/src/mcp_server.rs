@@ -360,8 +360,12 @@ impl McpServer {
         if running || done { Ok(text) } else { Err(text) }
     }
 
+    fn tripo_key(&self) -> Result<String, String> {
+        (self.config.key)("tripo").ok_or_else(|| "there is no Tripo API key: add it in the DBV Unreal AI settings".to_string())
+    }
+
     fn client(&self) -> Result<TripoClient, String> {
-        let key = (self.config.key)("tripo").ok_or("there is no Tripo API key: add it in the DBV Unreal AI settings")?;
+        let key = self.tripo_key()?;
         Ok(match &self.config.tripo_base {
             Some(base) => TripoClient::with_base_url(&key, base),
             None => TripoClient::new(&key),
@@ -382,7 +386,7 @@ impl McpServer {
             let each = if launch.variants > 1 { format!(" ({} x {})", launch.variants, total / f64::from(launch.variants)) } else { String::new() };
             return Err(format!("not run: {} costs about {total} Tripo credits{each}. Tell the user and call again with confirm_cost=true only if they accept.", launch.operation.name));
         }
-        let client_key = (self.config.key)("tripo").ok_or("there is no Tripo API key: add it in the DBV Unreal AI settings")?;
+        let client_key = self.tripo_key()?;
         let settings = GenerationSettings::load(&self.config.config_dir);
         let spent = self.session_spent();
         if !within_budget(spent, total, settings.budget_credits) {

@@ -107,6 +107,27 @@ fn wait_for_task(client: &TripoClient, task_id: &str, cancel: &AtomicBool, polli
 /// Una tarea de Tripo sigue siendo `input` válido de otra durante este tiempo; pasado, se sube el fichero.
 const TASK_REUSE_SECS: u64 = 24 * 3600;
 
+/// Lo único que se sube a Tripo (`/v3/files`): imágenes y modelos, con sus topes. La ruta la escribe la IA y un
+/// documento malicioso podría hacerle pedir `~/.ssh/id_rsa` en una operación gratuita (sin tarjeta de coste):
+/// cualquier otra cosa se rechaza antes de leerla (hallazgo Crítico de la revisión de la v0.1.x).
+pub fn uploadable(path: &Path) -> Result<(), UnrealError> {
+    const IMAGES: [&str; 4] = ["png", "jpg", "jpeg", "webp"];
+    const MODELS: [&str; 5] = ["glb", "gltf", "fbx", "obj", "stl"];
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let limit = if IMAGES.contains(&ext.as_str()) {
+        20 * 1024 * 1024
+    } else if MODELS.contains(&ext.as_str()) {
+        150 * 1024 * 1024
+    } else {
+        return Err(UnrealError::Format(format!("{} no se sube a Tripo: solo imágenes (png, jpg, webp) y modelos (glb, gltf, fbx, obj, stl)", path.display())));
+    };
+    let size = std::fs::metadata(path).map(|m| m.len()).map_err(|error| crate::unreal::io_error(path, &error))?;
+    if size > limit {
+        return Err(UnrealError::Format(format!("{} pasa del tope de Tripo ({} MB)", path.display(), limit / 1024 / 1024)));
+    }
+    Ok(())
+}
+
 /// Traduce una fuente (`input`, `inputs`, `ref_image`) a lo que entiende Tripo: los `task_…`, `file_…` y enlaces
 /// pasan tal cual; un id de la biblioteca se convierte en su tarea (un rig, siempre: retarget la exige) o se sube
 /// su fichero; una ruta local se sube. Recorre listas y objetos (`inputs: [{"front": …}]`).
@@ -126,6 +147,7 @@ fn resolve_source(text: &str, client: &TripoClient, library: &Library, report: &
         return Ok(text.to_string());
     }
     let upload = |path: &Path, report: &mut dyn FnMut(JobEvent)| -> Result<String, UnrealError> {
+        uploadable(path)?;
         report(JobEvent::Note(format!("subiendo {} a Tripo…", path.display())));
         let token = client.upload(path)?;
         report(JobEvent::Note(format!("subido: {token}")));
@@ -145,8 +167,12 @@ fn resolve_source(text: &str, client: &TripoClient, library: &Library, report: &
 
 /// Nombre del fichero local de una salida (`model_url` → `model.glb`, `rendered_image_url` → `thumbnail.webp`).
 fn output_file(key: &str, url: &str, produces: &str) -> String {
+    // La imagen de una generación de imagen ES el resultado, no su vista previa: si se guardara como miniatura,
+    // el asset quedaría sin fichero y no serviría para `image_to_model`.
+    let is_image_result = matches!(produces, "image" | "multiview");
     let stem = match key.trim_end_matches("_url") {
-        "rendered_image" | "image" => "thumbnail".to_string(),
+        "rendered_image" => "thumbnail".to_string(),
+        "image" if !is_image_result => "thumbnail".to_string(),
         "pbr_model" | "base_model" => "model".to_string(),
         other => other.to_string(),
     };
@@ -300,6 +326,9 @@ mod tests {
         let library = Library::new(dir.path().join("library"));
         let mut stages = Vec::new();
         let mut sent = Vec::new();
+        assert_eq!(output_file("image_url", "https://x/a.png?sig=1", "image"), "image.png", "el resultado de una imagen no es su miniatura");
+        assert_eq!(output_file("rendered_image_url", "https://x/r.webp", "model"), "thumbnail.webp");
+        assert_eq!(output_file("model_url", "https://x/m", "model"), "model.glb");
         let entry = run_tripo_job(&client, &request(), "Cofre del tesoro", &library, &AtomicBool::new(false), quick(), &mut |event| match event {
             JobEvent::Stage(stage, _) => stages.push(stage.to_string()),
             JobEvent::Request { endpoint, body } => sent.push((endpoint.to_string(), body.clone())),
@@ -333,6 +362,28 @@ mod tests {
         let cancelled = run_tripo_job(&TripoClient::with_base_url("k", api2.trim_end_matches("/mcp")), &request(), "x", &library, &AtomicBool::new(true), quick(), &mut |_| {});
         assert!(cancelled.unwrap_err().to_string().contains("cancelado"));
         assert!(library.list().is_empty());
+    }
+
+    /// Una ruta que escribe la IA no puede subir a Tripo cualquier fichero del equipo. @spec REQ-32, REQ-33
+    #[test]
+    fn solo_se_suben_imagenes_y_modelos() {
+        let dir = tempfile::tempdir().unwrap();
+        let secret = dir.path().join("id_rsa");
+        std::fs::write(&secret, "PRIVATE KEY").unwrap();
+        let notes = dir.path().join("claves.txt");
+        std::fs::write(&notes, "x").unwrap();
+        let image = dir.path().join("barco.png");
+        std::fs::write(&image, [0x89, b'P']).unwrap();
+        assert!(uploadable(&secret).is_err());
+        assert!(uploadable(&notes).is_err());
+        assert!(uploadable(&image).is_ok());
+        // Y el trabajo entero falla ANTES de llamar a Tripo (no hay servidor: si llegara a conectar, sería otro error).
+        let library = Library::new(dir.path().join("library"));
+        let client = TripoClient::with_base_url("k", "http://127.0.0.1:1");
+        let operation = catalog::find("rig_check").unwrap();
+        let request = OperationRequest { operation, params: json!({ "input": secret.to_string_lossy() }), name: "x".into(), parent: None };
+        let error = run_operation(&client, &request, &library, &AtomicBool::new(false), quick(), &mut |_| {}).unwrap_err();
+        assert!(error.to_string().contains("no se sube a Tripo"), "{error}");
     }
 
     /// @spec RNF-04
