@@ -167,6 +167,26 @@ pub fn run() {
             unreal::commands::unreal_prepare_apply,
             #[cfg(desktop)]
             unreal::commands::unreal_prepare_revert,
+            #[cfg(desktop)]
+            generation::commands::generation_status,
+            #[cfg(desktop)]
+            generation::commands::generation_set_key,
+            #[cfg(desktop)]
+            generation::commands::generation_delete_key,
+            #[cfg(desktop)]
+            generation::commands::generation_set_budget,
+            #[cfg(desktop)]
+            generation::commands::generation_tripo_start,
+            #[cfg(desktop)]
+            generation::commands::generation_cancel,
+            #[cfg(desktop)]
+            generation::commands::library_list,
+            #[cfg(desktop)]
+            generation::commands::library_remove,
+            #[cfg(desktop)]
+            generation::commands::library_file_path,
+            #[cfg(desktop)]
+            generation::commands::library_record_sent,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

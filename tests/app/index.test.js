@@ -31,3 +31,29 @@ describe('index.html (RNF-01)', () => {
     expect(text).toMatch(/^<!doctype html>\s*<html\b/i);
   });
 });
+
+describe('barra superior', () => {
+  const html = readFileSync(path.join(src, 'index.html'), 'utf8');
+  const css = readFileSync(path.join(src, 'styles.css'), 'utf8');
+  const root = path.join(src, '..');
+
+  /** Los tres temas y el idioma se eligen directamente; la chincheta mantiene la ventana encima. */
+  it('ofrece Claro/Oscuro/Sepia, ES/EN y la chincheta de «siempre encima» @spec REQ-01', () => {
+    for (const theme of ['light', 'dark', 'sepia']) expect(html).toContain(`data-theme-choice="${theme}"`);
+    for (const lang of ['es', 'en']) expect(html).toContain(`data-lang-choice="${lang}"`);
+    expect(html).toContain('id="btn-pin"');
+    expect(css).toContain(":root[data-theme='sepia']");
+  });
+
+  it('la ventana tiene permiso para fijarse encima, o el botón fallaría en silencio', () => {
+    const capability = readFileSync(path.join(root, 'src-tauri', 'capabilities', 'default.json'), 'utf8');
+    expect(capability).toContain('core:window:allow-set-always-on-top');
+  });
+
+  it('los textos del tema y de la chincheta existen en español e inglés', () => {
+    const dictionary = readFileSync(path.join(src, 'i18n.js'), 'utf8');
+    for (const key of ['theme.light', 'theme.dark', 'theme.sepia', 'action.alwaysOnTop', 'action.alwaysOnTopActive', 'action.alwaysOnTopFailed']) {
+      expect(dictionary.split(`"${key}"`).length - 1, key).toBe(2);
+    }
+  });
+});

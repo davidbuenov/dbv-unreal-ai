@@ -32,8 +32,8 @@
 
 - **Imagen → modelo con Tripo (REQ-15):** no implementado; el endpoint v3 no está verificado (necesita una clave real).
 - **Generación real con Tripo:** solo probada contra un servidor simulado; falta una prueba con clave (≈30 créditos).
-- **Variante C++ del toolset (REQ-06, D8):** plantilla sin compilar; verificar con UBT en un proyecto con código.
-- **Preparar un proyecto real (REQ-05):** probado en proyectos temporales; falta el ciclo completo con un proyecto de plantilla de Epic y reinicio del editor.
+- **Variante C++ del toolset (REQ-06, D8):** el usuario la instaló desde la interfaz en su proyecto y el editor arrancó bien (2026-10-24); falta verificar en otro proyecto y en CI con UBT.
+- **Preparar un proyecto real (REQ-05):** el usuario lo ha ejecutado con su proyecto y el editor arrancó bien (2026-10-24); falta el ciclo con un proyecto de plantilla de Epic y la reversión.
 - **RNF-08:** hecho «Copiar diagnóstico»; falta el log local rotativo.
 - **REQ-25 (guías conceptuales):** la referencia sintáctica sale del motor; la búsqueda en las guías de MCPCLiente (D2) no está conectada.
 - **REQ-13 (captura del viewport para modelos multimodales):** las herramientas de Epic `CaptureViewport` se pueden llamar, pero la imagen no se pasa al modelo.

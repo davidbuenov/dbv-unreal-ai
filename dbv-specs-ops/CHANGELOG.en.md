@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Evals with a real model against the real editor (`npm run eval:unreal -- --model qwen3:8b --toolset unreal-plugin/DBVUnrealAI/Content/Python`): the same loop and tools as the app, with the ground truth computed by querying the editor. With `qwen3:8b`: 5/5 in three runs and zero modifications without approval.
 - When an API is deprecated, the validation and the API reference give the equivalent editor subsystem call (`unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()`), and the system prompt explains the Unreal 5.8 subsystem pattern.
 - Tagged tests for every v0.1 requirement (REQ-11 with MCP servers in `session/new`, REQ-13, RNF-01, RNF-05 with measured latency, RNF-06, RNF-07, RNF-IA.2).
+- Top bar like the other DBV apps: Light/Dark/**Sepia** selector (a full warm palette; there was only light and dark), ES/EN as a segmented selector and a **pin** that keeps the window on top of the others (per window and not persisted: a decision of the moment, not a preference).
 
 ### Fixed
 
@@ -49,3 +50,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Concrete hints when code fails, instead of similar names from a deprecated class: a missing member is looked up (also approximately) in the editor subsystems (`EditorLevelLibrary.get_current_level` → `LevelEditorSubsystem`); `get_editor_subsystem(unreal.EditorLevelLibrary)` is rejected before running; a runtime `AttributeError` (`world.get_all_actors()`) brings `EditorActorSubsystem.get_all_level_actors()`; the API reference accepts expressions with calls.
 - If the model writes Unreal Python in its reply without calling `unreal_run_python`, the app reminds it once (nothing had run and the user saw no approval card).
 - The Eval uses the same system prompt as the app (`--prompt full`) and can be compared with the short one (`--prompt domain`).
+- **Generate and the Library did not work in the real app:** the ten `generation_*` and `library_*` commands were written but not registered in `invoke_handler`. Saving the Tripo key said "Command generation_set_key not found", the key status never reached "Generate" (it said there was no key) and the Library listed nothing. Every test mocked the backend, so nobody saw it. They are now registered and a test cross-checks every command the interface uses against `invoke_handler`.
+- In a conversation with an agent (Claude Code…) the answer appeared at the very top and the steps and permission card below, even though they had arrived first: the user expected the answer after their approvals. If a step or card was already added after the bubble, the following text starts another bubble at the end.

@@ -84,6 +84,15 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     ok('al arrancar no se carga el asistente de IA (RNF-IA.1)', boot.ai.length === 0, JSON.stringify(boot.ai));
     await shot(h, 'project.png');
 
+    await h.eval(`document.querySelector('[data-theme-choice="sepia"]').click()`);
+    const sepia = await h.eval(`return { theme: document.documentElement.dataset.theme, bg: getComputedStyle(document.body).backgroundColor, pressed: document.querySelector('[data-theme-choice="sepia"]').getAttribute('aria-pressed') }`);
+    ok('el tema Sepia se aplica con su paleta cálida', sepia.theme === 'sepia' && sepia.bg === 'rgb(250, 243, 224)' && sepia.pressed === 'true', JSON.stringify(sepia));
+    await shot(h, 'sepia.png');
+    await h.eval(`document.querySelector('#btn-pin').click()`);
+    await h.sleep(200);
+    ok('la chincheta fija la ventana encima y lo indica', (await h.eval(`return document.querySelector('#btn-pin').getAttribute('aria-pressed')`)) === 'true');
+    await h.eval(`document.querySelector('[data-theme-choice="dark"]').click(); document.querySelector('#btn-pin').click()`);
+
     await h.eval(`document.querySelector('[data-view="library"]').click()`);
     await h.sleep(500);
     ok('la biblioteca enseña el asset', (await h.eval(`return document.querySelector('.asset-name')?.textContent`)) === 'Linterna');

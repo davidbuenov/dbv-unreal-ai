@@ -25,13 +25,18 @@
         <span class="spacer"></span>
         <span id="cost-pill" class="pill pill--cost hidden" data-i18n-title="gen.spentTitle" title="Créditos gastados en esta sesión"></span>
         <button id="btn-log" class="btn-icon" data-i18n-title="log.toggle" title="Registro de acciones">☰</button>
-        <button id="btn-theme" class="btn-icon" data-i18n-title="app.theme" title="Tema claro/oscuro">◐</button>
-        <label class="lang-picker" data-i18n-title="lang.label" title="Idioma">
-          <select id="lang-select" aria-label="Idioma">
-            <option value="es">ES</option>
-            <option value="en">EN</option>
-          </select>
-        </label>
+        <div id="theme-switcher" class="segmented" role="group" data-i18n-title="app.theme" title="Tema">
+          <button type="button" class="segmented-btn" data-theme-choice="light" aria-pressed="false"><span aria-hidden="true">☀</span> <span data-i18n="theme.light">Claro</span></button>
+          <button type="button" class="segmented-btn" data-theme-choice="dark" aria-pressed="false"><span aria-hidden="true">☾</span> <span data-i18n="theme.dark">Oscuro</span></button>
+          <button type="button" class="segmented-btn" data-theme-choice="sepia" aria-pressed="false"><span aria-hidden="true">❦</span> <span data-i18n="theme.sepia">Sepia</span></button>
+        </div>
+        <div id="lang-switcher" class="segmented" role="group" data-i18n-title="lang.label" title="Idioma">
+          <button type="button" class="segmented-btn" data-lang-choice="es" aria-pressed="false">ES</button>
+          <button type="button" class="segmented-btn" data-lang-choice="en" aria-pressed="false">EN</button>
+        </div>
+        <button id="btn-pin" class="btn-icon" data-i18n-title="action.alwaysOnTop" title="Mantener la ventana encima" aria-pressed="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 17v5M8.5 12.5L5 14l7-7 7 7-3.5-1.5M8.5 12.5L7 6l5-2 5 2-1.5 6.5M8.5 12.5h7"/></svg>
+        </button>
         <button id="btn-about" class="btn-icon" data-i18n-title="toolbar.about" title="Acerca de">ⓘ</button>
       </header>
 

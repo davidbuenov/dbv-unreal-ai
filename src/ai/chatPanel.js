@@ -259,7 +259,7 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
      * plegable de razonamiento, que solo se muestra y nunca se guarda.
      */
     addAssistant(initial = '', { toolsOffered = false } = {}) {
-      const bubble = el('div', 'ai-msg ai-msg--assistant md');
+      let bubble = el('div', 'ai-msg ai-msg--assistant md');
       const activityRow = el('div', 'ai-activity-row');
       const activityLine = el('div', 'ai-activity hidden');
       activityLine.setAttribute('role', 'status');
@@ -273,12 +273,24 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
       // La lista de mensajes es `aria-live`: el razonamiento no se anuncia, solo el indicador de estado.
       thinkBox.setAttribute('aria-live', 'off');
       thinkBox.append(thinkSummary, thinkText);
-      const body = el('div', 'ai-msg__body');
+      let body = el('div', 'ai-msg__body');
       bubble.append(activityRow, thinkBox, body);
       let text = initial;
+      // Con un agente un turno entero usa una sola burbuja: si tras ella se añadió un paso o una tarjeta de permiso,
+      // el texto que sigue empieza una burbuja nueva al final (orden cronológico) y `segmentStart` marca dónde.
+      let segmentStart = 0;
       if (text) renderInto(body, text);
       messages.append(bubble);
       scrollToEnd();
+      const continueAtEnd = () => {
+        if (!bubble.nextSibling) return;
+        if (!text.slice(segmentStart).trim() && thoughtStart === null) bubble.classList.add('hidden');
+        bubble = el('div', 'ai-msg ai-msg--assistant md');
+        body = el('div', 'ai-msg__body');
+        bubble.append(activityRow, body);
+        messages.append(bubble);
+        segmentStart = text.length;
+      };
 
       let activityKind = null;
       let thoughtStart = null;
@@ -314,8 +326,9 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
       const api = {
         text: () => text,
         append(chunk) {
+          continueAtEnd();
           text += chunk;
-          body.textContent = text;
+          body.textContent = text.slice(segmentStart);
           scrollToEnd();
         },
         /**
@@ -364,10 +377,12 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
           paintSummary();
         },
         finish(final = text) {
-          text = final;
+          // Con varios tramos, `final` (lo acumulado) no se vuelve a pintar entero: cada burbuja lleva el suyo.
+          if (segmentStart === 0) text = final;
           api.endThinking();
           api.activity(null);
-          if (text.trim()) renderInto(body, text);
+          const shown = text.slice(segmentStart);
+          if (shown.trim()) renderInto(body, shown);
           else if (thoughtStart === null) bubble.remove();
           scrollToEnd();
         },

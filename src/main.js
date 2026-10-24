@@ -13,6 +13,7 @@
   const { getVersion } = window.__TAURI__.app;
   const { t, applyTranslations, setLanguage, getLanguage } = window.dbvI18n;
   const THEME_KEY = 'dbv-unreal-ai:theme';
+  const THEMES = ['light', 'dark', 'sepia'];
   let app = null;
 
   function readTheme() {
@@ -23,11 +24,12 @@
       stored = null;
     }
     const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-    return stored === 'light' || stored === 'dark' ? stored : prefersLight ? 'light' : 'dark';
+    return THEMES.includes(stored) ? stored : prefersLight ? 'light' : 'dark';
   }
 
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
+    for (const button of document.querySelectorAll('[data-theme-choice]')) button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
     try {
       localStorage.setItem(THEME_KEY, theme);
     } catch {
@@ -35,18 +37,52 @@
     }
   }
 
+  // «Mantener encima»: por ventana y sin persistencia (una decisión del momento, no una preferencia). Solo se
+  // da por bueno lo que la ventana confirma: si falla, el botón no se queda diciendo que está fijada.
+  let pinned = false;
+
+  function showPin() {
+    const button = document.querySelector('#btn-pin');
+    const label = t(pinned ? 'action.alwaysOnTopActive' : 'action.alwaysOnTop');
+    button.setAttribute('aria-pressed', String(pinned));
+    button.setAttribute('data-i18n-title', pinned ? 'action.alwaysOnTopActive' : 'action.alwaysOnTop');
+    button.title = label;
+    button.setAttribute('aria-label', label);
+  }
+
+  async function togglePin() {
+    try {
+      await getCurrentWindow().setAlwaysOnTop(!pinned);
+      pinned = !pinned;
+    } catch (error) {
+      console.error('[pin]', error);
+      document.querySelector('#btn-pin').title = t('action.alwaysOnTopFailed');
+    }
+    showPin();
+  }
+
   window.addEventListener('DOMContentLoaded', async () => {
     applyTheme(readTheme());
-    const langSelect = document.querySelector('#lang-select');
-    langSelect.value = getLanguage();
-    langSelect.addEventListener('change', () => setLanguage(langSelect.value));
-    document.querySelector('#btn-theme').addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'));
+    for (const button of document.querySelectorAll('[data-theme-choice]')) button.addEventListener('click', () => applyTheme(button.dataset.themeChoice));
+    const markLanguage = () => {
+      for (const button of document.querySelectorAll('[data-lang-choice]')) button.setAttribute('aria-pressed', String(button.dataset.langChoice === getLanguage()));
+    };
+    for (const button of document.querySelectorAll('[data-lang-choice]')) {
+      button.addEventListener('click', () => {
+        setLanguage(button.dataset.langChoice);
+        markLanguage();
+        showPin();
+      });
+    }
+    markLanguage();
+    document.querySelector('#btn-pin').addEventListener('click', togglePin);
     document.querySelector('#btn-about').addEventListener('click', async () => {
       document.querySelector('#about-version').textContent = t('about.version', { version: await getVersion() });
       document.querySelector('#about-modal').classList.remove('hidden');
     });
     document.querySelector('#about-close').addEventListener('click', () => document.querySelector('#about-modal').classList.add('hidden'));
     applyTranslations();
+    showPin();
     try {
       const module = await import('./app/app.js');
       app = module.start();
