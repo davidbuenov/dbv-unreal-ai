@@ -10,7 +10,7 @@ The AI in **DBV Unreal AI** is **optional**. Without connecting one, the app det
 | --- | --- | --- | --- |
 | **A local AI** (Ollama, LM Studio, llama.cpp…) | The server application and at least one downloaded model | **No** | No (uses your own CPU/GPU and RAM) |
 | **Claude, ChatGPT, Gemini or OpenRouter with an API key** | An API key from that provider | Yes, to the selected provider | Yes, pay-per-use at provider rates |
-| **My monthly subscription** (Claude Pro/Max, ChatGPT Plus, Gemini, Copilot) | The official **installed agent** signed in: Claude Code, Codex, Gemini CLI or Copilot CLI | Yes, to the agent's service | Covered by your subscription |
+| **My monthly subscription** (Claude Pro/Max, ChatGPT Plus, Copilot) | The official **installed agent** signed in: Claude Code, Codex or Copilot CLI | Yes, to the agent's service | Covered by your subscription |
 
 > ⚠️ **A subscription is not an API key.** Subscribing to Claude Pro, ChatGPT Plus or Gemini does not give you an API key (those are bought and billed separately on developer consoles). With a subscription, the recommended route is the **installed agent** (third row).
 
@@ -67,8 +67,10 @@ If you have **Claude Pro/Max, ChatGPT Plus or GitHub Copilot**, you can connect 
 | --- | --- | --- |
 | **Claude Code** | Claude Code and [Node.js](https://nodejs.org) | `npx -y @agentclientprotocol/claude-agent-acp` |
 | **Codex (OpenAI)** | Codex and Node.js | `npx -y @zed-industries/codex-acp` |
-| **Gemini CLI** | Gemini CLI | `gemini --experimental-acp` |
+| **Gemini CLI** | Gemini CLI | `gemini --acp` |
 | **GitHub Copilot CLI** | GitHub Copilot CLI | `copilot --acp` |
+
+> ℹ️ **Gemini CLI and Antigravity CLI.** Since June 18, 2026, Google replaced Gemini CLI with [Antigravity CLI](https://antigravity.google/product/antigravity-cli) for free and Google One accounts (Gemini subscriptions included). Gemini CLI still works with paid access (API key, Vertex AI or Gemini Code Assist). The app cannot connect Antigravity CLI yet; in the meantime, with a free or Google One Google account, use Gemini with an API key (section 2).
 
 **Steps:**
 1. Install the agent and make sure it is in your `PATH`.

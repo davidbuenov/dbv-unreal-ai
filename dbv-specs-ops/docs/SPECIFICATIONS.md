@@ -125,7 +125,7 @@ Origen: el usuario probó la app con Claude Code y pidió un pirata. Hallazgos: 
 - **Dependencias Críticas:**
   - Plugins de UE 5.8 `ModelContextProtocol` (Experimental), `ToolsetRegistry`, `PythonScriptPlugin`, `EditorToolset` y, opcionales, `LiveCodingToolset`, `PCGToolset`, `NiagaraToolsets`, etc.
   - API de Tripo v3 y API de World Labs Marble (de pago, con clave).
-  - Agentes ACP: `@agentclientprotocol/claude-agent-acp`, `@zed-industries/codex-acp`, `gemini --experimental-acp`, `copilot --acp`.
+  - Agentes ACP: `@agentclientprotocol/claude-agent-acp`, `@zed-industries/codex-acp`, `gemini --acp` (solo accesos de pago desde el 2026-06-18; las cuentas gratuitas y de Google One pasaron a Antigravity CLI, cuyo servidor ACP es el binario aparte `agy_acp_server`, pendiente de integrar), `copilot --acp`.
 - **Oportunidades de Skills y MCPs:** el producto **es** un host MCP. Además:
   - el toolset DBV puede publicar *Agent Skills* de Unreal (instrucciones del tipo «cómo importar un asset de Tripo») con `toolset_registry.agent_skill`;
   - el modo `--mcp` (REQ-20, en v0.1) convierte la app en un servidor MCP reutilizable por cualquier agente; su empaquetado como **Agent Plugin 1.0.0** (`plugin.json` + `mcp.json` + `skills/`) para Claude Code, Gemini CLI, Cursor, etc. se valora en `/plan`.

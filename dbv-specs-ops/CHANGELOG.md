@@ -13,7 +13,14 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
-_Nada todavía._
+### Added
+
+- README: sección «Descárgalo e instálalo» para Windows, macOS y Linux con los instaladores de la Release, cómo pasar los avisos de SmartScreen y Gatekeeper, y los canales previstos (Homebrew, Microsoft Store, Uptodown).
+
+### Fixed
+
+- «Cómo instalarlo» en «Conectar una IA» no abría el navegador: llamaba a `shell.open`, de un plugin que la app no carga, y el respaldo `window.open` no hace nada dentro de la WebView. Ahora usa `opener.openUrl`.
+- Gemini CLI se lanza con `--acp` (el flag actual) en vez de `--experimental-acp`. El asistente de conexión y la guía de IA ya no lo recomiendan para suscripciones: desde el 18 de junio de 2026, Google lo sustituyó por Antigravity CLI para las cuentas gratuitas y las de Google One, y solo sigue sirviendo con accesos de pago.
 
 ## [0.1.0] - 2026-10-24
 

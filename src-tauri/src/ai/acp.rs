@@ -67,7 +67,8 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
     let (program, args): (PathBuf, Vec<String>) = match spec.id.as_str() {
         "claude" => (need("npx")?, vec!["-y".into(), CLAUDE_ADAPTER.into()]),
         "codex" => (need("npx")?, vec!["-y".into(), CODEX_ADAPTER.into()]),
-        "gemini" => (need("gemini")?, vec!["--experimental-acp".into()]),
+        // `--acp` es el flag actual (registro ACP, Gemini CLI 0.65); `--experimental-acp` era el de las primeras versiones.
+        "gemini" => (need("gemini")?, vec!["--acp".into()]),
         "copilot" => (need("copilot")?, vec!["--acp".into()]),
         other => return Err(AiError::Config(format!("agente desconocido: {other}"))),
     };

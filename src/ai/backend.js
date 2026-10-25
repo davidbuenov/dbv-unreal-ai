@@ -31,14 +31,22 @@ export function on(eventName, handler) {
   return tauri().event.listen(eventName, (event) => handler(event.payload));
 }
 
-/** Abre una dirección en el navegador del sistema. */
-export const openExternalUrl = async (url) => {
+/**
+ * Abre una dirección en el navegador del sistema con el plugin `opener` (el
+ * único cargado: `shell` no existe y `window.open` no hace nada en la WebView).
+ * Fuera de Tauri (navegador de desarrollo) recurre a `window.open`.
+ */
+export async function openExternalUrl(url) {
+  const opener = tauri()?.opener;
+  let result = { ok: true, value: undefined };
   try {
-    await tauri().shell.open(url);
-  } catch {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    if (opener) await opener.openUrl(url);
+    else window.open(url, '_blank', 'noopener,noreferrer');
+  } catch (error) {
+    result = { ok: false, error: normalizeError(error) };
   }
-};
+  return result;
+}
 
 // ─── Conexiones y modelos ────────────────────────────────────────────
 export const aiConnections = () => call('ai_connections');

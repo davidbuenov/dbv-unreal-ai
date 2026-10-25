@@ -39,6 +39,15 @@
 - [x] **`/code-simplify` v0.1.x** — 1 Crítico (subida a Tripo de cualquier fichero local con una ruta escrita por la IA) y 2 Importantes resueltos, 3 Nits anotados (ver CHANGELOG); lint sin errores.
 - [x] **`/ship` v0.1.0** (2026-10-24) — versión elegida por el usuario, `walkthrough.md`, `docs/IA.md`/`IA.en.md`, CHANGELOG publicado, tag `v0.1.0`.
 
+## Próxima versión — hallazgos de la prueba de la v0.1.0
+
+- [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).
+- [x] Gemini CLI: flag `--acp` y avisos de que solo sirve con accesos de pago desde el 2026-06-18 (2026-10-25).
+- [x] README (ES/EN): sección «Descárgalo e instálalo» por sistema operativo con los instaladores de la Release, avisos de SmartScreen y Gatekeeper, y canales «próximamente» (2026-10-25).
+- [ ] **Canales de distribución** (anunciados como «próximamente» en el README): tap de Homebrew `davidbuenov/homebrew-dbv-unreal-ai` que se actualice solo en cada Release (como el de dbv-md-reader); Microsoft Store (MSIX firmado por la Store, ver `dbv-specs-ops/docs/MARKETPLACE_PUBLISHING.md`); ficha en Uptodown para Windows y macOS. Al publicarlos, cambiar la sección «Próximamente» del README.
+- [ ] **Actualizaciones:** la app no se actualiza sola (`includeUpdaterJson: false`, sin plugin updater). Decidir si se añade el updater de Tauri para los instaladores de Releases o se delega en Store/Homebrew.
+- [ ] **Antigravity CLI como quinto agente** (pendiente de `/spec` + `/plan`, requisito nuevo). Datos del 2026-10-25: el CLI es `agy` (instalador por script, no npm) y **no** tiene modo ACP (issue #31 de `google-antigravity/antigravity-cli`, abierta). El ACP oficial es un binario aparte de Google, `agy_acp_server`, publicado en el registro ACP como `antigravity-acp` (v1.4.3, por plataforma, con SHA-256; Linux lleva `--uid=`). Decidir: descargarlo y verificarlo desde la app o pedir su ruta; arranque en frío de ~16 s en Windows (`AGY_ACP_DEFAULT_MODEL` lo reduce); `session/load` no reproduce el historial.
+
 
 ## Deuda Técnica
 *Mejoras detectadas fuera del foco de la tarea actual, para abordarlas después.*

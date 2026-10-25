@@ -10,7 +10,7 @@ La IA en **DBV Unreal AI** es **opcional**. Sin conectar ninguna, la aplicación
 | --- | --- | --- | --- |
 | **Una IA local** (Ollama, LM Studio, llama.cpp…) | El programa servidor y al menos un modelo descargado | **No** | No (usa tu CPU/GPU y memoria) |
 | **Claude, ChatGPT, Gemini u OpenRouter con clave de API** | Una clave de API del proveedor | Sí, al proveedor elegido | Sí, por uso, según sus tarifas |
-| **Mi suscripción mensual** (Claude Pro/Max, ChatGPT Plus, Gemini, Copilot) | El **agente oficial** instalado y con sesión iniciada: Claude Code, Codex, Gemini CLI o GitHub Copilot CLI | Sí, al servicio del agente | Cubierto por tu suscripción |
+| **Mi suscripción mensual** (Claude Pro/Max, ChatGPT Plus, Copilot) | El **agente oficial** instalado y con sesión iniciada: Claude Code, Codex o GitHub Copilot CLI | Sí, al servicio del agente | Cubierto por tu suscripción |
 
 > ⚠️ **Una suscripción no es una clave de API.** Pagar Claude Pro, ChatGPT Plus o Gemini no te da una clave de API (se contratan y facturan aparte, en las consolas de desarrollador). Si tienes una suscripción, la vía recomendada es el **agente instalado** (tercera fila).
 
@@ -67,8 +67,10 @@ Si tienes **Claude Pro/Max, ChatGPT Plus o GitHub Copilot**, puedes conectar su 
 | --- | --- | --- |
 | **Claude Code** | Claude Code y [Node.js](https://nodejs.org) | `npx -y @agentclientprotocol/claude-agent-acp` |
 | **Codex (OpenAI)** | Codex y Node.js | `npx -y @zed-industries/codex-acp` |
-| **Gemini CLI** | Gemini CLI | `gemini --experimental-acp` |
+| **Gemini CLI** | Gemini CLI | `gemini --acp` |
 | **GitHub Copilot CLI** | GitHub Copilot CLI | `copilot --acp` |
+
+> ℹ️ **Gemini CLI y Antigravity CLI.** Desde el 18 de junio de 2026, Google sustituyó Gemini CLI por [Antigravity CLI](https://antigravity.google/product/antigravity-cli) para las cuentas gratuitas y las de Google One (suscripciones de Gemini incluidas). Gemini CLI sigue funcionando con accesos de pago (clave de API, Vertex AI o Gemini Code Assist). La app todavía no conecta Antigravity CLI; mientras tanto, con una cuenta de Google gratuita o de Google One usa Gemini con clave de API (sección 2).
 
 **Pasos:**
 1. Instala el agente y comprueba que está en el `PATH` de tu terminal.

@@ -8,11 +8,16 @@
 
 ## 📑 Table of Contents
 
+- [Download and install](#install)
+  - [Windows](#install-windows)
+  - [macOS](#install-macos)
+  - [Linux](#install-linux)
+  - [Coming soon: Homebrew, Microsoft Store and Uptodown](#install-soon)
 - [About](#about)
 - [Status](#status)
 - [How it works](#how)
 - [Requirements](#requirements)
-- [How to run](#usage)
+- [For developers](#usage)
 - [Use it from other agents (MCP)](#mcp)
 - [Which AI to use](./docs/IA.en.md)
 - [Tests](#tests)
@@ -22,11 +27,67 @@
 
 ---
 
+<a name="install"></a>
+
+## 🚀 Download and install
+
+**You don't need Rust, Node.js or any programming tool.** Download the installer for your system from the **[latest GitHub Release](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)**: it is built automatically for every version for Windows, macOS (Intel and Apple Silicon) and Linux.
+
+You only need **Unreal Engine 5.8** to work on a project and, to chat, an AI (local, with an API key or your subscription): the [`docs/IA.en.md`](./docs/IA.en.md) guide explains each option. A [Tripo](https://www.tripo3d.ai) key is optional and only needed to generate 3D models.
+
+> **Updates:** the app does not update itself yet. To move to a new version, download and run the new installer from Releases; your library, connections and keys are kept.
+
+<a name="install-windows"></a>
+
+### 🪟 Windows
+
+**[⬇️ Download from Releases](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)** one of these two (Windows 10 and 11, 64-bit):
+
+- **`DBV.Unreal.AI_x.y.z_x64-setup.exe`** — the recommended one: double-click and you're done.
+- **`DBV.Unreal.AI_x.y.z_x64_en-US.msi`** — the same program as an MSI package, meant for managed installs (companies, classrooms).
+
+The installer is not signed with a code-signing certificate, so the first time Windows SmartScreen warns that "Windows protected your PC". Click **More info → Run anyway**. The UI engine (WebView2) already ships with Windows 10 and 11; if it were missing, the installer downloads it.
+
+<a name="install-macos"></a>
+
+### 🍎 macOS
+
+**[⬇️ Download `DBV.Unreal.AI_x.y.z_universal.dmg` from Releases](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)** — a single universal binary for Intel and Apple Silicon. Open it and drag **DBV Unreal AI** to **Applications**.
+
+It is neither signed nor notarized (that requires the paid Apple Developer Program), so macOS blocks it the first time ("cannot be opened because the developer cannot be verified"). To open it:
+
+- Right-click (or `Ctrl` + click) **DBV Unreal AI** in Applications → **Open** → confirm in the dialog. Only needed the first time.
+- Or, from the Terminal: `xattr -cr "/Applications/DBV Unreal AI.app"` before opening it.
+
+The `DBV.Unreal.AI_universal.app.tar.gz` file in the Release is the same app compressed; the `.dmg` is all you need to install.
+
+<a name="install-linux"></a>
+
+### 🐧 Linux
+
+**[⬇️ Download from Releases](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)** the package for your distribution (x86_64):
+
+- **`.deb` (Debian, Ubuntu, Linux Mint and derivatives):** `sudo apt install ./DBV.Unreal.AI_x.y.z_amd64.deb` (or double-click it in the file manager). It also installs any missing dependencies, such as WebKitGTK.
+- **`.rpm` (Fedora, openSUSE, RHEL and derivatives):** `sudo dnf install ./DBV.Unreal.AI-x.y.z-1.x86_64.rpm` (on openSUSE, `sudo zypper install`).
+- **`.AppImage` (any distribution):** make it executable (`chmod +x DBV.Unreal.AI_x.y.z_amd64.AppImage`) and run it. It is portable, no installation needed.
+
+<a name="install-soon"></a>
+
+### 🔜 Coming soon
+
+These channels are not available yet; they will arrive in an upcoming version. In the meantime, use the Releases installers above.
+
+- **🍺 Homebrew (macOS):** `brew install --cask` from a dedicated tap that updates itself with every Release.
+- **🛒 Microsoft Store (Windows):** a package signed by the Store, with no SmartScreen warning and automatic updates.
+- **🟢 Uptodown:** direct download of the latest version for Windows and macOS.
+
+---
+
 <a name="about"></a>
 
 ## 📌 About
 
-**DBV Unreal AI** (`dbv-unreal-ai`) is a native desktop application (Windows, macOS and Linux) that talks with you and acts on the Unreal Engine 5.8 project you have open. It uses the AI you prefer —a local model (Ollama, LM Studio), a cloud API or your Claude Code, Codex, Gemini CLI or Copilot subscription— and connects it to the editor through its built-in MCP server. If the project is not ready yet, the app prepares it for you. It generates 3D models with Tripo, keeps them in a local library and brings them into the editor with one click.
+**DBV Unreal AI** (`dbv-unreal-ai`) is a native desktop application (Windows, macOS and Linux) that talks with you and acts on the Unreal Engine 5.8 project you have open. It uses the AI you prefer —a local model (Ollama, LM Studio), a cloud API or your Claude Code, Codex or Copilot subscription (Gemini CLI, with paid access)— and connects it to the editor through its built-in MCP server. If the project is not ready yet, the app prepares it for you. It generates 3D models with Tripo, keeps them in a local library and brings them into the editor with one click.
 
 **Built with:** Rust, Tauri v2, bundler-free HTML/CSS/JavaScript, Unreal Engine 5.8 (MCP + Python).
 
@@ -74,14 +135,16 @@ Roadmap in [`SPECIFICATIONS.md`](./dbv-specs-ops/docs/SPECIFICATIONS.md).
 ## 🧰 Requirements
 
 - **Unreal Engine 5.8** (installed with the Epic launcher or built from source).
-- For development: [Rust](https://rustup.rs) (stable), Node.js 20+ and the Tauri v2 system dependencies (WebView2 on Windows, WebKitGTK on Linux). Python 3.10+ for the toolset tests.
+- For development (not needed to use the [Releases](#install) installers): [Rust](https://rustup.rs) (stable), Node.js 20+ and the Tauri v2 system dependencies (WebView2 on Windows, WebKitGTK on Linux). Python 3.10+ for the toolset tests.
 - Optional: an AI (Ollama/LM Studio, an API key or a subscription agent) and a [Tripo](https://www.tripo3d.ai) API key to generate models. Keys are stored in the system credential store, never in files.
 
 ---
 
 <a name="usage"></a>
 
-## ▶️ How to run
+## 🧑‍💻 For developers
+
+To run the app from source (if you only want to use it, the [installer](#install) is easier):
 
 ```bash
 npm install
@@ -94,7 +157,7 @@ Installers (in `src-tauri/target/release/bundle/`):
 npm run tauri build
 ```
 
-Pushing a `vX.Y.Z` tag makes GitHub Actions build Windows, macOS (universal) and Linux and attach them to a draft Release.
+Pushing a `vX.Y.Z` tag makes GitHub Actions build Windows, macOS (universal) and Linux and attach them to a draft Release, which is published by hand.
 
 ---
 
