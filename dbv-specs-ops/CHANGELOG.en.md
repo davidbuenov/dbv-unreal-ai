@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- DBV Unreal AI toolset 0.3.0 (Python variant): `play_animation` with Tripo skeletons and `place_asset` on the floor. "Prepare" updates it; the C++ variant is unchanged (no recompilation needed).
 - The Project view went blank when a project was selected (the memory card used `dirName` without importing it). New test that renders the view with a selected project.
 - "How to install" in "Connect an AI" did not open the browser: it called `shell.open`, from a plugin the app does not load, and the `window.open` fallback does nothing inside the WebView. It now uses `opener.openUrl`.
 - Gemini CLI is launched with `--acp` (the current flag) instead of `--experimental-acp`. The connection assistant and the AI guide no longer recommend it for subscriptions: since June 18, 2026, Google replaced it with Antigravity CLI for free and Google One accounts, and it only keeps working with paid access.

@@ -21,7 +21,7 @@ import unreal
 from dbv_unreal_ai import analysis
 
 #: Versión del contrato de herramientas (la app la compara con la que trae).
-TOOLSET_VERSION = "0.2.0"
+TOOLSET_VERSION = "0.3.0"
 
 
 def _json(value: Any) -> str:

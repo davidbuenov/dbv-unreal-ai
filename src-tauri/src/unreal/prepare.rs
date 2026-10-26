@@ -437,7 +437,7 @@ mod tests {
         for expected in ["plugin:ModelContextProtocol", "plugin:EditorToolset", "autoStart", "toolset"] {
             assert!(failing.contains(&expected), "{expected} debería fallar: {failing:?}");
         }
-        assert_eq!(report.toolset_bundled, "0.2.0");
+        assert_eq!(report.toolset_bundled, "0.3.0");
     }
 
     /// @spec REQ-04, REQ-05
