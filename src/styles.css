@@ -291,6 +291,9 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .memory-save { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 12px; margin: 8px 0; display: grid; gap: 6px; }
 .memory-save__entry { width: 100%; resize: vertical; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .memory-save--discard { border-left-color: var(--unreal-offline); }
+/* Captura del viewport en la conversación (REQ-13, DESIGN.md v0.2): miniatura de 160 px. */
+.capture-thumb { width: 160px; height: auto; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; margin: 4px 0; }
+.capture-full { max-width: 100%; height: auto; display: block; }
 /* Vista Plan (REQ-36, DESIGN.md v0.2). */
 .plan-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .plan-task { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; }

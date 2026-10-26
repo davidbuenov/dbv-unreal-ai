@@ -27,6 +27,7 @@ export const unrealReadiness = (path) => call('unreal_readiness', { path });
 export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_plan', { path, variant, port: port ?? null });
 export const unrealPrepareApply = (path, variant, port) => call('unreal_prepare_apply', { path, variant, port: port ?? null });
 export const unrealPrepareRevert = (path, backup) => call('unreal_prepare_revert', { path, backup });
+export const unrealCaptureViewport = (endpoint, annotate) => call('unreal_capture_viewport', { endpoint, annotate: Boolean(annotate) });
 export const appMcpCommand = (port, project = null) => call('app_mcp_command', { port, project });
 /** Imagen (base64) o documento que el usuario eligió para adjuntar a la conversación (REQ-32). */
 export const aiReadAttachment = (path) => call('ai_read_attachment', { path });

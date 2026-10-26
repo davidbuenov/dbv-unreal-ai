@@ -45,7 +45,7 @@
 - [x] **`/plan` v0.2** (2026-10-26) — Architect Review, D13–D21, REJECTED-02..04. **Aprobado por el usuario el 2026-10-26** con dos cambios: fuera el actualizador (REQ-39, D21, S30) y la clave de World Labs (llavero + Ajustes) va antes del spike de S18. Gasto de Tripo autorizado para S18.
 - [ ] **S18 · Verificación con el usuario y spikes en vivo** — *con el usuario delante (gasto y editor abierto)*:
   - [x] Tripo real (2026-10-26): texto, imagen (con subida), rig, animación; coste real = estimación (105 créditos). Arreglados: `model` obligatorio, trabajos huérfanos reanudados.
-  - [x] Personajes S17 en UE 5.8.4 (variante C++ recompilada con `play_animation`): Skeletal Mesh + Animation Sequence importados; arreglados el esqueleto del clip (compatible) y la colocación en el suelo. **Falta que el usuario vea el baile con el editor en primer plano** (sin foco no hay tick).
+  - [x] Personajes S17 en UE 5.8.4 (variante C++ recompilada con `play_animation`): Skeletal Mesh + Animation Sequence importados; arreglados el esqueleto del clip (compatible) y la colocación en el suelo. Verificado después en una captura: el pirata baila cuando el editor hace tick.
   - [x] `CaptureViewport` (PNG base64, exige los tres parámetros) y contador de deshacer (deshacer diferido al siguiente tick).
   - [ ] Un mundo `marble-1.0-draft` (230 créditos) importado — necesita la clave de World Labs (S27, primero el sitio para guardarla).
   - [ ] Plugin de splats (P-09).
@@ -56,7 +56,7 @@
 - [x] **S22 · Tareas comprobadas** (REQ-37) — criterios, `check_task` (toolset 0.3.0 o `RunPython` con código fijo).
 - [x] **S23 · Memoria en el MCP propio** (hecho a la vez que S20–S22: las cinco herramientas y el test de paridad) (REQ-38) — cinco herramientas, test de paridad.
 - [ ] **S24 · Varias instancias** (REQ-07) — `state.connections`, selector, identidad por sesión, puerto libre.
-- [ ] **S25 · La IA ve el viewport** (REQ-13) — captura como imagen (D16).
+- [x] **S25 · La IA ve el viewport** (REQ-13) — captura como imagen (D16).
 - [ ] **S26 · Deshacer un turno** (REQ-40) — contadores, `undo_turn`, borrar importados con tarjeta.
 - [ ] **S27 · World Labs: generación** (REQ-18) — cliente, trabajos, biblioteca «mundo», `generate_world`, `export_world_mesh`, saldo.
 - [ ] **S28 · World Labs → Unreal** (REQ-18) — `import_world`, escala y suelo, cielo y splats según S18.

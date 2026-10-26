@@ -14,7 +14,7 @@
 import { registerTranslations, t } from '../ai/i18nBridge.js';
 import { createApprovalCard } from '../unreal/approvalCard.js';
 import { createPermissionMemory } from '../unreal/permissions.js';
-import { createUnrealTools, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
+import { createUnrealTools, describeCapture, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
 import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import { createChatJobs } from '../generation/chatJobs.js';
 import { createGenerationTools } from '../generation/generationTools.js';
@@ -228,6 +228,10 @@ export function start() {
       listToolsets: () => api.unrealListToolsets(endpoint()),
       describeToolset: (toolset) => api.unrealDescribeToolset(endpoint(), toolset),
       callTool: (toolset, tool, args, timeout) => api.unrealCallTool(endpoint(), toolset, tool, args, timeout),
+      captureViewport: async (annotate) => {
+        const captured = await api.unrealCaptureViewport(endpoint(), annotate);
+        return captured.ok ? { ok: true, value: { ...captured.value, text: describeCapture(captured.value) } } : captured;
+      },
     };
   }
 
@@ -272,14 +276,21 @@ export function start() {
       // Memoria del proyecto (REQ-34, REQ-35): ficha de contexto y botón «Recordar».
       contextNotes: () => projectMemory.contextNotes(),
       rememberRequest: (language) => rememberRequest(language),
-      extraTools: ({ panel, conversationId }) => {
+      extraTools: ({ panel, conversationId, vision = false }) => {
         if (!memories.has(conversationId)) memories.set(conversationId, createPermissionMemory());
         const askApproval = (request) => {
           const card = createApprovalCard(request);
           panel.addNode(card.node);
           return card.choice;
         };
-        const unreal = state.connection?.status === 'online' ? createUnrealTools({ backend: unrealBackend(), askApproval, onAction: log.add, permissions: memories.get(conversationId) }) : [];
+        // La captura se ve en la conversación como miniatura (pulsar la abre a tamaño completo).
+        const showImage = (capture) => {
+          const src = `data:${capture.mime};base64,${capture.base64}`;
+          const thumb = el('img', { className: 'capture-thumb', attrs: { src, alt: t('unreal.capture'), title: t('unreal.capture') } });
+          thumb.addEventListener('click', () => openModal([el('img', { className: 'capture-full', attrs: { src, alt: t('unreal.capture') } })], { wide: true }));
+          panel.addNode(thumb);
+        };
+        const unreal = state.connection?.status === 'online' ? createUnrealTools({ backend: unrealBackend(), askApproval, onAction: log.add, permissions: memories.get(conversationId), vision, showImage }) : [];
         const generation = createGenerationTools({
           specs: generationSpecs,
           status: api.generationStatus,

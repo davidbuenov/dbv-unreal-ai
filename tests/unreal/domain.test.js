@@ -13,6 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { agentPreamble, systemPrompt } from '../../src/ai/context.js';
+import { memoryPrompt } from '../../src/memory/memory.js';
 import { createTools } from '../../src/ai/tools.js';
 import { AI_TRANSLATIONS } from '../../src/ai/translations.js';
 import { unrealPrompt } from '../../src/unreal/unrealTools.js';
@@ -30,8 +31,12 @@ describe('el prompt de un agente (REQ-11)', () => {
     const rust = ['mcp_server.rs', path.join('generation', 'tools.rs')].map((file) => readFileSync(path.join(root, 'src-tauri', 'src', file), 'utf8')).join('\n');
     const published = [...new Set([...rust.matchAll(/tool\(\s*"([a-z_0-9]+)"/g)].map((m) => m[1]))];
     expect(published).toEqual(expect.arrayContaining(['rig_model', 'animate_model', 'tripo_run', 'tripo_balance', 'generation_jobs']));
-    const prompt = agentPreamble({ lang: 'es', domain: unrealPrompt({ projectName: 'DBVMCPFirst', engineVersion: '5.8.2', agent: true }) });
-    for (const name of published) expect(prompt, name).toContain(name);
+    // Las de la memoria del proyecto (`project_memory/tools.rs`) las presenta su propio prompt cuando hay memoria (REQ-38).
+    const memoryRust = readFileSync(path.join(root, 'src-tauri', 'src', 'project_memory', 'tools.rs'), 'utf8');
+    const memoryTools = [...new Set([...memoryRust.matchAll(/tool\(\s*"([a-z_0-9]+)"/g)].map((m) => m[1]))];
+    expect(memoryTools).toEqual(expect.arrayContaining(['project_memory_read', 'project_memory_propose', 'project_tasks_list', 'project_tasks_propose', 'project_task_update']));
+    const prompt = agentPreamble({ lang: 'es', domain: `${unrealPrompt({ projectName: 'DBVMCPFirst', engineVersion: '5.8.2', agent: true })}\n\n${memoryPrompt({ active: true, agent: true })}` });
+    for (const name of [...published, ...memoryTools]) expect(prompt, name).toContain(name);
     expect(prompt).toContain('dbv-unreal-ai');
     expect(prompt).toContain('/Game/DBV');
     expect(prompt).toContain('confirm_cost=true');

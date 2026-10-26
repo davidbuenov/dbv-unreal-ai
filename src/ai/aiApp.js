@@ -597,7 +597,8 @@ export function createAiApp(deps) {
       const proposal = createProposal();
       const check = makeChecker();
       // Herramientas propias de la app (Unreal, generación, biblioteca): las aporta el host.
-      const extra = host.extraTools?.({ panel, conversationId: current.id }) ?? [];
+      // `vision`: el modelo ve imágenes (p. ej. la captura del viewport, REQ-13).
+      const extra = host.extraTools?.({ panel, conversationId: current.id, vision: seen }) ?? [];
       const toolset = [...createTools({
         listFiles: async () => files,
         readText,

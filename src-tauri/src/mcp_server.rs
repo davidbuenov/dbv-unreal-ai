@@ -128,6 +128,12 @@ pub fn tool_specs() -> Vec<Value> {
             json!({ "code": { "type": "string" } }),
             json!(["code"]),
         ),
+        tool(
+            "unreal_capture_viewport",
+            "Look at the level viewport of the Unreal Editor: returns an image (and the camera) to check what you placed or changed. With annotate=true it draws a ground grid (2 m cells, coordinates in meters) and labels the nearest actors, useful to place things. Read-only.",
+            json!({ "annotate": { "type": "boolean" } }),
+            json!([]),
+        ),
         tool("unreal_describe_python_api", "Exact reference of an `unreal` Python API name in this engine version.", json!({ "name": { "type": "string" } }), json!(["name"])),
         tool(
             "library_list",
@@ -483,10 +489,19 @@ impl McpServer {
             "tools/call" => {
                 let name = params.get("name").and_then(Value::as_str).unwrap_or("").to_string();
                 let arguments = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
-                Ok(match self.call(&name, &arguments) {
-                    Ok(text) => text_result(text, false),
-                    Err(text) => text_result(text, true),
-                })
+                // La captura es la única que devuelve una imagen (contenido `image` de MCP, REQ-13).
+                let result = if name == "unreal_capture_viewport" {
+                    match self.editor(|s| crate::unreal::capture::capture(s, arguments.get("annotate").and_then(Value::as_bool).unwrap_or(false))) {
+                        Ok(capture) => json!({ "content": [{ "type": "image", "data": capture.base64, "mimeType": capture.mime }, { "type": "text", "text": crate::unreal::capture::describe(&capture) }], "isError": false }),
+                        Err(error) => text_result(error.to_string(), true),
+                    }
+                } else {
+                    match self.call(&name, &arguments) {
+                        Ok(text) => text_result(text, false),
+                        Err(text) => text_result(text, true),
+                    }
+                };
+                Ok(result)
             }
             other => Err((-32601, format!("method not found: {other}"))),
         };

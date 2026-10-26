@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { classifyTool, createPermissionMemory, firstWord } from '../../src/unreal/permissions.js';
-import { createUnrealTools, formatResult, isDbvToolset, pythonNudge, resolveToolset, unrealPrompt } from '../../src/unreal/unrealTools.js';
+import { createUnrealTools, describeCapture, formatResult, isDbvToolset, pythonNudge, resolveToolset, unrealPrompt } from '../../src/unreal/unrealTools.js';
 
 const TOOLSETS = [
   { name: 'ToolsetRegistry.AgentSkillToolset', description: 'skills' },
@@ -226,5 +226,27 @@ describe('contexto del proyecto y del editor (REQ-13)', () => {
     const described = { 'DBVMCPFirst.MyCustomSceneToolset': { name: 'DBVMCPFirst.MyCustomSceneToolset', tools: [{ name: 'RunPython', description: '', inputSchema: {} }, { name: 'GetActors', description: '', inputSchema: {} }] } };
     const backend = fakeBackend({ toolsets, described, responses: { GetActors: { text: '', isError: false, value: { actors: [] } } } });
     expect(await tool(createUnrealTools({ backend, askApproval: vi.fn() }), 'unreal_scene_summary').run({})).toBe('{"actors":[]}');
+  });
+});
+
+describe('la IA ve el viewport (REQ-13)', () => {
+  const capture = { mime: 'image/jpeg', base64: 'AAAA', width: 1568, height: 498, info: { cameraFOV: 90, labeledActors: [{ label: 'Pirata' }] }, text: 'Viewport capture (1568×498 px).' };
+
+  it('solo se ofrece a un modelo con visión @spec REQ-13', () => {
+    const backend = { ...fakeBackend(), captureViewport: vi.fn() };
+    expect(tool(createUnrealTools({ backend, askApproval: vi.fn() }), 'unreal_capture_viewport')).toBeUndefined();
+    expect(tool(createUnrealTools({ backend, askApproval: vi.fn(), vision: true }), 'unreal_capture_viewport')).toBeDefined();
+  });
+
+  it('devuelve la imagen aparte del texto, la enseña y no pide permiso @spec REQ-13', async () => {
+    const backend = { ...fakeBackend(), captureViewport: vi.fn(async () => ({ ok: true, value: capture })) };
+    const askApproval = vi.fn();
+    const showImage = vi.fn();
+    const result = await tool(createUnrealTools({ backend, askApproval, vision: true, showImage }), 'unreal_capture_viewport').run({ annotate: true });
+    expect(backend.captureViewport).toHaveBeenCalledWith(true);
+    expect(result).toEqual({ text: capture.text, images: [{ mime: 'image/jpeg', base64: 'AAAA' }] });
+    expect(showImage).toHaveBeenCalledWith(capture);
+    expect(askApproval).not.toHaveBeenCalled();
+    expect(describeCapture(capture)).toContain('Labeled actors: Pirata');
   });
 });

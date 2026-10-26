@@ -13,6 +13,7 @@
 //   · `prepare`: diagnóstico y preparación de un proyecto (REQ-04, REQ-05).
 //   · `commands`: frontera con el frontend.
 
+pub mod capture;
 pub mod commands;
 pub mod discovery;
 pub mod ini;

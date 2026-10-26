@@ -208,6 +208,13 @@ pub async fn unreal_call_tool(app: AppHandle, endpoint: Endpoint, toolset: Strin
     .await
 }
 
+/// Captura del viewport reducida a JPEG para un modelo con visión. @spec REQ-13
+#[tauri::command]
+pub async fn unreal_capture_viewport(app: AppHandle, endpoint: Endpoint, annotate: bool) -> Result<super::capture::Capture, UnrealError> {
+    let url = endpoint.url();
+    blocking(move || with_session(&app.state::<UnrealState>(), &url, |session| super::capture::capture(session, annotate))).await
+}
+
 // ─── Preparación ─────────────────────────────────────────────────────
 
 /// Diagnóstico de un proyecto. @spec REQ-04
