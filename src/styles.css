@@ -291,6 +291,19 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .memory-save { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 12px; margin: 8px 0; display: grid; gap: 6px; }
 .memory-save__entry { width: 100%; resize: vertical; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .memory-save--discard { border-left-color: var(--unreal-offline); }
+/* Vista Plan (REQ-36, DESIGN.md v0.2). */
+.plan-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.plan-task { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; }
+.plan-task:hover { background: var(--bg-tertiary); }
+.plan-task--done .plan-task__title { color: var(--text-muted); text-decoration: line-through; }
+.plan-task__body { display: grid; gap: 2px; min-width: 0; }
+.plan-task__criterion { color: var(--text-secondary); font-size: 11px; overflow-wrap: anywhere; }
+.plan-task__actions { display: flex; gap: 4px; opacity: 0; transition: opacity var(--transition, 120ms ease); }
+.plan-task:hover .plan-task__actions, .plan-task:focus-within .plan-task__actions { opacity: 1; }
+.plan-task__edit { width: 100%; }
+.plan-memory { max-height: 60vh; overflow: auto; }
+.plan-proposal__row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: start; }
+.plan-proposal__row input { width: 100%; }
 
 /* ─── Modales de la app ─────────────────────────────────────────────── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: grid; place-items: center; z-index: 30; }

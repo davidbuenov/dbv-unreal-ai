@@ -282,6 +282,8 @@ impl McpServer {
             launcher if tools::LAUNCHERS.contains(&launcher) => self.launch(launcher, args)?,
             "project_memory_read" => memory_tools::read_text(&self.project_dir()?, args)?,
             "project_memory_propose" => memory_tools::propose_and_save(&self.project_dir()?, args)?,
+            "project_tasks_list" => memory_tools::tasks_text(&self.project_dir()?)?,
+            "project_tasks_propose" => memory_tools::propose_plan_and_save(&self.project_dir()?, args)?,
             other => Err(format!("unknown tool: {other}"))?,
         };
         Ok(result)

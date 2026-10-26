@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-08, REQ-09, REQ-11, REQ-12, REQ-14, REQ-24, RNF-IA.1, REQ-34, REQ-35
+// @spec REQ-08, REQ-09, REQ-11, REQ-12, REQ-14, REQ-24, RNF-IA.1, REQ-34, REQ-35, REQ-36
 //
 // Módulo ES cargado por `main.js` (script clásico). El asistente de IA se carga de forma perezosa
 // la primera vez que se abre la Conversación o «Conectar una IA» (RNF-IA.1 adaptado): sin IA, la
@@ -19,12 +19,13 @@ import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import { createChatJobs } from '../generation/chatJobs.js';
 import { createGenerationTools } from '../generation/generationTools.js';
 import { mountInlineViewer, viewableFile } from '../generation/preview.js';
-import { createMemoryTools, createProjectMemory, createSaveCard, memoryPrompt, rememberRequest } from '../memory/memory.js';
+import { createMemoryTools, createPlanCard, createProjectMemory, createSaveCard, memoryPrompt, rememberRequest } from '../memory/memory.js';
 import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
 import { button, dirName, el } from './dom.js';
 import { confirmCost, createGenerateView } from './generateView.js';
 import { assetThumbnail, createLibraryView, sendBackend } from './libraryView.js';
+import { createPlanView } from './planView.js';
 import { createProjectView } from './projectView.js';
 import { createSettingsView } from './settingsView.js';
 import { createState } from './state.js';
@@ -134,7 +135,8 @@ export function start() {
   for (const item of document.querySelectorAll('.nav-item')) item.addEventListener('click', () => show(item.dataset.view));
 
   // Memoria del proyecto conectado (REQ-34): su resumen va como ficha de contexto sin esperar al backend.
-  const projectMemory = createProjectMemory({ api, getProject: () => state.connection?.projectPath ?? null });
+  // Al cambiar (se guardó algo desde la conversación) se repinta el Plan si está a la vista.
+  const projectMemory = createProjectMemory({ api, getProject: () => state.connection?.projectPath ?? null, onChange: () => current === 'plan' && views.plan?.render() });
   views.project = createProjectView($('#view-project'), { state, toast, openModal, closeModal, onMemoryChanged: () => projectMemory.refresh(), showView: (name) => show(name) });
   /** Lo que se ve de un trabajo terminado: el modelo girando (o su miniatura) y el camino a la biblioteca (REQ-31). */
   async function renderJobResult(record, slot) {
@@ -176,6 +178,22 @@ export function start() {
       show('generate');
       views.generate.watch();
     },
+  });
+  // Vista Plan (REQ-36): «Planificar» y «Hacer esta tarea» van a la conversación.
+  views.plan = createPlanView($('#view-plan'), {
+    state,
+    toast,
+    openModal,
+    closeModal,
+    showView: (name) => show(name),
+    onChanged: () => projectMemory.refresh(),
+    ask: (text) => {
+      show('chat');
+      loadAi()
+        .then((app) => (app.isReady() ? app.ask(text) : app.openConnect()))
+        .catch(() => {});
+    },
+    renderMarkdown: () => import('../ai/markdown.js').then((module) => (markdown) => module.renderMarkdown(markdown)).catch(() => null),
   });
   views.settings = createSettingsView($('#view-settings'), { toast, state, openConnect: () => loadAi().then((app) => app.openConnect()) });
 
@@ -299,6 +317,13 @@ export function start() {
               markProposed: () => {
                 proposed = true;
               },
+              preview: api.memoryPlanPreview,
+              askPlan: (preview) => {
+                const card = createPlanCard(preview);
+                panel.addNode(card.node);
+                return card.choice;
+              },
+              applyTasks: (change) => projectMemory.applyTasks(change),
             })
           : [];
         return [...unreal, ...generation, ...memory];

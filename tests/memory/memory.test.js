@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildContext } from '../../src/ai/context.js';
-import { createMemoryTools, createProjectMemory, createSaveCard, memoryPrompt, rememberRequest } from '../../src/memory/memory.js';
+import { createMemoryTools, createPlanCard, createProjectMemory, createSaveCard, memoryPrompt, rememberRequest } from '../../src/memory/memory.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 
 const PROPOSE = { name: 'project_memory_propose', description: 'Propose saving ONE entry…', inputSchema: { type: 'object', properties: { section: { type: 'string' }, entry: { type: 'string' } }, required: ['section', 'entry'] } };
@@ -112,6 +112,31 @@ describe('Herramientas de memoria del asistente integrado', () => {
     api.memoryApply.mockImplementationOnce(async () => ({ ok: false, error: { kind: 'conflict', message: 'cambió' } }));
     const { propose } = tools(api, async (request) => ({ action: 'save', section: request.section, entry: request.entry }));
     expect(await propose.run({ section: 'Lessons', entry: '- x' })).toContain('Not saved: cambió');
+  });
+});
+
+describe('Plan propuesto', () => {
+  it('se edita y se recorta antes de guardar; el coste lo recalcula la app @spec REQ-36', async () => {
+    const api = fakeApi();
+    const memory = createProjectMemory({ api, getProject: () => 'D:/P/Demo.uproject' });
+    await memory.refresh();
+    const preview = vi.fn(async (args) => ({ ok: true, value: { goal: args.goal, nextStep: null, total: args.tasks.length * 20, tasks: args.tasks.map((task) => ({ title: task.title, criterion: task.done_when || null, credits: 20, line: `- [ ] ${task.title}` })) } }));
+    const applyTasks = vi.fn(async () => ({ ok: true }));
+    const askPlan = vi.fn(async (shown) => {
+      const card = createPlanCard(shown);
+      const inputs = card.node.querySelectorAll('input');
+      inputs[0].value = 'Model the cabin';
+      [...card.node.querySelectorAll('button')].filter((b) => b.textContent === '×')[1].click();
+      [...card.node.querySelectorAll('button')].find((b) => b.textContent === 'Aceptar plan').click();
+      expect(card.node.textContent).toContain('Aceptar el plan no gasta nada');
+      return card.choice;
+    });
+    const [, , , plan] = createMemoryTools({ specs: [READ, PROPOSE, { ...READ, name: 'project_tasks_list' }, { ...READ, name: 'project_tasks_propose' }], memory, askSave: vi.fn(), alreadyProposed: () => false, markProposed: () => {}, preview, askPlan, applyTasks });
+    const args = { goal: 'Test level', tasks: [{ title: 'Build the cabin', generation: [{ tool: 'generate_3d_model' }] }, { title: 'Five props' }, { title: 'Light the scene' }] };
+    const result = await plan.run(args);
+    expect(preview).toHaveBeenLastCalledWith({ goal: 'Test level', tasks: [{ title: 'Model the cabin', done_when: '', generation: [{ tool: 'generate_3d_model' }] }, { title: 'Light the scene', done_when: '' }] });
+    expect(applyTasks).toHaveBeenCalledWith({ op: 'plan', goal: 'Test level', tasks: ['- [ ] Model the cabin', '- [ ] Light the scene'], nextStep: null });
+    expect(result).toContain('Saved 2 task(s)');
   });
 });
 

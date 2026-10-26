@@ -46,6 +46,7 @@
       <nav class="sidebar" aria-label="Secciones">
         <button class="nav-item" data-view="project" aria-current="page"><span class="nav-icon">⌂</span><span data-i18n="nav.project">Proyecto</span></button>
         <button class="nav-item" data-view="chat"><span class="nav-icon">✦</span><span data-i18n="nav.chat">Conversación</span></button>
+        <button class="nav-item" data-view="plan"><span class="nav-icon">☑</span><span data-i18n="nav.plan">Plan</span></button>
         <button class="nav-item" data-view="generate"><span class="nav-icon">◆</span><span data-i18n="nav.generate">Generar</span></button>
         <button class="nav-item" data-view="library"><span class="nav-icon">▦</span><span data-i18n="nav.library">Biblioteca</span></button>
         <span class="spacer"></span>
@@ -58,6 +59,7 @@
           <!-- El Asistente lo pinta `src/ai/` al cargarse, no antes -->
           <aside id="ai-panel-container" class="ai-sidebar"></aside>
         </section>
+        <section id="view-plan" class="view hidden" data-view-panel="plan"></section>
         <section id="view-generate" class="view hidden" data-view-panel="generate"></section>
         <section id="view-library" class="view hidden" data-view-panel="library"></section>
         <section id="view-settings" class="view hidden" data-view-panel="settings"></section>

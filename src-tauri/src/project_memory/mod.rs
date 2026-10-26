@@ -117,6 +117,9 @@ pub enum Edit {
     /// Sustituye un texto que aparece exactamente una vez.
     #[serde(rename_all = "camelCase")]
     Replace { search: String, replace: String },
+    /// Un plan aceptado (REQ-36): fija el objetivo y el siguiente paso y añade las tareas (líneas ya formadas).
+    #[serde(rename_all = "camelCase")]
+    Plan { goal: Option<String>, tasks: Vec<String>, next_step: Option<String> },
 }
 
 /// Una tarea de `task.md`: `- [ ] Title — done when: <criterion> — est: <n> credits`.
@@ -199,15 +202,19 @@ pub fn apply(project_dir: &Path, doc: Doc, base_hash: &str, edit: &Edit) -> Resu
         return Err(UnrealError::Conflict(format!("{}/{} cambió desde que se leyó: vuelve a leerlo y repite el cambio", FOLDER, doc.file_name())));
     }
     let added = match edit {
-        Edit::Append { entry, .. } => entry.as_str(),
-        Edit::Replace { replace, .. } => replace.as_str(),
+        Edit::Append { entry, .. } => entry.clone(),
+        Edit::Replace { replace, .. } => replace.clone(),
+        Edit::Plan { goal, tasks, next_step } => [goal.clone().unwrap_or_default(), tasks.join("
+"), next_step.clone().unwrap_or_default()].join("
+"),
     };
-    if let Some(kind) = find_secret(added) {
+    if let Some(kind) = find_secret(&added) {
         return Err(UnrealError::Format(format!("no se guarda: parece {kind}, y este fichero se versiona con el proyecto")));
     }
     let next = match edit {
         Edit::Append { section, entry } => append_entry(&current.text, section, entry)?,
         Edit::Replace { search, replace } => replace_once(&current.text, search, replace)?,
+        Edit::Plan { goal, tasks, next_step } => apply_plan(&current.text, goal.as_deref(), tasks, next_step.as_deref())?,
     };
     write(&file_path(project_dir, doc)?, &next)?;
     let snapshot = Snapshot { doc, exists: true, hash: fnv1a(&next), text: next };
@@ -262,6 +269,56 @@ pub fn append_entry(text: &str, section: &str, entry: &str) -> Result<String, Un
         _ => format!("{}\n\n{heading}\n\n{entry}\n", text.trim_end()),
     };
     Ok(result)
+}
+
+/// Sustituye el cuerpo de `## section` (o la añade al final si no existe).
+pub fn set_section(text: &str, section: &str, body: &str) -> String {
+    let heading = format!("## {section}");
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.iter().position(|l| l.trim().eq_ignore_ascii_case(&heading));
+    let result = match start {
+        Some(s) => {
+            let end = lines.iter().skip(s + 1).position(|l| l.starts_with("## ")).map_or(lines.len(), |i| s + 1 + i);
+            let mut out: Vec<String> = lines[..=s].iter().map(|l| (*l).to_string()).collect();
+            out.extend([String::new(), body.trim().to_string()]);
+            if end < lines.len() {
+                out.push(String::new());
+                out.extend(lines[end..].iter().map(|l| (*l).to_string()));
+            }
+            format!("{}
+", out.join("
+"))
+        }
+        None => format!("{}
+
+{heading}
+
+{}
+", text.trim_end(), body.trim()),
+    };
+    result
+}
+
+/// Un plan aceptado sobre `task.md`: objetivo y siguiente paso nuevos, tareas añadidas a las que hubiera (las de
+/// antes no se pierden: se cierran a mano o con `project_task_update`).
+pub fn apply_plan(text: &str, goal: Option<&str>, tasks: &[String], next_step: Option<&str>) -> Result<String, UnrealError> {
+    if tasks.iter().any(|t| !t.trim_start().starts_with("- [")) {
+        return Err(UnrealError::Format("cada tarea tiene que ser una línea «- [ ] …»".into()));
+    }
+    let mut next = text.to_string();
+    if let Some(goal) = goal.filter(|g| !g.trim().is_empty()) {
+        next = set_section(&next, "Goal", goal);
+    }
+    for task in tasks {
+        // Una tarea que ya está no se repite (y no tira el resto del plan).
+        if !parse_tasks(&next).iter().any(|t| normalized(&t.line) == normalized(task)) {
+            next = append_entry(&next, "Tasks", task)?;
+        }
+    }
+    if let Some(step) = next_step.filter(|s| !s.trim().is_empty()) {
+        next = set_section(&next, "Next step", step);
+    }
+    Ok(next)
 }
 
 /// Sustituye `search` por `replace` si aparece exactamente una vez.

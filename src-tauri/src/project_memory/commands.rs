@@ -79,6 +79,12 @@ pub fn memory_tool_specs() -> Vec<serde_json::Value> {
     super::tools::specs()
 }
 
+/// Un plan propuesto por la IA con su coste calculado por la app (para la tarjeta de propuesta). @spec REQ-36
+#[tauri::command]
+pub fn memory_plan_preview(args: serde_json::Value) -> Result<super::tools::PlanPreview, UnrealError> {
+    super::tools::plan_preview(&args).map_err(UnrealError::Format)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -66,6 +66,7 @@ export const memoryStatus = (project) => call('memory_status', { project });
 export const memoryActivate = (project) => call('memory_activate', { project });
 export const memoryApply = (project, doc, baseHash, edit) => call('memory_apply', { project, doc, baseHash, edit });
 export const memoryToolSpecs = () => call('memory_tool_specs');
+export const memoryPlanPreview = (args) => call('memory_plan_preview', { args });
 
 // ─── Progreso de los trabajos ────────────────────────────────────────
 // El oyente se registra ANTES de lanzar un trabajo y guarda lo que llega: un fallo inmediato (una clave
