@@ -11,7 +11,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 import { clipLabel, frameDistance } from '../../src/generation/modelViewer.js';
-import { generateThumbnailForEntry, openPreview, viewableFile } from '../../src/generation/preview.js';
+import { generateThumbnailForEntry, openPreview, rigPicker, viewableFile } from '../../src/generation/preview.js';
 
 beforeAll(() => {
   window.DBV_I18N?.register(APP_TRANSLATIONS);
@@ -44,6 +44,38 @@ describe('visor 3D (REQ-31)', () => {
 
     const noFile = await generateThumbnailForEntry({ files: ['test.txt'] });
     expect(noFile).toBeNull();
+  });
+
+  /** @spec REQ-31, REQ-16 */
+  it('rigPicker retorna null sin rigs o crea el desplegable con solo esqueleto y los rigs disponibles', () => {
+    expect(rigPicker(null, null, () => {})).toBeNull();
+    expect(rigPicker([], null, () => {})).toBeNull();
+
+    const rigs = [
+      { id: 'rig-rust', name: 'Rust rig' },
+      { id: 'rig-pumuki', name: 'Pumuki rig' },
+    ];
+    let selected = null;
+    const picker = rigPicker(rigs, 'rig-rust', (id) => { selected = id; });
+    expect(picker).toBeTruthy();
+
+    const select = picker.querySelector('select');
+    expect(select).toBeTruthy();
+    expect(select.options.length).toBe(3); // 1 esqueleto + 2 rigs
+    expect(select.options[0].textContent).toContain('Solo esqueleto');
+    expect(select.options[1].textContent).toContain('Rust rig');
+    expect(select.options[2].textContent).toContain('Pumuki rig');
+    expect(select.value).toBe('rig-rust');
+
+    // Cambiar selección
+    select.value = 'rig-pumuki';
+    select.dispatchEvent(new Event('change'));
+    expect(selected).toBe('rig-pumuki');
+
+    // Selección de solo esqueleto
+    select.value = '';
+    select.dispatchEvent(new Event('change'));
+    expect(selected).toBe('');
   });
 
   /** @spec REQ-31, REQ-16 */

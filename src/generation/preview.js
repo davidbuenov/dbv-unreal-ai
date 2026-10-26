@@ -88,18 +88,20 @@ function clipPicker(viewer) {
 }
 
 /** Selector de rigs de personajes para ver la animación sobre su cuerpo. */
-function rigPicker(rigs, currentRigId, onChange) {
+export function rigPicker(rigs, currentRigId, onChange) {
   if (!rigs || !rigs.length) return null;
-  const select = el(
-    'select',
-    { attrs: { 'aria-label': t('preview.rigPicker') } },
-    el('option', { text: t('preview.skeletonOnly'), attrs: { value: '' } }),
+  const skeletonOpt = el('option', { text: t('preview.skeletonOnly'), attrs: { value: '' } });
+  if (!currentRigId) skeletonOpt.selected = true;
+  const options = [
+    skeletonOpt,
     ...rigs.map((r) => {
       const opt = el('option', { text: `🎭 ${r.name}`, attrs: { value: r.id } });
       if (r.id === currentRigId) opt.selected = true;
       return opt;
     }),
-  );
+  ];
+  const select = el('select', { attrs: { 'aria-label': t('preview.rigPicker') } }, ...options);
+  select.value = currentRigId || '';
   select.addEventListener('change', () => onChange(select.value));
   return el('label', { className: 'row', style: 'align-items: center; gap: 6px; font-size: 13px;' }, el('span', { text: t('preview.rigPicker') }), select);
 }
@@ -114,7 +116,9 @@ export async function openPreview(entry, deps) {
   let showingRender = false;
 
   const isWorld = entry?.kind === 'world';
-  const isAnim = entry?.kind === 'animation';
+  const isAnim = entry?.kind === 'animation'
+    || (entry?.name && /(?:^|[\s_-])anim(?:[\s_-]|$)|_anim|anim_|_dance|_wave/i.test(entry.name))
+    || (entry?.files && entry.files.some((f) => /anim|dance|wave/i.test(f)));
   const notice = isWorld ? el('p', {
     className: 'hint',
     style: 'margin: 4px 0 8px 0; padding: 6px 10px; background: rgba(0, 0, 0, 0.05); border-radius: 6px; font-size: 13px;',
@@ -188,17 +192,21 @@ export async function openPreview(entry, deps) {
   let currentRigId = null;
   if (isAnim) {
     try {
-      const all = await api.libraryList();
-      rigs = (all ?? []).filter((e) => e.id !== entry.id && (e.kind === 'rig' || e.name.toLowerCase().includes('rig')));
+      const res = await api.libraryList();
+      const all = (res?.ok && Array.isArray(res.value)) ? res.value : (Array.isArray(res) ? res : []);
+      rigs = all.filter((e) => e.id !== entry.id && (e.kind === 'rig' || e.name.toLowerCase().includes('rig')));
       if (entry.parent) {
         currentRigId = rigs.find((r) => r.id === entry.parent)?.id ?? null;
       }
       if (!currentRigId) {
         const stem = entry.name.toLowerCase();
         currentRigId = rigs.find((r) => {
-          const rName = r.name.toLowerCase().replace(/[\s_]rig$/, '');
-          return stem.startsWith(rName) || stem.includes(rName);
+          const rName = r.name.toLowerCase().replace(/[\s_]rig$/i, '').trim();
+          return rName.length > 0 && (stem.startsWith(rName) || stem.includes(rName));
         })?.id ?? null;
+      }
+      if (!currentRigId && rigs.length > 0) {
+        currentRigId = rigs[0].id;
       }
     } catch {
       rigs = [];
@@ -208,6 +216,8 @@ export async function openPreview(entry, deps) {
   async function renderViewer(rigId) {
     stage.replaceChildren(el('p', { className: 'hint', text: t('preview.loading') }));
     viewer?.dispose();
+    const rigSelector = isAnim && rigs.length ? rigPicker(rigs, rigId, (newId) => renderViewer(newId)) : null;
+    tools.replaceChildren(...[el('span', { className: 'hint', text: t('preview.help') }), rigSelector].filter(Boolean));
     try {
       let rigUrl = null;
       if (rigId) {
@@ -216,7 +226,6 @@ export async function openPreview(entry, deps) {
       }
       viewer = await createModelViewer(stage, url, { rigUrl });
       const picker = clipPicker(viewer);
-      const rigSelector = isAnim && rigs.length ? rigPicker(rigs, rigId, (newId) => renderViewer(newId)) : null;
       tools.replaceChildren(...[el('span', { className: 'hint', text: t('preview.help') }), picker, rigSelector].filter(Boolean));
       keepThumbnail(entry, viewer, deps?.onThumbnail);
     } catch (error) {

@@ -47,7 +47,8 @@
 ## ⚠️ Lecciones Aprendidas / Errores Evitados
 *Notas sobre bugs específicos, configuraciones que fallaron o refactors intentados para no repetirlos.*
 
-- **2026-10-26 — Trampas de DOM y Three.js con SkeletonHelper:**
+- **2026-10-26 — Trampas de DOM, IPC y Three.js con SkeletonHelper:**
+  - **Sobres de retorno IPC en `backend.js` (`{ok, value}`):** Todos los métodos expuestos por `api.*` (como `api.libraryList()`) devuelven el sobre de resultado `{ ok: true, value: [...] }` o `{ ok: false, error }`, nunca un array directo ni lanzan excepciones. Consumir `const all = await api.libraryList(); all.filter(...)` arroja un `TypeError: all.filter is not a function`. Regla: desempaquetar siempre con `const res = await api.libraryList(); const all = (res?.ok && Array.isArray(res.value)) ? res.value : [];`.
   - **`element.replaceChildren(...nodes)` stringifica no-nodos:** según la especificación DOM de JavaScript, cualquier valor que no sea un `Node` se convierte mediante `String(val)`. Pasar `null` o `undefined` genera texto literal «null» o «undefined» en pantalla. Regla: filtrar siempre los arrays de hijos con `.filter(Boolean)` antes de pasarlos a `openModal` o `replaceChildren`.
   - **`THREE.SkeletonHelper` en Three.js 0.180:** extiende `LineSegments` y actualiza la posición de las líneas de los huesos internamente en su método `updateMatrixWorld(force)` que el renderizador de Three.js invoca automáticamente al pintar la escena. No tiene método `update()`; invocar `helper?.update()` produce un `TypeError: helper?.update is not a function`.
 - **2026-10-26 — Spikes de S18 en vivo (DBVUnrealAITest1, UE 5.8.4, toolset C++ 0.2.0 ya recompilado con `play_animation`):**
