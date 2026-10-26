@@ -5,9 +5,9 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08, REQ-30
+// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08, REQ-30, REQ-18
 //
-// La clave de Tripo solo viaja de ida: el campo nunca se rellena con la guardada, solo se dice
+// Las claves de Tripo y World Labs solo viajan de ida: el campo nunca se rellena con la guardada, solo se dice
 // si hay una (RNF-IA.4).
 
 import { t } from '../ai/i18nBridge.js';
@@ -24,9 +24,37 @@ export function mcpClientConfig(command) {
  * @param {object} deps `{toast, openConnect, state}`.
  */
 export function createSettingsView(host, deps) {
+  /**
+   * Campo de la clave de un servicio de generación y sus botones (la clave solo viaja de ida).
+   * @param {'tripo'|'worldlabs'} service
+   */
+  function keyControls(service, hasKey) {
+    const key = el('input', { attrs: { type: 'password', autocomplete: 'off', 'aria-label': t(`settings.${service}`) } });
+    return [
+      el('p', { className: 'hint', text: hasKey ? t('settings.keyPresent') : t('settings.keyMissing') }),
+      el('label', {}, t(`settings.${service}`), key),
+      el(
+        'div',
+        { className: 'row' },
+        button(t('settings.save'), async () => {
+          // El campo se vacía antes de esperar: la clave no se queda a la vista mientras se guarda.
+          const value = key.value;
+          key.value = '';
+          const saved = await api.generationSetKey(service, value);
+          if (!saved.ok) return deps.toast(saved.error.message, 'error');
+          deps.toast(saved.value === 'system' ? t('settings.keySaved') : t('settings.keySession'));
+          return render();
+        }, 'btn-primary'),
+        button(t('settings.delete'), async () => {
+          await api.generationDeleteKey(service);
+          await render();
+        }, 'btn-ghost btn-danger'),
+      ),
+    ];
+  }
+
   async function render() {
     const status = await api.generationStatus();
-    const key = el('input', { attrs: { type: 'password', autocomplete: 'off', 'aria-label': t('settings.tripo') } });
     const budget = el('input', { attrs: { type: 'number', min: '0', step: '10', value: String(status.ok ? status.value.budget : 300), 'aria-label': t('settings.budget') } });
     const port = deps.state.connection?.endpoint?.port ?? 8000;
     const [command, location] = await Promise.all([api.appMcpCommand(port), api.libraryLocation()]);
@@ -67,32 +95,16 @@ export function createSettingsView(host, deps) {
         'div',
         { className: 'card stack' },
         el('h3', { text: 'Tripo' }),
-        el('p', { className: 'hint', text: hasKey ? t('settings.keyPresent') : t('settings.keyMissing') }),
         balance,
-        el('label', {}, t('settings.tripo'), key),
-        el(
-          'div',
-          { className: 'row' },
-          button(t('settings.save'), async () => {
-            // El campo se vacía antes de esperar: la clave no se queda a la vista mientras se guarda.
-            const value = key.value;
-            key.value = '';
-            const saved = await api.generationSetKey('tripo', value);
-            if (!saved.ok) return deps.toast(saved.error.message, 'error');
-            deps.toast(saved.value === 'system' ? t('settings.keySaved') : t('settings.keySession'));
-            return render();
-          }, 'btn-primary'),
-          button(t('settings.delete'), async () => {
-            await api.generationDeleteKey('tripo');
-            await render();
-          }, 'btn-ghost btn-danger'),
-        ),
+        ...keyControls('tripo', hasKey),
         el('label', {}, t('settings.budget'), budget),
         el('div', { className: 'row' }, button(t('settings.save'), async () => {
           const saved = await api.generationSetBudget(Number(budget.value) || 0);
           deps.toast(saved.ok ? t('settings.budgetSaved') : saved.error.message, saved.ok ? 'info' : 'error');
         })),
       ),
+      // @spec REQ-18, RNF-IA.4 — la clave de World Labs, en el mismo llavero que la de Tripo.
+      el('div', { className: 'card stack' }, el('h3', { text: 'World Labs' }), el('p', { className: 'hint', text: t('settings.worldlabsHint') }), ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs)),
       libraryCard,
       el('div', { className: 'card stack' }, el('h3', { text: t('settings.mcp') }), el('p', { className: 'hint', text: t('settings.mcpHint') }), command.ok ? el('pre', { className: 'diff', text: mcpClientConfig(command.value) }) : null),
       el(

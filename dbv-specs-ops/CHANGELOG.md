@@ -15,6 +15,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
+- **Clave de API de World Labs** en Ajustes, en el llavero del sistema como la de Tripo (solo de ida), con dónde crearla (`platform.worldlabs.ai`).
 - README: sección «Descárgalo e instálalo» para Windows, macOS y Linux con los instaladores de la Release, cómo pasar los avisos de SmartScreen y Gatekeeper, y los canales previstos (Homebrew, Microsoft Store, Uptodown).
 
 ### Fixed

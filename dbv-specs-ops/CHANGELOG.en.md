@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **World Labs API key** in Settings, stored in the system keychain like the Tripo key (one way only), with where to create it (`platform.worldlabs.ai`).
 - README: "Download and install" section for Windows, macOS and Linux with the Release installers, how to get past the SmartScreen and Gatekeeper warnings, and the planned channels (Homebrew, Microsoft Store, Uptodown).
 
 ### Fixed

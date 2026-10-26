@@ -66,6 +66,21 @@ describe('Ajustes', () => {
     expect(input.value).toBe('');
   });
 
+  it('la clave de World Labs tiene su propio campo y va al mismo llavero @spec REQ-18, RNF-IA.4', async () => {
+    const host = document.createElement('div');
+    await createSettingsView(host, { toast: vi.fn(), openConnect: vi.fn(), state: { connection: null } }).render();
+    const input = host.querySelector('input[aria-label="Clave de API de World Labs"]');
+    expect(input).not.toBeNull();
+    expect(host.textContent).toContain('platform.worldlabs.ai');
+    const card = input.closest('.card');
+    expect(card.textContent).toMatch(/No hay clave/);
+    input.value = 'wlt-secreta';
+    [...card.querySelectorAll('button')].find((b) => b.textContent === 'Guardar').click();
+    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'generation_set_key')).toBe(true));
+    expect(invoked.find(([c]) => c === 'generation_set_key')[1]).toEqual({ service: 'worldlabs', key: 'wlt-secreta' });
+    expect(input.value).toBe('');
+  });
+
   /**
    * La biblioteca puede vivir en una carpeta compartida con otras apps; por defecto se copia lo que ya había.
    * @spec REQ-30
