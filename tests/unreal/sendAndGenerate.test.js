@@ -12,7 +12,7 @@ import { createGenerationTools } from '../../src/generation/generationTools.js';
 const ENTRY = { id: 'linterna-1', name: 'Linterna mágica', provider: 'tripo', kind: 'model', prompt: 'lantern', files: ['model.glb'], sentTo: [] };
 const DBV = 'PythonTypes.DBVUnrealAIToolset_0x3D7D6EDD';
 
-function backend({ toolsets = [{ name: DBV, description: '' }], importResult, playResult } = {}) {
+function backend({ toolsets = [{ name: DBV, description: '' }], importResult, playResult, splatResult } = {}) {
   const calls = [];
   return {
     calls,
@@ -23,6 +23,7 @@ function backend({ toolsets = [{ name: DBV, description: '' }], importResult, pl
       calls.push({ toolset, tool, args, timeout });
       if (tool === 'import_model') return { ok: true, value: { text: '', isError: false, value: importResult ?? { success: true, imported: ['/Game/DBV/Generated/Linterna_magica/StaticMeshes/Linterna_magica.Linterna_magica'], primary: '/Game/DBV/Generated/Linterna_magica/StaticMeshes/Linterna_magica.Linterna_magica' } } };
       if (tool === 'play_animation') return playResult ?? { ok: true, value: { text: '', isError: false, value: { success: true } } };
+      if (tool === 'load_gaussian_splat') return splatResult ?? { ok: true, value: { text: '', isError: false, value: { success: true, actor: args.actor_label } } };
       return { ok: true, value: { text: '', isError: false, value: { success: true, actor: 'Linterna_magica' } } };
     },
   };
@@ -53,6 +54,32 @@ describe('enviar a Unreal (REQ-19)', () => {
     const out = await sendToUnreal({ backend: old }, ENTRY, { project: 'p' });
     expect(out).toMatchObject({ ok: true, playing: null, note: 'toolsetOutdated' });
     expect(old.libraryRecordSent).toHaveBeenCalled();
+  });
+
+  /** @spec REQ-41, REQ-42 */
+  it('un escenario World Labs carga el Gaussian Splat nativo y coloca su malla de colisión @spec REQ-41, REQ-42', async () => {
+    const worldEntry = {
+      id: 'isla-pirata',
+      name: 'Isla Pirata',
+      kind: 'world',
+      files: ['splat.spz', 'collision_mesh.glb', 'thumbnail.webp'],
+      sentTo: [],
+    };
+    const b = backend();
+    const out = await sendToUnreal({ backend: b }, worldEntry, { project: 'D:/P/P.uproject' });
+    expect(out).toMatchObject({
+      ok: true,
+      kind: 'world',
+      assetPath: 'Isla_Pirata_Splat',
+      actor: 'Isla_Pirata_Splat',
+      colliderActor: 'Linterna_magica',
+    });
+    expect(b.calls.map((c) => c.tool)).toEqual(['load_gaussian_splat', 'import_model', 'place_asset']);
+    expect(b.calls[0].args).toEqual({
+      source_file: 'C:/data/library/isla-pirata/splat.spz',
+      actor_label: 'Isla_Pirata_Splat',
+    });
+    expect(b.libraryRecordSent).toHaveBeenCalledWith('isla-pirata', 'D:/P/P.uproject', 'Isla_Pirata_Splat');
   });
 
   it('sin colocar, sin toolset o con una importación fallida lo explica y no anota nada @spec REQ-19', async () => {
