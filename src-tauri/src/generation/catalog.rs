@@ -217,6 +217,15 @@ pub const BIPED_PRESETS: [(&str, &str); 7] = [
 /// Animaciones de los rigs v2.0/v2.5/v3.0 (cualquier tipo): 16 presets `preset:<nombre>`.
 pub const GENERIC_PRESETS: [&str; 16] = ["idle", "walk", "run", "dive", "climb", "jump", "slash", "shoot", "hurt", "fall", "turn", "quadruped:walk", "hexapod:walk", "octopod:walk", "serpentine:march", "aquatic:march"];
 
+/// Modelo de generación que se manda si la petición no trae uno. Tripo lo hizo obligatorio en 2026
+/// («HTTP 400: model is required», visto con la API real el 2026-10-26): antes tenía un valor por defecto.
+pub const DEFAULT_MODEL: &str = "v3.1-20260211";
+
+/// Operaciones que exigen `model` (las que generan una malla desde texto o imágenes).
+pub fn needs_model(op: &Operation) -> bool {
+    matches!(op.name, "text_to_model" | "image_to_model" | "multiview_to_model")
+}
+
 /// ¿El rig se hizo con el modelo v1.0 (el de los 101 presets bípedos)? Sin dato, se supone que sí (es el defecto).
 pub fn is_v1_rig(rig_request: &Value) -> bool {
     rig_request.get("model").and_then(Value::as_str).is_none_or(|m| m.starts_with("v1.0"))

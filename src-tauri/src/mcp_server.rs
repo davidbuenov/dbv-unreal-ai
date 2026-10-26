@@ -29,7 +29,7 @@ use serde_json::{json, Value};
 
 use crate::ai::secrets::Secrets;
 use crate::generation::commands::GenerationSettings;
-use crate::generation::jobs::{describe, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
+use crate::generation::jobs::{describe, resume_orphans, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
 use crate::generation::tripo::TripoClient;
 use crate::generation::{key_account, tools, within_budget, Polling};
 use crate::library::{now_secs, Library};
@@ -392,21 +392,29 @@ impl McpServer {
         if !within_budget(spent, total, settings.budget_credits) {
             return Err(format!("not run: it would exceed the session cap of {} credits ({spent} already used)", settings.budget_credits));
         }
-        let context = JobContext {
+        let context = self.job_context(client_key);
+        let ids = start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone());
+        self.report(&self.wait_for(&ids, self.config.max_wait))
+    }
+
+    fn job_context(&self, key: String) -> JobContext {
+        JobContext {
             board: self.board.clone(),
             library: self.config.library.clone(),
-            key: client_key,
+            key,
             base_url: self.config.tripo_base.clone(),
             polling: self.config.polling,
             cancels: self.cancels.clone(),
             hook: Arc::new(|_| {}),
             source: "agent".into(),
-        };
-        let ids = start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone());
-        self.report(&self.wait_for(&ids, self.config.max_wait))
+        }
     }
 
     fn jobs(&mut self, args: &Value) -> Result<String, String> {
+        // Un trabajo cuyo proceso murió (otra sesión del agente) se reanuda: su tarea sigue en Tripo.
+        if let Ok(key) = self.tripo_key() {
+            resume_orphans(&self.job_context(key));
+        }
         let wait = Duration::from_secs(args.get("wait_seconds").and_then(Value::as_u64).unwrap_or(0).min(self.config.max_wait.as_secs()));
         let since = self.board.session_start(self.started_at);
         let ids: Vec<String> = match args.get("job_id").and_then(Value::as_str) {

@@ -2,7 +2,7 @@
 
 > **Fase:** `/spec` → se valida y completa en `/plan`
 > **Estado:** Borrador
-> **Última Revisión:** 2026-10-24
+> **Última Revisión:** 2026-10-26 (hechos y módulos de la v0.2)
 
 ---
 
@@ -77,6 +77,16 @@ Llamadas de solo lectura por HTTP desde la máquina de desarrollo:
 - `GetActors` respondió en **0,7 s**. `RunPython` (código de solo lectura) devolvió `UE 5.8.2-56702186`, Python **3.11.8** y, en `stderr`, un **`DeprecationWarning`** por `EditorLevelLibrary.get_editor_world` → la IA puede usar APIs obsoletas; motiva REQ-26.
 - MCPCLiente ya tiene en caché (`.mcp_tools_cache.json`, con `toolsets_hash`) las **282 herramientas** aplanadas de este mismo proyecto: base para el editor simulado de los tests.
 | `MCPClientToolset`: «adaptador para que los clientes del ToolsetRegistry (como el asistente del editor) se conecten a servidores MCP locales/privados» | `MCPClientToolset.uplugin` | El MCP propio (REQ-20) también podría usarse desde dentro del editor |
+| `unreal.ToolsetLibrary.get_active_undo_count()` y `undo_transaction(can_redo)` están expuestos a Python; los **títulos** del historial no (`UTransBuffer::GetTransaction` es solo C++). Epic los usa para deshacer un script fallido (`_TransactionScope`). El búfer descarta transacciones viejas al llenarse (2026-10-26) | `ToolsetRegistry/Public/ToolsetRegistry/ToolsetLibrary.h:129,144`; `EditorToolset/.../programmatic.py:764`; `TransBuffer.h:96` | «Deshacer este turno» (REQ-40) por contador (D15, REJECTED-02) |
+| `EditorAppToolset.CaptureViewport` admite una pose y anotaciones (rejilla y etiquetas de actores para un agente con visión) pero no publica `outputSchema` | caché de herramientas de MCPCLiente | Verificar en vivo si devuelve ruta o imagen (S18) antes de REQ-13 |
+
+### Módulos de la v0.2 (plan del 2026-10-26)
+
+- `src-tauri/src/project_memory/` — memoria y tareas del proyecto (`dbv-unreal-ai/` junto al `.uproject`), con las herramientas definidas una vez para el asistente y el MCP propio (D13, D19).
+- `src-tauri/src/generation/worldlabs.rs` — cliente de World Labs sobre el núcleo de trabajos (D18).
+- `src-tauri/src/ai/mcp_hub.rs` — clientes MCP de terceros por stdio y HTTP (D20).
+- `src/app/planView.js` — vista Plan. Toolset DBV 0.3.0: `check_task`, `undo_turn`, `import_world`.
+- `tauri-plugin-updater` + `tauri-plugin-process` (D21).
 
 ---
 
@@ -104,7 +114,7 @@ Llamadas de solo lectura por HTTP desde la máquina de desarrollo:
 | --- | --- | --- |
 | Unreal Engine 5.8 MCP | Controlar el editor | HTTP local sin autenticación; experimental |
 | Tripo API v3 (`openapi.tripo3d.ai/v3`) | Texto/imagen → modelo, rig, animación | ≈30 créditos por modelo, rig 30, animación ≈20; la URL del GLB caduca a los 5 min; `face_limit` es orientativo |
-| World Labs Marble (`api.worldlabs.ai/marble/v1`) | Texto/imagen → mundo (pano, malla, splats) | Operación asíncrona (sondeo cada ~4 s, hasta ~12 min); cabecera `WLT-Api-Key` |
+| World Labs Marble (`api.worldlabs.ai/marble/v1`) | Texto/imagen → mundo (pano, malla, splats) | Operación asíncrona (sondeo cada ~4 s, hasta ~12 min); cabecera `WLT-Api-Key`. Documentación del 2026-10-26: modelos `marble-1.0-draft` (230 créditos con texto), `marble-1.0`/`marble-1.1` (1.580), `marble-1.1-plus` (1.580–3.080); 1.250 créditos = 1 $; malla HQ por `:export` = 3.500; PLY gratis; `assets.mesh.{collider_mesh_url, full_res_mesh_url, hq_mesh_url}`, `assets.splats.spz_urls` (claves sin documentar), `semantics_metadata.{metric_scale_factor, ground_plane_offset}`; saldo en `GET /credits`; imágenes en `data_base64` |
 | Ollama / LM Studio / nube / ACP | Modelos de IA | Ver `AI_DESKTOP_ARCHITECTURE.md` |
 
 ---

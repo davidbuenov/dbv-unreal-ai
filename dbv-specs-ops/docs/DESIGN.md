@@ -2,7 +2,7 @@
 
 > **Fase:** `/spec` (Especificación Visual)
 > **Estado:** Borrador
-> **Última Revisión:** 2026-10-24
+> **Última Revisión:** 2026-10-26 (componentes de la v0.2)
 > **Aplica a:** la aplicación de escritorio (Tauri v2, Vanilla JS/CSS sin bundler).
 
 ---
@@ -153,7 +153,7 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 
 ### Estructura de la ventana
 
-- **Barra lateral izquierda (iconos + etiqueta):** Proyecto · Conversación · Generar · Biblioteca · Ajustes.
+- **Barra lateral izquierda (iconos + etiqueta):** Proyecto · Conversación · **Plan** (v0.2) · Generar · Biblioteca · Ajustes.
 - **Barra superior:** píldora de conexión con Unreal (proyecto, versión, puerto, estado), selector de IA con su etiqueta de destino, y gasto acumulado de la sesión (`cost`).
 - **Centro:** la vista activa (conversación por defecto).
 - **Panel derecho plegable:** contexto activo (fichas removibles) y registro de acciones de la sesión (REQ-14).
@@ -178,6 +178,17 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 ### Mensajes de la conversación
 
 - Usuario alineado a la derecha sobre `surface`; IA a la izquierda sin fondo. Las llamadas a herramientas se muestran como filas compactas plegables (icono, nombre en mono, duración, resultado).
+
+### Decisiones de diseño v0.2 (2026-10-26)
+
+- **Vista Plan (REQ-36):** dos pestañas, **Tareas** y **Memoria**. Tareas: el objetivo arriba (subheading), lista de casillas con el título en body, el criterio debajo en caption y en `--font-mono` si es una comprobación (REQ-37), y el coste estimado en `cost` alineado a la derecha. Abajo, «Siguiente paso» y el total estimado. Acciones por fila al pasar el cursor: «Hacer esta tarea» (primario de la fila), editar, borrar. Arriba, un solo botón primario: «Planificar». Estado de una comprobación: ✓ `success`, ✗ `error` con el motivo, «pendiente de comprobar» en `unreal-offline`. Memoria: `memory.md` en Markdown seguro, de solo lectura, con «Abrir carpeta» y «Editar en mi editor». Sin memoria activada, la vista explica qué es en tres líneas y ofrece «Activar memoria del proyecto».
+- **Tarjeta «¿Guardar en la memoria del proyecto?» (REQ-35):** misma forma que la tarjeta de aprobación, con borde izquierdo `accent` (no `action-modify`: no cambia el editor). Muestra la sección de destino y la entrada en un campo editable; acciones Guardar (primario), Editar, Descartar (texto). El foco inicial va a Descartar, como en la tarjeta de coste.
+- **Propuesta de plan (REQ-36):** la lista propuesta se ve como la vista Tareas, pero cada fila es editable y se puede quitar; el pie muestra el total estimado en `cost` y «Aceptar plan» (primario).
+- **Selector de proyecto (REQ-07):** la píldora de conexión se convierte en un menú cuando hay más de un editor conectado (proyecto, puerto y estado de cada uno). El proyecto activo se repite en la cabecera de la conversación para que nunca haya duda de a cuál se dirige.
+- **Captura del viewport (REQ-13):** miniatura de 160 px de ancho dentro de la fila de la herramienta; al pulsarla se abre a tamaño completo.
+- **Deshacer este turno (REQ-40):** botón secundario pequeño al pie de la respuesta de la IA, solo si el turno modificó el editor. Si no puede deshacer con seguridad, muestra el aviso en `warning` en esa misma línea, sin modal.
+- **Actualización disponible (REQ-39):** franja discreta bajo la barra superior (no un modal) con la versión, «Ver novedades», «Actualizar» (primario) y «Más tarde». Las notas se muestran en Markdown seguro.
+- **MCPs de terceros (REQ-21):** sección en Ajustes con una fila por servidor (nombre, tipo, estado, número de herramientas) y un interruptor por proyecto. El comando de un servidor stdio se ve completo en `--font-mono` en el diálogo de confirmación.
 
 ---
 

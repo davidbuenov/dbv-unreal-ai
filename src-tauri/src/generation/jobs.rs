@@ -23,7 +23,7 @@ use serde_json::Value;
 
 use super::catalog::{self, Operation};
 use super::tripo::TripoClient;
-use super::{run_operation, JobEvent, OperationRequest, Polling};
+use super::{finish_task, run_operation, JobEvent, OperationRequest, Outcome, Polling};
 use crate::library::{now_secs, Library, LibraryEntry};
 use crate::unreal::{io_error, UnrealError};
 
@@ -109,6 +109,11 @@ impl JobRecord {
     }
 }
 
+/// Activo y sin latido: el proceso que lo llevaba murió.
+fn is_stale(record: &JobRecord, now: u64) -> bool {
+    record.is_active() && now.saturating_sub(record.updated_at) > STALE_SECS
+}
+
 /// Carpeta de trabajos dentro de la carpeta de datos de la app.
 pub fn jobs_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("jobs")
@@ -138,18 +143,26 @@ impl JobBoard {
         std::fs::rename(&tmp, &path).map_err(|error| io_error(&path, &error))
     }
 
-    /// Trabajos, el más reciente primero. Un activo sin latido se muestra como fallido («perdido»).
-    pub fn list(&self) -> Vec<JobRecord> {
-        let now = now_secs();
-        let mut records: Vec<JobRecord> = std::fs::read_dir(&self.dir)
+    /// Los ficheros de trabajo tal cual están en disco.
+    fn raw(&self) -> Vec<JobRecord> {
+        std::fs::read_dir(&self.dir)
             .into_iter()
             .flatten()
             .flatten()
             .filter(|f| f.path().extension().is_some_and(|e| e == "json"))
             .filter_map(|f| std::fs::read_to_string(f.path()).ok())
             .filter_map(|text| serde_json::from_str::<JobRecord>(&text).ok())
+            .collect()
+    }
+
+    /// Trabajos, el más reciente primero. Un activo sin latido se muestra como fallido («perdido»).
+    pub fn list(&self) -> Vec<JobRecord> {
+        let now = now_secs();
+        let mut records: Vec<JobRecord> = self
+            .raw()
+            .into_iter()
             .map(|mut record| {
-                if record.is_active() && now.saturating_sub(record.updated_at) > STALE_SECS {
+                if is_stale(&record, now) {
                     record.stage = "failed".into();
                     record.error.get_or_insert_with(|| "el proceso que lo llevaba se detuvo (sin señales desde hace más de 90 s)".into());
                 }
@@ -158,6 +171,33 @@ impl JobBoard {
             .collect();
         records.sort_by_key(|r| std::cmp::Reverse((r.started_at, r.id.clone())));
         records
+    }
+
+    fn claim_path(&self, id: &str) -> PathBuf {
+        self.path(id).with_extension("claim")
+    }
+
+    /// Trabajos huérfanos que se pueden reanudar: su proceso murió con la tarea YA creada en Tripo (se cobra
+    /// igual). Cada uno se reclama creando `<id>.claim` de forma atómica, así que si la ventana y un `--mcp` lo
+    /// intentan a la vez, solo uno lo consigue. Una reclamación sin latido (su proceso también murió) se renueva.
+    pub fn claim_orphans(&self) -> Vec<JobRecord> {
+        let now = now_secs();
+        let mut claimed = Vec::new();
+        for record in self.raw().into_iter().filter(|r| is_stale(r, now) && r.submitted && r.task_id.is_some()) {
+            let claim = self.claim_path(&record.id);
+            let old_claim = std::fs::metadata(&claim).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age.as_secs() > STALE_SECS);
+            if old_claim {
+                let _ = std::fs::remove_file(&claim);
+            }
+            if std::fs::OpenOptions::new().write(true).create_new(true).open(&claim).is_ok() {
+                claimed.push(record);
+            }
+        }
+        claimed
+    }
+
+    fn release(&self, id: &str) {
+        let _ = std::fs::remove_file(self.claim_path(id));
     }
 
     pub fn get(&self, id: &str) -> Option<JobRecord> {
@@ -277,14 +317,48 @@ pub fn start_jobs(context: &JobContext, operation: &'static Operation, params: &
     ids
 }
 
+/// Reanuda los trabajos huérfanos (ver `JobBoard::claim_orphans`): sigue esperando su tarea y la descarga a la
+/// biblioteca como si nada. Devuelve sus ids. Lo llaman la ventana (al consultar los trabajos) y el `--mcp`.
+pub fn resume_orphans(context: &JobContext) -> Vec<String> {
+    let mut ids = Vec::new();
+    for mut record in context.board.claim_orphans() {
+        let Some(operation) = catalog::find(&record.kind) else {
+            context.board.release(&record.id);
+            continue;
+        };
+        let task_id = record.task_id.clone().unwrap_or_default();
+        record.note(&format!("reanudado por {}: el proceso anterior se detuvo y la tarea {task_id} sigue en Tripo", context.source));
+        record.updated_at = now_secs();
+        publish(context, &record);
+        let cancel = Arc::new(AtomicBool::new(false));
+        if let Ok(mut cancels) = context.cancels.lock() {
+            cancels.insert(record.id.clone(), cancel.clone());
+        }
+        ids.push(record.id.clone());
+        // El cuerpo guardado es el que se envió (fuentes ya resueltas): sirve tal cual para la entrada de la biblioteca.
+        let request = OperationRequest { operation, params: record.request.clone(), name: record.name.clone(), parent: record.parent.clone() };
+        let context = context.clone();
+        std::thread::spawn(move || {
+            let body = request.params.clone();
+            drive(&context, record, &cancel, |client, mut report| finish_task(client, &request, body, task_id, &context.library, &cancel, context.polling, &mut report));
+        });
+    }
+    ids
+}
+
 /// El cuerpo del trabajo: corre la operación y va dejando el estado en el fichero.
-fn run_job(context: &JobContext, mut record: JobRecord, request: &OperationRequest, cancel: &AtomicBool) {
+fn run_job(context: &JobContext, record: JobRecord, request: &OperationRequest, cancel: &AtomicBool) {
+    drive(context, record, cancel, |client, mut report| run_operation(client, request, &context.library, cancel, context.polling, &mut report));
+}
+
+/// Lleva un trabajo (nuevo o reanudado): traduce los eventos al fichero de trabajo y deja el resultado.
+fn drive(context: &JobContext, mut record: JobRecord, cancel: &AtomicBool, work: impl FnOnce(&TripoClient, &mut dyn FnMut(JobEvent)) -> Result<Outcome, UnrealError>) {
     let client = match &context.base_url {
         Some(base) => TripoClient::with_base_url(&context.key, base),
         None => TripoClient::new(&context.key),
     };
     let mut last_progress: Option<i64> = None;
-    let result = run_operation(&client, request, &context.library, cancel, context.polling, &mut |event| {
+    let result = work(&client, &mut |event| {
         match event {
             JobEvent::Request { endpoint, body } => {
                 record.endpoint = endpoint.to_string();
@@ -332,6 +406,7 @@ fn run_job(context: &JobContext, mut record: JobRecord, request: &OperationReque
     }
     record.updated_at = now_secs();
     publish(context, &record);
+    context.board.release(&record.id);
     if let Ok(mut cancels) = context.cancels.lock() {
         cancels.remove(&record.id);
     }
@@ -413,6 +488,51 @@ mod tests {
         assert_eq!(board.session_start(7), 7, "sin ventana, el inicio es el del proceso que pregunta");
         let started = board.start_session();
         assert_eq!(board.session_start(7), started);
+    }
+
+    /// Hallazgo de S18 con Tripo real: el `--mcp` de un agente se cerró con la tarea al 31 % y el trabajo quedó
+    /// «perdido» aunque Tripo lo terminaba (y lo cobraba). Otro proceso lo reclama UNA vez y lo termina.
+    /// @spec REQ-27
+    #[test]
+    fn un_huerfano_con_tarea_se_reanuda_una_sola_vez_y_acaba_en_la_biblioteca() {
+        use crate::unreal::mcp_client::tests::{fake_server, http};
+        let (cdn, _cdn) = fake_server(vec![http("200 OK", "", "glTF-binario")]);
+        let model_url = cdn.replace("/mcp", "/m.glb");
+        let (api, _api) = fake_server(vec![http("200 OK", "", &format!(r#"{{"code":0,"data":{{"status":"success","progress":100,"consumed_credit":20,"output":{{"model_url":"{model_url}"}}}}}}"#))]);
+        let dir = tempfile::tempdir().unwrap();
+        let board = JobBoard::new(dir.path());
+        let mut orphan = record("huerfano", "running", true, 1);
+        orphan.kind = "text_to_model".into();
+        orphan.task_id = Some("t-31".into());
+        orphan.request = serde_json::json!({ "prompt": "cofre", "model": "v3.1-20260211" });
+        orphan.updated_at = now_secs() - STALE_SECS - 5;
+        board.write(&orphan).unwrap();
+        let mut lost = record("sin-tarea", "queued", false, 1);
+        lost.updated_at = orphan.updated_at;
+        board.write(&lost).unwrap();
+        let context = JobContext {
+            board: board.clone(),
+            library: Library::new(dir.path().join("library")),
+            key: "k".into(),
+            base_url: Some(api.trim_end_matches("/mcp").to_string()),
+            polling: Polling { interval: std::time::Duration::from_millis(1), max_wait: std::time::Duration::from_secs(5) },
+            cancels: Cancels::default(),
+            hook: Arc::new(|_| {}),
+            source: "app".into(),
+        };
+        assert_eq!(resume_orphans(&context), vec!["huerfano".to_string()], "sin tarea creada no hay nada que reanudar");
+        assert!(resume_orphans(&context).is_empty(), "ya reclamado: otro proceso no lo reanuda dos veces");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while board.get("huerfano").is_some_and(|r| r.is_active()) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let done = board.get("huerfano").unwrap();
+        assert_eq!(done.stage, "done", "{:?}", done.log);
+        assert_eq!(done.credits, Some(20.0));
+        assert!(done.log.iter().any(|l| l.contains("reanudado")));
+        let entry = entry_of(&context.library, &done).unwrap();
+        assert_eq!((entry.name.as_str(), entry.task_id.as_str(), entry.prompt.as_str()), ("huerfano", "t-31", "cofre"));
+        assert!(!board.claim_path("huerfano").exists(), "al terminar suelta la reclamación");
     }
 
     /// @spec REQ-29

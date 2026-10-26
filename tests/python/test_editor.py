@@ -28,16 +28,42 @@ class StaticMesh:
     """Malla estática."""
 
 
+class Skeleton:
+    """Esqueleto: guarda los esqueletos que se le declaran compatibles."""
+
+    def __init__(self) -> None:
+        self.compatible: list[Skeleton] = []
+
+    def modify(self) -> bool:
+        """Marca el asset para la transacción."""
+        return True
+
+    def add_compatible_skeleton(self, other):  # noqa: ANN001, ANN201 — imita la API de Unreal
+        """Declara un esqueleto compatible."""
+        self.compatible.append(other)
+
+
 class SkeletalMesh:
     """Malla con esqueleto."""
 
+    def __init__(self, skeleton: Skeleton | None = None) -> None:
+        self.skeleton = skeleton or Skeleton()
 
-class Skeleton:
-    """Esqueleto."""
+    def get_editor_property(self, name):  # noqa: ANN001, ANN201
+        """Propiedad de la malla."""
+        return self.skeleton if name == "skeleton" else None
 
 
 class AnimSequence:
-    """Animación."""
+    """Animación con su esqueleto y sus pistas (huesos)."""
+
+    def __init__(self, skeleton: Skeleton | None = None, tracks: tuple[str, ...] = ("root", "hip")) -> None:
+        self.skeleton = skeleton
+        self.tracks = tracks
+
+    def get_editor_property(self, name):  # noqa: ANN001, ANN201
+        """Propiedad de la animación."""
+        return self.skeleton if name == "skeleton" else None
 
 
 ASSETS: dict[str, object] = {}
@@ -63,9 +89,23 @@ class AssetTools:
 class SkeletalMeshComponent:
     """Componente que guarda lo que se le pide."""
 
-    def __init__(self) -> None:
+    def __init__(self, mesh: SkeletalMesh | None = None, bones: tuple[str, ...] = ("root", "hip", "spine")) -> None:
         self.mode = None
         self.data = None
+        self.mesh = mesh or SkeletalMesh()
+        self.bones = bones
+
+    def get_skeletal_mesh_asset(self):  # noqa: ANN201
+        """Malla del componente."""
+        return self.mesh
+
+    def get_num_bones(self) -> int:
+        """Huesos de la malla."""
+        return len(self.bones)
+
+    def get_bone_name(self, index: int) -> str:
+        """Nombre del hueso ``index``."""
+        return self.bones[index]
 
     def set_animation_mode(self, mode):  # noqa: ANN001, ANN201
         """Modo de animación."""
@@ -74,6 +114,14 @@ class SkeletalMeshComponent:
     def override_animation_data(self, animation, looping, playing, position, rate):  # noqa: ANN001, ANN201, PLR0913
         """Animación del editor."""
         self.data = (animation, looping, playing, position, rate)
+
+    def play_animation(self, animation, looping):  # noqa: ANN001, ANN201
+        """Lo que se ve ya (no solo lo que se guarda)."""
+        self.playing = (animation, looping)
+
+    def set_update_animation_in_editor(self, value):  # noqa: ANN001, ANN201
+        """Que el viewport la mueva fuera de una partida."""
+        self.in_editor = value
 
 
 class Actor:
@@ -115,6 +163,7 @@ def fake_unreal() -> types.ModuleType:
     module.load_asset = ASSETS.get
     module.get_editor_subsystem = lambda cls: cls()
     module.AnimationMode = types.SimpleNamespace(ANIMATION_SINGLE_NODE="single-node")
+    module.AnimationLibrary = types.SimpleNamespace(get_animation_track_names=lambda animation: list(animation.tracks))
     module.ScopedEditorTransaction = lambda description: contextlib.nullcontext()
     return module
 
@@ -174,14 +223,39 @@ class PlayAnimationTests(unittest.TestCase):
 
     def test_pone_el_componente_en_una_sola_animacion_en_bucle(self) -> None:
         """@spec REQ-16 — sin Animation Blueprint, como hace falta para revisar un baile de Tripo."""
-        dance = AnimSequence()
-        ASSETS["/Game/DBV/Generated/Anim_dance_01"] = dance
         component = SkeletalMeshComponent()
+        dance = AnimSequence(component.mesh.skeleton)
+        ASSETS["/Game/DBV/Generated/Anim_dance_01"] = dance
         ACTORS.append(Actor("Pirata", component))
         report = json.loads(editor.play_animation("Pirata", "/Game/DBV/Generated/Anim_dance_01"))
         self.assertTrue(report["success"])
+        self.assertFalse(report["compatible_skeleton_added"])
         self.assertEqual(component.mode, "single-node")
         self.assertEqual(component.data, (dance, True, True, 0.0, 1.0))
+        self.assertEqual(component.playing, (dance, True), "solo con override_animation_data la instancia se quedaba sin clip (en vivo)")
+        self.assertTrue(component.in_editor)
+
+    def test_un_clip_de_tripo_con_su_propio_esqueleto_se_declara_compatible(self) -> None:
+        """@spec REQ-16 — visto en vivo (S18): el GLB del baile trae su copia del rig y Unreal no lo reproducía."""
+        component = SkeletalMeshComponent()
+        # Mayúsculas distintas, como en vivo (malla `Root`, clip `root`): en Unreal es el mismo hueso.
+        dance = AnimSequence(Skeleton(), tracks=("ROOT", "Hip"))
+        ASSETS["/Game/dance"] = dance
+        ACTORS.append(Actor("Pirata", component))
+        report = json.loads(editor.play_animation("Pirata", "/Game/dance"))
+        self.assertTrue(report["compatible_skeleton_added"])
+        self.assertEqual(component.mesh.skeleton.compatible, [dance.skeleton])
+        self.assertEqual(component.data[0], dance)
+
+    def test_un_clip_de_otro_rig_se_explica_en_vez_de_mentir(self) -> None:
+        """@spec REQ-16 — antes respondía «success» sin que se moviera nada."""
+        component = SkeletalMeshComponent()
+        ASSETS["/Game/other"] = AnimSequence(Skeleton(), tracks=("root", "tail_01", "tail_02"))
+        ACTORS.append(Actor("Pirata", component))
+        report = json.loads(editor.play_animation("Pirata", "/Game/other"))
+        self.assertFalse(report["success"])
+        self.assertIn("tail_01", report["error"])
+        self.assertIsNone(component.data)
 
     def test_explica_lo_que_falta(self) -> None:
         """@spec REQ-16"""

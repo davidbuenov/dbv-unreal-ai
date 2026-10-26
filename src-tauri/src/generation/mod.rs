@@ -213,6 +213,9 @@ pub fn run_operation(client: &TripoClient, request: &OperationRequest, library: 
     catalog::validate(op, &request.params).map_err(UnrealError::Format)?;
     let mut body = request.params.clone();
     if let Value::Object(map) = &mut body {
+        if catalog::needs_model(op) && map.get("model").and_then(Value::as_str).is_none_or(str::is_empty) {
+            map.insert("model".into(), Value::String(catalog::DEFAULT_MODEL.into()));
+        }
         for field in catalog::SOURCE_FIELDS {
             if let Some(value) = map.get(field).cloned() {
                 map.insert(field.to_string(), resolve_sources(&value, client, library, report)?);
@@ -224,6 +227,14 @@ pub fn run_operation(client: &TripoClient, request: &OperationRequest, library: 
     // A partir de aquí la tarea existe en Tripo y puede cobrarse.
     report(JobEvent::Task(&task_id));
     report(JobEvent::Stage("submitted", None));
+    finish_task(client, request, body, task_id, library, cancel, polling, report)
+}
+
+/// Segunda mitad de un trabajo: esperar una tarea YA creada y bajar sus salidas. La usa también quien reanuda el
+/// trabajo de un proceso que murió (`jobs::resume_orphans`): la tarea sigue en Tripo y se cobra igual.
+#[allow(clippy::too_many_arguments)]
+pub fn finish_task(client: &TripoClient, request: &OperationRequest, body: Value, task_id: String, library: &Library, cancel: &AtomicBool, polling: Polling, report: &mut impl FnMut(JobEvent)) -> Result<Outcome, UnrealError> {
+    let op = request.operation;
     let task = wait_for_task(client, &task_id, cancel, polling, report)?;
     let links: Vec<(String, String)> = task
         .output
@@ -340,6 +351,8 @@ mod tests {
         assert_eq!(sent.len(), 1);
         assert_eq!(sent[0].0, "/generation/text-to-model");
         assert_eq!(sent[0].1["prompt"], "cofre del tesoro");
+        // Tripo exige `model` desde 2026 (HTTP 400 con la API real): sin él en la petición se manda el de por defecto.
+        assert_eq!(sent[0].1["model"], catalog::DEFAULT_MODEL);
         assert!(!sent[0].1.to_string().contains("Bearer"));
         assert_eq!(entry.task_id, "t-9");
         assert_eq!(entry.credits, Some(30.0));

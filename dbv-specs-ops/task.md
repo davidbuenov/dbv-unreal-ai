@@ -5,7 +5,7 @@
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo directamente en el editor (World Labs en v0.2).
 * **Estado actual**: **v0.1.0 publicada** el 2026-10-24 (tag `v0.1.0`, en local: no hay remoto). Incluye la v0.1 (S1–S11) y la ampliación tras la primera prueba del usuario (S12–S17).
 * **Última decisión técnica**: D9–D12 de `implementation_plan.md` §4 (trabajos compartidos por ficheros, herramientas de Tripo con una sola definición, biblioteca configurable, Three.js incluido). D1–D8 se tomaron sin el usuario (ADR-V010-001 en `memory.md`), para revisar.
-* **Próximo paso**: el usuario prueba la v0.1.0; verificar con la API real de Tripo y con el editor abierto (ver «Deuda técnica»).
+* **Próximo paso**: aprobación del plan de la v0.2.0 (`implementation_plan.md` §5) y después S18/S19.
 
 ## Checklist de Tareas
 
@@ -39,6 +39,31 @@
 - [x] **`/code-simplify` v0.1.x** — 1 Crítico (subida a Tripo de cualquier fichero local con una ruta escrita por la IA) y 2 Importantes resueltos, 3 Nits anotados (ver CHANGELOG); lint sin errores.
 - [x] **`/ship` v0.1.0** (2026-10-24) — versión elegida por el usuario, `walkthrough.md`, `docs/IA.md`/`IA.en.md`, CHANGELOG publicado, tag `v0.1.0`.
 
+## v0.2.0 — memoria y plan del proyecto, World Labs (plan en `implementation_plan.md` §5)
+
+- [x] **`/spec` v0.2** (2026-10-26) — `SPECIFICATIONS.md` v1.4: §3.7 memoria y plan (REQ-34..REQ-38), §3.8 actualizaciones y deshacer (REQ-39, REQ-40), REQ-07/13/18/21 concretados, R-16..R-19, P-07..P-09; `DESIGN.md` con la vista Plan y los componentes nuevos.
+- [x] **`/plan` v0.2** (2026-10-26) — Architect Review, D13–D21, REJECTED-02..04. **Aprobado por el usuario el 2026-10-26** con dos cambios: fuera el actualizador (REQ-39, D21, S30) y la clave de World Labs (llavero + Ajustes) va antes del spike de S18. Gasto de Tripo autorizado para S18.
+- [ ] **S18 · Verificación con el usuario y spikes en vivo** — *con el usuario delante (gasto y editor abierto)*:
+  - [x] Tripo real (2026-10-26): texto, imagen (con subida), rig, animación; coste real = estimación (105 créditos). Arreglados: `model` obligatorio, trabajos huérfanos reanudados.
+  - [x] Personajes S17 en UE 5.8.4 (variante C++ recompilada con `play_animation`): Skeletal Mesh + Animation Sequence importados; arreglados el esqueleto del clip (compatible) y la colocación en el suelo. **Falta que el usuario vea el baile con el editor en primer plano** (sin foco no hay tick).
+  - [x] `CaptureViewport` (PNG base64, exige los tres parámetros) y contador de deshacer (deshacer diferido al siguiente tick).
+  - [ ] Un mundo `marble-1.0-draft` (230 créditos) importado — necesita la clave de World Labs (S27, primero el sitio para guardarla).
+  - [ ] Plugin de splats (P-09).
+  - [ ] Pendiente de la v0.1: la ruta de importación lleva `model/SkeletalMeshes` (Interchange crea subcarpetas con el nombre del fichero); la convención es `/Game/DBV/<Tipo>/<nombre>`.
+- [ ] **S19 · Memoria: núcleo** (REQ-34) — `project_memory/` en Rust: confinamiento, secretos, hash base, formato tolerante, resumen; test «preparar → memoria → revertir → la memoria sigue».
+- [ ] **S20 · Memoria en la conversación** (REQ-34, REQ-35) — activar, ficha de resumen, preámbulo de agentes, `project_memory_read`/`_propose`, tarjeta «¿Guardar…?», «Recordar», `--project` al `--mcp` del agente.
+- [ ] **S21 · Vista Plan** (REQ-36) — tareas, «Planificar» con `project_tasks_propose` y coste de la app, «Hacer esta tarea».
+- [ ] **S22 · Tareas comprobadas** (REQ-37) — criterios, `check_task` (toolset 0.3.0 o `RunPython` con código fijo).
+- [ ] **S23 · Memoria en el MCP propio** (REQ-38) — cinco herramientas, test de paridad.
+- [ ] **S24 · Varias instancias** (REQ-07) — `state.connections`, selector, identidad por sesión, puerto libre.
+- [ ] **S25 · La IA ve el viewport** (REQ-13) — captura como imagen (D16).
+- [ ] **S26 · Deshacer un turno** (REQ-40) — contadores, `undo_turn`, borrar importados con tarjeta.
+- [ ] **S27 · World Labs: generación** (REQ-18) — cliente, trabajos, biblioteca «mundo», `generate_world`, `export_world_mesh`, saldo.
+- [ ] **S28 · World Labs → Unreal** (REQ-18) — `import_world`, escala y suelo, cielo y splats según S18.
+- [ ] **S29 · MCPs de terceros** (REQ-21) — Ajustes, stdio/HTTP, asistente y ACP, permisos.
+- [x] ~~**S30 · Actualizador** (REQ-39)~~ — retirado por el usuario el 2026-10-26: Microsoft Store gestiona las actualizaciones en Windows.
+- [ ] `/test` · `/code-simplify` · `/ship` v0.2.0.
+
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
 - [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).
@@ -48,6 +73,8 @@
 - [ ] **Actualizaciones:** la app no se actualiza sola (`includeUpdaterJson: false`, sin plugin updater). Decidir si se añade el updater de Tauri para los instaladores de Releases o se delega en Store/Homebrew.
 - [ ] **Antigravity CLI como quinto agente** (pendiente de `/spec` + `/plan`, requisito nuevo). Datos del 2026-10-25: el CLI es `agy` (instalador por script, no npm) y **no** tiene modo ACP (issue #31 de `google-antigravity/antigravity-cli`, abierta). El ACP oficial es un binario aparte de Google, `agy_acp_server`, publicado en el registro ACP como `antigravity-acp` (v1.4.3, por plataforma, con SHA-256; Linux lleva `--uid=`). Decidir: descargarlo y verificarlo desde la app o pedir su ruta; arranque en frío de ~16 s en Windows (`AGY_ACP_DEFAULT_MODEL` lo reduce); `session/load` no reproduce el historial.
 
+
+- [ ] **Idioma chino (`zh-CN`)** — aplazado por el usuario el 2026-10-26 (la comunidad de Tripo en China es grande; dbv-md-reader añadió coreano). Al retomarlo: un tercer idioma en `i18n.js` y en los dos `translations.js` (~900 textos), selector y detección de `zh-*`; `LANGUAGE` de `context.js` y `agentPreamble` (hoy `lang === 'es' ? … : 'Answer in English.'`: un tercer idioma caería en inglés); los errores del backend en Rust están en español; `README.zh-CN.md` e `IA.zh-CN.md`; revisión por una persona nativa; investigar el acceso desde China (proveedores como DeepSeek o Qwen, y si Tripo tiene allí otra plataforma).
 
 ## Deuda Técnica
 *Mejoras detectadas fuera del foco de la tarea actual, para abordarlas después.*
@@ -68,7 +95,7 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-24
-> **Exact point / Punto exacto:** v0.1.0 publicada en local (commit de release + tag `v0.1.0`; sin remoto). Revisión de la v0.1.x cerrada sin Críticos.
-> **Pending / Pendiente:** verificar con la API real de Tripo y con el editor abierto (S17); crear el remoto de GitHub y subir (`git push origin master --tags`) para que el workflow de Release compile los instaladores.
-> **Next step / Próximo paso:** el usuario prueba la v0.1.0; los hallazgos entran como `[Sin publicar]` de la próxima versión.
+> **Last update / Última actualización:** 2026-10-26
+> **Exact point / Punto exacto:** `/spec` y `/plan` de la v0.2.0 terminados (`SPECIFICATIONS.md` v1.4, `implementation_plan.md` §5, ADR-V020-001, REJECTED-02..04). Sin código todavía.
+> **Pending / Pendiente:** aprobación explícita del plan por el usuario; revisión de ADR-V020-001 (sobre todo D18: splats sin importación automática salvo spike); P-08 (clave de firma del actualizador, la genera el usuario).
+> **Next step / Próximo paso:** con el plan aprobado, S18 si el usuario está delante (editor abierto y gasto de créditos); si no, empezar por S19 (memoria: núcleo), que no depende del editor.

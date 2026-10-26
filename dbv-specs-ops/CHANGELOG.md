@@ -21,6 +21,14 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 - «Cómo instalarlo» en «Conectar una IA» no abría el navegador: llamaba a `shell.open`, de un plugin que la app no carga, y el respaldo `window.open` no hace nada dentro de la WebView. Ahora usa `opener.openUrl`.
 - Gemini CLI se lanza con `--acp` (el flag actual) en vez de `--experimental-acp`. El asistente de conexión y la guía de IA ya no lo recomiendan para suscripciones: desde el 18 de junio de 2026, Google lo sustituyó por Antigravity CLI para las cuentas gratuitas y las de Google One, y solo sigue sirviendo con accesos de pago.
+- **Tripo rechazaba toda generación de modelos** («HTTP 400: model is required»): la API ahora exige `model`. Texto, imagen y multivista → modelo mandan `v3.1-20260211` si la petición no trae otro. Visto con la API real; la v0.1 solo se había probado contra un Tripo simulado.
+- **Un trabajo de un agente se perdía si su sesión se cerraba** con la tarea en marcha, aunque Tripo la terminaba y la cobraba. Ahora la ventana (o el siguiente `--mcp`) reclama el trabajo huérfano una sola vez, sigue esperando su tarea y la guarda en la biblioteca.
+- **Una animación de Tripo no se reproducía en su personaje** aunque `play_animation` respondía «success»: el GLB del clip trae su propia copia del esqueleto. Si los huesos coinciden (sin distinguir mayúsculas, como Unreal), el esqueleto del clip se declara compatible; si no, se explica qué falta. Además el clip se aplica al momento y se actualiza en el viewport del editor.
+- **Lo que se coloca delante de la cámara se queda en el suelo**, no flotando a media altura: se baja hasta lo que haya debajo.
+
+### Verified
+
+- Con la API real de Tripo (2026-10-26): texto → modelo, imagen → modelo (con subida del fichero), rig y una animación. El coste real coincidió con la estimación en las cinco (105 créditos). El rig y su animación entraron en Unreal 5.8.4 como Skeletal Mesh y Animation Sequence.
 
 ## [0.1.0] - 2026-10-24
 

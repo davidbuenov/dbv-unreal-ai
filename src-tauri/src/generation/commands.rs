@@ -18,7 +18,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use super::jobs::{entry_of, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
+use super::jobs::{entry_of, resume_orphans, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
 use super::tripo::{Balance, TripoClient};
 use super::{key_account, settings_path, tools, within_budget, Polling, Progress, SERVICES};
 use crate::ai::secrets::KeyStorage;
@@ -210,10 +210,16 @@ pub fn generation_launch(app: AppHandle, ai: State<'_, AiState>, state: State<'_
     if !within_budget(spent, total, budget) {
         return Err(UnrealError::Protocol(format!("superaría el tope de {budget} créditos de esta sesión (llevas {spent} y esto son {total})")));
     }
+    let context = job_context(&app, &state, key)?;
+    Ok(start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone()))
+}
+
+/// Contexto de los trabajos de la ventana: cada cambio llega a la interfaz como evento.
+fn job_context(app: &AppHandle, state: &GenerationState, key: String) -> Result<JobContext, UnrealError> {
     let emitter = app.clone();
     let context = JobContext {
-        board: board(&app)?,
-        library: library(&app)?,
+        board: board(app)?,
+        library: library(app)?,
         key,
         base_url: None,
         polling: Polling::default(),
@@ -223,7 +229,7 @@ pub fn generation_launch(app: AppHandle, ai: State<'_, AiState>, state: State<'_
         }),
         source: "app".into(),
     };
-    Ok(start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone()))
+    Ok(context)
 }
 
 /// Catálogo de operaciones de Tripo (para `tripo_operations` del asistente integrado). @spec REQ-33
@@ -245,9 +251,13 @@ fn progress_of(app: &AppHandle, record: &JobRecord) -> Progress {
     Progress { job_id: record.id.clone(), stage: record.stage.clone(), progress: record.progress, entry, error: record.error.clone() }
 }
 
-/// Trabajos de la sesión, también los lanzados por un agente, con su consola. @spec REQ-27
+/// Trabajos de la sesión, también los lanzados por un agente, con su consola. De paso reanuda los huérfanos: un
+/// agente que cerró su sesión con una tarea en marcha no pierde lo que ya se cobró. @spec REQ-27
 #[tauri::command]
-pub fn generation_jobs(app: AppHandle, state: State<'_, GenerationState>) -> Result<Vec<JobRecord>, UnrealError> {
+pub fn generation_jobs(app: AppHandle, ai: State<'_, AiState>, state: State<'_, GenerationState>) -> Result<Vec<JobRecord>, UnrealError> {
+    if let Some(key) = ai.secrets.get(&key_account("tripo")) {
+        resume_orphans(&job_context(&app, &state, key)?);
+    }
     let since = state.session_start.load(Ordering::Relaxed);
     Ok(board(&app)?.list().into_iter().filter(|r| r.started_at >= since || r.is_active()).take(30).collect())
 }

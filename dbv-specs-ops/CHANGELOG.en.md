@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - "How to install" in "Connect an AI" did not open the browser: it called `shell.open`, from a plugin the app does not load, and the `window.open` fallback does nothing inside the WebView. It now uses `opener.openUrl`.
 - Gemini CLI is launched with `--acp` (the current flag) instead of `--experimental-acp`. The connection assistant and the AI guide no longer recommend it for subscriptions: since June 18, 2026, Google replaced it with Antigravity CLI for free and Google One accounts, and it only keeps working with paid access.
+- **Tripo rejected every model generation** ("HTTP 400: model is required"): the API now requires `model`. Text, image and multiview → model send `v3.1-20260211` when the request has none. Found with the real API; v0.1 had only been tested against a simulated Tripo.
+- **An agent's job was lost if its session closed** while the task was running, even though Tripo finished and charged it. The window (or the next `--mcp`) now claims the orphaned job once, keeps waiting for its task and saves it to the library.
+- **A Tripo animation did not play on its character** even though `play_animation` answered "success": the clip's GLB carries its own copy of the skeleton. If the bones match (case-insensitively, like Unreal), the clip's skeleton is declared compatible; if not, the error says what is missing. The clip is also applied right away and updates in the editor viewport.
+- **What is placed in front of the camera stays on the floor**, not floating in mid-air: it is dropped onto whatever is below.
+
+### Verified
+
+- With the real Tripo API (2026-10-26): text → model, image → model (with file upload), rig and one animation. The real cost matched the estimate in all five (105 credits). The rig and its animation reached Unreal 5.8.4 as a Skeletal Mesh and an Animation Sequence.
 
 ## [0.1.0] - 2026-10-24
 

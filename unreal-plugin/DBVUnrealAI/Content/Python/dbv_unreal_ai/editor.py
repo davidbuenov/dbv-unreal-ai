@@ -130,18 +130,43 @@ def import_model(source_file: str, folder_path: str = "/Game/DBV/Generated", ass
 
 
 def place_asset(asset_path: str, distance: float = 300.0, folder: str = "DBV/Generated") -> str:
-    """Coloca ``asset_path`` delante de la cámara del editor, en una carpeta del Outliner. @spec REQ-19"""
+    """Coloca ``asset_path`` delante de la cámara del editor, apoyado en el suelo, en una carpeta del Outliner. @spec REQ-19
+
+    Delante de la cámara a ``distance`` cm suele quedar a media altura: en vivo (S18) un personaje de Tripo quedó
+    flotando a 80 cm. Si un rayo hacia abajo desde ese punto da con algo, la base de los límites del actor se apoya
+    en el impacto; si no (un nivel vacío), se queda donde estaba.
+    """
     asset = unreal.load_asset(asset_path)
     if asset is None:
         return _json({"success": False, "error": f"asset not found: {asset_path}"})
     location, rotation = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_level_viewport_camera_info()
     target = location + rotation.get_forward_vector() * float(distance)
+    grounded = False
     with unreal.ScopedEditorTransaction("DBV Unreal AI: place asset"):
         actor = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).spawn_actor_from_object(asset, target)
+        if actor:
+            grounded = _drop_to_ground(actor)
         if actor and folder:
             actor.set_folder_path(folder)
-    result = {"success": actor is not None, "actor": actor.get_actor_label() if actor else None, "location": _round(target), "folder": folder}
+    placed = actor.get_actor_location() if actor else target
+    result = {"success": actor is not None, "actor": actor.get_actor_label() if actor else None, "location": _round(placed), "on_ground": grounded, "folder": folder}
     return _json(result)
+
+
+def _drop_to_ground(actor: Any) -> bool:
+    """Baja ``actor`` hasta que la base de sus límites toca lo que haya debajo. ``True`` si encontró suelo."""
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    start = actor.get_actor_location()
+    end = start - unreal.Vector(0.0, 0.0, 100000.0)
+    hit = unreal.SystemLibrary.line_trace_single(world, start, end, unreal.TraceTypeQuery.ECC_VISIBILITY, False, [actor], unreal.DrawDebugTrace.NONE, True)
+    # `HitResult` no publica sus campos por nombre en Python (5.8); su tupla sí: 0 = blocking_hit, 5 = impact_point.
+    fields = hit.to_tuple() if hit is not None else ()
+    blocking = bool(fields and fields[0])
+    if blocking:
+        origin, extent = actor.get_actor_bounds(False)
+        floor = fields[5].z
+        actor.set_actor_location(start + unreal.Vector(0.0, 0.0, floor - (origin.z - extent.z)), False, False)
+    return blocking
 
 
 def play_animation(actor_label: str, animation_path: str, looping: bool = True) -> str:
@@ -149,6 +174,11 @@ def play_animation(actor_label: str, animation_path: str, looping: bool = True) 
 
     Modo «una sola animación» del componente: se ve en el viewport sin Animation Blueprint, que es lo que hace
     falta para revisar un baile de Tripo; para un personaje jugable se crea luego su Animation Blueprint.
+
+    Un clip de Tripo se importa con SU esqueleto (el GLB de la animación trae su propia copia del rig), y Unreal no
+    reproduce una animación de otro esqueleto. Visto en vivo (S18, 2026-10-26): antes se respondía «success» sin que
+    se moviera nada. Si todas las pistas del clip existen en el esqueleto del actor, se declara compatible
+    (``add_compatible_skeleton``, lo mismo que la lista «Compatible Skeletons» del editor); si no, se explica.
     """
     animation = unreal.load_asset(animation_path)
     if not isinstance(animation, unreal.AnimSequence):
@@ -157,10 +187,35 @@ def play_animation(actor_label: str, animation_path: str, looping: bool = True) 
     component = actors[0].get_component_by_class(unreal.SkeletalMeshComponent) if actors else None
     if component is None:
         return _json({"success": False, "error": f"no skeletal mesh actor labelled {actor_label}"})
+    mesh = component.get_skeletal_mesh_asset()
+    mesh_skeleton = mesh.get_editor_property("skeleton") if mesh else None
+    anim_skeleton = animation.get_editor_property("skeleton")
+    missing = _missing_bones(component, animation) if anim_skeleton != mesh_skeleton else []
+    if missing:
+        return _json({"success": False, "error": f"the animation belongs to another skeleton and {len(missing)} of its bones are not in {actor_label} (e.g. {', '.join(missing[:5])}): animate the rig this mesh comes from"})
+    compatible = anim_skeleton != mesh_skeleton
     with unreal.ScopedEditorTransaction("DBV Unreal AI: play animation"):
+        if compatible:
+            mesh_skeleton.modify()
+            mesh_skeleton.add_compatible_skeleton(anim_skeleton)
         component.set_animation_mode(unreal.AnimationMode.ANIMATION_SINGLE_NODE)
+        # Lo que se guarda con el nivel...
         component.override_animation_data(animation, bool(looping), True, 0.0, 1.0)
-    return _json({"success": True, "actor": actor_label, "animation": animation_path, "looping": bool(looping)})
+        # ...y lo que hace que se vea ya: en vivo, solo con lo anterior la instancia se quedó sin clip, y sin
+        # «actualizar en el editor» el viewport no la mueve fuera de una partida (PIE).
+        component.play_animation(animation, bool(looping))
+        component.set_update_animation_in_editor(True)
+    return _json({"success": True, "actor": actor_label, "animation": animation_path, "looping": bool(looping), "compatible_skeleton_added": compatible})
+
+
+def _missing_bones(component: Any, animation: Any) -> list[str]:
+    """Pistas del clip que no son huesos del componente.
+
+    Sin distinguir mayúsculas, como los ``FName`` de Unreal: en vivo, la malla del rig de Tripo tenía ``Root``/``Hip``
+    y su clip ``root``/``hip``, y son los mismos huesos.
+    """
+    bones = {str(component.get_bone_name(i)).lower() for i in range(component.get_num_bones())}
+    return [str(name) for name in unreal.AnimationLibrary.get_animation_track_names(animation) if str(name).lower() not in bones]
 
 
 def get_scene_summary(name_filter: str = "", class_filter: str = "", limit: int = 200) -> str:
