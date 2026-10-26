@@ -110,7 +110,7 @@ fn srgb_to_linear(channel: u8) -> f32 {
 }
 
 fn pad4(bytes: &mut Vec<u8>, fill: u8) {
-    while bytes.len() % 4 != 0 {
+    while !bytes.len().is_multiple_of(4) {
         bytes.push(fill);
     }
 }
@@ -217,7 +217,7 @@ mod tests {
         let splat = |opacity: u8, radius: f32| Splat { center: [0.0, 0.0, 0.0], rgba: [1, 2, 3, opacity], radius };
         let kept = most_visible(vec![splat(10, 1.0), splat(255, 1.0), splat(255, 0.1), splat(200, 2.0)], 2);
         assert_eq!(kept.iter().map(|s| (s.rgba[3], s.radius)).collect::<Vec<_>>().len(), 2);
-        assert!(kept.iter().all(|s| s.rgba[3] * 1 >= 200));
+        assert!(kept.iter().all(|s| s.rgba[3] >= 200), "se quedan los más opacos");
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("s.glb");
         write_glb(&kept, &path).unwrap();
