@@ -32,6 +32,7 @@ use crate::generation::commands::GenerationSettings;
 use crate::generation::jobs::{describe, resume_orphans, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
 use crate::generation::tripo::TripoClient;
 use crate::generation::{key_account, tools, within_budget, Polling};
+use crate::project_memory::tools as memory_tools;
 use crate::library::{now_secs, Library};
 use crate::unreal::discovery;
 use crate::unreal::mcp_client::{endpoint_url, McpSession, ToolResult, DEFAULT_TIMEOUT};
@@ -58,6 +59,8 @@ pub struct ServerConfig {
     pub key: KeyLookup,
     /// URL de Tripo (cambia en los tests).
     pub tripo_base: Option<String>,
+    /// Carpeta del proyecto (`--project`): la de su memoria `dbv-unreal-ai/` (REQ-38).
+    pub project_dir: Option<PathBuf>,
 }
 
 pub struct McpServer {
@@ -80,7 +83,8 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 /// Configuración a partir de la línea de comandos y de las carpetas de la app.
 pub fn config_from_args(args: &[String]) -> ServerConfig {
     let port = flag(args, "--port").and_then(|p| p.parse::<u16>().ok());
-    let project_settings = flag(args, "--project").and_then(|p| PathBuf::from(p).parent().map(discovery::read_mcp_settings));
+    let project_dir = flag(args, "--project").and_then(|p| PathBuf::from(p).parent().map(PathBuf::from));
+    let project_settings = project_dir.as_deref().map(discovery::read_mcp_settings);
     let (port, path) = match (port, project_settings) {
         (Some(port), _) => (port, discovery::DEFAULT_MCP_PATH.to_string()),
         (None, Some(settings)) => (settings.port, settings.path),
@@ -98,6 +102,7 @@ pub fn config_from_args(args: &[String]) -> ServerConfig {
         max_wait: DEFAULT_MAX_WAIT,
         key: Box::new(move |service| secrets.get(&key_account(service))),
         tripo_base: None,
+        project_dir,
     }
 }
 
@@ -155,8 +160,9 @@ pub fn tool_specs() -> Vec<Value> {
             json!([]),
         ),
     ];
-    // Las de Tripo vienen de una única definición, compartida con el asistente integrado (D10).
+    // Las de Tripo y las de la memoria vienen de una única definición, compartida con el asistente integrado (D10).
     specs.extend(tools::specs(true));
+    specs.extend(memory_tools::specs());
     specs
 }
 
@@ -274,9 +280,16 @@ impl McpServer {
             "tripo_operations" => tools::operations_text(args)?,
             "tripo_balance" => self.balance()?,
             launcher if tools::LAUNCHERS.contains(&launcher) => self.launch(launcher, args)?,
+            "project_memory_read" => memory_tools::read_text(&self.project_dir()?, args)?,
+            "project_memory_propose" => memory_tools::propose_and_save(&self.project_dir()?, args)?,
             other => Err(format!("unknown tool: {other}"))?,
         };
         Ok(result)
+    }
+
+    /// Carpeta del proyecto, que el agente recibe con `--project` (REQ-38).
+    fn project_dir(&self) -> Result<PathBuf, String> {
+        self.config.project_dir.clone().ok_or_else(|| "no project: this server was started without --project <.uproject>".to_string())
     }
 
     fn run_python(&mut self, code: &str) -> Result<String, String> {
@@ -501,6 +514,7 @@ mod tests {
             max_wait: Duration::from_secs(5),
             key: Box::new(|_| None),
             tripo_base: None,
+            project_dir: Some(dir.join("project")),
         })
     }
 
@@ -552,6 +566,27 @@ mod tests {
         // REQ-28: sin nombre no se genera; el modelo debe dar uno corto, no el prompt.
         let nameless = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "confirm_cost": true } }));
         assert!(nameless["result"]["content"][0]["text"].as_str().unwrap().contains("`name` is required"));
+    }
+
+    /// Un agente lee y guarda la memoria del proyecto que le dio `--project`; el asistente integrado ve las
+    /// mismas herramientas (una sola definición). @spec REQ-38, REQ-35
+    #[test]
+    fn el_agente_lee_y_guarda_la_memoria_del_proyecto() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let listed = rpc(&mut s, "tools/list", json!({}));
+        let names: Vec<String> = listed["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect();
+        for spec in memory_tools::specs() {
+            assert!(names.contains(&spec["name"].as_str().unwrap().to_string()), "{}", spec["name"]);
+        }
+        let none = rpc(&mut s, "tools/call", json!({ "name": "project_memory_read", "arguments": {} }));
+        assert!(none["result"]["content"][0]["text"].as_str().unwrap().contains("has no memory yet"));
+        std::fs::create_dir_all(dir.path().join("project")).unwrap();
+        crate::project_memory::activate(&dir.path().join("project")).unwrap();
+        let saved = rpc(&mut s, "tools/call", json!({ "name": "project_memory_propose", "arguments": { "section": "Conventions", "entry": "Props go in /Game/DBV/Props" } }));
+        assert_eq!(saved["result"]["isError"], false, "{saved}");
+        let read = rpc(&mut s, "tools/call", json!({ "name": "project_memory_read", "arguments": { "file": "memory" } }));
+        assert!(read["result"]["content"][0]["text"].as_str().unwrap().contains("- Props go in /Game/DBV/Props"));
     }
 
     /// @spec REQ-20, REQ-17

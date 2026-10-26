@@ -37,12 +37,17 @@ pub mod mcp_server;
 pub mod paths;
 
 /// Orden con la que un agente ACP lanza el servidor MCP propio de la app (REQ-11, REQ-20):
-/// este mismo ejecutable con `--mcp` y el puerto del editor conectado.
+/// este mismo ejecutable con `--mcp`, el puerto del editor conectado y, si lo hay, el `.uproject` (sin él el agente
+/// no ve la memoria del proyecto, REQ-38).
 #[cfg(desktop)]
 #[tauri::command]
-fn app_mcp_command(port: u16) -> Result<serde_json::Value, String> {
+fn app_mcp_command(port: u16, project: Option<String>) -> Result<serde_json::Value, String> {
     let exe = std::env::current_exe().map_err(|error| error.to_string())?;
-    Ok(serde_json::json!({ "command": exe.to_string_lossy(), "args": ["--mcp", "--port", port.to_string()] }))
+    let mut args = vec!["--mcp".to_string(), "--port".to_string(), port.to_string()];
+    if let Some(project) = project.filter(|p| !p.trim().is_empty()) {
+        args.extend(["--project".to_string(), project]);
+    }
+    Ok(serde_json::json!({ "command": exe.to_string_lossy(), "args": args }))
 }
 
 /// Diagnóstico para una incidencia (RNF-08): versión, sistema, instalaciones de Unreal y editores
@@ -236,6 +241,8 @@ pub fn run() {
             project_memory::commands::memory_activate,
             #[cfg(desktop)]
             project_memory::commands::memory_apply,
+            #[cfg(desktop)]
+            project_memory::commands::memory_tool_specs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

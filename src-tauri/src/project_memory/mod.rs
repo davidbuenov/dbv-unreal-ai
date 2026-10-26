@@ -17,6 +17,7 @@
 // Lo que dice la memoria es DATO para la IA (R-16): quien la presenta al modelo lo marca así.
 
 pub mod commands;
+pub mod tools;
 
 use std::path::{Path, PathBuf};
 

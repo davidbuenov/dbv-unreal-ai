@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-08, REQ-09, REQ-11, REQ-12, REQ-14, REQ-24, RNF-IA.1
+// @spec REQ-08, REQ-09, REQ-11, REQ-12, REQ-14, REQ-24, RNF-IA.1, REQ-34, REQ-35
 //
 // Módulo ES cargado por `main.js` (script clásico). El asistente de IA se carga de forma perezosa
 // la primera vez que se abre la Conversación o «Conectar una IA» (RNF-IA.1 adaptado): sin IA, la
@@ -19,6 +19,7 @@ import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import { createChatJobs } from '../generation/chatJobs.js';
 import { createGenerationTools } from '../generation/generationTools.js';
 import { mountInlineViewer, viewableFile } from '../generation/preview.js';
+import { createMemoryTools, createProjectMemory, createSaveCard, memoryPrompt, rememberRequest } from '../memory/memory.js';
 import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
 import { button, dirName, el } from './dom.js';
@@ -132,7 +133,9 @@ export function start() {
   }
   for (const item of document.querySelectorAll('.nav-item')) item.addEventListener('click', () => show(item.dataset.view));
 
-  views.project = createProjectView($('#view-project'), { state, toast, openModal, closeModal });
+  // Memoria del proyecto conectado (REQ-34): su resumen va como ficha de contexto sin esperar al backend.
+  const projectMemory = createProjectMemory({ api, getProject: () => state.connection?.projectPath ?? null });
+  views.project = createProjectView($('#view-project'), { state, toast, openModal, closeModal, onMemoryChanged: () => projectMemory.refresh(), showView: (name) => show(name) });
   /** Lo que se ve de un trabajo terminado: el modelo girando (o su miniatura) y el camino a la biblioteca (REQ-31). */
   async function renderJobResult(record, slot) {
     const listed = record.entryId ? await api.libraryList() : null;
@@ -158,8 +161,9 @@ export function start() {
 
   views.generate = createGenerateView($('#view-generate'), { confirm, toast, onSpent: refreshSpent, openLibrary: () => show('library'), suggestName, renderResult: renderJobResult });
   const chatJobs = createChatJobs({ list: api.generationJobs, renderResult: renderJobResult });
-  // Herramientas de Tripo de Rust (las mismas que ve un agente): se piden una vez al cargar la IA.
+  // Herramientas de Tripo y de memoria de Rust (las mismas que ve un agente): se piden una vez al cargar la IA.
   let generationSpecs = [];
+  let memorySpecs = [];
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
   views.library = createLibraryView($('#view-library'), {
     state,
@@ -181,8 +185,13 @@ export function start() {
     node.textContent = pill.text;
     node.className = pill.className;
   }
+  let memoryProject = null;
   state.subscribe((connection) => {
     paintPill();
+    if ((connection?.projectPath ?? null) !== memoryProject) {
+      memoryProject = connection?.projectPath ?? null;
+      projectMemory.refresh();
+    }
     if (connection?.status === 'online') aiApp?.onRootChanged(dirName(connection.projectPath));
   });
   document.addEventListener('dbv-lang-changed', () => {
@@ -239,8 +248,12 @@ export function start() {
       promptDomain: (_language, { agent = false } = {}) => {
         const connection = state.connection;
         const base = unrealPrompt({ projectName: connection?.projectName ?? '', engineVersion: connection?.engineVersion ?? '', agent });
-        return connection?.status === 'online' ? base : `${base}\n\nNo Unreal project is connected right now: if the user asks to act on Unreal, tell them to connect one in the Project view.`;
+        const memory = connection?.projectPath ? `\n\n${memoryPrompt({ active: projectMemory.isActive(), agent, summary: projectMemory.status?.summary ?? '' })}` : '';
+        return connection?.status === 'online' ? `${base}${memory}` : `${base}${memory}\n\nNo Unreal project is connected right now: if the user asks to act on Unreal, tell them to connect one in the Project view.`;
       },
+      // Memoria del proyecto (REQ-34, REQ-35): ficha de contexto y botón «Recordar».
+      contextNotes: () => projectMemory.contextNotes(),
+      rememberRequest: (language) => rememberRequest(language),
       extraTools: ({ panel, conversationId }) => {
         if (!memories.has(conversationId)) memories.set(conversationId, createPermissionMemory());
         const askApproval = (request) => {
@@ -271,7 +284,24 @@ export function start() {
           askApproval,
           confirmCost: (request) => confirmCost(confirm, request),
         });
-        return [...unreal, ...generation];
+        // Como mucho una propuesta de memoria por turno: cada turno pide sus herramientas de nuevo.
+        let proposed = false;
+        const memory = state.connection?.projectPath
+          ? createMemoryTools({
+              specs: memorySpecs,
+              memory: projectMemory,
+              askSave: (request) => {
+                const card = createSaveCard(request);
+                panel.addNode(card.node);
+                return card.choice;
+              },
+              alreadyProposed: () => proposed,
+              markProposed: () => {
+                proposed = true;
+              },
+            })
+          : [];
+        return [...unreal, ...generation, ...memory];
       },
       // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): el diálogo del sistema y Rust los leen.
       pickAttachments: async () => {
@@ -289,7 +319,7 @@ export function start() {
       // Un agente genera en su propio proceso (`--mcp`): sus trabajos aparecen en la conversación (REQ-27).
       onTurnStart: ({ panel, agent, isBusy }) => agent && chatJobs.follow(panel, isBusy),
       mcpServers: async () => {
-        const command = await api.appMcpCommand(state.connection?.endpoint?.port ?? 8000);
+        const command = await api.appMcpCommand(state.connection?.endpoint?.port ?? 8000, state.connection?.projectPath ?? null);
         return command.ok ? [{ name: 'dbv-unreal-ai', command: command.value.command, args: command.value.args, env: [] }] : [];
       },
     };
@@ -297,9 +327,10 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs()])
-        .then(([entry, markdown, specs]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh()])
+        .then(([entry, markdown, specs, memory]) => {
           generationSpecs = specs.ok ? specs.value : [];
+          memorySpecs = memory.ok ? memory.value : [];
           return entry.createAi(buildHost(markdown.renderMarkdown));
         })
         .then((app) => {

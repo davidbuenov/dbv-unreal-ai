@@ -57,7 +57,7 @@ export function createSettingsView(host, deps) {
     const status = await api.generationStatus();
     const budget = el('input', { attrs: { type: 'number', min: '0', step: '10', value: String(status.ok ? status.value.budget : 300), 'aria-label': t('settings.budget') } });
     const port = deps.state.connection?.endpoint?.port ?? 8000;
-    const [command, location] = await Promise.all([api.appMcpCommand(port), api.libraryLocation()]);
+    const [command, location] = await Promise.all([api.appMcpCommand(port, deps.state.connection?.projectPath ?? null), api.libraryLocation()]);
     const hasKey = status.ok && status.value.hasKey?.tripo;
     const balance = el('p', { className: 'hint' });
     if (hasKey) api.generationBalance().then((result) => (balance.textContent = result.ok && result.value ? t('gen.balance', { balance: String(result.value.balance), frozen: String(result.value.frozen) }) : (result.error?.message ?? '')));

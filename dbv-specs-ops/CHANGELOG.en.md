@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Project memory in the conversation (REQ-34, REQ-35):** "Turn on project memory" in the Project view, showing both files first. The assistant gets a summary as a context chip (removable) and agents get it in their first message. When something is decided, the AI proposes saving it with an editable "Save in the project memory?" card (at most one per turn, nothing is written without accepting). "Remember" button in the conversation. Agents read and extend it with `project_memory_read` and `project_memory_propose` of the app's MCP server, which now receives `--project`.
 - **Project memory (core, REQ-34):** `dbv-unreal-ai/memory.md` and `task.md` next to the `.uproject`, in English. Only those two files are written, without following links, atomically and checking that nobody changed them since they were read (by hand, by `git pull` or from another process). Nothing that looks like a key is ever saved. "Revert preparation" leaves it alone.
 - **World Labs API key** in Settings, stored in the system keychain like the Tripo key (one way only), with where to create it (`platform.worldlabs.ai`).
 - README: "Download and install" section for Windows, macOS and Linux with the Release installers, how to get past the SmartScreen and Gatekeeper warnings, and the planned channels (Homebrew, Microsoft Store, Uptodown).

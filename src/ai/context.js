@@ -104,6 +104,7 @@ export function agentPreamble({ lang = 'es', domain = '' } = {}) {
  * @property {Array<{level: number, text: string}>} [outline]
  * @property {Array<{path: string, content: string}>} [attachments] Mencionados con @ o añadidos.
  * @property {{title: string, text: string}|null} [section] Sección visible adjuntada con el botón.
+ * @property {Array<{id: string, label: string, title: string, text: string}>} [notes] Notas del host, antes que todo lo demás.
  * @property {string[]} [excluded] Elementos que el usuario quitó del indicador.
  */
 
@@ -145,6 +146,9 @@ export function buildContext(source, budget) {
     }
   };
 
+  // Primero las notas del host: cortas y con lo que el proyecto ya decidió (la memoria, REQ-34).
+  for (const note of source.notes ?? []) add(note.id, note.label, `## ${note.title}
+${note.text}`);
   const active = source.active;
   if (active?.selection) add('selection', `selección (${active.path})`, `## Selected text in ${active.path}\n\`\`\`markdown\n${active.selection}\n\`\`\``);
   if (source.section?.text) add('section', source.section.title, `## Visible section: ${source.section.title}\n\`\`\`markdown\n${source.section.text}\n\`\`\``);

@@ -26,6 +26,16 @@ pub struct MemoryStatus {
     pub tasks: Snapshot,
     pub task_list: Vec<Task>,
     pub summary: String,
+    /// Lo que crearía «Activar» (ficheros que faltan y su contenido), para enseñarlo ANTES (REQ-34).
+    pub missing: Vec<Template>,
+}
+
+/// Un fichero que «Activar» crearía.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Template {
+    pub file: String,
+    pub text: String,
 }
 
 /// Carpeta del proyecto a partir de la ruta de su `.uproject` (o de la propia carpeta).
@@ -38,7 +48,9 @@ fn project_dir(project: &str) -> Result<PathBuf, UnrealError> {
 /// Estado de la memoria de un proyecto (para cualquier proceso: la ventana y `--mcp`).
 pub fn status_of(dir: &Path) -> Result<MemoryStatus, UnrealError> {
     let tasks = read(dir, Doc::Tasks)?;
-    let status = MemoryStatus { active: is_active(dir), memory: read(dir, Doc::Memory)?, task_list: parse_tasks(&tasks.text), tasks, summary: summary(dir)? };
+    let memory = read(dir, Doc::Memory)?;
+    let missing = [(&memory, Doc::Memory), (&tasks, Doc::Tasks)].iter().filter(|(snap, _)| !snap.exists).map(|(_, doc)| Template { file: format!("{}/{}", super::FOLDER, doc.file_name()), text: doc.template().to_string() }).collect();
+    let status = MemoryStatus { active: is_active(dir), memory, task_list: parse_tasks(&tasks.text), tasks, summary: summary(dir)?, missing };
     Ok(status)
 }
 
@@ -61,6 +73,12 @@ pub fn memory_apply(project: String, doc: Doc, base_hash: String, edit: Edit) ->
     apply(&project_dir(&project)?, doc, &base_hash, &edit)
 }
 
+/// Definiciones de las herramientas de memoria, las mismas que publica el MCP propio (D10). @spec REQ-38
+#[tauri::command]
+pub fn memory_tool_specs() -> Vec<serde_json::Value> {
+    super::tools::specs()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,7 +92,10 @@ mod tests {
         assert_eq!(project_dir(&uproject.to_string_lossy()).unwrap(), dir.path());
         assert_eq!(project_dir(&dir.path().to_string_lossy()).unwrap(), dir.path());
         assert!(matches!(project_dir("Z:/no/existe/Demo.uproject"), Err(UnrealError::NotFound(_))));
+        let before = memory_status(uproject.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(before.missing.iter().map(|m| m.file.as_str()).collect::<Vec<_>>(), vec!["dbv-unreal-ai/memory.md", "dbv-unreal-ai/task.md"], "se enseña antes lo que se creará");
         let status = memory_activate(uproject.to_string_lossy().into_owned()).unwrap();
+        assert!(status.missing.is_empty());
         assert!(status.active && status.tasks.exists && status.task_list.is_empty());
         let edit: Edit = serde_json::from_value(serde_json::json!({ "op": "append", "section": "Tasks", "entry": "- [ ] Build the cabin" })).unwrap();
         let saved = memory_apply(uproject.to_string_lossy().into_owned(), Doc::Tasks, status.tasks.hash, edit).unwrap();

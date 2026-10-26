@@ -27,7 +27,7 @@ export const unrealReadiness = (path) => call('unreal_readiness', { path });
 export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_plan', { path, variant, port: port ?? null });
 export const unrealPrepareApply = (path, variant, port) => call('unreal_prepare_apply', { path, variant, port: port ?? null });
 export const unrealPrepareRevert = (path, backup) => call('unreal_prepare_revert', { path, backup });
-export const appMcpCommand = (port) => call('app_mcp_command', { port });
+export const appMcpCommand = (port, project = null) => call('app_mcp_command', { port, project });
 /** Imagen (base64) o documento que el usuario eligió para adjuntar a la conversación (REQ-32). */
 export const aiReadAttachment = (path) => call('ai_read_attachment', { path });
 /** Diagnóstico sin secretos para una incidencia (RNF-08). */
@@ -61,6 +61,11 @@ export const libraryRename = (id, name) => call('library_rename', { id, name });
 export const libraryEntryDir = (id) => call('library_entry_dir', { id });
 export const librarySaveThumbnail = (id, png) => call('library_save_thumbnail', { id, png });
 export const generationAllowReference = (path) => call('generation_allow_reference', { path });
+// Memoria y tareas del proyecto (`dbv-unreal-ai/` junto al `.uproject`, REQ-34..REQ-38).
+export const memoryStatus = (project) => call('memory_status', { project });
+export const memoryActivate = (project) => call('memory_activate', { project });
+export const memoryApply = (project, doc, baseHash, edit) => call('memory_apply', { project, doc, baseHash, edit });
+export const memoryToolSpecs = () => call('memory_tool_specs');
 
 // ─── Progreso de los trabajos ────────────────────────────────────────
 // El oyente se registra ANTES de lanzar un trabajo y guarda lo que llega: un fallo inmediato (una clave

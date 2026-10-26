@@ -161,7 +161,52 @@ export function createProjectView(host, deps) {
       for (const path of recentList) sections.push(projectCard(path, button(t('project.openInUnreal'), () => openInUnreal(path))));
     }
     if (selected && readiness) sections.push(readinessCard(open.find((e) => e.editor.project.toLowerCase() === selected.toLowerCase())));
+    if (selected) sections.push(await memoryCard(selected));
     host.replaceChildren(...sections);
+  }
+
+  /**
+   * Memoria del proyecto (REQ-34): qué es y, antes de activarla, qué ficheros crea y con qué contenido. Es aparte de
+   * «Preparar»: «Revertir preparación» no la toca (REJECTED-03).
+   */
+  async function memoryCard(path) {
+    const status = await api.memoryStatus(path);
+    if (!status.ok) return el('div', { className: 'card' }, el('p', { className: 'error', text: status.error.message }));
+    const memory = status.value;
+    const folder = `${dirName(path)}/dbv-unreal-ai`;
+    const activate = async () => {
+      const activated = await api.memoryActivate(path);
+      if (!activated.ok) return deps.toast(activated.error.message, 'error');
+      deps.toast(t('memory.activated'));
+      deps.onMemoryChanged?.();
+      return render();
+    };
+    const preview = () =>
+      deps.openModal([
+        el('h3', { text: t('memory.previewTitle') }),
+        el('p', { className: 'hint', text: t('memory.previewHint') }),
+        ...memory.missing.flatMap((file) => [el('div', { className: 'mono subheading', text: file.file }), el('pre', { className: 'diff', text: file.text })]),
+        el('div', { className: 'row' }, button(t('memory.activate'), async () => {
+          deps.closeModal();
+          await activate();
+        }, 'btn-primary'), button(t('memory.cancel'), deps.closeModal, 'btn-ghost')),
+      ]);
+    const open = memory.taskList.filter((task) => !task.done).length;
+    return el(
+      'div',
+      { className: 'card stack' },
+      el('h3', { text: t('memory.title') }),
+      memory.active
+        ? el('p', { text: t('memory.activeSummary', { lines: String(memory.memory.text.split('\n').length), open: String(open) }) })
+        : el('p', { className: 'hint', text: t('memory.intro') }),
+      el(
+        'div',
+        { className: 'row' },
+        memory.active ? null : button(t('memory.activate'), preview),
+        memory.active ? button(t('memory.openPlan'), () => deps.showView?.('plan')) : null,
+        memory.active ? button(t('lib.reveal'), () => window.__TAURI__.opener.revealItemInDir(folder), 'btn-ghost') : null,
+      ),
+    );
   }
 
   function readinessCard(editor) {

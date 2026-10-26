@@ -287,6 +287,10 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .unreal-approval__actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .unreal-approval__decision { font-size: 12px; color: var(--text-muted); }
 .unreal-approval--deny { border-left-color: var(--unreal-offline); }
+/* Tarjeta «¿Guardar en la memoria del proyecto?» (REQ-35): acento, no «modificar», porque no cambia el editor (DESIGN.md v0.2). */
+.memory-save { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 12px; margin: 8px 0; display: grid; gap: 6px; }
+.memory-save__entry { width: 100%; resize: vertical; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+.memory-save--discard { border-left-color: var(--unreal-offline); }
 
 /* ─── Modales de la app ─────────────────────────────────────────────── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: grid; place-items: center; z-index: 30; }

@@ -51,7 +51,7 @@
   - [ ] Plugin de splats (P-09).
   - [ ] Pendiente de la v0.1: la ruta de importación lleva `model/SkeletalMeshes` (Interchange crea subcarpetas con el nombre del fichero); la convención es `/Game/DBV/<Tipo>/<nombre>`.
 - [x] **S19 · Memoria: núcleo** (REQ-34) — `project_memory/` en Rust: confinamiento, secretos, hash base, formato tolerante, resumen; test «preparar → memoria → revertir → la memoria sigue».
-- [ ] **S20 · Memoria en la conversación** (REQ-34, REQ-35) — activar, ficha de resumen, preámbulo de agentes, `project_memory_read`/`_propose`, tarjeta «¿Guardar…?», «Recordar», `--project` al `--mcp` del agente.
+- [x] **S20 · Memoria en la conversación** (REQ-34, REQ-35) — activar, ficha de resumen, preámbulo de agentes, `project_memory_read`/`_propose`, tarjeta «¿Guardar…?», «Recordar», `--project` al `--mcp` del agente.
 - [ ] **S21 · Vista Plan** (REQ-36) — tareas, «Planificar» con `project_tasks_propose` y coste de la app, «Hacer esta tarea».
 - [ ] **S22 · Tareas comprobadas** (REQ-37) — criterios, `check_task` (toolset 0.3.0 o `RunPython` con código fijo).
 - [ ] **S23 · Memoria en el MCP propio** (REQ-38) — cinco herramientas, test de paridad.

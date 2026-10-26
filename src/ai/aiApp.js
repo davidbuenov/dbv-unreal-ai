@@ -201,6 +201,8 @@ export function createAiApp(deps) {
       onClose: () => host.showPanel(false),
       onAttachSection: () => attachSection(),
       onAttachFiles: host.pickAttachments ? () => attachExternal() : undefined,
+      // La petición la escribe el host (sabe si hay memoria del proyecto y en qué idioma): REQ-35.
+      onRemember: host.rememberRequest ? () => ask(host.rememberRequest(getLanguage())) : undefined,
       onCopy: (code) => navigator.clipboard.writeText(code).then(() => host.toast(t('ai.copied'))),
       onInsert: (code) => insertAtCursor(code),
     },
@@ -343,6 +345,8 @@ export function createAiApp(deps) {
       outline: host.getOutline?.() ?? [],
       section: section ? { title: section.title, text: section.content } : null,
       attachments: [...attachments.filter((a) => a.kind === 'file'), ...extraAttachments],
+      // Notas que aporta el host (p. ej. el resumen de la memoria del proyecto, REQ-34): fichas quitables.
+      notes: host.contextNotes?.() ?? [],
       excluded: [...excluded],
     };
   }
