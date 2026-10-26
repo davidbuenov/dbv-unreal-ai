@@ -62,6 +62,7 @@
 - [ ] **S28 · World Labs → Unreal** (REQ-18) — `import_world`, escala y suelo, cielo y splats según S18.
 - [ ] **S28b · Componente nativo propio de Gaussian Splatting en C++** (REQ-41, decidido con el usuario el 2026-10-26) — Tras el hallazgo de la ventana de pago/clave "Pro" en XGRIDS LCC, se rechaza la dependencia privativa. Desarrollo de `UDbvGaussianSplatComponent` y `ADbvGaussianSplatActor` (licencia MIT) en `Plugins/DBVUnrealAI` (módulo `DBVUnrealAICpp`), aprovechando las lecciones de YaGS (Apache 2.0: escritura de profundidad para oclusión mutua, GPU radix sort, y soporte nativo de `.spz` y `.ply`).
 - [x] **S28c · Spike y validación visual de splats** (P-10) — *Completado el 2026-10-26:* El spike de XGRIDS LCC (`LCC4Unreal`) validó que los `.spz` de World Labs funcionan a la perfección con escala 100x y orientación Roll=90.0° en UE 5.8.4, sirviendo de referencia de calidad idéntica a Wordsmith. Con esa referencia y las lecciones de YaGS, se avanza en la solución propia 100% nativa y gratuita.
+- [ ] **S28d · Importación de escenarios World Labs (Splat + Collider Mesh) [v0.2]** (REQ-42, añadido el 2026-10-26 tras analizar Wordsmith) — Detección e importación directa de manifiestos JSON (individual o carpeta completa `Wordsmith/storage/generations/worldlabs/`): descarga de splat `.spz`, malla de colisión `.glb` y miniatura `.webp`, guardado en biblioteca con metadatos de escala/suelo (`metric_scale_factor`, `ground_plane_offset`), y envío a Unreal con ambos actores alineados.
 - [ ] **S29 · MCPs de terceros** (REQ-21) — Ajustes, stdio/HTTP, asistente y ACP, permisos.
 - [x] ~~**S30 · Actualizador** (REQ-39)~~ — retirado por el usuario el 2026-10-26: Microsoft Store gestiona las actualizaciones en Windows.
 - [ ] `/test` · `/code-simplify` · `/ship` v0.2.0.
@@ -97,9 +98,10 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-26, implementación completada de las mejoras de Biblioteca v0.2.0 (REQ-30, REQ-41).
-> **Exact point / Punto exacto:** (1) Clarificación de importación de ficheros vs fusión de biblioteca externa con tooltips; (2) Soporte de Gaussian Splats (`.spz` y `.ply`) con `kind = "world"` y miniatura 🏝️; (3) Descarga e importación directa desde URL (`library_import_url` con `ureq`); (4) División de la Biblioteca en pestañas «Todos», «Objetos» y «Escenarios». 163 tests Rust, 262 Vitest y 30 Python en verde.
+> **Last update / Última actualización:** 2026-10-26, incorporación de REQ-42 (Importación de escenarios World Labs con Splats + Collider Mesh) y miniaturas automáticas en segundo plano (REQ-31).
+> **Exact point / Punto exacto:** (1) Miniaturas automáticas y adopción de imágenes acompañantes implementadas y probadas; (2) Ficheros de World Labs analizados (`Wordsmith/storage/generations/worldlabs/*.json`); (3) Requisito REQ-42 y tarea S28d especificados en framework SDD. 164 tests Rust, 263 Vitest y 30 Python en verde.
 > **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, toolset C++ 0.2.0): Nivel activo `/Game/DBV/Maps/PruebasGaussianSplat`.
-> **Pending / Pendiente:** (1) Implementar la arquitectura de `UDbvGaussianSplatComponent` y `ADbvGaussianSplatActor` en `Plugins/DBVUnrealAI/Source/DBVUnrealAICpp` con lector de `.spz` y proxy de render; (2) Compilar y verificar en UE 5.8.4; (3) Conectar con la generación de World Labs (S27/S28).
-> **Next step / Próximo paso:** Implementar el lector SPZ (`DbvSpzReader`), los tipos de datos de splat y los componentes `UDbvGaussianSplatComponent` / `ADbvGaussianSplatActor` en C++.
+> **Pending / Pendiente:** (1) Implementar importación en backend y UI de manifiestos JSON de World Labs (splat `.spz`, `colliderMeshUrl` `.glb`, `previewUrl` y metadatos de escala); (2) Añadir tests unitarios en Rust y Vitest; (3) Conectar colocación alineada splat + colisión en «Enviar a Unreal».
+> **Next step / Próximo paso:** Implementar el parser y descargador de manifiestos World Labs en `src-tauri/src/library/mod.rs` y la interfaz de selección en `src/app/libraryView.js`.
+
 
