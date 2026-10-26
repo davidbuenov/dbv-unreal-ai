@@ -19,8 +19,8 @@ import { button, el } from './dom.js';
 import { confirmAndLaunch } from './generateView.js';
 import { generateThumbnailForEntry, openPreview, viewableFile } from '../generation/preview.js';
 
-/** Extensiones que se pueden importar (`library::MODEL_EXTENSIONS`, `SPLAT_EXTENSIONS` e imágenes). */
-export const IMPORT_EXTENSIONS = ['glb', 'gltf', 'fbx', 'obj', 'usdz', 'spz', 'ply', 'png', 'jpg', 'jpeg', 'webp'];
+/** Extensiones que se pueden importar (`library::MODEL_EXTENSIONS`, `SPLAT_EXTENSIONS`, imágenes y manifiestos World Labs). */
+export const IMPORT_EXTENSIONS = ['glb', 'gltf', 'fbx', 'obj', 'usdz', 'spz', 'ply', 'png', 'jpg', 'jpeg', 'webp', 'json'];
 
 /** Animaciones que se pueden elegir de una vez (límite de Tripo por tarea). */
 export const MAX_ANIMATIONS = 5;

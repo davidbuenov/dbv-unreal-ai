@@ -125,6 +125,65 @@ pub fn filename_from_url(url: &str) -> Option<String> {
     }
 }
 
+/// Descarga un fichero por HTTP/HTTPS de forma segura limitando el tamaño máximo.
+pub fn download_to(agent: &ureq::Agent, url: &str, target: &Path, max_bytes: usize) -> Result<(), UnrealError> {
+    let response = agent.get(url).call().map_err(|error| {
+        UnrealError::Unreachable(format!("error descargando desde {url}: {error}"))
+    })?;
+    let status = response.status().as_u16();
+    if status != 200 {
+        return Err(UnrealError::Protocol(format!("la descarga de {url} respondió HTTP {status}")));
+    }
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    response
+        .into_body()
+        .into_reader()
+        .take((max_bytes + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| io_error(target, &error))?;
+    if bytes.len() > max_bytes {
+        return Err(UnrealError::Protocol(format!("el fichero descargado supera el límite de {max_bytes} bytes")));
+    }
+    std::fs::write(target, &bytes).map_err(|error| io_error(target, &error))
+}
+
+/// Descarga desde URL remota o copia desde fichero local.
+pub fn download_or_copy(
+    agent: &ureq::Agent,
+    source_str: &str,
+    base_dir: &Path,
+    target: &Path,
+    max_bytes: usize,
+) -> Result<(), UnrealError> {
+    if source_str.starts_with("http://") || source_str.starts_with("https://") {
+        download_to(agent, source_str, target, max_bytes)
+    } else {
+        let local_path = if Path::new(source_str).is_absolute() {
+            PathBuf::from(source_str)
+        } else {
+            base_dir.join(source_str)
+        };
+        if local_path.is_file() {
+            std::fs::copy(&local_path, target).map(|_| ()).map_err(|e| io_error(&local_path, &e))
+        } else {
+            Err(UnrealError::NotFound(format!("fichero local no encontrado: {}", local_path.display())))
+        }
+    }
+}
+
+/// Comprueba si un JSON describe una escena de World Labs (Marble v1.1). @spec REQ-42
+pub fn is_worldlabs_manifest(value: &Value) -> bool {
+    value.get("sceneUrl").is_some()
+        || value.get("scene_url").is_some()
+        || value.get("colliderMeshUrl").is_some()
+        || value.get("collider_mesh_url").is_some()
+        || value.pointer("/rawResponse/assets/splats").is_some()
+        || value.pointer("/rawResponse/assets/mesh/collider_mesh_url").is_some()
+        || value.pointer("/rawResponse/world_marble_url").is_some()
+        || value.get("world_marble_url").is_some()
+}
+
 /// Nombre legible a partir del nombre de un fichero (`linterna_hierro-02.glb` → «Linterna hierro 02»).
 pub fn name_from_file(path: &Path) -> String {
     let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
@@ -311,10 +370,13 @@ impl Library {
         })
     }
 
-    /// Copia un modelo (`.glb`, `.gltf`, `.fbx`, `.obj`, `.usdz`), un Gaussian Splat (`.spz`, `.ply`) o una imagen
-    /// a la biblioteca como entrada nueva (proveedor `import`), con los ficheros que necesita (búferes, `.mtl`, texturas). @spec REQ-30, REQ-41
+    /// Copia un modelo (`.glb`, `.gltf`, `.fbx`, `.obj`, `.usdz`), un Gaussian Splat (`.spz`, `.ply`), una imagen
+    /// o un escenario de World Labs (`.json`) a la biblioteca. @spec REQ-30, REQ-41, REQ-42
     pub fn import_file(&self, source: &Path, name: Option<&str>) -> Result<LibraryEntry, UnrealError> {
         let ext = extension(source);
+        if ext == "json" {
+            return self.import_worldlabs_manifest(source, name);
+        }
         let kind = if MODEL_EXTENSIONS.contains(&ext.as_str()) {
             "model"
         } else if SPLAT_EXTENSIONS.contains(&ext.as_str()) {
@@ -322,7 +384,10 @@ impl Library {
         } else if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
             "image"
         } else {
-            return Err(UnrealError::Format(format!("{} no es un modelo (glb, gltf, fbx, obj, usdz), splat (spz, ply) ni una imagen (png, jpg, webp)", source.display())));
+            return Err(UnrealError::Format(format!(
+                "{} no es un modelo (glb, gltf, fbx, obj, usdz), splat (spz, ply), imagen (png, jpg, webp) ni manifiesto de World Labs (json)",
+                source.display()
+            )));
         };
         let folder = source.parent().ok_or_else(|| UnrealError::NotFound(source.display().to_string()))?;
         let file_name = source.file_name().map(|n| n.to_string_lossy().to_string()).ok_or_else(|| UnrealError::NotFound(source.display().to_string()))?;
@@ -387,6 +452,143 @@ impl Library {
         Ok(entry)
     }
 
+    /// Importa un escenario de World Labs a partir de su manifiesto JSON (REQ-42).
+    /// Descarga el splat (.spz), la malla de colisión (.glb) y la miniatura (.webp),
+    /// conservando en parámetros la escala métrica y el desplazamiento del suelo.
+    pub fn import_worldlabs_manifest(&self, source: &Path, name: Option<&str>) -> Result<LibraryEntry, UnrealError> {
+        let text = std::fs::read_to_string(source).map_err(|e| io_error(source, &e))?;
+        let json: Value = serde_json::from_str(&text).map_err(|e| UnrealError::Format(format!("JSON inválido en {}: {e}", source.display())))?;
+        if !is_worldlabs_manifest(&json) {
+            return Err(UnrealError::Format(format!("{} no es un manifiesto válido de World Labs (falta sceneUrl o assets)", source.display())));
+        }
+
+        let base_dir = source.parent().unwrap_or_else(|| Path::new("."));
+        let world_id = json.get("id").or_else(|| json.pointer("/rawResponse/world_id")).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+
+        let candidate_name = name.map(str::to_string)
+            .or_else(|| json.pointer("/rawResponse/display_name").and_then(|v| v.as_str()).map(str::to_string))
+            .or_else(|| json.get("theme").and_then(|v| v.as_str()).map(|t| {
+                t.split('-').map(|w| {
+                    let mut c = w.chars();
+                    c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+                }).collect::<Vec<_>>().join(" ")
+            }))
+            .or_else(|| json.get("prompt").and_then(|v| v.as_str()).map(suggest_name))
+            .unwrap_or_else(|| name_from_file(source));
+
+        let (id, dir) = self.new_entry_dir(&candidate_name)?;
+
+        let agent = ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .timeout_global(Some(Duration::from_secs(300)))
+            .build()
+            .new_agent();
+
+        let outcome = (|| -> Result<LibraryEntry, UnrealError> {
+            let mut files = Vec::new();
+
+            // 1. Splat URL (.spz)
+            let splat_url = json.pointer("/rawResponse/assets/splats/spz_urls/full_res")
+                .or_else(|| json.get("sceneUrl"))
+                .or_else(|| json.get("scene_url"))
+                .or_else(|| json.pointer("/rawResponse/assets/splats/spz_urls/500k"))
+                .and_then(|v| v.as_str());
+
+            let mut splat_filename = None;
+            if let Some(s_url) = splat_url {
+                let fname = filename_from_url(s_url).unwrap_or_else(|| "scene.spz".to_string());
+                let dest = dir.join(&fname);
+                download_or_copy(&agent, s_url, base_dir, &dest, 512 * 1024 * 1024)?;
+                files.push(fname.clone());
+                splat_filename = Some(fname);
+            }
+
+            // 2. Collider Mesh URL (.glb)
+            let collider_url = json.pointer("/rawResponse/assets/mesh/collider_mesh_url")
+                .or_else(|| json.get("colliderMeshUrl"))
+                .or_else(|| json.get("collider_mesh_url"))
+                .and_then(|v| v.as_str());
+
+            let mut collider_filename = None;
+            if let Some(c_url) = collider_url {
+                let fname = filename_from_url(c_url).unwrap_or_else(|| "collider.glb".to_string());
+                let dest = dir.join(&fname);
+                if download_or_copy(&agent, c_url, base_dir, &dest, 100 * 1024 * 1024).is_ok() {
+                    files.push(fname.clone());
+                    collider_filename = Some(fname);
+                }
+            }
+
+            // 3. Thumbnail URL (.webp)
+            let thumbnail_url = json.pointer("/rawResponse/assets/thumbnail_url")
+                .or_else(|| json.get("previewUrl"))
+                .or_else(|| json.get("preview_url"))
+                .and_then(|v| v.as_str());
+
+            let mut thumbnail_file = None;
+            if let Some(t_url) = thumbnail_url {
+                let ext = filename_from_url(t_url).map(|f| extension(Path::new(&f))).unwrap_or_else(|| "webp".to_string());
+                let fname = format!("thumbnail.{ext}");
+                let dest = dir.join(&fname);
+                if download_or_copy(&agent, t_url, base_dir, &dest, 10 * 1024 * 1024).is_ok() {
+                    thumbnail_file = Some(fname);
+                }
+            }
+
+            // 4. Copia del manifiesto original
+            let manifest_dest = dir.join("manifest.json");
+            let _ = std::fs::copy(source, &manifest_dest);
+            files.push("manifest.json".to_string());
+
+            let metric_scale = json.pointer("/rawResponse/assets/splats/semantics_metadata/metric_scale_factor")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+
+            let ground_offset = json.pointer("/rawResponse/assets/splats/semantics_metadata/ground_plane_offset")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+
+            let prompt = json.get("prompt")
+                .or_else(|| json.pointer("/rawResponse/world_prompt/text_prompt"))
+                .or_else(|| json.pointer("/rawResponse/assets/caption"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+
+            let entry = LibraryEntry {
+                id,
+                name: candidate_name,
+                provider: "worldlabs".to_string(),
+                kind: "world".to_string(),
+                prompt,
+                parameters: serde_json::json!({
+                    "manifest_source": source.to_string_lossy(),
+                    "world_id": world_id,
+                    "metric_scale_factor": metric_scale,
+                    "ground_plane_offset": ground_offset,
+                    "splat_file": splat_filename,
+                    "collider_file": collider_filename,
+                }),
+                task_id: String::new(),
+                created_at: now_secs(),
+                credits: None,
+                files,
+                thumbnail: thumbnail_file,
+                sent_to: vec![],
+                parent: None,
+                output: Value::Null,
+            };
+
+            self.add(entry.clone())?;
+            Ok(entry)
+        })();
+
+        if outcome.is_err() {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+        outcome
+    }
+
     /// Descarga un fichero desde una URL (HTTPS, HTTP o localhost en tests) y lo importa a la biblioteca.
     /// Admite modelos 3D (.glb, .gltf, .fbx, .obj, .usdz), Gaussian Splats (.spz, .ply) e imágenes.
     /// @spec REQ-30
@@ -435,25 +637,7 @@ impl Library {
             .new_agent();
 
         let outcome = (|| -> Result<LibraryEntry, UnrealError> {
-            let response = agent.get(trimmed_url).call().map_err(|error| {
-                UnrealError::Unreachable(format!("error descargando desde {trimmed_url}: {error}"))
-            })?;
-            let status = response.status().as_u16();
-            if status != 200 {
-                return Err(UnrealError::Protocol(format!("la descarga respondió HTTP {status}")));
-            }
-            let mut bytes = Vec::new();
-            use std::io::Read;
-            response
-                .into_body()
-                .into_reader()
-                .take(512 * 1024 * 1024 + 1)
-                .read_to_end(&mut bytes)
-                .map_err(|error| io_error(&target_path, &error))?;
-            if bytes.len() > 512 * 1024 * 1024 {
-                return Err(UnrealError::Protocol("el fichero descargado supera el límite de 512 MB".into()));
-            }
-            std::fs::write(&target_path, &bytes).map_err(|error| io_error(&target_path, &error))?;
+            download_to(&agent, trimmed_url, &target_path, 512 * 1024 * 1024)?;
 
             let mut imported = self.import_file(&target_path, name)?;
             imported.parameters = serde_json::json!({
@@ -685,5 +869,80 @@ mod tests {
         assert_eq!(filename_from_url("https://example.com/asset.glb").as_deref(), Some("asset.glb"));
         assert_eq!(filename_from_url("https://example.com/no-extension/"), None);
     }
+
+    /// @spec REQ-42
+    #[test]
+    fn reconoce_manifiesto_worldlabs() {
+        let valid_wl = serde_json::json!({
+            "sceneUrl": "https://example.com/scene.spz",
+            "colliderMeshUrl": "https://example.com/collider.glb"
+        });
+        assert!(is_worldlabs_manifest(&valid_wl));
+
+        let valid_marble = serde_json::json!({
+            "rawResponse": {
+                "world_marble_url": "https://worldlabs.ai/worlds/w1",
+                "assets": {
+                    "splats": { "spz_urls": { "full_res": "https://example.com/scene.spz" } },
+                    "mesh": { "collider_mesh_url": "https://example.com/collider.glb" }
+                }
+            }
+        });
+        assert!(is_worldlabs_manifest(&valid_marble));
+
+        let random_json = serde_json::json!({ "name": "other", "version": 1 });
+        assert!(!is_worldlabs_manifest(&random_json));
+    }
+
+    /// @spec REQ-42
+    #[test]
+    fn importa_manifiesto_worldlabs_con_splat_y_colision() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("source");
+        std::fs::create_dir_all(&src).unwrap();
+
+        std::fs::write(src.join("isla.spz"), b"SPZ fake binary data").unwrap();
+        std::fs::write(src.join("isla_collider.glb"), b"glTF fake collider").unwrap();
+        std::fs::write(src.join("preview.webp"), b"WEBP fake image").unwrap();
+
+        let manifest_content = serde_json::json!({
+            "id": "wl-test-123",
+            "prompt": "An abandoned pirate island in the Caribbean",
+            "sceneUrl": "isla.spz",
+            "colliderMeshUrl": "isla_collider.glb",
+            "previewUrl": "preview.webp",
+            "rawResponse": {
+                "world_id": "wl-test-123",
+                "display_name": "Abandoned Pirate Island",
+                "assets": {
+                    "splats": {
+                        "semantics_metadata": {
+                            "metric_scale_factor": 2.15,
+                            "ground_plane_offset": 1.25
+                        }
+                    }
+                }
+            }
+        });
+        let manifest_path = src.join("manifest.json");
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest_content).unwrap()).unwrap();
+
+        let library = Library::new(dir.path().join("library"));
+        let entry = library.import_file(&manifest_path, None).unwrap();
+
+        assert_eq!(entry.kind, "world");
+        assert_eq!(entry.provider, "worldlabs");
+        assert_eq!(entry.name, "Abandoned Pirate Island");
+        assert_eq!(entry.primary_file().as_deref(), Some("isla.spz"));
+        assert!(entry.files.contains(&"isla_collider.glb".to_string()));
+        assert!(entry.files.contains(&"manifest.json".to_string()));
+        assert_eq!(entry.thumbnail.as_deref(), Some("thumbnail.webp"));
+
+        let scale = entry.parameters.get("metric_scale_factor").and_then(|v| v.as_f64()).unwrap();
+        assert!((scale - 2.15).abs() < 1e-4);
+        let offset = entry.parameters.get("ground_plane_offset").and_then(|v| v.as_f64()).unwrap();
+        assert!((offset - 1.25).abs() < 1e-4);
+    }
 }
+
 

@@ -345,6 +345,25 @@ pub async fn library_import(app: AppHandle, paths: Vec<String>) -> Result<Vec<cr
                 let before: Vec<String> = library.list().into_iter().map(|e| e.id).collect();
                 library.merge_from(&path)?;
                 added.extend(library.list().into_iter().filter(|e| !before.contains(&e.id)));
+            } else if path.is_dir() {
+                let mut dir_added = 0;
+                if let Ok(entries) = std::fs::read_dir(&path) {
+                    for entry_res in entries.flatten() {
+                        let sub_path = entry_res.path();
+                        if sub_path.is_file() {
+                            if let Ok(imported) = library.import_file(&sub_path, None) {
+                                added.push(imported);
+                                dir_added += 1;
+                            }
+                        }
+                    }
+                }
+                if dir_added == 0 {
+                    return Err(UnrealError::NotFound(format!(
+                        "no se encontraron modelos, splats ni manifiestos de World Labs en {}",
+                        path.display()
+                    )));
+                }
             } else {
                 added.push(library.import_file(&path, None)?);
             }

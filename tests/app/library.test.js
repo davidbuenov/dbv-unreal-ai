@@ -9,7 +9,7 @@
 // convierte en 3D), siempre por la tarjeta de coste, y nunca más de cinco animaciones por tarea.
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createLibraryView, filterEntries, filterEntriesByTab, isV1Rig } from '../../src/app/libraryView.js';
+import { createLibraryView, filterEntries, filterEntriesByTab, isV1Rig, IMPORT_EXTENSIONS } from '../../src/app/libraryView.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 
 const base = { provider: 'tripo', prompt: '', createdAt: 1, files: ['model.glb'], sentTo: [], parameters: {} };
@@ -176,5 +176,41 @@ describe('Biblioteca (REQ-16, REQ-30)', () => {
     await vi.waitFor(() => expect(invoked.some(([c]) => c === 'library_import_url')).toBe(true));
     expect(invoked.find(([c]) => c === 'library_import_url')[1]).toEqual({ url: 'https://cdn.worldlabs.ai/scenes/cueva.spz', name: null });
   });
+
+  /** @spec REQ-42 */
+  it('IMPORT_EXTENSIONS admite json y un escenario World Labs muestra miniatura y ficha', async () => {
+    expect(IMPORT_EXTENSIONS).toContain('json');
+    expect(IMPORT_EXTENSIONS).toContain('spz');
+    expect(IMPORT_EXTENSIONS).toContain('ply');
+
+    const worldManifestEntry = {
+      ...base,
+      id: 'isla-wl',
+      name: 'Isla Calavera',
+      kind: 'world',
+      provider: 'worldlabs',
+      thumbnail: 'thumbnail.webp',
+      files: ['isla.spz', 'isla_collider.glb', 'manifest.json'],
+      parameters: {
+        metric_scale_factor: 2.1,
+        ground_plane_offset: 1.2,
+      },
+    };
+
+    const { host, library } = view();
+    window.__TAURI__.core.invoke.mockImplementation(async (command) => {
+      if (command === 'library_list') return [worldManifestEntry];
+      if (command === 'library_location') return { current: 'C:/lib', default: 'C:/lib', isDefault: true };
+      if (command === 'library_file_path') return 'C:/lib/isla-wl/thumbnail.webp';
+      return null;
+    });
+
+    await library.render();
+    const card = host.querySelector('.asset-card');
+    expect(card).toBeTruthy();
+    expect(card.dataset.kind).toBe('world');
+    expect(card.textContent).toContain('Isla Calavera');
+  });
 });
+
 
