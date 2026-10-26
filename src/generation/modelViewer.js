@@ -96,11 +96,38 @@ export async function createModelViewer(container, url, options = {}) {
   const gltf = await new GLTFLoader().loadAsync(url);
   const model = gltf.scene;
   setupModelScene(THREE, scene, model);
+
+  let hasMesh = false;
+  model.traverse((child) => {
+    if (child.isMesh) hasMesh = true;
+  });
+
+  let helper = null;
+  if (!hasMesh) {
+    helper = new THREE.SkeletonHelper(model);
+    scene.add(helper);
+  }
+
   // Encuadre: el modelo centrado y la cámara a la distancia que lo abarca, un poco por encima.
-  const box = new THREE.Box3().setFromObject(model);
+  const box = new THREE.Box3();
+  if (hasMesh) {
+    box.setFromObject(model);
+  } else {
+    model.traverse((child) => {
+      if (child.isBone || child.type === 'Bone') {
+        const v = new THREE.Vector3();
+        child.getWorldPosition(v);
+        box.expandByPoint(v);
+      }
+    });
+    if (box.isEmpty()) {
+      box.min.set(-0.5, -0.5, -0.5);
+      box.max.set(0.5, 0.5, 0.5);
+    }
+  }
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   model.position.sub(sphere.center);
-  const distance = frameDistance(sphere.radius, camera.fov);
+  const distance = Math.max(0.5, frameDistance(sphere.radius, camera.fov));
   camera.position.set(distance * 0.6, distance * 0.35, distance * 0.75);
   camera.near = distance / 100;
   camera.far = distance * 100;
@@ -162,6 +189,7 @@ export async function createModelViewer(container, url, options = {}) {
       resize.disconnect();
       controls.dispose();
       mixer?.stopAllAction();
+      helper?.dispose?.();
       scene.traverse((node) => {
         node.geometry?.dispose?.();
         for (const material of [node.material].flat().filter(Boolean)) {
@@ -197,6 +225,15 @@ export async function renderModelThumbnail(url, size = 256) {
     const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
     const gltf = await new GLTFLoader().loadAsync(url);
     const model = gltf.scene;
+
+    let hasMesh = false;
+    model.traverse((child) => {
+      if (child.isMesh) hasMesh = true;
+    });
+    if (!hasMesh) {
+      return null;
+    }
+
     setupModelScene(THREE, scene, model);
 
     const box = new THREE.Box3().setFromObject(model);

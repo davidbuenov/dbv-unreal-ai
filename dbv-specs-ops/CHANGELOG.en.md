@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Animation viewer and modal null fix (REQ-16, REQ-31):** fixed literal "null" text appearing under titles in modal dialogs when opening models, rigs, and animation clips (caused by `replaceChildren` converting null arguments to text). Automatic detection of `animation` and `rig` kinds when importing GLBs without geometry; real-time skeletal rendering in Three.js via `SkeletonHelper` (without loop failure), automatic thumbnail inheritance from parent character, and informative header note.
 - **Automatic thumbnails in library (REQ-31):** imported 3D models without companion images (`thumbnail: null` in `library.json`) now automatically generate and persist their thumbnail (`thumbnail.png`) offscreen using Three.js in the background, updating the card in real-time. In addition, file imports automatically adopt companion images (`.png`, `.jpg`, `.webp`) sharing the same file stem if present in the source folder.
 - DBV Unreal AI toolset 0.3.0 (Python variant): `play_animation` with Tripo skeletons and `place_asset` on the floor. "Prepare" updates it; the C++ variant is unchanged (no recompilation needed).
 - The Project view went blank when a project was selected (the memory card used `dirName` without importing it). New test that renders the view with a selected project.

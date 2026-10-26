@@ -82,14 +82,18 @@ async function pumpThumbnailQueue() {
 
 /** Miniatura de un asset (la que trajo el proveedor, o una imagen del propio asset), o su icono. */
 export async function assetThumbnail(entry, className = 'asset-thumb') {
-  const box = el('div', { className, text: { rig: '🦴', animation: '💃', image: '🖼', world: '🏝️', splat: '🏝️' }[entry.kind] ?? '◆' });
+  const icon = { rig: '🦴', animation: '💃', image: '🖼', world: '🏝️', splat: '🏝️' }[entry.kind] ?? '◆';
+  const box = el('div', { className, text: icon, style: 'position: relative;' });
   const image = entry.thumbnail ?? (entry.kind === 'image' ? entry.files?.[0] : null);
   if (image) {
     const path = await api.libraryFilePath(entry.id, image);
     if (path.ok && path.value && window.__TAURI__?.core) {
       box.replaceChildren(el('img', { attrs: { src: window.__TAURI__.core.convertFileSrc(path.value), alt: entry.name } }));
+      if (entry.kind === 'animation' || entry.kind === 'rig') {
+        box.append(el('span', { className: 'asset-badge', text: icon, style: 'position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.6); border-radius: 4px; padding: 1px 4px; font-size: 13px;' }));
+      }
     }
-  } else if (viewableFile(entry) && window.__TAURI__?.core) {
+  } else if (viewableFile(entry) && entry.kind !== 'animation' && window.__TAURI__?.core) {
     pendingThumbnailQueue.push({ entry, box });
     pumpThumbnailQueue();
   }

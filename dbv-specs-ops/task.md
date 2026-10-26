@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo directamente en el editor (World Labs en v0.2).
-* **Estado actual**: **v0.1.0 publicada** el 2026-10-24 (tag `v0.1.0`, en local: no hay remoto). Incluye la v0.1 (S1–S11) y la ampliación tras la primera prueba del usuario (S12–S17).
-* **Última decisión técnica**: D9–D12 de `implementation_plan.md` §4 (trabajos compartidos por ficheros, herramientas de Tripo con una sola definición, biblioteca configurable, Three.js incluido). D1–D8 se tomaron sin el usuario (ADR-V010-001 en `memory.md`), para revisar.
-* **Próximo paso**: aprobación del plan de la v0.2.0 (`implementation_plan.md` §5) y después S18/S19.
+* **Estado actual**: **v0.2.0 en desarrollo** (v0.1.0 publicada el 2026-10-24). Completadas S18–S23, S25, S28c, S28d y mejoras de biblioteca (REQ-30, REQ-31, REQ-42). Corregido texto literal «null» en ventanas modales y soporte completo para importación y visualización esquelética 3D de clips de animación puros (REQ-16, REQ-31).
+* **Última decisión técnica**: D9–D12 de `implementation_plan.md` §4, S28d para escenarios World Labs (splat + colisión) y decisión de crear componente nativo C++ de 3DGS libre de costes/licencias privativas (MIT) en `Plugins/DBVUnrealAI`.
+* **Próximo paso**: S28b (desarrollo del componente nativo de 3DGS en C++ `UDbvGaussianSplatComponent` / `ADbvGaussianSplatActor`) y conexión para colocar splat + colisión en Unreal.
 
 ## Checklist de Tareas
 

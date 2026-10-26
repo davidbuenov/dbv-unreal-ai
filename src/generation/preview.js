@@ -97,11 +97,16 @@ export async function openPreview(entry, deps) {
   let showingRender = false;
 
   const isWorld = entry?.kind === 'world';
+  const isAnim = entry?.kind === 'animation';
   const notice = isWorld ? el('p', {
     className: 'hint',
     style: 'margin: 4px 0 8px 0; padding: 6px 10px; background: rgba(0, 0, 0, 0.05); border-radius: 6px; font-size: 13px;',
     text: t('preview.worldColliderNotice'),
-  }) : null;
+  }) : (isAnim ? el('p', {
+    className: 'hint',
+    style: 'margin: 4px 0 8px 0; padding: 6px 10px; background: rgba(0, 0, 0, 0.05); border-radius: 6px; font-size: 13px;',
+    text: t('preview.animationNotice'),
+  }) : null);
 
   let toggleBtn = null;
   if (isWorld && entry?.thumbnail) {
@@ -139,7 +144,7 @@ export async function openPreview(entry, deps) {
       stage,
       tools,
       el('div', { className: 'modal-actions' }, toggleBtn, deps.onSend ? button(t('lib.send'), () => deps.onSend(entry), 'btn-primary') : null, button(t('action.close'), deps.closeModal)),
-    ],
+    ].filter(Boolean),
     { onClose: () => viewer?.dispose(), wide: true },
   );
   const url = await urlFor(entry);

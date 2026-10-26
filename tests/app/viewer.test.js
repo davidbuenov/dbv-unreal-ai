@@ -8,9 +8,15 @@
 // jsdom no tiene WebGL: el pintado real lo comprueba el banco E2E con un GLB de prueba. Aquí, el encuadre, los
 // nombres de las animaciones y qué ficheros se pueden ver.
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 import { clipLabel, frameDistance } from '../../src/generation/modelViewer.js';
-import { generateThumbnailForEntry, viewableFile } from '../../src/generation/preview.js';
+import { generateThumbnailForEntry, openPreview, viewableFile } from '../../src/generation/preview.js';
+
+beforeAll(() => {
+  window.DBV_I18N?.register(APP_TRANSLATIONS);
+  window.DBV_I18N?.setLang('es');
+});
 
 describe('visor 3D (REQ-31)', () => {
   /** @spec REQ-31 */
@@ -38,6 +44,35 @@ describe('visor 3D (REQ-31)', () => {
 
     const noFile = await generateThumbnailForEntry({ files: ['test.txt'] });
     expect(noFile).toBeNull();
+  });
+
+  /** @spec REQ-31, REQ-16 */
+  it('openPreview no pasa elementos nulos ni texto literal null a openModal para modelos y animaciones', async () => {
+    let capturedChildren = null;
+    const deps = {
+      openModal: (children) => { capturedChildren = children; },
+      closeModal: () => {},
+    };
+
+    // Modelo normal (sin aviso de colisión ni animación)
+    await openPreview({ name: 'Pirata', kind: 'model' }, deps);
+    expect(capturedChildren).toBeTruthy();
+    expect(capturedChildren.every((c) => c !== null && c !== undefined)).toBe(true);
+    expect(capturedChildren.some((c) => c.textContent === 'null')).toBe(false);
+
+    // Animación (con aviso de animación esquelética)
+    await openPreview({ name: 'Pumuki dance', kind: 'animation' }, deps);
+    expect(capturedChildren).toBeTruthy();
+    expect(capturedChildren.every((c) => c !== null && c !== undefined)).toBe(true);
+    expect(capturedChildren.some((c) => c.textContent === 'null')).toBe(false);
+    expect(capturedChildren.some((c) => c.textContent?.includes('animación esquelética'))).toBe(true);
+
+    // Mundo (con aviso de malla de colisión)
+    await openPreview({ name: 'Playa', kind: 'world' }, deps);
+    expect(capturedChildren).toBeTruthy();
+    expect(capturedChildren.every((c) => c !== null && c !== undefined)).toBe(true);
+    expect(capturedChildren.some((c) => c.textContent === 'null')).toBe(false);
+    expect(capturedChildren.some((c) => c.textContent?.includes('colisión'))).toBe(true);
   });
 });
 

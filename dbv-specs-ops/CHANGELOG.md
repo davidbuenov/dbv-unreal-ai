@@ -29,6 +29,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Fixed
 
+- **Corrección en modal y visor de animaciones (REQ-16, REQ-31):** se corrige el texto literal «null» que aparecía debajo del título en ventanas modales al abrir modelos, rigs y clips de animación (provocado por `replaceChildren` convirtiendo argumentos nulos a texto). Detección automática del tipo `animation` y `rig` al importar archivos GLB sin geometría; renderizado en tiempo real del esqueleto con Three.js mediante `SkeletonHelper` (sin fallo en el bucle de animación), herencia automática de miniaturas del personaje base y aviso explicativo en la cabecera.
 - **Miniaturas automáticas en la biblioteca (REQ-31):** los modelos 3D importados sin imagen acompañante (`thumbnail: null` en `library.json`) ahora generan y guardan automáticamente su miniatura (`thumbnail.png`) fuera de pantalla con Three.js en segundo plano, actualizando la tarjeta de la biblioteca al momento. Además, la importación adopta automáticamente cualquier imagen acompañante (`.png`, `.jpg`, `.webp`) con el mismo nombre si existe en la carpeta de origen.
 - Toolset de DBV Unreal AI 0.3.0 (variante Python): `play_animation` con esqueletos de Tripo y `place_asset` en el suelo. «Preparar» lo actualiza; la variante C++ no cambia (no hace falta recompilar).
 - La vista Proyecto se quedaba en blanco al seleccionar un proyecto (la tarjeta de memoria usaba `dirName` sin importarlo). Test nuevo que pinta la vista con un proyecto seleccionado.

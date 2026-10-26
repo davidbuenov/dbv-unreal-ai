@@ -209,6 +209,38 @@ fn companions(path: &Path) -> Vec<String> {
     found.into_iter().filter(|uri| !uri.starts_with("data:") && !uri.contains("://") && !uri.contains("..") && !Path::new(uri).is_absolute()).collect()
 }
 
+/// Comprueba si un fichero 3D es un clip de animación esquelética.
+fn is_animation_file(path: &Path, stem_lower: &str) -> bool {
+    if stem_lower.contains("_anim_") || stem_lower.contains("_anim") || stem_lower.starts_with("anim_") || stem_lower.contains("_dance") {
+        return true;
+    }
+    if let Ok(mut f) = std::fs::File::open(path) {
+        use std::io::Read;
+        let mut header = [0u8; 20];
+        if f.read_exact(&mut header).is_ok() && &header[0..4] == b"glTF" {
+            let json_len = u32::from_le_bytes([header[12], header[13], header[14], header[15]]) as usize;
+            if json_len > 0 && json_len < 10 * 1024 * 1024 {
+                let mut json_buf = vec![0u8; json_len];
+                if f.read_exact(&mut json_buf).is_ok() {
+                    if let Ok(val) = serde_json::from_slice::<Value>(&json_buf) {
+                        let has_anims = val.get("animations").and_then(Value::as_array).is_some_and(|a| !a.is_empty());
+                        let has_meshes = val.get("meshes").and_then(Value::as_array).is_some_and(|m| !m.is_empty());
+                        if has_anims && !has_meshes {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Comprueba si un fichero 3D es un rig de personaje (esqueleto + malla).
+fn is_rig_file(stem_lower: &str) -> bool {
+    stem_lower.ends_with("_rig") || stem_lower.contains("_rig_")
+}
+
 impl LibraryEntry {
     /// El fichero principal: el primer modelo o splat, o el primer fichero si no hay modelos (una imagen).
     pub fn primary_file(&self) -> Option<String> {
@@ -370,7 +402,7 @@ impl Library {
         })
     }
 
-    /// Elimina entradas duplicadas (mismo world_id) y sus carpetas en disco.
+    /// Elimina entradas duplicadas (mismo world_id), repara tipos de animaciones/rigs y sus miniaturas.
     pub fn deduplicate(&self) -> Result<usize, UnrealError> {
         let count = self.update(|entries| {
             let mut seen_world_ids = std::collections::HashSet::new();
@@ -394,6 +426,64 @@ impl Library {
 
             let num = to_remove_ids.len();
             entries.retain(|e| !to_remove_ids.contains(&e.id));
+
+            // Actualización y saneamiento de tipos y miniaturas de animaciones y rigs existentes
+            let snapshot = entries.clone();
+            for entry in entries.iter_mut() {
+                let file_opt = entry.primary_file();
+                if let Some(ref f) = file_opt {
+                    let stem_lower = Path::new(f).file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_lowercase();
+                    let f_path = self.root.join(&entry.id).join(f);
+                    if entry.kind == "model" {
+                        if is_animation_file(&f_path, &stem_lower) {
+                            entry.kind = "animation".into();
+                        } else if is_rig_file(&stem_lower) {
+                            entry.kind = "rig".into();
+                        }
+                    }
+
+                    if entry.kind == "animation" {
+                        // Limpiar miniaturas transparentes rotas (< 4 KB)
+                        if let Some(ref thumb) = entry.thumbnail {
+                            let thumb_path = self.root.join(&entry.id).join(thumb);
+                            if thumb_path.is_file() {
+                                let size = std::fs::metadata(&thumb_path).map(|m| m.len()).unwrap_or(0);
+                                if size < 4000 {
+                                    let _ = std::fs::remove_file(&thumb_path);
+                                    entry.thumbnail = None;
+                                }
+                            }
+                        }
+
+                        // Vincular modelo padre si aún no lo tiene
+                        if entry.parent.is_none() {
+                            let base_candidate = if let Some(idx) = stem_lower.find("_anim") {
+                                &stem_lower[..idx]
+                            } else if let Some(idx) = stem_lower.find("anim_") {
+                                &stem_lower[idx + 5..]
+                            } else {
+                                ""
+                            };
+                            if !base_candidate.is_empty() {
+                                if let Some(parent) = snapshot.iter().find(|p| {
+                                    p.id != entry.id && (slug(&p.name) == slug(base_candidate) || p.primary_file().as_deref().and_then(|pf| Path::new(pf).file_stem()).and_then(|s| s.to_str()).is_some_and(|s| s.to_lowercase() == base_candidate))
+                                }) {
+                                    entry.parent = Some(parent.id.clone());
+                                    if entry.thumbnail.is_none() && parent.thumbnail.is_some() {
+                                        let p_thumb = parent.thumbnail.as_ref().unwrap();
+                                        let from = self.root.join(&parent.id).join(p_thumb);
+                                        let to = self.root.join(&entry.id).join(p_thumb);
+                                        if from.is_file() && std::fs::copy(&from, &to).is_ok() {
+                                            entry.thumbnail = Some(p_thumb.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Ok(num)
         })?;
         Ok(count)
@@ -412,8 +502,16 @@ impl Library {
         }) {
             return Ok(existing);
         }
+        let stem_str = source.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
+        let stem_lower = stem_str.to_lowercase();
         let kind = if MODEL_EXTENSIONS.contains(&ext.as_str()) {
-            "model"
+            if is_animation_file(source, &stem_lower) {
+                "animation"
+            } else if is_rig_file(&stem_lower) {
+                "rig"
+            } else {
+                "model"
+            }
         } else if SPLAT_EXTENSIONS.contains(&ext.as_str()) {
             "world"
         } else if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
@@ -467,6 +565,47 @@ impl Library {
                 }
             }
         }
+
+        let mut parent_id = None;
+        let mut inherited_thumbnail = None;
+        if kind == "animation" || kind == "rig" {
+            let base_candidate = if let Some(idx) = stem_lower.find("_anim") {
+                &stem_lower[..idx]
+            } else if let Some(idx) = stem_lower.find("anim_") {
+                &stem_lower[idx + 5..]
+            } else if let Some(idx) = stem_lower.find("_rig") {
+                &stem_lower[..idx]
+            } else {
+                ""
+            };
+            if !base_candidate.is_empty() {
+                for existing in self.list() {
+                    let ex_stem = existing.primary_file()
+                        .as_deref()
+                        .and_then(|f| Path::new(f).file_stem())
+                        .and_then(|s| s.to_str())
+                        .unwrap_or_default()
+                        .to_lowercase();
+                    if ex_stem == base_candidate || slug(&existing.name) == slug(base_candidate) {
+                        parent_id = Some(existing.id.clone());
+                        if companion_thumbnail.is_none() && existing.thumbnail.is_some() {
+                            if let Ok(parent_thumb_path) = self.file_path(&existing.id, existing.thumbnail.as_ref().unwrap()) {
+                                if parent_thumb_path.is_file() {
+                                    let thumb_ext = extension(&parent_thumb_path);
+                                    let thumb_name = format!("thumbnail.{thumb_ext}");
+                                    if std::fs::copy(&parent_thumb_path, dir.join(&thumb_name)).is_ok() {
+                                        inherited_thumbnail = Some(thumb_name);
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        let final_thumbnail = companion_thumbnail.or(inherited_thumbnail);
+
         let entry = LibraryEntry {
             id,
             name,
@@ -478,9 +617,9 @@ impl Library {
             created_at: now_secs(),
             credits: None,
             files: vec![file_name],
-            thumbnail: companion_thumbnail,
+            thumbnail: final_thumbnail,
             sent_to: vec![],
-            parent: None,
+            parent: parent_id,
             output: Value::Null,
         };
         self.add(entry.clone())?;

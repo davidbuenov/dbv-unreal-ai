@@ -97,7 +97,8 @@ export function start() {
   const openModal = (children, { onClose, wide = false } = {}) => {
     modalClosed?.();
     modalClosed = onClose ?? null;
-    $('#app-modal-card').replaceChildren(...children);
+    const nodes = (Array.isArray(children) ? children : [children]).flat().filter((c) => c !== null && c !== undefined && c !== false);
+    $('#app-modal-card').replaceChildren(...nodes);
     $('#app-modal-card').classList.toggle('modal-card--wide', wide);
     $('#app-modal').classList.remove('hidden');
   };
