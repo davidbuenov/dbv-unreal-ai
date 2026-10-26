@@ -61,4 +61,8 @@ public:
 	/** Compact list of the actors of the open level. Returns JSON (total, counts, actors). */
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString get_scene_summary(const FString& name_filter, const FString& class_filter, int32 limit);
+
+	/** Load a 3D Gaussian Splat (.spz or .ply) into a native ADbvGaussianSplatActor in the scene. Returns JSON (success, actor, num_splats, bounds). */
+	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
+	static FString load_gaussian_splat(const FString& source_file, const FString& actor_label);
 };

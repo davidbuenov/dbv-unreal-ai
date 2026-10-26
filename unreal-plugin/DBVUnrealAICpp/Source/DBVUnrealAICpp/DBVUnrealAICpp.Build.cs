@@ -12,7 +12,17 @@ public class DBVUnrealAICpp : ModuleRules
 	public DBVUnrealAICpp(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "ToolsetRegistry" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "PythonScriptPlugin" });
+		PublicDependencyModuleNames.AddRange(new string[] { 
+			"Core", 
+			"CoreUObject", 
+			"Engine", 
+			"RenderCore", 
+			"RHI", 
+			"ToolsetRegistry" 
+		});
+		PrivateDependencyModuleNames.AddRange(new string[] { 
+			"PythonScriptPlugin",
+			"Projects"
+		});
 	}
 }

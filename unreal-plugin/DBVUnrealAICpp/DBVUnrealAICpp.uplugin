@@ -3,17 +3,17 @@
 	"Version": 2,
 	"VersionName": "0.2.0",
 	"FriendlyName": "DBV Unreal AI Toolset (C++)",
-	"Description": "C++ registration of the DBV Unreal AI toolset for projects with C++ code. Same tools as the Python variant, which it delegates to.",
-	"Category": "Scripting",
+	"Description": "Native 3D Gaussian Splatting renderer and C++ toolset for DBV Unreal AI. 100% open-source (MIT).",
+	"Category": "Rendering",
 	"CreatedBy": "David Bueno Vallejo, David Bueno Carmona",
 	"CreatedByURL": "https://github.com/davidbuenov/dbv-unreal-ai",
-	"CanContainContent": false,
+	"CanContainContent": true,
 	"IsBetaVersion": true,
 	"Installed": false,
 	"Modules": [
 		{
 			"Name": "DBVUnrealAICpp",
-			"Type": "Editor",
+			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}
 	],

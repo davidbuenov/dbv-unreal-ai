@@ -146,6 +146,19 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
         """
         return editor.get_scene_summary(name_filter, class_filter, limit)
 
+    @staticmethod
+    def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat") -> str:
+        """Load a 3D Gaussian Splat (.spz or .ply) into a native ADbvGaussianSplatActor in the scene.
+
+        Args:
+            source_file: Absolute path to the .spz or .ply file.
+            actor_label: Outliner label for the splat actor (default "DBV_GaussianSplat").
+
+        Returns:
+            JSON with success, actor, source_file.
+        """
+        return editor.load_gaussian_splat(source_file, actor_label)
+
 
 def register() -> bool:
     """Registra el toolset en el ``ToolsetRegistry`` (lo hace ``init_unreal.py``)."""

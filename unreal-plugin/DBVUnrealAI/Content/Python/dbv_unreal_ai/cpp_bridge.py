@@ -59,3 +59,9 @@ def play_animation(actor_label: str, animation_path: str, looping: str) -> str:
 def get_scene_summary(name_filter: str, class_filter: str, limit: str) -> str:
     """Ver ``editor.get_scene_summary``."""
     return editor.get_scene_summary(_text(name_filter), _text(class_filter), int(_text(limit) or "200"))
+
+
+def load_gaussian_splat(source_file: str, actor_label: str) -> str:
+    """Ver ``editor.load_gaussian_splat``."""
+    return editor.load_gaussian_splat(_text(source_file), _text(actor_label) or "DBV_GaussianSplat")
+

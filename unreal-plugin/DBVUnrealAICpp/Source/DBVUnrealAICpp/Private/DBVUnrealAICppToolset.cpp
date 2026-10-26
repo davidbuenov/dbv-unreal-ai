@@ -84,3 +84,8 @@ FString UDBVUnrealAICppToolset::get_scene_summary(const FString& name_filter, co
 {
 	return CallPython(TEXT("get_scene_summary"), { name_filter, class_filter, FString::FromInt(limit) });
 }
+
+FString UDBVUnrealAICppToolset::load_gaussian_splat(const FString& source_file, const FString& actor_label)
+{
+	return CallPython(TEXT("load_gaussian_splat"), { source_file, actor_label });
+}

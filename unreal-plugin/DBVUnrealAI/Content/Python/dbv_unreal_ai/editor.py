@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 import sys
 from typing import Any
 
@@ -233,3 +234,56 @@ def get_scene_summary(name_filter: str = "", class_filter: str = "", limit: int 
                 listed.append({"label": label, "class": cls, "location": _round(actor.get_actor_location()), "folder": str(actor.get_folder_path())})
     total = sum(counts.values())
     return _json({"total": total, "counts": counts, "actors": listed, "truncated": total > len(listed)})
+
+
+def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat") -> str:
+    """Carga un Gaussian Splat (.spz o .ply) en un ADbvGaussianSplatActor nativo.
+
+    Aplica la orientación validada para World Labs (Roll 90.0, Escala 100x).
+    """
+    result: dict[str, Any] = {"success": False}
+    source_path = Path(source_file)
+    if not source_path.exists():
+        result["error"] = f"El archivo de splat no existe: {source_file}"
+    else:
+        actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+        target_actor = None
+        for actor in actor_subsystem.get_all_level_actors():
+            if actor.get_actor_label() == actor_label:
+                target_actor = actor
+                break
+
+        if target_actor is None:
+            splat_class = unreal.load_class(None, "/Script/DBVUnrealAICpp.DbvGaussianSplatActor")
+            if splat_class is None:
+                splat_class = getattr(unreal, "DbvGaussianSplatActor", None)
+
+            if splat_class is not None:
+                spawn_loc = unreal.Vector(0.0, 0.0, 0.0)
+                spawn_rot = unreal.Rotator(pitch=0.0, yaw=0.0, roll=90.0)
+                target_actor = actor_subsystem.spawn_actor_from_class(splat_class, spawn_loc, spawn_rot)
+                if target_actor:
+                    target_actor.set_actor_label(actor_label)
+                    target_actor.set_actor_scale3d(unreal.Vector(100.0, 100.0, 100.0))
+                    target_actor.set_folder_path(unreal.Name("DBV/Splats"))
+            else:
+                result["error"] = "Clase DbvGaussianSplatActor no encontrada en el motor (compilar módulo DBVUnrealAICpp)"
+
+        if target_actor is not None:
+            lower_file = str(source_path).lower()
+            loaded = False
+            if lower_file.endswith(".spz") and hasattr(target_actor, "load_spz"):
+                loaded = bool(target_actor.load_spz(str(source_path)))
+            elif lower_file.endswith(".ply") and hasattr(target_actor, "load_ply"):
+                loaded = bool(target_actor.load_ply(str(source_path)))
+            elif hasattr(target_actor, "splat_component") and target_actor.splat_component:
+                loaded = bool(target_actor.splat_component.load_file(str(source_path)))
+
+            result["success"] = loaded
+            result["actor"] = target_actor.get_actor_label()
+            result["source_file"] = str(source_path)
+            if not loaded:
+                result["error"] = f"Fallo al invocar el método de carga en {target_actor.get_actor_label()}"
+
+    return _json(result)
+
