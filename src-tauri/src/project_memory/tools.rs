@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-35, REQ-36, REQ-38
+// @spec REQ-35, REQ-36, REQ-37, REQ-38
 //
 // Como las de Tripo (D10): se definen una vez y las publican el MCP propio y el asistente integrado, para que un
 // agente y el modelo de la app vean lo mismo. Lo que cambia es quién aprueba guardar: en la ventana, la tarjeta
@@ -84,6 +84,12 @@ pub fn specs() -> Vec<Value> {
                 "next_step": { "type": "string" }
             }),
             &["tasks"],
+        ),
+        tool(
+            "project_task_update",
+            "Mark a task of the plan as done (or reopen it) when you finished it. If the task says how to check it (done when: asset exists …, actor exists …, level is …), the app checks it in the editor and only marks it done if the check passes; if it does not, you get what failed. A task checked by a sentence is confirmed by the user, not by you.",
+            json!({ "task": { "type": "string", "description": "The task title (project_tasks_list)." }, "done": { "type": "boolean", "description": "true to mark it done (default), false to reopen it." } }),
+            &["task"],
         ),
     ]
 }

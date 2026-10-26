@@ -22,6 +22,14 @@ export function retitle(task, title) {
   return at < 0 || !clean ? task.line : `${task.line.slice(0, at)}${clean}${task.line.slice(at + task.title.length)}`;
 }
 
+/**
+ * Cambio de una línea ENTERA de `task.md` (`null` la borra): buscar solo el texto encontraría también el ejemplo que
+ * la plantilla cita con el mismo título.
+ */
+export function wholeLine(line, replacement) {
+  return { op: 'replace', search: `\n${line}\n`, replace: replacement === null ? '\n' : `\n${replacement}\n` };
+}
+
 /** Línea de una tarea marcada o desmarcada. */
 export function toggled(task) {
   return task.done ? task.line.replace(/\[[xX]\]/, '[ ]') : task.line.replace('[ ]', '[x]');
@@ -61,12 +69,20 @@ export function createPlanView(host, deps) {
     const title = el('span', { className: 'plan-task__title', text: task.title });
     const box = el('input', { attrs: { type: 'checkbox', 'aria-label': task.title } });
     box.checked = task.done;
-    box.addEventListener('change', () => write(project, status, { op: 'replace', search: task.line, replace: toggled(task) }));
+    box.addEventListener('change', async () => {
+      // Con una comprobación, «hecha» la decide el editor (REQ-37); sin editor queda pendiente de comprobar.
+      if (task.done || !isCheck(task.criterion)) return write(project, status, wholeLine(task.line, toggled(task)));
+      const endpoint = deps.state.connection?.status === 'online' ? deps.state.connection.endpoint : null;
+      const updated = await api.memoryTaskUpdate(project, endpoint, task.title, true, false);
+      deps.toast(updated.ok ? updated.value.message : updated.error.message, updated.ok && updated.value.saved ? 'info' : 'error');
+      deps.onChanged?.();
+      return render();
+    });
     const edit = () => {
       const field = el('input', { className: 'plan-task__edit', attrs: { type: 'text', 'aria-label': t('plan.edit') } });
       field.value = task.title;
       field.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') write(project, status, { op: 'replace', search: task.line, replace: retitle(task, field.value) });
+        if (event.key === 'Enter') write(project, status, wholeLine(task.line, retitle(task, field.value)));
         if (event.key === 'Escape') render();
       });
       title.replaceWith(field);
@@ -83,7 +99,7 @@ export function createPlanView(host, deps) {
         { className: 'plan-task__actions' },
         task.done ? null : button(t('plan.doTask'), () => deps.ask(taskRequest(task, getLanguage())), 'btn-primary button--compact'),
         button(t('plan.edit'), edit, 'btn-ghost button--compact'),
-        button(t('plan.delete'), () => write(project, status, { op: 'replace', search: `${task.line}\n`, replace: '' }), 'btn-ghost btn-danger button--compact'),
+        button(t('plan.delete'), () => write(project, status, wholeLine(task.line, null)), 'btn-ghost btn-danger button--compact'),
       ),
     );
   }

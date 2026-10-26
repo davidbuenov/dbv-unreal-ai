@@ -68,15 +68,32 @@ describe('Vista Plan', () => {
     expect(host.querySelector('.plan-task--done').textContent).toContain('Pick a style');
   });
 
-  it('marcar una tarea la escribe al momento sobre la huella leída @spec REQ-36', async () => {
+  it('reabrir una tarea la escribe al momento, línea entera y sobre la huella leída @spec REQ-36', async () => {
     const { host, plan, deps } = view();
+    await plan.render();
+    const box = [...host.querySelectorAll('input[type="checkbox"]')].find((b) => b.getAttribute('aria-label') === 'Pick a style');
+    box.checked = false;
+    box.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'memory_apply')).toBe(true));
+    expect(invoked.find(([c]) => c === 'memory_apply')[1]).toEqual({ project: 'D:/P/Demo.uproject', doc: 'tasks', baseHash: 'h1', edit: { op: 'replace', search: `\n${STYLE.line}\n`, replace: '\n- [ ] Pick a style\n' } });
+    await vi.waitFor(() => expect(deps.onChanged).toHaveBeenCalled());
+  });
+
+  it('marcar una tarea con comprobación la decide el editor; sin editor queda pendiente @spec REQ-37', async () => {
+    const { host, plan, deps } = view();
+    window.__TAURI__.core.invoke = vi.fn(async (command, args) => {
+      invoked.push([command, args]);
+      if (command === 'memory_task_update') return { saved: false, task: 'Build the cabin', check: { passed: null, detail: 'no Unreal editor is connected' }, message: 'Not marked: «Build the cabin» could not be checked' };
+      return { active: true, memory: { exists: true, text: '', hash: 'm1' }, tasks: { exists: true, text: TASKS_TEXT, hash: 'h1' }, taskList: [STYLE, CABIN], summary: '', missing: [] };
+    });
     await plan.render();
     const box = [...host.querySelectorAll('input[type="checkbox"]')].find((b) => b.getAttribute('aria-label') === 'Build the cabin');
     box.checked = true;
     box.dispatchEvent(new Event('change'));
-    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'memory_apply')).toBe(true));
-    expect(invoked.find(([c]) => c === 'memory_apply')[1]).toEqual({ project: 'D:/P/Demo.uproject', doc: 'tasks', baseHash: 'h1', edit: { op: 'replace', search: CABIN.line, replace: toggled(CABIN) } });
-    await vi.waitFor(() => expect(deps.onChanged).toHaveBeenCalled());
+    await vi.waitFor(() => expect(deps.toast).toHaveBeenCalled());
+    expect(invoked.find(([c]) => c === 'memory_task_update')[1]).toEqual({ project: 'D:/P/Demo.uproject', endpoint: null, title: 'Build the cabin', done: true, byAi: false });
+    expect(invoked.some(([c]) => c === 'memory_apply')).toBe(false);
+    expect(deps.toast.mock.calls[0]).toEqual(['Not marked: «Build the cabin» could not be checked', 'error']);
   });
 
   it('si el fichero cambió fuera, avisa en vez de pisar @spec REQ-34, REQ-36', async () => {

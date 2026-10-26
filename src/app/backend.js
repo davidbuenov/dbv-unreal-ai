@@ -67,6 +67,7 @@ export const memoryActivate = (project) => call('memory_activate', { project });
 export const memoryApply = (project, doc, baseHash, edit) => call('memory_apply', { project, doc, baseHash, edit });
 export const memoryToolSpecs = () => call('memory_tool_specs');
 export const memoryPlanPreview = (args) => call('memory_plan_preview', { args });
+export const memoryTaskUpdate = (project, endpoint, title, done, byAi) => call('memory_task_update', { project, endpoint: endpoint ?? null, title, done, byAi });
 
 // ─── Progreso de los trabajos ────────────────────────────────────────
 // El oyente se registra ANTES de lanzar un trabajo y guarda lo que llega: un fallo inmediato (una clave

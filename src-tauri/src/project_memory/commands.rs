@@ -79,6 +79,31 @@ pub fn memory_tool_specs() -> Vec<serde_json::Value> {
     super::tools::specs()
 }
 
+/// Marca o reabre una tarea; si tiene una comprobación, la ejecuta antes en el editor de `endpoint` (código fijo de
+/// la app, solo lectura). `by_ai`: lo pide la IA (un criterio en texto libre lo confirma la persona). @spec REQ-37
+#[tauri::command]
+pub async fn memory_task_update(app: tauri::AppHandle, project: String, endpoint: Option<crate::unreal::commands::Endpoint>, title: String, done: bool, by_ai: bool) -> Result<super::checks::Update, UnrealError> {
+    use tauri::Manager;
+    let dir = project_dir(&project)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let run = |code: &str| -> Result<serde_json::Value, String> {
+            let endpoint = endpoint.ok_or("no Unreal editor is connected")?;
+            let state = app.state::<crate::unreal::commands::UnrealState>();
+            crate::unreal::commands::with_session(&state, &endpoint.url(), |session| {
+                let toolsets = session.list_toolsets()?;
+                let dbv = toolsets.iter().find(|t| t.name.contains("DBVUnrealAI")).map(|t| t.name.clone()).ok_or_else(|| UnrealError::NotFound("the DBV Unreal AI toolset is not installed: prepare the project".into()))?;
+                session.call_toolset_tool(&dbv, "run_python", serde_json::json!({ "code": code }), crate::unreal::mcp_client::DEFAULT_TIMEOUT)
+            })
+            .map_err(|e| e.to_string())?
+            .value
+            .ok_or_else(|| "unexpected answer from the editor".to_string())
+        };
+        super::checks::update_task(&dir, &title, done, by_ai, run).map_err(UnrealError::Format)
+    })
+    .await
+    .map_err(|error| UnrealError::Io(error.to_string()))?
+}
+
 /// Un plan propuesto por la IA con su coste calculado por la app (para la tarjeta de propuesta). @spec REQ-36
 #[tauri::command]
 pub fn memory_plan_preview(args: serde_json::Value) -> Result<super::tools::PlanPreview, UnrealError> {

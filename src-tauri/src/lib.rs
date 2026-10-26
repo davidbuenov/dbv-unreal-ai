@@ -245,6 +245,8 @@ pub fn run() {
             project_memory::commands::memory_tool_specs,
             #[cfg(desktop)]
             project_memory::commands::memory_plan_preview,
+            #[cfg(desktop)]
+            project_memory::commands::memory_task_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

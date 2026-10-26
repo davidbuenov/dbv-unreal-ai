@@ -232,6 +232,12 @@ export function createMemoryTools(deps) {
     project_memory_propose: propose,
     project_tasks_list: listTasks,
     project_tasks_propose: proposePlan,
+    // La comprobación en el editor y la escritura las hace Rust, igual que para un agente (REQ-37).
+    project_task_update: async (args) => {
+      const updated = await deps.updateTask(String(args.task ?? ''), args.done !== false);
+      await deps.memory.refresh();
+      return updated.ok ? updated.value.message : `error: ${updated.error.message}`;
+    },
   };
   return (deps.specs ?? [])
     .filter((spec) => runners[spec.name])

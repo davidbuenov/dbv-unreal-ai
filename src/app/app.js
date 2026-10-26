@@ -324,6 +324,7 @@ export function start() {
                 return card.choice;
               },
               applyTasks: (change) => projectMemory.applyTasks(change),
+              updateTask: (title, done) => api.memoryTaskUpdate(state.connection.projectPath, state.connection?.status === 'online' ? state.connection.endpoint : null, title, done, true),
             })
           : [];
         return [...unreal, ...generation, ...memory];

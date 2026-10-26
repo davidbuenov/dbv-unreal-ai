@@ -16,6 +16,7 @@
 //   · nada con forma de clave se escribe: el fichero se versiona con el proyecto.
 // Lo que dice la memoria es DATO para la IA (R-16): quien la presenta al modelo lo marca así.
 
+pub mod checks;
 pub mod commands;
 pub mod tools;
 

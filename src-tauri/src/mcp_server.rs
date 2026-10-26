@@ -284,9 +284,23 @@ impl McpServer {
             "project_memory_propose" => memory_tools::propose_and_save(&self.project_dir()?, args)?,
             "project_tasks_list" => memory_tools::tasks_text(&self.project_dir()?)?,
             "project_tasks_propose" => memory_tools::propose_plan_and_save(&self.project_dir()?, args)?,
+            "project_task_update" => {
+                let dir = self.project_dir()?;
+                let done = args.get("done").and_then(Value::as_bool).unwrap_or(true);
+                crate::project_memory::checks::update_task(&dir, &text(args, "task"), done, true, |code| self.check_in_editor(code))?.message
+            }
             other => Err(format!("unknown tool: {other}"))?,
         };
         Ok(result)
+    }
+
+    /// Ejecuta en el editor una comprobación de tarea (código FIJO de la app, solo lectura: REQ-37) y devuelve lo
+    /// que dejó en `result`. No pasa por `validate_python`: no lo escribió la IA.
+    fn check_in_editor(&mut self, code: &str) -> Result<Value, String> {
+        let err = |e: UnrealError| e.to_string();
+        let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+        let ran = self.editor(|s| s.call_toolset_tool(&dbv, "run_python", json!({ "code": code }), DEFAULT_TIMEOUT)).map_err(err)?;
+        ran.value.ok_or_else(|| format!("unexpected answer from the editor: {}", ran.text))
     }
 
     /// Carpeta del proyecto, que el agente recibe con `--project` (REQ-38).

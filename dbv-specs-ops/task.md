@@ -53,8 +53,8 @@
 - [x] **S19 · Memoria: núcleo** (REQ-34) — `project_memory/` en Rust: confinamiento, secretos, hash base, formato tolerante, resumen; test «preparar → memoria → revertir → la memoria sigue».
 - [x] **S20 · Memoria en la conversación** (REQ-34, REQ-35) — activar, ficha de resumen, preámbulo de agentes, `project_memory_read`/`_propose`, tarjeta «¿Guardar…?», «Recordar», `--project` al `--mcp` del agente.
 - [x] **S21 · Vista Plan** (REQ-36) — tareas, «Planificar» con `project_tasks_propose` y coste de la app, «Hacer esta tarea».
-- [ ] **S22 · Tareas comprobadas** (REQ-37) — criterios, `check_task` (toolset 0.3.0 o `RunPython` con código fijo).
-- [ ] **S23 · Memoria en el MCP propio** (REQ-38) — cinco herramientas, test de paridad.
+- [x] **S22 · Tareas comprobadas** (REQ-37) — criterios, `check_task` (toolset 0.3.0 o `RunPython` con código fijo).
+- [x] **S23 · Memoria en el MCP propio** (hecho a la vez que S20–S22: las cinco herramientas y el test de paridad) (REQ-38) — cinco herramientas, test de paridad.
 - [ ] **S24 · Varias instancias** (REQ-07) — `state.connections`, selector, identidad por sesión, puerto libre.
 - [ ] **S25 · La IA ve el viewport** (REQ-13) — captura como imagen (D16).
 - [ ] **S26 · Deshacer un turno** (REQ-40) — contadores, `undo_turn`, borrar importados con tarjeta.
