@@ -61,7 +61,7 @@
 - [ ] **S27 · World Labs: generación** (REQ-18) — cliente, trabajos, biblioteca «mundo», `generate_world`, `export_world_mesh`, saldo.
 - [ ] **S28 · World Labs → Unreal** (REQ-18) — `import_world`, escala y suelo, cielo y splats según S18.
 - [ ] **S28b · Splats de cualquier origen** (REQ-41, añadido por el usuario el 2026-10-26) — capa de adaptadores; conversión `.spz` → `.ply`; activación con diff/copia/revertir; sin adaptador, fichero preparado y paso manual explicado. Primer adaptador: el plugin de terceros que instale el usuario (P-09).
-- [ ] **S28c · Spike del plugin propio de splats sobre Niagara** (P-10) — `.ply` → texturas de datos en Rust, sistema Niagara + material creados por Python; medir calidad y rendimiento con un splat real de World Labs. Si convence, adaptador por defecto.
+- [~] **S28c · Spike del plugin propio de splats** (P-10) — *hecho el 2026-10-26 sin Niagara (su grafo no se puede montar por Python): malla de quads + material por Python. Funciona con el splat real de World Labs como vista previa (ver memory.md). Pendiente: valoración del usuario en su viewport; siguientes mejoras: gaussianas anisótropas (covarianza proyectada en el material), más splats o LOD, y convertirlo en adaptador (`src-tauri/src/splats` + `scripts/spikes`).* Original: — `.ply` → texturas de datos en Rust, sistema Niagara + material creados por Python; medir calidad y rendimiento con un splat real de World Labs. Si convence, adaptador por defecto.
 - [ ] **S29 · MCPs de terceros** (REQ-21) — Ajustes, stdio/HTTP, asistente y ACP, permisos.
 - [x] ~~**S30 · Actualizador** (REQ-39)~~ — retirado por el usuario el 2026-10-26: Microsoft Store gestiona las actualizaciones en Windows.
 - [ ] `/test` · `/code-simplify` · `/ship` v0.2.0.

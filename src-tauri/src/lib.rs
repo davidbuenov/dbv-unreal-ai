@@ -26,6 +26,10 @@ pub mod generation;
 #[cfg(desktop)]
 pub mod library;
 
+// Gaussian Splats: lectura y malla de vista previa para Unreal (REQ-41, spike P-10).
+#[cfg(desktop)]
+pub mod splats;
+
 // Memoria y tareas del proyecto en `dbv-unreal-ai/`, junto al `.uproject` (REQ-34..REQ-38).
 #[cfg(desktop)]
 pub mod project_memory;
