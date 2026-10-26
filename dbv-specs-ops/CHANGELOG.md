@@ -26,6 +26,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Fixed
 
+- La vista Proyecto se quedaba en blanco al seleccionar un proyecto (la tarjeta de memoria usaba `dirName` sin importarlo). Test nuevo que pinta la vista con un proyecto seleccionado.
 - «Cómo instalarlo» en «Conectar una IA» no abría el navegador: llamaba a `shell.open`, de un plugin que la app no carga, y el respaldo `window.open` no hace nada dentro de la WebView. Ahora usa `opener.openUrl`.
 - Gemini CLI se lanza con `--acp` (el flag actual) en vez de `--experimental-acp`. El asistente de conexión y la guía de IA ya no lo recomiendan para suscripciones: desde el 18 de junio de 2026, Google lo sustituyó por Antigravity CLI para las cuentas gratuitas y las de Google One, y solo sigue sirviendo con accesos de pago.
 - **Tripo rechazaba toda generación de modelos** («HTTP 400: model is required»): la API ahora exige `model`. Texto, imagen y multivista → modelo mandan `v3.1-20260211` si la petición no trae otro. Visto con la API real; la v0.1 solo se había probado contra un Tripo simulado.

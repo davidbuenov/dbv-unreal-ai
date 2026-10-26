@@ -13,7 +13,7 @@
 import { t } from '../ai/i18nBridge.js';
 import { lineOps } from '../ai/diff.js';
 import * as api from './backend.js';
-import { baseName, button, el } from './dom.js';
+import { baseName, button, dirName, el } from './dom.js';
 
 const BACKUP_KEY = 'dbv-unreal-ai:lastBackup:';
 

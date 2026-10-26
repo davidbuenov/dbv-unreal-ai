@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The Project view went blank when a project was selected (the memory card used `dirName` without importing it). New test that renders the view with a selected project.
 - "How to install" in "Connect an AI" did not open the browser: it called `shell.open`, from a plugin the app does not load, and the `window.open` fallback does nothing inside the WebView. It now uses `opener.openUrl`.
 - Gemini CLI is launched with `--acp` (the current flag) instead of `--experimental-acp`. The connection assistant and the AI guide no longer recommend it for subscriptions: since June 18, 2026, Google replaced it with Antigravity CLI for free and Google One accounts, and it only keeps working with paid access.
 - **Tripo rejected every model generation** ("HTTP 400: model is required"): the API now requires `model`. Text, image and multiview → model send `v3.1-20260211` when the request has none. Found with the real API; v0.1 had only been tested against a simulated Tripo.
