@@ -137,7 +137,7 @@ pub fn tool_specs() -> Vec<Value> {
         tool("unreal_describe_python_api", "Exact reference of an `unreal` Python API name in this engine version.", json!({ "name": { "type": "string" } }), json!(["name"])),
         tool(
             "library_list",
-            "List the assets of the DBV Unreal AI library (generated or imported): id, name, kind (model, rig, animation, image…), source asset, files and prompt. Use the id with rig_model, animate_model, tripo_run or library_send_to_unreal.",
+            "List the assets of the DBV Unreal AI library (models, rigs, animations, images, and world scenarios with visual Gaussian Splat .spz and physical collider mesh .glb): id, name, kind, files and prompt. Use the id with rig_model, animate_model, tripo_run or library_send_to_unreal.",
             json!({ "filter": { "type": "string" } }),
             json!([]),
         ),
@@ -155,7 +155,7 @@ pub fn tool_specs() -> Vec<Value> {
         ),
         tool(
             "library_send_to_unreal",
-            "Import a library asset into the Unreal project under /Game/DBV/Generated and place it in front of the editor camera.",
+            "Import a library asset into the Unreal project under /Game/DBV/Generated and place it in front of the editor camera. For 3D models it imports the mesh; for World Labs scenarios it imports the collider mesh (Static Mesh with collision) for ground and physics.",
             json!({ "id": { "type": "string" }, "place": { "type": "boolean" } }),
             json!(["id"]),
         ),
@@ -264,7 +264,24 @@ impl McpServer {
                     .list()
                     .into_iter()
                     .filter(|e| needle.is_empty() || format!("{} {}", e.name, e.prompt).to_lowercase().contains(&needle))
-                    .map(|e| format!("- {}: \"{}\" ({} {}{}, files: {}, prompt: \"{}\")", e.id, e.name, e.provider, e.kind, e.parent.as_ref().map(|p| format!(" from {p}")).unwrap_or_default(), e.files.join(", "), e.prompt))
+                    .map(|e| {
+                        let details = if e.kind == "world" || e.provider == "worldlabs" {
+                            let splat = e.parameters.get("splat_file").and_then(Value::as_str)
+                                .or_else(|| e.files.iter().find(|f| f.ends_with(".spz") || f.ends_with(".ply")).map(String::as_str));
+                            let collider = e.parameters.get("collider_file").and_then(Value::as_str)
+                                .or_else(|| e.files.iter().find(|f| f.ends_with(".glb") || f.ends_with(".fbx")).map(String::as_str));
+                            let mut parts = Vec::new();
+                            if let Some(s) = splat { parts.push(format!("visual Gaussian Splat: {s}")); }
+                            if let Some(c) = collider { parts.push(format!("physical collider mesh: {c}")); }
+                            if let Some(scale) = e.parameters.get("metric_scale_factor").and_then(Value::as_f64) {
+                                parts.push(format!("scale: {scale}"));
+                            }
+                            if parts.is_empty() { String::new() } else { format!(" [{}]", parts.join(", ")) }
+                        } else {
+                            String::new()
+                        };
+                        format!("- {}: \"{}\" ({} {}{}{}, files: {}, prompt: \"{}\")", e.id, e.name, e.provider, e.kind, e.parent.as_ref().map(|p| format!(" from {p}")).unwrap_or_default(), details, e.files.join(", "), e.prompt)
+                    })
                     .collect();
                 if entries.is_empty() {
                     "the library is empty or nothing matches".to_string()

@@ -27,7 +27,17 @@ export function describeEntry(entry) {
   const sent = entry.sentTo?.length ? `, sent to ${entry.sentTo.length} project(s)` : '';
   const from = entry.parent ? ` from ${entry.parent}` : '';
   const prompt = entry.prompt ? `, prompt: "${entry.prompt}"` : '';
-  return `- ${entry.id}: "${entry.name}" (${entry.provider} ${entry.kind}${from}, files: ${(entry.files ?? []).join(', ')}${prompt}${sent})`;
+  let details = '';
+  if (entry.kind === 'world' || entry.provider === 'worldlabs') {
+    const splat = entry.parameters?.splat_file || entry.files?.find((f) => /\.(spz|ply)$/i.test(f));
+    const collider = entry.parameters?.collider_file || entry.files?.find((f) => /\.(glb|gltf|fbx|obj)$/i.test(f));
+    const parts = [];
+    if (splat) parts.push(`visual Gaussian Splat: ${splat}`);
+    if (collider) parts.push(`physical collider mesh: ${collider}`);
+    if (entry.parameters?.metric_scale_factor) parts.push(`scale: ${entry.parameters.metric_scale_factor}`);
+    if (parts.length) details = ` [${parts.join(', ')}]`;
+  }
+  return `- ${entry.id}: "${entry.name}" (${entry.provider} ${entry.kind}${from}${details}, files: ${(entry.files ?? []).join(', ')}${prompt}${sent})`;
 }
 
 /** Texto para el modelo con el final de cada trabajo. */
@@ -97,7 +107,7 @@ export function createGenerationTools(deps) {
 
   const list = {
     name: 'library_list',
-    description: 'List the assets of the library (generated or imported, all projects): id, name, kind (model, rig, animation, image…), source asset and files. Use the id with rig_model, animate_model, tripo_run or library_send_to_unreal.',
+    description: 'List the assets of the library (models, rigs, animations, images, and world scenarios with visual Gaussian Splat .spz and physical collider mesh .glb): id, name, kind, files and prompt. Use the id with rig_model, animate_model, tripo_run or library_send_to_unreal.',
     parameters: object({ filter: { type: 'string' } }),
     label: () => 'Library',
     run: async ({ filter = '' }) => {
@@ -121,7 +131,7 @@ export function createGenerationTools(deps) {
 
   const send = {
     name: 'library_send_to_unreal',
-    description: 'Import a library asset into the connected Unreal project (under /Game/DBV/Generated) and place it in front of the editor camera. Needs the user approval.',
+    description: 'Import a library asset into the connected Unreal project (under /Game/DBV/Generated) and place it in front of the editor camera. For 3D models it imports the mesh; for World Labs scenarios it imports the collider mesh (Static Mesh with collision) for ground physics. Needs the user approval.',
     parameters: object({ id: { type: 'string', description: 'Library id from library_list.' }, purpose: { type: 'string' } }, ['id']),
     label: (args) => `Unreal ← ${args.id ?? ''}`,
     run: async ({ id, purpose = '' }) => {
