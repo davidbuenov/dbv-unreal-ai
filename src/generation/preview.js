@@ -87,6 +87,23 @@ function clipPicker(viewer) {
   return select;
 }
 
+/** Selector de rigs de personajes para ver la animación sobre su cuerpo. */
+function rigPicker(rigs, currentRigId, onChange) {
+  if (!rigs || !rigs.length) return null;
+  const select = el(
+    'select',
+    { attrs: { 'aria-label': t('preview.rigPicker') } },
+    el('option', { text: t('preview.skeletonOnly'), attrs: { value: '' } }),
+    ...rigs.map((r) => {
+      const opt = el('option', { text: `🎭 ${r.name}`, attrs: { value: r.id } });
+      if (r.id === currentRigId) opt.selected = true;
+      return opt;
+    }),
+  );
+  select.addEventListener('change', () => onChange(select.value));
+  return el('label', { className: 'row', style: 'align-items: center; gap: 6px; font-size: 13px;' }, el('span', { text: t('preview.rigPicker') }), select);
+}
+
 /**
  * Ventana con el visor. `deps`: `{openModal(children, {onClose}), closeModal(), onSend?(entry), onThumbnail?(entry)}`.
  */
@@ -147,6 +164,7 @@ export async function openPreview(entry, deps) {
     ].filter(Boolean),
     { onClose: () => viewer?.dispose(), wide: true },
   );
+
   const url = await urlFor(entry);
   if (!url) {
     if (entry?.thumbnail) {
@@ -165,15 +183,48 @@ export async function openPreview(entry, deps) {
     stage.replaceChildren(el('p', { className: 'hint', text: t('preview.notViewable') }));
     return;
   }
-  stage.replaceChildren(el('p', { className: 'hint', text: t('preview.loading') }));
-  try {
-    viewer = await createModelViewer(stage, url);
-    // `replaceChildren` pintaría «null» como texto: solo los nodos que existen.
-    tools.replaceChildren(...[el('span', { className: 'hint', text: t('preview.help') }), clipPicker(viewer)].filter(Boolean));
-    keepThumbnail(entry, viewer, deps?.onThumbnail);
-  } catch (error) {
-    stage.replaceChildren(el('p', { className: 'check-fail', text: t('preview.failed', { error: String(error?.message ?? error) }) }));
+
+  let rigs = [];
+  let currentRigId = null;
+  if (isAnim) {
+    try {
+      const all = await api.libraryList();
+      rigs = (all ?? []).filter((e) => e.id !== entry.id && (e.kind === 'rig' || e.name.toLowerCase().includes('rig')));
+      if (entry.parent) {
+        currentRigId = rigs.find((r) => r.id === entry.parent)?.id ?? null;
+      }
+      if (!currentRigId) {
+        const stem = entry.name.toLowerCase();
+        currentRigId = rigs.find((r) => {
+          const rName = r.name.toLowerCase().replace(/[\s_]rig$/, '');
+          return stem.startsWith(rName) || stem.includes(rName);
+        })?.id ?? null;
+      }
+    } catch {
+      rigs = [];
+    }
   }
+
+  async function renderViewer(rigId) {
+    stage.replaceChildren(el('p', { className: 'hint', text: t('preview.loading') }));
+    viewer?.dispose();
+    try {
+      let rigUrl = null;
+      if (rigId) {
+        const rigEntry = rigs.find((r) => r.id === rigId);
+        if (rigEntry) rigUrl = await urlFor(rigEntry);
+      }
+      viewer = await createModelViewer(stage, url, { rigUrl });
+      const picker = clipPicker(viewer);
+      const rigSelector = isAnim && rigs.length ? rigPicker(rigs, rigId, (newId) => renderViewer(newId)) : null;
+      tools.replaceChildren(...[el('span', { className: 'hint', text: t('preview.help') }), picker, rigSelector].filter(Boolean));
+      keepThumbnail(entry, viewer, deps?.onThumbnail);
+    } catch (error) {
+      stage.replaceChildren(el('p', { className: 'check-fail', text: t('preview.failed', { error: String(error?.message ?? error) }) }));
+    }
+  }
+
+  await renderViewer(currentRigId);
 }
 
 /** Visores en línea vivos (el más antiguo, primero). */

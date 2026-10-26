@@ -93,8 +93,23 @@ export async function createModelViewer(container, url, options = {}) {
   controls.autoRotate = options.autoRotate !== false;
   controls.autoRotateSpeed = 1.5;
 
-  const gltf = await new GLTFLoader().loadAsync(url);
-  const model = gltf.scene;
+  const loader = new GLTFLoader();
+  const animGltf = await loader.loadAsync(url);
+  let model = animGltf.scene;
+  let animClips = animGltf.animations;
+
+  if (options.rigUrl) {
+    try {
+      const rigGltf = await loader.loadAsync(options.rigUrl);
+      model = rigGltf.scene;
+      if (!animClips.length && rigGltf.animations.length) {
+        animClips = rigGltf.animations;
+      }
+    } catch {
+      // Fallback silencioso al GLB de la animación
+    }
+  }
+
   setupModelScene(THREE, scene, model);
 
   let hasMesh = false;
@@ -135,11 +150,11 @@ export async function createModelViewer(container, url, options = {}) {
   controls.target.set(0, 0, 0);
   controls.update();
 
-  const mixer = gltf.animations.length ? new THREE.AnimationMixer(model) : null;
-  const clips = gltf.animations.map((clip) => clip.name);
+  const mixer = animClips.length ? new THREE.AnimationMixer(model) : null;
+  const clips = animClips.map((clip) => clip.name);
   let action = null;
   function play(name) {
-    const clip = gltf.animations.find((c) => c.name === name);
+    const clip = animClips.find((c) => c.name === name);
     if (!mixer || !clip) return;
     action?.stop();
     action = mixer.clipAction(clip);
