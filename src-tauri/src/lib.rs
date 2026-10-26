@@ -26,6 +26,10 @@ pub mod generation;
 #[cfg(desktop)]
 pub mod library;
 
+// Memoria y tareas del proyecto en `dbv-unreal-ai/`, junto al `.uproject` (REQ-34..REQ-38).
+#[cfg(desktop)]
+pub mod project_memory;
+
 // Servidor MCP propio por stdio (`--mcp`) y las carpetas de la app que usa sin Tauri.
 #[cfg(desktop)]
 pub mod mcp_server;
@@ -226,6 +230,12 @@ pub fn run() {
             generation::commands::library_rename,
             #[cfg(desktop)]
             generation::commands::library_entry_dir,
+            #[cfg(desktop)]
+            project_memory::commands::memory_status,
+            #[cfg(desktop)]
+            project_memory::commands::memory_activate,
+            #[cfg(desktop)]
+            project_memory::commands::memory_apply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

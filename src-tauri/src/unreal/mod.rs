@@ -41,6 +41,8 @@ pub enum UnrealError {
     Expired(String),
     /// Una ruta que se sale de la carpeta del proyecto.
     Outside(String),
+    /// El fichero cambió desde que se leyó (a mano, por `git pull` o desde otro proceso): no se pisa.
+    Conflict(String),
 }
 
 impl std::fmt::Display for UnrealError {
@@ -53,7 +55,8 @@ impl std::fmt::Display for UnrealError {
             | Self::Timeout(m)
             | Self::NotFound(m)
             | Self::Expired(m)
-            | Self::Outside(m) => m,
+            | Self::Outside(m)
+            | Self::Conflict(m) => m,
         };
         write!(f, "{message}")
     }

@@ -22,7 +22,8 @@ use super::AiError;
 /// Tope por proyecto: muchas conversaciones largas, pero no sin límite.
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
 
-fn fnv1a(text: &str) -> String {
+/// Huella FNV-1a de 64 bits en hexadecimal (estable entre versiones y procesos).
+pub fn fnv1a(text: &str) -> String {
     let mut hash: u64 = 0xcbf29ce484222325;
     for byte in text.as_bytes() {
         hash ^= *byte as u64;

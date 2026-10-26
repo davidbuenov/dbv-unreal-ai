@@ -15,6 +15,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
+- **Memoria del proyecto (núcleo, REQ-34):** `dbv-unreal-ai/memory.md` y `task.md` junto al `.uproject`, en inglés. Solo se escriben esos dos ficheros, sin seguir enlaces, con escritura atómica y comprobando que nadie los cambió desde que se leyeron (a mano, por `git pull` o desde otro proceso). Nunca se guarda nada con forma de clave. «Revertir preparación» no la toca.
 - **Clave de API de World Labs** en Ajustes, en el llavero del sistema como la de Tripo (solo de ida), con dónde crearla (`platform.worldlabs.ai`).
 - README: sección «Descárgalo e instálalo» para Windows, macOS y Linux con los instaladores de la Release, cómo pasar los avisos de SmartScreen y Gatekeeper, y los canales previstos (Homebrew, Microsoft Store, Uptodown).
 
