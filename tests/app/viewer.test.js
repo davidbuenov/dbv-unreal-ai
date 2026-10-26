@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { clipLabel, frameDistance } from '../../src/generation/modelViewer.js';
-import { viewableFile } from '../../src/generation/preview.js';
+import { generateThumbnailForEntry, viewableFile } from '../../src/generation/preview.js';
 
 describe('visor 3D (REQ-31)', () => {
   /** @spec REQ-31 */
@@ -30,4 +30,14 @@ describe('visor 3D (REQ-31)', () => {
     expect(viewableFile({ files: ['barco.png'] })).toBeNull();
     expect(viewableFile({})).toBeNull();
   });
+
+  /** @spec REQ-31 */
+  it('generateThumbnailForEntry reutiliza la miniatura si existe o retorna null sin fichero 3D', async () => {
+    const existing = await generateThumbnailForEntry({ thumbnail: 'thumb.png' });
+    expect(existing).toBe('thumb.png');
+
+    const noFile = await generateThumbnailForEntry({ files: ['test.txt'] });
+    expect(noFile).toBeNull();
+  });
 });
+

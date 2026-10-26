@@ -15,7 +15,7 @@
 import { t } from '../ai/i18nBridge.js';
 import * as api from '../app/backend.js';
 import { button, el } from '../app/dom.js';
-import { clipLabel, createModelViewer } from './modelViewer.js';
+import { clipLabel, createModelViewer, renderModelThumbnail } from './modelViewer.js';
 
 /** Visores en línea vivos a la vez. */
 export const MAX_INLINE = 2;
@@ -28,16 +28,55 @@ export function viewableFile(entry) {
 async function urlFor(entry) {
   const file = viewableFile(entry);
   const path = file ? await api.libraryFilePath(entry.id, file) : null;
-  return path?.ok && path.value ? window.__TAURI__.core.convertFileSrc(path.value) : null;
+  return path?.ok && path.value && window.__TAURI__?.core ? window.__TAURI__.core.convertFileSrc(path.value) : null;
 }
 
-/** Si el asset no tiene miniatura, guarda la del visor (tras un momento, con el modelo ya encuadrado). */
-function keepThumbnail(entry, viewer) {
+/**
+ * Genera la miniatura de un modelo 3D que no la tiene y la guarda en la biblioteca.
+ * @param {object} entry Entrada de la biblioteca.
+ * @returns {Promise<string|null>} Nombre del fichero guardado ('thumbnail.png') o null.
+ */
+export async function generateThumbnailForEntry(entry) {
+  let saved = null;
+  if (entry?.thumbnail) {
+    saved = entry.thumbnail;
+  } else {
+    const file = viewableFile(entry);
+    if (file) {
+      const path = await api.libraryFilePath(entry.id, file);
+      const url = path?.ok && path.value && window.__TAURI__?.core?.convertFileSrc
+        ? window.__TAURI__.core.convertFileSrc(path.value)
+        : null;
+      if (url) {
+        const png = await renderModelThumbnail(url).catch(() => null);
+        if (png) {
+          const res = await api.librarySaveThumbnail(entry.id, Array.from(png));
+          if (res.ok) {
+            entry.thumbnail = 'thumbnail.png';
+            saved = 'thumbnail.png';
+          }
+        }
+      }
+    }
+  }
+  return saved;
+}
+
+/** Si el asset no tiene miniatura, guarda la del visor. */
+async function keepThumbnail(entry, viewer, onSaved) {
   if (entry.thumbnail) return;
-  setTimeout(async () => {
+  try {
     const png = await viewer.snapshot().catch(() => null);
-    if (png) await api.librarySaveThumbnail(entry.id, Array.from(png));
-  }, 1200);
+    if (png) {
+      const res = await api.librarySaveThumbnail(entry.id, Array.from(png));
+      if (res.ok) {
+        entry.thumbnail = 'thumbnail.png';
+        onSaved?.(entry);
+      }
+    }
+  } catch {
+    // ignorar
+  }
 }
 
 /** Selector de animaciones del GLB, si trae alguna. */
@@ -49,7 +88,7 @@ function clipPicker(viewer) {
 }
 
 /**
- * Ventana con el visor. `deps`: `{openModal(children, {onClose}), closeModal(), onSend?(entry)}`.
+ * Ventana con el visor. `deps`: `{openModal(children, {onClose}), closeModal(), onSend?(entry), onThumbnail?(entry)}`.
  */
 export async function openPreview(entry, deps) {
   const stage = el('div', { className: 'viewer-stage', attrs: { role: 'img', 'aria-label': entry.name } });
@@ -74,7 +113,7 @@ export async function openPreview(entry, deps) {
     viewer = await createModelViewer(stage, url);
     // `replaceChildren` pintaría «null» como texto: solo los nodos que existen.
     tools.replaceChildren(...[el('span', { className: 'hint', text: t('preview.help') }), clipPicker(viewer)].filter(Boolean));
-    keepThumbnail(entry, viewer);
+    keepThumbnail(entry, viewer, deps?.onThumbnail);
   } catch (error) {
     stage.replaceChildren(el('p', { className: 'check-fail', text: t('preview.failed', { error: String(error?.message ?? error) }) }));
   }

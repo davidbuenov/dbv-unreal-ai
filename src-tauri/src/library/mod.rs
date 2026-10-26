@@ -353,6 +353,20 @@ impl Library {
             pending.extend(companions(&folder.join(&relative)));
             copied.push(relative);
         }
+        let mut companion_thumbnail = None;
+        if let Some(stem) = source.file_stem() {
+            let stem_str = stem.to_string_lossy();
+            for img_ext in ["png", "jpg", "jpeg", "webp"] {
+                let candidate = folder.join(format!("{stem_str}.{img_ext}"));
+                if candidate.is_file() {
+                    let thumb_name = format!("thumbnail.{img_ext}");
+                    if std::fs::copy(&candidate, dir.join(&thumb_name)).is_ok() {
+                        companion_thumbnail = Some(thumb_name);
+                        break;
+                    }
+                }
+            }
+        }
         let entry = LibraryEntry {
             id,
             name,
@@ -364,7 +378,7 @@ impl Library {
             created_at: now_secs(),
             credits: None,
             files: vec![file_name],
-            thumbnail: None,
+            thumbnail: companion_thumbnail,
             sent_to: vec![],
             parent: None,
             output: Value::Null,
@@ -594,6 +608,21 @@ mod tests {
         assert_eq!(library.merge_from(&other.root).unwrap(), 1);
         assert_eq!(library.merge_from(&other.root).unwrap(), 0, "no duplica");
         assert_eq!(library.list().len(), 3);
+    }
+
+    /// @spec REQ-30, REQ-31
+    #[test]
+    fn importa_fichero_con_miniatura_acompanante() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("source");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("personaje.glb"), b"glTF fake binary content").unwrap();
+        std::fs::write(src.join("personaje.png"), b"PNG fake image data").unwrap();
+
+        let library = Library::new(dir.path().join("library"));
+        let entry = library.import_file(&src.join("personaje.glb"), None).unwrap();
+        assert_eq!(entry.thumbnail.as_deref(), Some("thumbnail.png"));
+        assert!(library.file_path(&entry.id, "thumbnail.png").unwrap().is_file());
     }
 
     /// @spec REQ-17

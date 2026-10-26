@@ -26,6 +26,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Fixed
 
+- **Miniaturas automáticas en la biblioteca (REQ-31):** los modelos 3D importados sin imagen acompañante (`thumbnail: null` en `library.json`) ahora generan y guardan automáticamente su miniatura (`thumbnail.png`) fuera de pantalla con Three.js en segundo plano, actualizando la tarjeta de la biblioteca al momento. Además, la importación adopta automáticamente cualquier imagen acompañante (`.png`, `.jpg`, `.webp`) con el mismo nombre si existe en la carpeta de origen.
 - Toolset de DBV Unreal AI 0.3.0 (variante Python): `play_animation` con esqueletos de Tripo y `place_asset` en el suelo. «Preparar» lo actualiza; la variante C++ no cambia (no hace falta recompilar).
 - La vista Proyecto se quedaba en blanco al seleccionar un proyecto (la tarjeta de memoria usaba `dirName` sin importarlo). Test nuevo que pinta la vista con un proyecto seleccionado.
 - «Cómo instalarlo» en «Conectar una IA» no abría el navegador: llamaba a `shell.open`, de un plugin que la app no carga, y el respaldo `window.open` no hace nada dentro de la WebView. Ahora usa `opener.openUrl`.

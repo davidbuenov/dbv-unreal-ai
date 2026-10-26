@@ -17,7 +17,7 @@ import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import * as api from './backend.js';
 import { button, el } from './dom.js';
 import { confirmAndLaunch } from './generateView.js';
-import { openPreview, viewableFile } from '../generation/preview.js';
+import { generateThumbnailForEntry, openPreview, viewableFile } from '../generation/preview.js';
 
 /** Extensiones que se pueden importar (`library::MODEL_EXTENSIONS`, `SPLAT_EXTENSIONS` e imágenes). */
 export const IMPORT_EXTENSIONS = ['glb', 'gltf', 'fbx', 'obj', 'usdz', 'spz', 'ply', 'png', 'jpg', 'jpeg', 'webp'];
@@ -58,13 +58,40 @@ export function sendBackend(connection) {
   };
 }
 
+/** Cola de generación de miniaturas en segundo plano para modelos 3D sin thumbnail. */
+const pendingThumbnailQueue = [];
+let thumbnailWorkerActive = false;
+
+async function pumpThumbnailQueue() {
+  if (thumbnailWorkerActive) return;
+  thumbnailWorkerActive = true;
+  while (pendingThumbnailQueue.length > 0) {
+    const item = pendingThumbnailQueue.shift();
+    if (!item.entry.thumbnail && viewableFile(item.entry)) {
+      const saved = await generateThumbnailForEntry(item.entry);
+      if (saved) {
+        const path = await api.libraryFilePath(item.entry.id, saved);
+        if (path.ok && path.value && window.__TAURI__?.core) {
+          item.box.replaceChildren(el('img', { attrs: { src: window.__TAURI__.core.convertFileSrc(path.value), alt: item.entry.name } }));
+        }
+      }
+    }
+  }
+  thumbnailWorkerActive = false;
+}
+
 /** Miniatura de un asset (la que trajo el proveedor, o una imagen del propio asset), o su icono. */
 export async function assetThumbnail(entry, className = 'asset-thumb') {
   const box = el('div', { className, text: { rig: '🦴', animation: '💃', image: '🖼', world: '🏝️', splat: '🏝️' }[entry.kind] ?? '◆' });
   const image = entry.thumbnail ?? (entry.kind === 'image' ? entry.files?.[0] : null);
   if (image) {
     const path = await api.libraryFilePath(entry.id, image);
-    if (path.ok) box.replaceChildren(el('img', { attrs: { src: window.__TAURI__.core.convertFileSrc(path.value), alt: entry.name } }));
+    if (path.ok && path.value && window.__TAURI__?.core) {
+      box.replaceChildren(el('img', { attrs: { src: window.__TAURI__.core.convertFileSrc(path.value), alt: entry.name } }));
+    }
+  } else if (viewableFile(entry) && window.__TAURI__?.core) {
+    pendingThumbnailQueue.push({ entry, box });
+    pumpThumbnailQueue();
   }
   return box;
 }
@@ -185,7 +212,16 @@ export function createLibraryView(host, deps) {
         'div',
         { className: 'asset-actions' },
         canSend ? button(t('lib.send'), () => send(entry, statusLine), 'btn-primary') : null,
-        viewableFile(entry) ? button(t('preview.open'), () => openPreview(entry, { openModal: deps.openModal, closeModal: deps.closeModal, onSend: canSend ? (e) => (deps.closeModal(), send(e, statusLine)) : null })) : null,
+        viewableFile(entry)
+          ? button(t('preview.open'), () =>
+              openPreview(entry, {
+                openModal: deps.openModal,
+                closeModal: deps.closeModal,
+                onThumbnail: () => paint(),
+                onSend: canSend ? (e) => (deps.closeModal(), send(e, statusLine)) : null,
+              }),
+            )
+          : null,
         nextStep(entry),
         button(t('lib.rename'), () => rename(entry), 'btn-ghost'),
         button(t('lib.reveal'), async () => {

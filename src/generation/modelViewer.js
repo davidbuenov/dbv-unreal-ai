@@ -140,3 +140,65 @@ export async function createModelViewer(container, url, options = {}) {
     },
   };
 }
+
+/**
+ * Renderiza una miniatura de un modelo 3D (GLB/glTF) fuera de pantalla y devuelve el PNG en bytes.
+ * @param {string} url Enlace del modelo (convertFileSrc)
+ * @param {number} [size=256] Tamaño del thumbnail en píxeles.
+ * @returns {Promise<Uint8Array|null>}
+ */
+export async function renderModelThumbnail(url, size = 256) {
+  let result = null;
+  try {
+    const { THREE, GLTFLoader } = await loadThree();
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setSize(size, size);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 2.2));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+    sun.position.set(3, 5, 4);
+    scene.add(sun);
+
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
+    const gltf = await new GLTFLoader().loadAsync(url);
+    const model = gltf.scene;
+    scene.add(model);
+
+    const box = new THREE.Box3().setFromObject(model);
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    model.position.sub(sphere.center);
+    const distance = frameDistance(sphere.radius, camera.fov);
+    camera.position.set(distance * 0.6, distance * 0.35, distance * 0.75);
+    camera.near = distance / 100;
+    camera.far = distance * 100;
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+
+    renderer.render(scene, camera);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (blob) {
+      result = new Uint8Array(await blob.arrayBuffer());
+    }
+
+    renderer.dispose();
+    renderer.forceContextLoss?.();
+    scene.traverse((node) => {
+      node.geometry?.dispose?.();
+      for (const material of [node.material].flat().filter(Boolean)) {
+        for (const value of Object.values(material)) {
+          if (value?.isTexture) value.dispose();
+        }
+        material.dispose?.();
+      }
+    });
+  } catch {
+    result = null;
+  }
+  return result;
+}
+
