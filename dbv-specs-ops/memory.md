@@ -9,7 +9,8 @@
 
 ## 🎯 Contexto Activo
 
-- **Estado actual del desarrollo:** v0.1.0 publicada (2026-10-24) más tres arreglos tras la prueba del usuario (2026-10-25). `/spec` de la v0.2.0 hecho el 2026-10-26 (`SPECIFICATIONS.md` v1.4: §3.7, §3.8, REQ-34..REQ-40).
+- **Estado actual del desarrollo:** v0.1.0 publicada (2026-10-24) más tres arreglos tras la prueba del usuario (2026-10-25). v0.2.0 en `/build` desde el 2026-10-26: hechas S18–S23, S25 y el spike P-10 (detalle y punto exacto en el Snapshot de `task.md`).
+- **Calidad de splats: referencia del usuario (2026-10-26).** El mismo mundo de World Labs se ve nítido en Wordsmith (`http://localhost:3000/`, render web de splats con todas las gaussianas, anisótropas y ordenadas). El spike propio (300.000 gaussianas redondas con dither) «no tiene nada que ver». Para comparar, el usuario dio la isla pirata de Marble como GLB de malla: `https://cdn.marble.worldlabs.ai/4ef475fc-6c13-4ea7-bb1a-2a25c0134939/fdee43c4.glb`. Lección: un renderizador de splats sin ordenar por profundidad, en una sola malla, no llega a esa calidad. Para un resultado bueno en Unreal, mejor la malla de Marble o un plugin dedicado.
 - **Foco inmediato:** v0.2.0 — memoria y plan del proyecto en `dbv-unreal-ai/` (el diferenciador), World Labs, la IA viendo el viewport, actualizador, deshacer un turno, varias instancias y MCPs de terceros.
 
 ## 🏗️ Log de Decisiones Técnicas (ADR Ligero)
