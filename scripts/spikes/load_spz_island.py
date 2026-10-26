@@ -49,7 +49,7 @@ for a in eass.get_all_level_actors():
 
 # Posicionar la cámara del visor en la playa mirando hacia la cala y el monolito
 ue_sub = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
-ue_sub.set_level_viewport_camera_info(unreal.Vector(-450, -1300, 260), unreal.Rotator(-2, 65, 0))
+ue_sub.set_level_viewport_camera_info(unreal.Vector(-450, -1300, 260), unreal.Rotator(pitch=-2.0, yaw=65.0, roll=0.0))
 
 print(f"SpzActor 'DBV_Splat_PirateIsland' cargado y posicionado con éxito desde: {SPZ_FILE}")
 
