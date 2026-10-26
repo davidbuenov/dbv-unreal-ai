@@ -255,7 +255,9 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .asset-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: transform var(--transition), box-shadow var(--transition); }
 .asset-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px var(--shadow); }
-.asset-thumb { aspect-ratio: 1; background: var(--bg-tertiary); display: grid; place-items: center; color: var(--text-muted); font-size: 32px; }
+.asset-thumb { aspect-ratio: 1; background: var(--bg-tertiary); display: grid; place-items: center; color: var(--text-muted); font-size: 32px; transition: transform var(--transition), filter var(--transition); }
+.asset-thumb:hover { filter: brightness(1.08); }
+.asset-thumb[style*="cursor: pointer"]:hover { transform: scale(1.02); }
 .asset-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .asset-body { padding: 10px; display: grid; gap: 4px; }
 .asset-name { font-weight: 600; font-size: 13px; }

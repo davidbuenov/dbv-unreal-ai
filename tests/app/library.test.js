@@ -197,7 +197,7 @@ describe('Biblioteca (REQ-16, REQ-30)', () => {
       },
     };
 
-    const { host, library } = view();
+    const { host, modal, library } = view();
     window.__TAURI__.core.invoke.mockImplementation(async (command) => {
       if (command === 'library_list') return [worldManifestEntry];
       if (command === 'library_location') return { current: 'C:/lib', default: 'C:/lib', isDefault: true };
@@ -210,6 +210,12 @@ describe('Biblioteca (REQ-16, REQ-30)', () => {
     expect(card).toBeTruthy();
     expect(card.dataset.kind).toBe('world');
     expect(card.textContent).toContain('Isla Calavera');
+
+    // Pulsar sobre la miniatura del objeto abre la previsualización (REQ-31)
+    const thumb = card.querySelector('.asset-thumb');
+    expect(thumb.style.cursor).toBe('pointer');
+    thumb.click();
+    expect(modal.textContent).toContain('Isla Calavera');
   });
 });
 

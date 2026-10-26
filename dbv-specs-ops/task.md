@@ -98,8 +98,8 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-26, implementación completa y verificada de REQ-42 (Importación de escenarios World Labs con Splats + Collider Mesh) y miniaturas automáticas en segundo plano (REQ-31).
-> **Exact point / Punto exacto:** S28d implementado y probado en Rust y JavaScript. Backend en `src-tauri/src/library/mod.rs` (detección con `is_worldlabs_manifest`, descarga segura por `ureq` o copia local con `download_or_copy`), importación por carpeta o fichero individual en `generation/commands.rs`, UI con selector de `.json` y pestaña «Escenarios», y tests unitarios en Rust (166 tests) y Vitest (264 tests) en verde.
+> **Last update / Última actualización:** 2026-10-26, usabilidad y mejoras de visor 3D e importación (REQ-31, REQ-42).
+> **Exact point / Punto exacto:** (1) Miniatura clicable en biblioteca para abrir visor 3D directamente; (2) Visor 3D mejorado con iluminación de estudio a 3 puntos, normales suaves, doble cara y acabado arcilla neutro para mallas de colisión; (3) Modal conmutador entre malla de colisión 3D y render fotorrealista para escenarios World Labs; (4) Indicador de progreso en vivo («Importando 1/7: …») y bloqueo de botones durante la carga; (5) Deduplicación automática en backend. 168 tests Rust y 264 Vitest en verde.
 > **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, toolset C++ 0.2.0): Nivel activo `/Game/DBV/Maps/PruebasGaussianSplat`.
 > **Pending / Pendiente:** (1) S28b: desarrollo del componente nativo de 3DGS en C++ (`UDbvGaussianSplatComponent` / `ADbvGaussianSplatActor`) bajo licencia MIT 100% abierta; (2) Conectar colocación alineada splat + colisión al pulsar «Enviar a Unreal»; (3) S24: varias instancias de Unreal; (4) S26: deshacer un turno.
 > **Next step / Próximo paso:** S28b (desarrollo de componente nativo de 3DGS en C++ en `Plugins/DBVUnrealAI` / integración del pipeline de colocación sincronizada de splat + colisión en Unreal).

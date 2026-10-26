@@ -370,12 +370,47 @@ impl Library {
         })
     }
 
+    /// Elimina entradas duplicadas (mismo world_id) y sus carpetas en disco.
+    pub fn deduplicate(&self) -> Result<usize, UnrealError> {
+        let count = self.update(|entries| {
+            let mut seen_world_ids = std::collections::HashSet::new();
+            let mut to_remove_ids = Vec::new();
+
+            for entry in entries.iter() {
+                let world_id = entry.parameters.get("world_id").and_then(|v| v.as_str()).unwrap_or_default();
+                if !world_id.is_empty() {
+                    if !seen_world_ids.insert(world_id.to_string()) {
+                        to_remove_ids.push(entry.id.clone());
+                    }
+                }
+            }
+
+            for id in &to_remove_ids {
+                let folder = self.root.join(id);
+                if folder.is_dir() {
+                    let _ = std::fs::remove_dir_all(&folder);
+                }
+            }
+
+            let num = to_remove_ids.len();
+            entries.retain(|e| !to_remove_ids.contains(&e.id));
+            Ok(num)
+        })?;
+        Ok(count)
+    }
+
     /// Copia un modelo (`.glb`, `.gltf`, `.fbx`, `.obj`, `.usdz`), un Gaussian Splat (`.spz`, `.ply`), una imagen
     /// o un escenario de World Labs (`.json`) a la biblioteca. @spec REQ-30, REQ-41, REQ-42
     pub fn import_file(&self, source: &Path, name: Option<&str>) -> Result<LibraryEntry, UnrealError> {
         let ext = extension(source);
         if ext == "json" {
             return self.import_worldlabs_manifest(source, name);
+        }
+        let source_str = source.to_string_lossy();
+        if let Some(existing) = self.list().into_iter().find(|e| {
+            e.parameters.get("source").and_then(|v| v.as_str()) == Some(&source_str)
+        }) {
+            return Ok(existing);
         }
         let kind = if MODEL_EXTENSIONS.contains(&ext.as_str()) {
             "model"
@@ -464,6 +499,13 @@ impl Library {
 
         let base_dir = source.parent().unwrap_or_else(|| Path::new("."));
         let world_id = json.get("id").or_else(|| json.pointer("/rawResponse/world_id")).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+
+        if let Some(existing) = self.list().into_iter().find(|e| {
+            (!world_id.is_empty() && e.parameters.get("world_id").and_then(|v| v.as_str()) == Some(&world_id))
+                || e.parameters.get("manifest_source").and_then(|v| v.as_str()) == Some(&source.to_string_lossy())
+        }) {
+            return Ok(existing);
+        }
 
         let candidate_name = name.map(str::to_string)
             .or_else(|| json.pointer("/rawResponse/display_name").and_then(|v| v.as_str()).map(str::to_string))
@@ -943,6 +985,57 @@ mod tests {
         let offset = entry.parameters.get("ground_plane_offset").and_then(|v| v.as_f64()).unwrap();
         assert!((offset - 1.25).abs() < 1e-4);
     }
+
+    /// @spec REQ-42
+    #[test]
+    fn reimportar_manifiesto_no_duplica() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("source");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("isla.spz"), b"SPZ data").unwrap();
+
+        let manifest = serde_json::json!({
+            "id": "wl-repeat-1",
+            "sceneUrl": "isla.spz",
+            "rawResponse": { "world_id": "wl-repeat-1", "display_name": "Isla Repetida" }
+        });
+        let manifest_path = src.join("manifest.json");
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+
+        let library = Library::new(dir.path().join("library"));
+        let e1 = library.import_file(&manifest_path, None).unwrap();
+        assert_eq!(library.list().len(), 1);
+
+        // Segunda importación devuelve la entrada existente sin duplicar
+        let e2 = library.import_file(&manifest_path, None).unwrap();
+        assert_eq!(e1.id, e2.id);
+        assert_eq!(library.list().len(), 1);
+    }
+
+    /// @spec REQ-42
+    #[test]
+    fn deduplica_entradas_con_mismo_world_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = Library::new(dir.path().join("library"));
+
+        let (id1, folder1) = library.new_entry_dir("Isla 1").unwrap();
+        let mut entry1 = entry(&id1, 10);
+        entry1.parameters = serde_json::json!({ "world_id": "wid-123" });
+        library.add(entry1).unwrap();
+
+        let (id2, folder2) = library.new_entry_dir("Isla 2").unwrap();
+        let mut entry2 = entry(&id2, 20);
+        entry2.parameters = serde_json::json!({ "world_id": "wid-123" });
+        library.add(entry2).unwrap();
+
+        assert_eq!(library.list().len(), 2);
+        let removed = library.deduplicate().unwrap();
+        assert_eq!(removed, 1);
+        assert_eq!(library.list().len(), 1);
+        assert!(!folder1.exists());
+        assert!(folder2.exists());
+    }
 }
+
 
 

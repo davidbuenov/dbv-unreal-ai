@@ -273,7 +273,9 @@ pub fn generation_cancel(state: State<'_, GenerationState>, job_id: String) -> b
 /// @spec REQ-17
 #[tauri::command]
 pub fn library_list(app: AppHandle) -> Result<Vec<crate::library::LibraryEntry>, UnrealError> {
-    Ok(library(&app)?.list())
+    let lib = library(&app)?;
+    let _ = lib.deduplicate();
+    Ok(lib.list())
 }
 
 /// @spec REQ-17
@@ -334,41 +336,64 @@ pub fn library_set_location(app: AppHandle, path: Option<String>, copy_existing:
     library_location(app)
 }
 
-/// Importa a la biblioteca modelos o imágenes sueltos, o carpetas de otra biblioteca. Devuelve lo añadido. @spec REQ-30
+/// Importa a la biblioteca modelos o imágenes sueltos, o carpetas de otra biblioteca. Devuelve lo añadido. @spec REQ-30, REQ-42
 #[tauri::command]
 pub async fn library_import(app: AppHandle, paths: Vec<String>) -> Result<Vec<crate::library::LibraryEntry>, UnrealError> {
     let library = library(&app)?;
+    let emitter = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let mut added = Vec::new();
+        let mut targets: Vec<(PathBuf, bool)> = Vec::new();
         for path in paths.iter().map(PathBuf::from) {
             if crate::library::is_library(&path) {
-                let before: Vec<String> = library.list().into_iter().map(|e| e.id).collect();
-                library.merge_from(&path)?;
-                added.extend(library.list().into_iter().filter(|e| !before.contains(&e.id)));
+                targets.push((path, true));
             } else if path.is_dir() {
-                let mut dir_added = 0;
                 if let Ok(entries) = std::fs::read_dir(&path) {
                     for entry_res in entries.flatten() {
                         let sub_path = entry_res.path();
                         if sub_path.is_file() {
-                            if let Ok(imported) = library.import_file(&sub_path, None) {
-                                added.push(imported);
-                                dir_added += 1;
-                            }
+                            targets.push((sub_path, false));
                         }
                     }
                 }
-                if dir_added == 0 {
-                    return Err(UnrealError::NotFound(format!(
-                        "no se encontraron modelos, splats ni manifiestos de World Labs en {}",
-                        path.display()
-                    )));
-                }
             } else {
-                added.push(library.import_file(&path, None)?);
+                targets.push((path, false));
             }
         }
-        Ok(added)
+
+        let total = targets.len();
+        let mut added = Vec::new();
+
+        for (idx, (target, is_merge)) in targets.into_iter().enumerate() {
+            let item_name = crate::library::name_from_file(&target);
+            let _ = emitter.emit("library-import-progress", serde_json::json!({
+                "current": idx + 1,
+                "total": total,
+                "name": item_name,
+                "done": false
+            }));
+
+            if is_merge {
+                let before: Vec<String> = library.list().into_iter().map(|e| e.id).collect();
+                library.merge_from(&target)?;
+                added.extend(library.list().into_iter().filter(|e| !before.contains(&e.id)));
+            } else if let Ok(imported) = library.import_file(&target, None) {
+                added.push(imported);
+            }
+        }
+
+        let _ = emitter.emit("library-import-progress", serde_json::json!({
+            "current": total,
+            "total": total,
+            "name": "",
+            "done": true
+        }));
+
+        let outcome = if added.is_empty() && total > 0 {
+            Err(UnrealError::NotFound("no se encontraron modelos, splats ni manifiestos válidos".into()))
+        } else {
+            Ok(added)
+        };
+        outcome
     })
     .await
     .map_err(|error| UnrealError::Io(error.to_string()))?

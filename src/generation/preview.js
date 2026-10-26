@@ -94,17 +94,69 @@ export async function openPreview(entry, deps) {
   const stage = el('div', { className: 'viewer-stage', attrs: { role: 'img', 'aria-label': entry.name } });
   const tools = el('div', { className: 'row' });
   let viewer = null;
+  let showingRender = false;
+
+  const isWorld = entry?.kind === 'world';
+  const notice = isWorld ? el('p', {
+    className: 'hint',
+    style: 'margin: 4px 0 8px 0; padding: 6px 10px; background: rgba(0, 0, 0, 0.05); border-radius: 6px; font-size: 13px;',
+    text: t('preview.worldColliderNotice'),
+  }) : null;
+
+  let toggleBtn = null;
+  if (isWorld && entry?.thumbnail) {
+    toggleBtn = button(t('preview.viewRender'), async () => {
+      showingRender = !showingRender;
+      if (showingRender) {
+        toggleBtn.textContent = t('preview.viewMesh');
+        const p = await api.libraryFilePath(entry.id, entry.thumbnail);
+        if (p.ok && p.value && window.__TAURI__?.core) {
+          const img = el('img', {
+            attrs: {
+              src: window.__TAURI__.core.convertFileSrc(p.value),
+              alt: entry.name,
+              style: 'max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 8px; display: block; margin: auto;',
+            },
+          });
+          stage.replaceChildren(img);
+        }
+      } else {
+        toggleBtn.textContent = t('preview.viewRender');
+        const url = await urlFor(entry);
+        if (url) {
+          stage.replaceChildren(el('p', { className: 'hint', text: t('preview.loading') }));
+          viewer?.dispose();
+          viewer = await createModelViewer(stage, url);
+        }
+      }
+    }, 'btn-ghost');
+  }
+
   deps.openModal(
     [
       el('h3', { text: entry.name }),
+      notice,
       stage,
       tools,
-      el('div', { className: 'modal-actions' }, deps.onSend ? button(t('lib.send'), () => deps.onSend(entry), 'btn-primary') : null, button(t('action.close'), deps.closeModal)),
+      el('div', { className: 'modal-actions' }, toggleBtn, deps.onSend ? button(t('lib.send'), () => deps.onSend(entry), 'btn-primary') : null, button(t('action.close'), deps.closeModal)),
     ],
     { onClose: () => viewer?.dispose(), wide: true },
   );
   const url = await urlFor(entry);
   if (!url) {
+    if (entry?.thumbnail) {
+      const p = await api.libraryFilePath(entry.id, entry.thumbnail);
+      if (p.ok && p.value && window.__TAURI__?.core) {
+        stage.replaceChildren(el('img', {
+          attrs: {
+            src: window.__TAURI__.core.convertFileSrc(p.value),
+            alt: entry.name,
+            style: 'max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 8px; display: block; margin: auto;',
+          },
+        }));
+        return;
+      }
+    }
     stage.replaceChildren(el('p', { className: 'hint', text: t('preview.notViewable') }));
     return;
   }

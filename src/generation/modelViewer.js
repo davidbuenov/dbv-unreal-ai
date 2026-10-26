@@ -29,6 +29,45 @@ function loadThree() {
   return threeModules;
 }
 
+/** Iluminación de estudio equilibrada y preparación de materiales/geometría para vistas 3D nítidas. */
+function setupModelScene(THREE, scene, model) {
+  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.8));
+
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  sun.position.set(4, 7, 5);
+  scene.add(sun);
+
+  const fill = new THREE.DirectionalLight(0xb0c4de, 1.4);
+  fill.position.set(-5, 3, -4);
+  scene.add(fill);
+
+  const rim = new THREE.DirectionalLight(0xfff5eb, 1.0);
+  rim.position.set(0, -4, 4);
+  scene.add(rim);
+
+  model.traverse((child) => {
+    if (child.isMesh) {
+      if (child.geometry) {
+        child.geometry.computeVertexNormals();
+      }
+      for (const mat of [child.material].flat().filter(Boolean)) {
+        mat.side = THREE.DoubleSide;
+        // Si no tiene textura (como mallas de colisión) o el color es casi negro:
+        if (!mat.map) {
+          mat.roughness = 0.65;
+          mat.metalness = 0.15;
+          const c = mat.color;
+          if (!c || (c.r < 0.25 && c.g < 0.25 && c.b < 0.25)) {
+            mat.color = new THREE.Color(0xa0aec0);
+          }
+        }
+      }
+    }
+  });
+  scene.add(model);
+}
+
 /**
  * Monta un visor en `container` con el modelo de `url`.
  * @param {HTMLElement} container
@@ -48,10 +87,6 @@ export async function createModelViewer(container, url, options = {}) {
   container.replaceChildren(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 2.2));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.4);
-  sun.position.set(3, 5, 4);
-  scene.add(sun);
   const camera = new THREE.PerspectiveCamera(40, width / height, 0.01, 1000);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -60,7 +95,7 @@ export async function createModelViewer(container, url, options = {}) {
 
   const gltf = await new GLTFLoader().loadAsync(url);
   const model = gltf.scene;
-  scene.add(model);
+  setupModelScene(THREE, scene, model);
   // Encuadre: el modelo centrado y la cámara a la distancia que lo abarca, un poco por encima.
   const box = new THREE.Box3().setFromObject(model);
   const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -159,15 +194,10 @@ export async function renderModelThumbnail(url, size = 256) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 2.2));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.4);
-    sun.position.set(3, 5, 4);
-    scene.add(sun);
-
     const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
     const gltf = await new GLTFLoader().loadAsync(url);
     const model = gltf.scene;
-    scene.add(model);
+    setupModelScene(THREE, scene, model);
 
     const box = new THREE.Box3().setFromObject(model);
     const sphere = box.getBoundingSphere(new THREE.Sphere());

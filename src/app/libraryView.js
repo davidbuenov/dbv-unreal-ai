@@ -103,6 +103,38 @@ export async function assetThumbnail(entry, className = 'asset-thumb') {
 export function createLibraryView(host, deps) {
   let entries = [];
   let currentTab = 'all';
+  let isImporting = false;
+  let btnImportFiles = null;
+  let btnImportUrl = null;
+  let btnImportLibrary = null;
+
+  function setImportButtonsDisabled(disabled) {
+    if (btnImportFiles) btnImportFiles.disabled = disabled;
+    if (btnImportUrl) btnImportUrl.disabled = disabled;
+    if (btnImportLibrary) btnImportLibrary.disabled = disabled;
+  }
+
+  const progressLine = el('div', {
+    className: 'import-progress hint',
+    style: 'display: none; padding: 6px 12px; margin: 4px 0 8px 0; background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 6px; font-size: 13px; align-items: center; gap: 8px;',
+  });
+
+  if (window.__TAURI__?.event?.listen) {
+    window.__TAURI__.event.listen('library-import-progress', (event) => {
+      const { current, total, name, done } = event.payload || {};
+      if (done) {
+        progressLine.style.display = 'none';
+        isImporting = false;
+        setImportButtonsDisabled(false);
+      } else if (total > 0) {
+        progressLine.style.display = 'flex';
+        const msg = `⏳ ${t('lib.importingProgress', { current: String(current), total: String(total), name: name || '' })}`;
+        progressLine.textContent = msg;
+        deps.toast(msg);
+      }
+    });
+  }
+
   const search = el('input', { attrs: { type: 'search', placeholder: t('lib.search'), 'aria-label': t('lib.search') } });
   const grid = el('div', { className: 'library-grid' });
   search.addEventListener('input', () => paint());
@@ -196,10 +228,26 @@ export function createLibraryView(host, deps) {
     const parent = entry.parent ? entries.find((e) => e.id === entry.parent) : null;
     const kind = t(`lib.kind.${entry.kind}`) === `lib.kind.${entry.kind}` ? entry.kind : t(`lib.kind.${entry.kind}`);
     const canSend = ['model', 'rig', 'animation'].includes(entry.kind);
+    const hasPreview = viewableFile(entry) || entry.thumbnail;
+
+    const thumb = await assetThumbnail(entry);
+    if (hasPreview) {
+      thumb.style.cursor = 'pointer';
+      thumb.setAttribute('title', t('preview.open'));
+      thumb.addEventListener('click', () => {
+        openPreview(entry, {
+          openModal: deps.openModal,
+          closeModal: deps.closeModal,
+          onThumbnail: () => paint(),
+          onSend: canSend ? (e) => (deps.closeModal(), send(e, statusLine)) : null,
+        });
+      });
+    }
+
     return el(
       'article',
       { className: 'asset-card', attrs: { 'data-kind': entry.kind } },
-      await assetThumbnail(entry),
+      thumb,
       el(
         'div',
         { className: 'asset-body' },
@@ -240,11 +288,30 @@ export function createLibraryView(host, deps) {
   }
 
   async function importPaths(paths) {
-    if (!paths?.length) return null;
-    const imported = await api.libraryImport(paths.map(String));
-    if (!imported.ok) return deps.toast(imported.error.message, 'error');
-    deps.toast(t('lib.imported', { n: String(imported.value.length) }));
-    return render();
+    let result = null;
+    if (!paths?.length || isImporting) {
+      result = null;
+    } else {
+      isImporting = true;
+      setImportButtonsDisabled(true);
+      progressLine.style.display = 'flex';
+      progressLine.textContent = `⏳ ${t('lib.importing')}`;
+      try {
+        const imported = await api.libraryImport(paths.map(String));
+        if (!imported.ok) {
+          deps.toast(imported.error.message, 'error');
+        } else {
+          deps.toast(t('lib.imported', { n: String(imported.value.length) }));
+          await render();
+        }
+        result = imported;
+      } finally {
+        isImporting = false;
+        setImportButtonsDisabled(false);
+        progressLine.style.display = 'none';
+      }
+    }
+    return result;
   }
 
   function promptImportUrl() {
@@ -340,6 +407,15 @@ export function createLibraryView(host, deps) {
     const [listed, location] = await Promise.all([api.libraryList(), api.libraryLocation()]);
     entries = listed.ok ? listed.value : [];
     const dialog = window.__TAURI__.dialog;
+    btnImportFiles = button(t('lib.importFiles'), async () => importPaths(await dialog.open({ multiple: true, filters: [{ name: t('lib.importable'), extensions: IMPORT_EXTENSIONS }] })), '', { title: t('lib.importFilesTooltip') });
+    btnImportUrl = button(t('lib.importUrl'), () => promptImportUrl(), '', { title: t('lib.importUrlTooltip') });
+    btnImportLibrary = button(t('lib.importLibrary'), async () => {
+      const folder = await dialog.open({ directory: true });
+      return importPaths(folder ? [folder] : []);
+    }, 'btn-ghost', { title: t('lib.importLibraryTooltip') });
+
+    setImportButtonsDisabled(isImporting);
+
     host.replaceChildren(
       el(
         'div',
@@ -348,13 +424,11 @@ export function createLibraryView(host, deps) {
         createTabs(),
         el('span', { className: 'spacer' }),
         search,
-        button(t('lib.importFiles'), async () => importPaths(await dialog.open({ multiple: true, filters: [{ name: t('lib.importable'), extensions: IMPORT_EXTENSIONS }] })), '', { title: t('lib.importFilesTooltip') }),
-        button(t('lib.importUrl'), () => promptImportUrl(), '', { title: t('lib.importUrlTooltip') }),
-        button(t('lib.importLibrary'), async () => {
-          const folder = await dialog.open({ directory: true });
-          return importPaths(folder ? [folder] : []);
-        }, 'btn-ghost', { title: t('lib.importLibraryTooltip') }),
+        btnImportFiles,
+        btnImportUrl,
+        btnImportLibrary,
       ),
+      progressLine,
       location.ok && location.value ? el('p', { className: 'hint mono', text: t('lib.location', { path: location.value.current }) }) : null,
       grid,
     );
