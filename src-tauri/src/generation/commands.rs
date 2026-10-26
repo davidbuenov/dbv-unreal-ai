@@ -355,6 +355,18 @@ pub async fn library_import(app: AppHandle, paths: Vec<String>) -> Result<Vec<cr
     .map_err(|error| UnrealError::Io(error.to_string()))?
 }
 
+/// Descarga un asset desde una URL y lo importa a la biblioteca. @spec REQ-30
+#[tauri::command]
+pub async fn library_import_url(app: AppHandle, url: String, name: Option<String>) -> Result<crate::library::LibraryEntry, UnrealError> {
+    let library = library(&app)?;
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        library.import_url(&url, name.as_deref())
+    })
+    .await
+    .map_err(|error| UnrealError::Io(error.to_string()))?;
+    outcome
+}
+
 /// @spec REQ-28
 #[tauri::command]
 pub fn library_rename(app: AppHandle, id: String, name: String) -> Result<crate::library::LibraryEntry, UnrealError> {

@@ -9,7 +9,7 @@
 // convierte en 3D), siempre por la tarjeta de coste, y nunca más de cinco animaciones por tarea.
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createLibraryView, filterEntries, isV1Rig } from '../../src/app/libraryView.js';
+import { createLibraryView, filterEntries, filterEntriesByTab, isV1Rig } from '../../src/app/libraryView.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 
 const base = { provider: 'tripo', prompt: '', createdAt: 1, files: ['model.glb'], sentTo: [], parameters: {} };
@@ -110,4 +110,71 @@ describe('Biblioteca (REQ-16, REQ-30)', () => {
     await vi.waitFor(() => expect(invoked.some(([c]) => c === 'generation_launch')).toBe(true));
     expect(invoked.find(([c]) => c === 'generation_prepare')[1]).toEqual({ tool: 'animate_model', args: { id: 'pirata-rig', animations: ['dance_01', 'dance_02', 'dance_03', 'dance_04', 'dance_05'] } });
   });
+
+  /** @spec REQ-30, REQ-41 */
+  it('filtra por apartados Objetos y Escenarios (Gaussian Splatting)', () => {
+    const world = { ...base, id: 'isla-1', name: 'Isla pirata', kind: 'world', files: ['isla.spz'] };
+    const all = [MODEL, RIG, IMAGE, world];
+    expect(filterEntriesByTab(all, 'all')).toHaveLength(4);
+    expect(filterEntriesByTab(all, 'objects').map((e) => e.id)).toEqual(['pirata-1', 'pirata-rig', 'barco-ref']);
+    expect(filterEntriesByTab(all, 'worlds').map((e) => e.id)).toEqual(['isla-1']);
+  });
+
+  /** @spec REQ-30 */
+  it('las pestañas de la cabecera conmutan la vista y permiten importar desde URL', async () => {
+    const world = { ...base, id: 'isla-1', name: 'Isla pirata', kind: 'world', files: ['isla.spz'] };
+    const { host, modal, library } = view();
+    // Inyectamos la lista con objetos y escenario
+    window.__TAURI__.core.invoke = vi.fn(async (command, args) => {
+      invoked.push([command, args]);
+      if (command === 'library_list') return [MODEL, RIG, IMAGE, world];
+      if (command === 'library_location') return { current: 'C:/lib', default: 'C:/lib', isDefault: true };
+      if (command === 'library_import_url') return { ...base, id: 'nuevo-1', name: args.name || 'Descargado', kind: 'world', files: ['descargado.spz'] };
+      return null;
+    });
+
+    await library.render();
+
+    // Verificamos presencia de los botones de pestañas y botones de importación
+    const tabAll = byText(host, 'Todos');
+    const tabObjects = byText(host, 'Objetos');
+    const tabWorlds = byText(host, 'Escenarios');
+    expect(tabAll).toBeTruthy();
+    expect(tabObjects).toBeTruthy();
+    expect(tabWorlds).toBeTruthy();
+
+    const btnImportFiles = byText(host, 'Importar…');
+    const btnImportUrl = byText(host, 'Importar URL…');
+    const btnMergeLib = byText(host, 'Fusionar biblioteca…');
+    expect(btnImportFiles).toBeTruthy();
+    expect(btnImportUrl).toBeTruthy();
+    expect(btnMergeLib).toBeTruthy();
+
+    // Estado inicial: Todos (4 tarjetas)
+    expect(host.querySelectorAll('.asset-card')).toHaveLength(4);
+
+    // Conmutar a Objetos: 3 tarjetas
+    tabObjects.click();
+    await vi.waitFor(() => expect(host.querySelectorAll('.asset-card')).toHaveLength(3));
+    expect([...host.querySelectorAll('.asset-card')].map((c) => c.dataset.kind)).toEqual(['model', 'rig', 'image']);
+
+    // Conmutar a Escenarios: 1 tarjeta (isla pirata) con icono 🏝️
+    tabWorlds.click();
+    await vi.waitFor(() => expect(host.querySelectorAll('.asset-card')).toHaveLength(1));
+    expect(host.querySelector('.asset-card').dataset.kind).toBe('world');
+    expect(host.querySelector('.asset-thumb').textContent).toBe('🏝️');
+
+    // Probar modal de Importar URL
+    btnImportUrl.click();
+    const urlInput = modal.querySelector('input[type=text]');
+    expect(urlInput).toBeTruthy();
+    urlInput.value = 'https://cdn.worldlabs.ai/scenes/cueva.spz';
+    const submitBtn = byText(modal, 'Descargar e importar');
+    expect(submitBtn).toBeTruthy();
+    submitBtn.click();
+
+    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'library_import_url')).toBe(true));
+    expect(invoked.find(([c]) => c === 'library_import_url')[1]).toEqual({ url: 'https://cdn.worldlabs.ai/scenes/cueva.spz', name: null });
+  });
 });
+

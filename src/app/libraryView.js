@@ -19,8 +19,8 @@ import { button, el } from './dom.js';
 import { confirmAndLaunch } from './generateView.js';
 import { openPreview, viewableFile } from '../generation/preview.js';
 
-/** Extensiones que se pueden importar (`library::MODEL_EXTENSIONS` e imágenes). */
-export const IMPORT_EXTENSIONS = ['glb', 'gltf', 'fbx', 'obj', 'usdz', 'png', 'jpg', 'jpeg', 'webp'];
+/** Extensiones que se pueden importar (`library::MODEL_EXTENSIONS`, `SPLAT_EXTENSIONS` e imágenes). */
+export const IMPORT_EXTENSIONS = ['glb', 'gltf', 'fbx', 'obj', 'usdz', 'spz', 'ply', 'png', 'jpg', 'jpeg', 'webp'];
 
 /** Animaciones que se pueden elegir de una vez (límite de Tripo por tarea). */
 export const MAX_ANIMATIONS = 5;
@@ -29,6 +29,17 @@ export const MAX_ANIMATIONS = 5;
 export function filterEntries(entries, query) {
   const needle = String(query ?? '').trim().toLowerCase();
   return needle ? entries.filter((e) => `${e.name} ${e.prompt} ${e.provider} ${e.kind}`.toLowerCase().includes(needle)) : entries;
+}
+
+/** Filtra entradas por pestaña activa: 'all' (todas), 'objects' (modelos, rigs, animaciones, imágenes), o 'worlds' (splats, mundos). */
+export function filterEntriesByTab(entries, tab) {
+  let filtered = entries;
+  if (tab === 'objects') {
+    filtered = entries.filter((e) => ['model', 'rig', 'animation', 'image'].includes(e.kind));
+  } else if (tab === 'worlds') {
+    filtered = entries.filter((e) => e.kind === 'world' || e.kind === 'splat');
+  }
+  return filtered;
 }
 
 /** ¿El rig se hizo con el modelo v1.0 (101 animaciones)? Igual que `catalog::is_v1_rig`. */
@@ -49,7 +60,7 @@ export function sendBackend(connection) {
 
 /** Miniatura de un asset (la que trajo el proveedor, o una imagen del propio asset), o su icono. */
 export async function assetThumbnail(entry, className = 'asset-thumb') {
-  const box = el('div', { className, text: { rig: '🦴', animation: '💃', image: '🖼' }[entry.kind] ?? '◆' });
+  const box = el('div', { className, text: { rig: '🦴', animation: '💃', image: '🖼', world: '🏝️', splat: '🏝️' }[entry.kind] ?? '◆' });
   const image = entry.thumbnail ?? (entry.kind === 'image' ? entry.files?.[0] : null);
   if (image) {
     const path = await api.libraryFilePath(entry.id, image);
@@ -64,6 +75,7 @@ export async function assetThumbnail(entry, className = 'asset-thumb') {
  */
 export function createLibraryView(host, deps) {
   let entries = [];
+  let currentTab = 'all';
   const search = el('input', { attrs: { type: 'search', placeholder: t('lib.search'), 'aria-label': t('lib.search') } });
   const grid = el('div', { className: 'library-grid' });
   search.addEventListener('input', () => paint());
@@ -199,10 +211,93 @@ export function createLibraryView(host, deps) {
     return render();
   }
 
+  function promptImportUrl() {
+    const urlInput = el('input', {
+      attrs: {
+        type: 'text',
+        placeholder: 'https://...',
+        'aria-label': t('lib.importUrlTitle'),
+        style: 'width: 100%;',
+      },
+    });
+    const nameInput = el('input', {
+      attrs: {
+        type: 'text',
+        placeholder: t('lib.importUrlNamePlaceholder'),
+        'aria-label': t('lib.importUrlNamePlaceholder'),
+        style: 'width: 100%; margin-top: 8px;',
+      },
+    });
+    const statusLine = el('p', { className: 'hint', style: 'min-height: 18px; margin-top: 6px;' });
+    const submitBtn = button(
+      t('lib.importUrlSubmit'),
+      async () => {
+        const url = urlInput.value.trim();
+        let finished = false;
+        if (!url) {
+          return null;
+        }
+        submitBtn.disabled = true;
+        statusLine.textContent = t('lib.importingUrl');
+        const res = await api.libraryImportUrl(url, nameInput.value.trim() || null);
+        if (!res.ok) {
+          submitBtn.disabled = false;
+          statusLine.textContent = '';
+          deps.toast(res.error.message, 'error');
+        } else {
+          deps.closeModal();
+          deps.toast(t('lib.importedOne', { name: res.value.name }));
+          await render();
+          finished = true;
+        }
+        return finished;
+      },
+      'btn-primary',
+    );
+
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitBtn.click();
+    });
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitBtn.click();
+    });
+
+    deps.openModal([
+      el('h3', { text: t('lib.importUrlTitle') }),
+      el('p', { className: 'hint', text: t('lib.importUrlPrompt') }),
+      urlInput,
+      nameInput,
+      statusLine,
+      el('div', { className: 'modal-actions' }, button(t('gen.cancel'), deps.closeModal), submitBtn),
+    ]);
+    setTimeout(() => urlInput.focus(), 50);
+  }
+
+  function createTabs() {
+    const updatePressed = () => {
+      allBtn.setAttribute('aria-pressed', String(currentTab === 'all'));
+      objectsBtn.setAttribute('aria-pressed', String(currentTab === 'objects'));
+      worldsBtn.setAttribute('aria-pressed', String(currentTab === 'worlds'));
+    };
+    const switchTab = (tab) => {
+      currentTab = tab;
+      updatePressed();
+      paint();
+    };
+    const allBtn = button(t('lib.tabAll'), () => switchTab('all'), 'segmented-btn', { 'aria-pressed': String(currentTab === 'all') });
+    const objectsBtn = button(t('lib.tabObjects'), () => switchTab('objects'), 'segmented-btn', { 'aria-pressed': String(currentTab === 'objects') });
+    const worldsBtn = button(t('lib.tabWorlds'), () => switchTab('worlds'), 'segmented-btn', { 'aria-pressed': String(currentTab === 'worlds') });
+    return el('div', { className: 'segmented' }, allBtn, objectsBtn, worldsBtn);
+  }
+
   async function paint() {
-    const shown = filterEntries(entries, search.value);
+    const tabEntries = filterEntriesByTab(entries, currentTab);
+    const shown = filterEntries(tabEntries, search.value);
     grid.replaceChildren(...(await Promise.all(shown.map(card))));
-    if (!shown.length) grid.replaceChildren(el('p', { className: 'empty', text: t('lib.empty') }));
+    if (!shown.length) {
+      const emptyKey = currentTab === 'objects' ? 'lib.emptyObjects' : currentTab === 'worlds' ? 'lib.emptyWorlds' : 'lib.empty';
+      grid.replaceChildren(el('p', { className: 'empty', text: t(emptyKey) }));
+    }
   }
 
   async function render() {
@@ -214,13 +309,15 @@ export function createLibraryView(host, deps) {
         'div',
         { className: 'view-header' },
         el('h2', { text: t('lib.title') }),
+        createTabs(),
         el('span', { className: 'spacer' }),
         search,
-        button(t('lib.importFiles'), async () => importPaths(await dialog.open({ multiple: true, filters: [{ name: t('lib.importable'), extensions: IMPORT_EXTENSIONS }] }))),
+        button(t('lib.importFiles'), async () => importPaths(await dialog.open({ multiple: true, filters: [{ name: t('lib.importable'), extensions: IMPORT_EXTENSIONS }] })), '', { title: t('lib.importFilesTooltip') }),
+        button(t('lib.importUrl'), () => promptImportUrl(), '', { title: t('lib.importUrlTooltip') }),
         button(t('lib.importLibrary'), async () => {
           const folder = await dialog.open({ directory: true });
           return importPaths(folder ? [folder] : []);
-        }, 'btn-ghost'),
+        }, 'btn-ghost', { title: t('lib.importLibraryTooltip') }),
       ),
       location.ok && location.value ? el('p', { className: 'hint mono', text: t('lib.location', { path: location.value.current }) }) : null,
       grid,

@@ -97,8 +97,8 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-26, inicio del desarrollo del componente nativo propio de Gaussian Splatting en C++ (S28b).
-> **Exact point / Punto exacto:** Decisión tomada y registrada (rechazo de paywalls de XGRIDS LCC; adopción de arquitectura nativa C++ basada en las lecciones de YaGS: profundidad real con `AlphaDepthClip`, GPU sorting, soporte nativo de `.spz` y `.ply`). Orientación validada (`Roll = 90.0°`, escala 100).
+> **Last update / Última actualización:** 2026-10-26, implementación completada de las mejoras de Biblioteca v0.2.0 (REQ-30, REQ-41).
+> **Exact point / Punto exacto:** (1) Clarificación de importación de ficheros vs fusión de biblioteca externa con tooltips; (2) Soporte de Gaussian Splats (`.spz` y `.ply`) con `kind = "world"` y miniatura 🏝️; (3) Descarga e importación directa desde URL (`library_import_url` con `ureq`); (4) División de la Biblioteca en pestañas «Todos», «Objetos» y «Escenarios». 163 tests Rust, 262 Vitest y 30 Python en verde.
 > **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, toolset C++ 0.2.0): Nivel activo `/Game/DBV/Maps/PruebasGaussianSplat`.
 > **Pending / Pendiente:** (1) Implementar la arquitectura de `UDbvGaussianSplatComponent` y `ADbvGaussianSplatActor` en `Plugins/DBVUnrealAI/Source/DBVUnrealAICpp` con lector de `.spz` y proxy de render; (2) Compilar y verificar en UE 5.8.4; (3) Conectar con la generación de World Labs (S27/S28).
 > **Next step / Próximo paso:** Implementar el lector SPZ (`DbvSpzReader`), los tipos de datos de splat y los componentes `UDbvGaussianSplatComponent` / `ADbvGaussianSplatActor` en C++.

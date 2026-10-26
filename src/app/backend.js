@@ -58,6 +58,7 @@ export const libraryRecordSent = (id, project, assetPath) => call('library_recor
 export const libraryLocation = () => call('library_location');
 export const librarySetLocation = (path, copyExisting) => call('library_set_location', { path: path || null, copyExisting: Boolean(copyExisting) });
 export const libraryImport = (paths) => call('library_import', { paths });
+export const libraryImportUrl = (url, name) => call('library_import_url', { url, name: name || null });
 export const libraryRename = (id, name) => call('library_rename', { id, name });
 export const libraryEntryDir = (id) => call('library_entry_dir', { id });
 export const librarySaveThumbnail = (id, png) => call('library_save_thumbnail', { id, png });

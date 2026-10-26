@@ -236,6 +236,8 @@ pub fn run() {
             #[cfg(desktop)]
             generation::commands::library_import,
             #[cfg(desktop)]
+            generation::commands::library_import_url,
+            #[cfg(desktop)]
             generation::commands::library_rename,
             #[cfg(desktop)]
             generation::commands::library_entry_dir,

@@ -105,11 +105,24 @@ pub struct LibraryEntry {
 
 /// Extensiones de modelo que Unreal importa.
 pub const MODEL_EXTENSIONS: [&str; 5] = ["glb", "gltf", "fbx", "obj", "usdz"];
+/// Extensiones de Gaussian Splatting (mundos/escenarios 3D).
+pub const SPLAT_EXTENSIONS: [&str; 2] = ["spz", "ply"];
 /// Imágenes que se pueden guardar como referencia (y subir a Tripo).
 pub const IMAGE_EXTENSIONS: [&str; 4] = ["png", "jpg", "jpeg", "webp"];
 
 fn extension(path: &Path) -> String {
     path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default()
+}
+
+/// Extrae el nombre de fichero legible desde una URL eliminando parámetros de consulta y hashes.
+pub fn filename_from_url(url: &str) -> Option<String> {
+    let clean = url.split(['?', '#']).next().unwrap_or(url);
+    let segment = clean.rsplit('/').next().unwrap_or_default().trim();
+    if segment.contains('.') {
+        Some(segment.to_string())
+    } else {
+        None
+    }
 }
 
 /// Nombre legible a partir del nombre de un fichero (`linterna_hierro-02.glb` → «Linterna hierro 02»).
@@ -138,10 +151,15 @@ fn companions(path: &Path) -> Vec<String> {
 }
 
 impl LibraryEntry {
-    /// El fichero principal: el primer modelo, o el primer fichero si no hay modelos (una imagen, un splat).
+    /// El fichero principal: el primer modelo o splat, o el primer fichero si no hay modelos (una imagen).
     pub fn primary_file(&self) -> Option<String> {
-        let is_model = |f: &&String| f.rsplit_once('.').is_some_and(|(_, ext)| MODEL_EXTENSIONS.contains(&ext.to_lowercase().as_str()));
-        self.files.iter().find(is_model).or_else(|| self.files.first()).cloned()
+        let is_primary = |f: &&String| {
+            f.rsplit_once('.').is_some_and(|(_, ext)| {
+                let lower = ext.to_lowercase();
+                MODEL_EXTENSIONS.contains(&lower.as_str()) || SPLAT_EXTENSIONS.contains(&lower.as_str())
+            })
+        };
+        self.files.iter().find(is_primary).or_else(|| self.files.first()).cloned()
     }
 }
 
@@ -293,16 +311,18 @@ impl Library {
         })
     }
 
-    /// Copia un modelo (`.glb`, `.gltf`, `.fbx`, `.obj`, `.usdz`) o una imagen a la biblioteca como entrada nueva
-    /// (proveedor `import`), con los ficheros que necesita (búferes, `.mtl`, texturas). @spec REQ-30
+    /// Copia un modelo (`.glb`, `.gltf`, `.fbx`, `.obj`, `.usdz`), un Gaussian Splat (`.spz`, `.ply`) o una imagen
+    /// a la biblioteca como entrada nueva (proveedor `import`), con los ficheros que necesita (búferes, `.mtl`, texturas). @spec REQ-30, REQ-41
     pub fn import_file(&self, source: &Path, name: Option<&str>) -> Result<LibraryEntry, UnrealError> {
         let ext = extension(source);
         let kind = if MODEL_EXTENSIONS.contains(&ext.as_str()) {
             "model"
+        } else if SPLAT_EXTENSIONS.contains(&ext.as_str()) {
+            "world"
         } else if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
             "image"
         } else {
-            return Err(UnrealError::Format(format!("{} no es un modelo (glb, gltf, fbx, obj, usdz) ni una imagen (png, jpg, webp)", source.display())));
+            return Err(UnrealError::Format(format!("{} no es un modelo (glb, gltf, fbx, obj, usdz), splat (spz, ply) ni una imagen (png, jpg, webp)", source.display())));
         };
         let folder = source.parent().ok_or_else(|| UnrealError::NotFound(source.display().to_string()))?;
         let file_name = source.file_name().map(|n| n.to_string_lossy().to_string()).ok_or_else(|| UnrealError::NotFound(source.display().to_string()))?;
@@ -351,6 +371,92 @@ impl Library {
         };
         self.add(entry.clone())?;
         Ok(entry)
+    }
+
+    /// Descarga un fichero desde una URL (HTTPS, HTTP o localhost en tests) y lo importa a la biblioteca.
+    /// Admite modelos 3D (.glb, .gltf, .fbx, .obj, .usdz), Gaussian Splats (.spz, .ply) e imágenes.
+    /// @spec REQ-30
+    pub fn import_url(&self, url: &str, name: Option<&str>) -> Result<LibraryEntry, UnrealError> {
+        let trimmed_url = url.trim();
+        let allowed = trimmed_url.starts_with("https://")
+            || trimmed_url.starts_with("http://")
+            || (cfg!(test) && trimmed_url.starts_with("http://127.0.0.1"));
+        if !allowed {
+            return Err(UnrealError::Protocol(format!("protocolo de URL no admitido: {trimmed_url}")));
+        }
+
+        let mut deduced_filename = filename_from_url(trimmed_url);
+        if deduced_filename.is_none() {
+            if let Some(n) = name.filter(|n| n.contains('.')) {
+                deduced_filename = Some(n.trim().to_string());
+            }
+        }
+        let file_name = match deduced_filename {
+            Some(f) if !f.trim().is_empty() => f,
+            _ => {
+                return Err(UnrealError::Format(
+                    "no se pudo deducir el nombre del fichero a partir de la URL; indica un nombre con extensión (.glb, .spz, etc.)".into(),
+                ));
+            }
+        };
+
+        let ext = file_name.rsplit_once('.').map(|(_, e)| e.to_lowercase()).unwrap_or_default();
+        let is_supported = MODEL_EXTENSIONS.contains(&ext.as_str())
+            || SPLAT_EXTENSIONS.contains(&ext.as_str())
+            || IMAGE_EXTENSIONS.contains(&ext.as_str());
+        if !is_supported {
+            return Err(UnrealError::Format(format!(
+                "extensión «.{ext}» no admitida. Se admiten: glb, gltf, fbx, obj, usdz, spz, ply, png, jpg, webp"
+            )));
+        }
+
+        let temp_dir = std::env::temp_dir().join(format!("dbv_url_import_{}_{}", now_secs(), slug(&file_name)));
+        std::fs::create_dir_all(&temp_dir).map_err(|err| io_error(&temp_dir, &err))?;
+        let target_path = temp_dir.join(&file_name);
+
+        let agent = ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .timeout_global(Some(Duration::from_secs(300)))
+            .build()
+            .new_agent();
+
+        let outcome = (|| -> Result<LibraryEntry, UnrealError> {
+            let response = agent.get(trimmed_url).call().map_err(|error| {
+                UnrealError::Unreachable(format!("error descargando desde {trimmed_url}: {error}"))
+            })?;
+            let status = response.status().as_u16();
+            if status != 200 {
+                return Err(UnrealError::Protocol(format!("la descarga respondió HTTP {status}")));
+            }
+            let mut bytes = Vec::new();
+            use std::io::Read;
+            response
+                .into_body()
+                .into_reader()
+                .take(512 * 1024 * 1024 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|error| io_error(&target_path, &error))?;
+            if bytes.len() > 512 * 1024 * 1024 {
+                return Err(UnrealError::Protocol("el fichero descargado supera el límite de 512 MB".into()));
+            }
+            std::fs::write(&target_path, &bytes).map_err(|error| io_error(&target_path, &error))?;
+
+            let mut imported = self.import_file(&target_path, name)?;
+            imported.parameters = serde_json::json!({
+                "source_url": trimmed_url,
+                "file_name": file_name,
+            });
+            self.update(|entries| {
+                if let Some(entry) = entries.iter_mut().find(|e| e.id == imported.id) {
+                    entry.parameters = imported.parameters.clone();
+                }
+                Ok(())
+            })?;
+            Ok(imported)
+        })();
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        outcome
     }
 
     /// Une otra biblioteca (una carpeta con `library.json`) a esta: copia las entradas que no tiene, con sus
@@ -523,4 +629,32 @@ mod tests {
         assert_eq!(slug("..//"), "asset");
         assert_eq!(slug("Ñandú"), "nandu");
     }
+
+    /// @spec REQ-30, REQ-41
+    #[test]
+    fn importa_gaussian_splatting_spz_y_ply() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("splats");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("isla_pirata.spz"), b"SPZ1...test data").unwrap();
+        std::fs::write(src.join("escenario.ply"), b"ply\nformat binary_little_endian 1.0\n").unwrap();
+
+        let library = Library::new(dir.path().join("library"));
+        let spz_entry = library.import_file(&src.join("isla_pirata.spz"), None).unwrap();
+        assert_eq!((spz_entry.name.as_str(), spz_entry.kind.as_str()), ("Isla pirata", "world"));
+        assert_eq!(spz_entry.primary_file().as_deref(), Some("isla_pirata.spz"));
+
+        let ply_entry = library.import_file(&src.join("escenario.ply"), Some("Mi Escenario")).unwrap();
+        assert_eq!((ply_entry.name.as_str(), ply_entry.kind.as_str()), ("Mi Escenario", "world"));
+        assert_eq!(ply_entry.primary_file().as_deref(), Some("escenario.ply"));
+    }
+
+    /// @spec REQ-30
+    #[test]
+    fn deduce_nombre_de_fichero_de_url() {
+        assert_eq!(filename_from_url("https://cdn.worldlabs.ai/scenes/island.spz?token=123#view").as_deref(), Some("island.spz"));
+        assert_eq!(filename_from_url("https://example.com/asset.glb").as_deref(), Some("asset.glb"));
+        assert_eq!(filename_from_url("https://example.com/no-extension/"), None);
+    }
 }
+
