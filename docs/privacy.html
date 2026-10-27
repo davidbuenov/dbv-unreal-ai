@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — DBV Unreal AI</title>
+  <meta name="description" content="Privacy policy for DBV Unreal AI: the application collects no personal data or telemetry. All processing runs locally, except for optional cloud AI and generation services you choose to connect." />
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="en/index.html#top" class="nav-brand">
+        <img src="assets/logo.png" alt="DBV Unreal AI Logo" class="nav-logo" />
+        <span>DBV Unreal AI</span>
+      </a>
+      <nav class="nav-links">
+        <a href="en/index.html#workflow">How it works</a>
+        <a href="en/index.html#gallery">Screenshots</a>
+        <a href="en/index.html#features">Features</a>
+        <a href="en/index.html#download">Download</a>
+        <a href="https://github.com/davidbuenov/dbv-unreal-ai" class="nav-github" target="_blank" rel="noopener">GitHub</a>
+        <a href="privacidad.html" class="nav-lang">Español</a>
+      </nav>
+      <a href="en/index.html#download" class="btn btn-primary btn-nav">Download</a>
+    </div>
+  </header>
+
+  <main>
+    <article class="legal">
+      <h1>Privacy Policy</h1>
+      <p class="legal-updated">Last updated: October 27, 2026</p>
+
+      <div class="legal-summary">
+        <p><strong>Summary:</strong> DBV Unreal AI does not collect, store on proprietary servers, or share any personal data with third parties. There are no user accounts, no embedded analytics or advertisements, and zero telemetry. Communication with Unreal Engine 5.8 runs entirely on your local machine (localhost). If you connect a cloud AI provider or generate assets via Tripo or World Labs, network requests travel directly from your machine to the respective official APIs, never through any proxy server of ours.</p>
+      </div>
+
+      <h2>What the application does on your computer</h2>
+      <p>DBV Unreal AI is a native desktop application built with Rust and Tauri v2. It interacts with your running Unreal Engine 5.8 editor instances through the local Model Context Protocol (MCP) server over loopback port <code>127.0.0.1</code>. Scene queries, static Python validation, and approved executions occur entirely on your local operating system.</p>
+
+      <h2>Secure Credential Storage</h2>
+      <p>API keys configured in the application (Anthropic, OpenAI, Google Gemini, Tripo 3D, or World Labs) are saved exclusively into your operating system's secure credential vault:</p>
+      <ul>
+        <li><strong>Windows:</strong> Windows Credential Manager.</li>
+        <li><strong>macOS:</strong> Apple Keychain.</li>
+        <li><strong>Linux:</strong> Secret Service API / Freedesktop Keyring.</li>
+      </ul>
+      <p>Keys are never written to plaintext config files, tracked in repositories, or displayed back in the assistant UI.</p>
+
+      <h2>Network Connections</h2>
+      <p>DBV Unreal AI initiates outbound network requests only upon your explicit action:</p>
+      <ul>
+        <li><strong>Cloud AI Models (optional):</strong> When you configure Anthropic, OpenAI, or Google, messages and selected context are dispatched directly to the official provider endpoints under their respective terms of service. If you use local models (Ollama, LM Studio), nothing leaves your machine.</li>
+        <li><strong>3D Generation with Tripo (optional):</strong> When you confirm and trigger a 3D generation request, the payload is submitted directly to <code>api.tripo3d.ai</code> and output GLB files are downloaded directly into your local library.</li>
+        <li><strong>World Generation with World Labs (optional):</strong> When creating environments or polling World Labs Marble jobs, calls communicate directly with <code>api.worldlabs.ai</code> and Gaussian Splats (<code>.spz</code>) and collider meshes (<code>.glb</code>) are downloaded to your disk.</li>
+        <li><strong>GitHub Releases (optional):</strong> Triggered only when navigating to external GitHub documentation or release links.</li>
+      </ul>
+
+      <h2>Local Library &amp; Project Memory</h2>
+      <p>All downloaded 3D assets, textures, thumbnails, and project memory files (<code>memory.md</code> and <code>task.md</code>) reside strictly on your local disk or inside your Unreal project repository. You retain full ownership and control to edit, move, or delete them at any time.</p>
+
+      <h2>Open Source Transparency</h2>
+      <p>The complete source code of DBV Unreal AI is public, open, and auditable under the MIT license at <a href="https://github.com/davidbuenov/dbv-unreal-ai" target="_blank" rel="noopener" style="color: var(--accent);">github.com/davidbuenov/dbv-unreal-ai</a>.</p>
+    </article>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-bottom" style="margin-top: 0; border-top: none;">
+      <span>Copyright &copy; 2026 David Bueno Vallejo and David Bueno Carmona · MIT License</span>
+      <a href="en/index.html" style="color: var(--accent);">Back to Homepage</a>
+    </div>
+  </footer>
+
+</body>
+</html>

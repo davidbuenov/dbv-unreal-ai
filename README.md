@@ -2,7 +2,7 @@
 
 # DBV Unreal AI
 
-**🇪🇸 Español · [🇬🇧 English](./README.en.md)**
+**🇪🇸 Español · [🇬🇧 English](./README.en.md) · [🌐 Web informativa](https://davidbuenov.github.io/dbv-unreal-ai/)**
 
 > Copiloto de IA nativo para Unreal Engine 5.8: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo y World Labs directamente en el editor.
 

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Política de Privacidad — DBV Unreal AI</title>
+  <meta name="description" content="Política de privacidad de DBV Unreal AI: la aplicación no recolecta datos personales ni telemetría. Todo el procesamiento ocurre en local, salvo la IA o APIs de generación que tú decidas conectar." />
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="index.html#top" class="nav-brand">
+        <img src="assets/logo.png" alt="DBV Unreal AI Logo" class="nav-logo" />
+        <span>DBV Unreal AI</span>
+      </a>
+      <nav class="nav-links">
+        <a href="index.html#workflow">Cómo funciona</a>
+        <a href="index.html#gallery">Capturas</a>
+        <a href="index.html#features">Características</a>
+        <a href="index.html#download">Descargar</a>
+        <a href="https://github.com/davidbuenov/dbv-unreal-ai" class="nav-github" target="_blank" rel="noopener">GitHub</a>
+        <a href="privacy.html" class="nav-lang">English</a>
+      </nav>
+      <a href="index.html#download" class="btn btn-primary btn-nav">Descargar</a>
+    </div>
+  </header>
+
+  <main>
+    <article class="legal">
+      <h1>Política de Privacidad</h1>
+      <p class="legal-updated">Última actualización: 27 de octubre de 2026</p>
+
+      <div class="legal-summary">
+        <p><strong>Resumen:</strong> DBV Unreal AI no recolecta, no almacena en servidores propios, ni comparte con terceros ningún dato personal. No tiene cuentas de usuario, no incluye analítica ni publicidad, y no envía telemetría de ningún tipo. La comunicación con Unreal Engine 5.8 se produce enteramente en tu propio equipo (localhost). Si conectas una IA en la nube o generas assets con Tripo o World Labs, las peticiones viajan directamente desde tu máquina hacia los proveedores oficiales respectivos, nunca a través de servidores nuestros.</p>
+      </div>
+
+      <h2>Qué hace la aplicación en tu equipo</h2>
+      <p>DBV Unreal AI es una aplicación de escritorio nativa desarrollada con Rust y Tauri v2. Se comunica con las instancias del editor Unreal Engine 5.8 que tengas abiertas mediante el protocolo local Model Context Protocol (MCP) en el puerto de loopback <code>127.0.0.1</code>. Todas las consultas de escenas, validaciones de código Python y ejecuciones aprobadas ocurren en tu propio sistema operativo.</p>
+
+      <h2>Almacenamiento seguro de credenciales</h2>
+      <p>Las claves de API que configures (Anthropic, OpenAI, Google Gemini, Tripo 3D o World Labs) se custodian exclusivamente en el almacén de credenciales seguro de tu sistema operativo:</p>
+      <ul>
+        <li><strong>Windows:</strong> Administrador de Credenciales de Windows (Windows Credential Manager).</li>
+        <li><strong>macOS:</strong> Llavero del Sistema (macOS Keychain).</li>
+        <li><strong>Linux:</strong> Servicio de Secretos (Secret Service API / Freedesktop).</li>
+      </ul>
+      <p>Las claves nunca se guardan en texto plano en archivos de configuración ni se exponen a través del asistente.</p>
+
+      <h2>Las únicas conexiones de red que realiza la aplicación</h2>
+      <p>DBV Unreal AI solo realiza conexiones externas cuando tú lo solicitas expresamente:</p>
+      <ul>
+        <li><strong>Modelos de IA en la nube (opcional):</strong> Si configuras un proveedor como Anthropic, OpenAI o Google, las conversaciones y el contexto seleccionado se envían directamente a los endpoints oficiales de dicho proveedor bajo sus correspondientes términos de servicio. Si utilizas un modelo local (Ollama, LM Studio), nada sale de tu equipo.</li>
+        <li><strong>Generación 3D con Tripo (opcional):</strong> Al pulsar «Generar» en la pestaña de modelos 3D y confirmar el coste, la petición se envía a <code>api.tripo3d.ai</code> y los archivos generados se descargan directamente a tu biblioteca local.</li>
+        <li><strong>Generación de Mundos con World Labs (opcional):</strong> Al generar escenarios o importar manifiestos de World Labs Marble, las consultas se realizan directamente a <code>api.worldlabs.ai</code> y los splats gaussianos <code>.spz</code> y mallas <code>.glb</code> se descargan directamente en tu equipo.</li>
+        <li><strong>Comprobación de actualizaciones en GitHub (opcional):</strong> Solo si visitas la sección de versión o pulsas en el enlace a la última Release de GitHub.</li>
+      </ul>
+
+      <h2>Biblioteca y Memoria del Proyecto</h2>
+      <p>Los assets generados, modelos 3D, texturas, y los ficheros de memoria y tareas del proyecto (<code>memory.md</code> y <code>task.md</code>) residen exclusivamente en tu disco local o en la carpeta de tu proyecto de Unreal. Tienes control absoluto sobre ellos y puedes editarlos, moverlos o eliminarlos en cualquier momento.</p>
+
+      <h2>Contacto y Código Fuente</h2>
+      <p>El código fuente completo de DBV Unreal AI es público y auditable bajo licencia MIT en <a href="https://github.com/davidbuenov/dbv-unreal-ai" target="_blank" rel="noopener" style="color: var(--accent);">github.com/davidbuenov/dbv-unreal-ai</a>.</p>
+    </article>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-bottom" style="margin-top: 0; border-top: none;">
+      <span>Copyright &copy; 2026 David Bueno Vallejo y David Bueno Carmona · Licencia MIT</span>
+      <a href="index.html" style="color: var(--accent);">Volver a la página principal</a>
+    </div>
+  </footer>
+
+</body>
+</html>

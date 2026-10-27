@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DBV Unreal AI — Copiloto de IA nativo para Unreal Engine 5.8</title>
+  <meta name="description" content="Copiloto de IA nativo para Unreal Engine 5.8: conecta cualquier IA (local o nube) a tu proyecto abierto, genera mundos fotorrealistas con World Labs Marble y personajes con Tripo, y actúa en el editor con validación y permiso explícito." />
+
+  <!-- Open Graph / Redes Sociales -->
+  <meta property="og:title" content="DBV Unreal AI — Copiloto de IA nativo para Unreal Engine 5.8" />
+  <meta property="og:description" content="Conecta tu IA local o en la nube a Unreal Engine 5.8. Genera mundos Gaussian Splatting y modelos 3D directamente en el editor con control absoluto y privacidad por diseño." />
+  <meta property="og:image" content="https://davidbuenov.github.io/dbv-unreal-ai/screenshots/01-hero-conversation.png" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="alternate" hreflang="es" href="https://davidbuenov.github.io/dbv-unreal-ai/" />
+  <link rel="alternate" hreflang="en" href="https://davidbuenov.github.io/dbv-unreal-ai/en/" />
+</head>
+<body>
+
+  <!-- ─── Barra de Navegación ──────────────────────────────────────────────── -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="#top" class="nav-brand">
+        <img src="assets/logo.png" alt="DBV Unreal AI Logo" class="nav-logo" />
+        <span>DBV Unreal AI</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#workflow">Cómo funciona</a>
+        <a href="#gallery">Capturas</a>
+        <a href="#features">Características</a>
+        <a href="#ai">IA y Privacidad</a>
+        <a href="#download">Descargar</a>
+        <a href="https://github.com/davidbuenov/dbv-unreal-ai" class="nav-github" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+        <a href="en/" class="nav-lang" hreflang="en">English</a>
+      </nav>
+      <a href="#download" class="btn btn-primary btn-nav">Descargar</a>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ─── Hero ─────────────────────────────────────────────────────────── -->
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="hero-eyebrow">
+          <span>Unreal Engine 5.8 Nativo</span>
+          <span class="badge-version">v0.2.0</span>
+          <span>· MIT Libre</span>
+        </p>
+        <h1>Copiloto de IA nativo para Unreal Engine 5.8</h1>
+        <p class="hero-sub">
+          Conecta cualquier IA —un modelo local como Ollama, una API en la nube o agentes como Claude Code— directamente a tu proyecto abierto. Prepara el motor con un clic, ejecuta Python validado con confirmación explícita, genera mundos fotorrealistas con World Labs y modelos 3D con Tripo, y revierte cualquier turno en bloque.
+        </p>
+        <div class="hero-ctas">
+          <a href="#download" class="btn btn-primary btn-lg">
+            ⬇️ Descargar instalador (v0.2.0)
+          </a>
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai" class="btn btn-ghost btn-lg" target="_blank" rel="noopener">
+            Ver código en GitHub
+          </a>
+        </div>
+        <p class="hero-note">Disponible para Windows 10/11 (64-bit), macOS (binario universal) y Linux (.deb, .rpm, .AppImage) · 100% de código abierto · Sin telemetría · Claves en el llavero del sistema.</p>
+      </div>
+
+      <div class="hero-shot">
+        <div class="window-frame">
+          <div class="window-titlebar">
+            <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+            <span class="window-title">DBV Unreal AI — Conversación &amp; Control en tiempo real</span>
+          </div>
+          <img
+            src="screenshots/01-hero-conversation.png"
+            alt="DBV Unreal AI — Conversación con el copiloto, tarjeta de validación de código Python y botón para deshacer el turno"
+            class="hero-screenshot zoomable"
+            loading="eager"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Cifras de Confianza ─────────────────────────────────────────── -->
+    <section class="stats">
+      <div class="stats-inner">
+        <div class="stat"><span class="stat-num">UE 5.8</span><span class="stat-label">Conexión MCP integrada</span></div>
+        <div class="stat"><span class="stat-num">3DGS + GLB</span><span class="stat-label">Gaussian Splats y colisión física</span></div>
+        <div class="stat"><span class="stat-num">100%</span><span class="stat-label">Permiso obligatorio antes de actuar</span></div>
+        <div class="stat"><span class="stat-num">↩️ 1 Clic</span><span class="stat-label">Deshacer transacciones en bloque</span></div>
+        <div class="stat"><span class="stat-num">MIT</span><span class="stat-label">Código abierto, sin muros de pago</span></div>
+      </div>
+    </section>
+
+    <!-- ─── Por qué / Manifiesto Técnico ──────────────────────────────────── -->
+    <section class="why">
+      <div class="why-inner">
+        <h2>Un puente transparente entre tu IA y el editor de Unreal</h2>
+        <p>
+          Los desarrolladores y artistas de Unreal Engine no necesitan cajas negras ni promesas abstractas. Necesitan herramientas fiables que entiendan la escena, respeten la jerarquía del Outliner y no rompan el proyecto.
+        </p>
+        <p>
+          <strong>DBV Unreal AI</strong> conecta tu modelo de IA directamente al servidor experimental Model Context Protocol (MCP) de Unreal Engine 5.8 a través de un toolset propio en Python y C++. Antes de ejecutar una sola línea de código, el script se valida estáticamente contra el motor en marcha. Si algo modifica el nivel, tú ves el código completo y decides si autorizarlo. Y si el resultado no te convence, el botón <strong>«Deshacer este turno»</strong> devuelve el editor exactamente al estado previo.
+        </p>
+      </div>
+    </section>
+
+    <!-- ─── Cómo funciona en 4 pasos ────────────────────────────────────── -->
+    <section class="steps" id="workflow">
+      <div class="steps-inner">
+        <h2>Del prompt al nivel de Unreal en cuatro pasos</h2>
+        <p class="section-sub">Un flujo de trabajo riguroso diseñado para preservar la estabilidad de tu proyecto en todo momento.</p>
+        <div class="step-grid">
+
+          <article class="step-card">
+            <div class="step-header">
+              <span class="step-num">1</span>
+              <h3>Conexión y Múltiples Editores</h3>
+            </div>
+            <p>La aplicación detecta automáticamente las instancias de Unreal Engine abiertas en puertos contiguos (8000, 8001…). La píldora de estado permite alternar entre proyectos activos con verificación de identidad.</p>
+          </article>
+
+          <article class="step-card">
+            <div class="step-header">
+              <span class="step-num">2</span>
+              <h3>Preparación con Diff Previo</h3>
+            </div>
+            <p>Si al proyecto le faltan los plugins de MCP o el toolset DBV, el asistente muestra un diff exacto de cada fichero de configuración antes de tocar nada, guarda una copia de seguridad y permite revertir byte a byte.</p>
+          </article>
+
+          <article class="step-card">
+            <div class="step-header">
+              <span class="step-num">3</span>
+              <h3>Validación y Aprobación Segura</h3>
+            </div>
+            <p>La IA consulta la escena libremente, pero cualquier modificación aparece en una tarjeta de aprobación con el código Python íntegro. El código se valida contra las APIs reales de tu versión del motor antes de pedir permiso.</p>
+          </article>
+
+          <article class="step-card">
+            <div class="step-header">
+              <span class="step-num">4</span>
+              <h3>Generación y Colocación Fotorrealista</h3>
+            </div>
+            <p>Genera mundos completos con World Labs Marble (splats gaussianos <code>.spz</code> y colisión física <code>.glb</code>) o modelos/animaciones con Tripo. «Enviar a Unreal» los importa y los posiciona en el nivel.</p>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Galería de Capturas Reales ───────────────────────────────────── -->
+    <section class="showcase" id="gallery">
+      <div class="showcase-inner">
+        <h2>Capturas reales de la aplicación</h2>
+        <p class="section-sub">Haz clic sobre cualquier captura para ampliarla en detalle. Interfaz limpia construida con Tauri v2 y Vanilla JS sin intermediarios pesados.</p>
+
+        <div class="showcase-grid">
+
+          <article class="showcase-card">
+            <img src="screenshots/01-hero-conversation.png" alt="Conversación interactiva con tarjeta de código y botón de deshacer" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Conversación &amp; Control</span>
+              <h3>Aprobación de código y Deshacer en 1 Clic</h3>
+              <p>Visualiza el script de Python que la IA propone ejecutar. Al terminar el turno, el botón «Deshacer este turno» revierte en bloque todas las transacciones generadas en Unreal Engine.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="screenshots/02-library-3d-viewer.png" alt="Visor 3D interactivo en la biblioteca con selector de personaje para clips de animación" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Biblioteca &amp; Visor 3D</span>
+              <h3>Visor Three.js y Selector de Rigs</h3>
+              <p>Previsualización 3D con iluminación de estudio a 3 puntos. Al abrir un clip de animación esquelético, puedes acoplarlo en tiempo real a cualquier personaje de tu biblioteca para verlo bailar.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="screenshots/03-generate-worldlabs-tripo.png" alt="Pestaña de generación de mundos con World Labs Marble y estimación de créditos" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Generación 3D y Entornos</span>
+              <h3>World Labs Marble &amp; Tripo 3D</h3>
+              <p>Genera mundos fotorrealistas desde texto o imagen con cálculo transparente de créditos, sondeo en vivo y descarga automática del splat <code>.spz</code> y la malla colisionadora.</p>
+            </div>
+          </article>
+
+        </div>
+
+        <div class="showcase-grid showcase-grid--bottom">
+
+          <article class="showcase-card">
+            <img src="screenshots/04-plan-tasks.png" alt="Vista Plan con tareas y criterios comprobados directamente en el editor de Unreal" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Planificación Asistida</span>
+              <h3>Memoria del Proyecto &amp; Tareas Comprobadas</h3>
+              <p>Objetivos y tareas vinculados a <code>task.md</code>. Los criterios de cumplimiento («asset exists», «actor exists») son verificados directamente dentro de Unreal por código estricto de la app.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="screenshots/05-project-readiness.png" alt="Diagnóstico punto por punto de los plugins del editor y preparación del proyecto" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Diagnóstico del Motor</span>
+              <h3>Preparación con Diff y Reversión</h3>
+              <p>Comprobación punto por punto de la instalación de UE 5.8, puerto de red, plugins de Epic y toolset de DBV. Todo cambio se anticipa con un diff visual de ficheros INI.</p>
+            </div>
+          </article>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ─── Características Técnicas ────────────────────────────────────────── -->
+    <section class="features" id="features">
+      <div class="features-inner">
+        <h2>Todo lo que un desarrollador de Unreal necesita</h2>
+        <p class="section-sub">Diseñado sin florituras innecesarias, con estándares estrictos de rendimiento y seguridad.</p>
+        <div class="feature-grid">
+
+          <article class="feature-card">
+            <div class="feature-icon">🏝️</div>
+            <h3>World Labs Marble Nativo</h3>
+            <p>Generación de mundos fotorrealistas (modelos <code>marble-1.1</code> y borrador). Descarga automática de splats gaussianos <code>.spz</code> y mallas de colisión física <code>.glb</code>.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Componente C++ 3DGS Libre</h3>
+            <p>Módulo nativo <code>DBVUnrealAICpp</code> con <code>UDbvGaussianSplatComponent</code>: lectura directa de <code>.spz/.ply</code>, billboards anisótropos y ordenación por GPU bajo licencia MIT (sin muros de pago).</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">↩️</div>
+            <h3>Deshacer Turno en Slate</h3>
+            <p>Reversión limpia de todas las modificaciones de un turno ejecutada en el Slate post-tick callback para esquivar bloqueos de transacciones activas.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">🔀</div>
+            <h3>Soporte Multi-instancia</h3>
+            <p>Maneja varios editores de Unreal Engine en puertos contiguos (8000, 8001…). La conexión valida la identidad del proyecto antes de enviar comandos.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">💃</div>
+            <h3>Rigs y Animaciones Dinámicas</h3>
+            <p>El visor 3D enlaza clips de animación de Tripo a cualquier rig de personaje de tu biblioteca en tiempo real con Three.js.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">🧠</div>
+            <h3>Memoria Persistente de Proyecto</h3>
+            <p>Ficheros <code>memory.md</code> y <code>task.md</code> guardados junto al <code>.uproject</code> con escritura atómica. La IA propone registrar decisiones técnicas clave.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">👁️</div>
+            <h3>Captura de Viewport para IA</h3>
+            <p>La herramienta <code>unreal_capture_viewport</code> entrega a modelos multimodales capturas optimizadas con escala métrica y actores etiquetados.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">🔌</div>
+            <h3>Servidor MCP Integrado</h3>
+            <p>Lanza <code>dbv-unreal-ai --mcp</code> para conectar tus herramientas de Unreal Engine a agentes externos como Claude Code, Cursor o Gemini CLI vía stdio.</p>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── IA Opcional y Privacidad ───────────────────────────────────────── -->
+    <section class="ai-section" id="ai">
+      <div class="ai-inner">
+        <h2>Tú eliges el motor de IA. Tu código nunca sale sin permiso.</h2>
+        <p class="section-sub">Sin suscripciones obligatorias ni telemetría oculta. La IA es un colaborador que se adapta a tu infraestructura.</p>
+        <div class="ai-grid">
+
+          <article class="ai-card">
+            <h3>🏠 Modelos Locales (100% Offline)</h3>
+            <p>Conéctate a Ollama, LM Studio o cualquier endpoint local compatible con OpenAI. Ningún byte ni dato de tu proyecto sale jamás de tu ordenador. Funciona completamente sin conexión a internet.</p>
+          </article>
+
+          <article class="ai-card">
+            <h3>☁️ APIs en la Nube con Llavero Seguro</h3>
+            <p>Utiliza tus claves de Anthropic (Claude 3.5 Sonnet), OpenAI (GPT-4o) o Google (Gemini 2.5/3). Las claves de API se almacenan de forma segura en el llavero de credenciales del sistema operativo, nunca en ficheros de texto plano.</p>
+          </article>
+
+          <article class="ai-card">
+            <h3>🤖 Agentes de Suscripción (ACP)</h3>
+            <p>Aprovecha los agentes de desarrollo que ya tengas instalados (Claude Code, Codex, Copilot o Gemini CLI con acceso de pago) mediante el protocolo Agent Client Protocol (ACP), compartiendo el contexto de tu proyecto.</p>
+          </article>
+
+        </div>
+        <div style="margin-top: 32px;">
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai/blob/master/docs/IA.md" class="btn btn-ghost btn-lg" target="_blank" rel="noopener">
+            📖 Consultar Guía Completa de Configuración de IA (IA.md)
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Descarga e Instalación ──────────────────────────────────────────── -->
+    <section class="download" id="download">
+      <div class="download-inner">
+        <h2>Descarga DBV Unreal AI</h2>
+        <p class="section-sub">Binarios compilados y listos para usar en cada versión. Sin necesidad de instalar Node.js ni toolchains de Rust.</p>
+        
+        <div class="download-grid">
+
+          <article class="download-card download-card--featured">
+            <div>
+              <span class="download-badge">Recomendado</span>
+              <h3>🪟 Windows</h3>
+              <p>Compatible con Windows 10 y Windows 11 de 64 bits. Utiliza el motor nativo WebView2 incluido en el sistema.</p>
+              <ul class="download-files">
+                <li><strong>Instalador:</strong> <code>DBV.Unreal.AI_0.2.0_x64-setup.exe</code></li>
+                <li><strong>Paquete MSI:</strong> <code>DBV.Unreal.AI_0.2.0_x64_en-US.msi</code></li>
+              </ul>
+            </div>
+            <a href="https://github.com/davidbuenov/dbv-unreal-ai/releases/latest" class="btn btn-primary" target="_blank" rel="noopener">
+              ⬇️ Descargar para Windows
+            </a>
+          </article>
+
+          <article class="download-card">
+            <div>
+              <span class="download-badge" style="background: rgba(255,255,255,0.08); color: #cbd5e1;">Universal</span>
+              <h3>🍎 macOS</h3>
+              <p>Binario universal compatible tanto con Apple Silicon (M1/M2/M3/M4) como con procesadores Intel.</p>
+              <ul class="download-files">
+                <li><strong>Imagen DMG:</strong> <code>DBV.Unreal.AI_0.2.0_universal.dmg</code></li>
+                <li><strong>Archivo comprimido:</strong> <code>DBV.Unreal.AI_universal.app.tar.gz</code></li>
+              </ul>
+            </div>
+            <a href="https://github.com/davidbuenov/dbv-unreal-ai/releases/latest" class="btn btn-ghost" target="_blank" rel="noopener">
+              ⬇️ Descargar para macOS
+            </a>
+          </article>
+
+          <article class="download-card">
+            <div>
+              <span class="download-badge" style="background: rgba(255,255,255,0.08); color: #cbd5e1;">Multi-distro</span>
+              <h3>🐧 Linux</h3>
+              <p>Paquetes precompilados para las distribuciones más habituales y paquete portátil universal.</p>
+              <ul class="download-files">
+                <li><strong>Debian / Ubuntu:</strong> <code>.deb</code></li>
+                <li><strong>Fedora / RHEL:</strong> <code>.rpm</code></li>
+                <li><strong>Portátil:</strong> <code>.AppImage</code></li>
+              </ul>
+            </div>
+            <a href="https://github.com/davidbuenov/dbv-unreal-ai/releases/latest" class="btn btn-ghost" target="_blank" rel="noopener">
+              ⬇️ Descargar para Linux
+            </a>
+          </article>
+
+        </div>
+
+        <div class="download-soon">
+          <strong>Aviso de seguridad en primera instalación:</strong> Como el binario no cuenta con un certificado de firma de pago comercial, Windows SmartScreen o macOS Gatekeeper pueden mostrar una advertencia inicial. Basta con pulsar «Más información → Ejecutar de todas formas» en Windows o «Clic derecho → Abrir» en macOS. El código fuente completo es 100% público y auditable en GitHub.
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ─── Pie de Página ────────────────────────────────────────────────────── -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <img src="assets/logo.png" alt="DBV Unreal AI Logo" style="width: 24px; height: 24px;" />
+          <span>DBV Unreal AI</span>
+        </div>
+        <p>Copiloto de IA nativo para Unreal Engine 5.8: conecta tu editor, valida código Python y genera assets fotorrealistas con control total.</p>
+      </div>
+
+      <div class="footer-links">
+        <div class="footer-col">
+          <h4>Navegación</h4>
+          <a href="#top">Inicio</a>
+          <a href="#workflow">Flujo de trabajo</a>
+          <a href="#gallery">Capturas de pantalla</a>
+          <a href="#features">Características</a>
+          <a href="#download">Descargas</a>
+        </div>
+        <div class="footer-col">
+          <h4>Documentación</h4>
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai/blob/master/README.md" target="_blank" rel="noopener">README</a>
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai/blob/master/docs/IA.md" target="_blank" rel="noopener">Guía de IA</a>
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai/blob/master/dbv-specs-ops/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+          <a href="privacidad.html">Privacidad</a>
+        </div>
+        <div class="footer-col">
+          <h4>Comunidad</h4>
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai/issues" target="_blank" rel="noopener">Reportar un problema</a>
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai/releases" target="_blank" rel="noopener">Todas las versiones</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>Copyright &copy; 2026 David Bueno Vallejo y David Bueno Carmona · Licencia MIT</span>
+      <span>Construido con <a href="https://github.com/davidbuenov/dbv-specs-ops" target="_blank" rel="noopener" style="color: var(--accent);">dbv-specs-ops</a></span>
+    </div>
+  </footer>
+
+  <!-- ─── Lightbox Modal para Ampliar Capturas ────────────────────────────── -->
+  <div id="lightbox" class="lightbox hidden" aria-hidden="true" role="dialog">
+    <div class="lightbox-container">
+      <button class="lightbox-close" id="lightbox-close" aria-label="Cerrar ampliación">&times;</button>
+      <img id="lightbox-img" class="lightbox-img" src="" alt="" />
+      <p id="lightbox-caption" class="lightbox-caption"></p>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const lightbox = document.getElementById('lightbox');
+      const lightboxImg = document.getElementById('lightbox-img');
+      const lightboxCaption = document.getElementById('lightbox-caption');
+      const closeBtn = document.getElementById('lightbox-close');
+
+      function openLightbox(src, alt) {
+        lightboxImg.src = src;
+        lightboxImg.alt = alt;
+        lightboxCaption.textContent = alt;
+        lightbox.classList.remove('hidden');
+        lightbox.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeLightbox() {
+        lightbox.classList.add('hidden');
+        lightbox.setAttribute('aria-hidden', 'true');
+        lightboxImg.src = '';
+        document.body.style.overflow = '';
+      }
+
+      document.querySelectorAll('.zoomable').forEach(img => {
+        img.addEventListener('click', () => openLightbox(img.src, img.alt));
+      });
+
+      closeBtn.addEventListener('click', closeLightbox);
+      lightbox.addEventListener('click', (e) => {
+        if (e.target === lightbox || e.target.classList.contains('lightbox-container')) {
+          closeLightbox();
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !lightbox.classList.contains('hidden')) {
+          closeLightbox();
+        }
+      });
+    })();
+  </script>
+
+</body>
+</html>
