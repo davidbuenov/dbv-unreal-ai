@@ -9,9 +9,11 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 > Este fichero tiene un espejo en inglés en [`CHANGELOG.en.md`](./CHANGELOG.en.md). Se mantienen sincronizados: **toda entrada del changelog se escribe en los dos idiomas, en el mismo commit.**
 
----
-
 ## [Sin publicar] / [Unreleased]
+
+## [0.2.0] - 2026-10-27
+
+### Added
 
 - **Generación de mundos fotorrealistas con World Labs Marble (REQ-18, S27):** integración completa con la API Marble de World Labs (`/marble/v1/worlds:generate`, `/operations/{id}`, `/worlds/{id}`). Permite generar mundos fotorrealistas a partir de texto o imagen de referencia (modelos `marble-1.1` y `marble-1.0-draft`), calcular créditos estimados antes de ejecutar, sondeo de progreso en vivo y descarga automática de splats gaussianos `.spz`, mallas físicas de colisión `.glb` y metadatos semánticos de escala y suelo a la biblioteca. Herramientas `generate_world` y `export_world_mesh` disponibles tanto en el asistente integrado como en el servidor MCP, junto con consulta de saldo (`generation_worldlabs_balance`) y pestaña dedicada en la vista Generar.
 - **Deshacer un turno de la IA con un clic (REQ-40, S26):** pie en las respuestas del asistente con el botón «↩️ Deshacer este turno», que permite revertir en bloque todas las transacciones realizadas en Unreal Engine durante ese turno. Implementado en el plugin de Unreal mediante `get_undo_count()` y `undo_turn(count, expected_current)` ejecutado de forma asíncrona mediante el callback `register_slate_post_tick_callback` para evitar bloqueos por transacciones activas. Incluye detección y aviso si el historial de deshacer del editor fue modificado externamente, y confirmación interactiva para eliminar de la biblioteca los assets creados durante el turno.
@@ -112,3 +114,7 @@ Primera versión: conexión con Unreal 5.8 por MCP, preparación del proyecto, c
 - **[Importante]** El resultado de una generación de imagen (`text_to_image`, `image_to_image`) se guardaba como miniatura y el asset quedaba sin fichero: «Generar 3D…» con esa imagen fallaba.
 - **[Importante]** El id de un trabajo podía coincidir entre la ventana y el `--mcp` de un agente si lanzaban en el mismo milisegundo; ahora lleva el id del proceso.
 - Nits de la revisión (3): `return` tempranos fuera de las guardas en `tools::build`, `resolve_source` y `uploadable`.
+
+[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.1.0

@@ -16,7 +16,7 @@ The AI in **DBV Unreal AI** is **optional**. Without connecting one, the app det
 
 To connect an AI: **Settings → Connect an AI**, or open the **Conversation** (`Ctrl+Shift+I`, `Cmd+Shift+I` on macOS) and, if none is connected, the connection assistant opens.
 
-> 🎨 **Tripo is separate.** Generating 3D models uses your **Tripo key** (Settings → Tripo) and spends credits of your Tripo account, whatever AI the conversation uses.
+> 🎨 **Tripo and World Labs are separate.** Generating 3D models and photorealistic worlds uses your Tripo or World Labs key (Settings) and spends credits of your corresponding account, whatever AI the conversation uses.
 
 ---
 

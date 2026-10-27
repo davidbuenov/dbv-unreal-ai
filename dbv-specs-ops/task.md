@@ -2,10 +2,10 @@
 
 ## Contexto del Proyecto (Context Snapshot)
 
-* **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo directamente en el editor (World Labs en v0.2).
-* **Estado actual**: **v0.2.0 en desarrollo** (v0.1.0 publicada el 2026-10-24). Completadas S18–S23, S25, S28c, S28d y mejoras de biblioteca (REQ-30, REQ-31, REQ-42). Corregido texto literal «null» en ventanas modales y soporte completo para importación y visualización esquelética 3D de clips de animación puros (REQ-16, REQ-31).
-* **Última decisión técnica**: D9–D12 de `implementation_plan.md` §4, S28d para escenarios World Labs (splat + colisión) y decisión de crear componente nativo C++ de 3DGS libre de costes/licencias privativas (MIT) en `Plugins/DBVUnrealAI`.
-* **Próximo paso**: S28b (desarrollo del componente nativo de 3DGS en C++ `UDbvGaussianSplatComponent` / `ADbvGaussianSplatActor`) y conexión para colocar splat + colisión en Unreal.
+* **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
+* **Estado actual**: **v0.2.0 entregada** (2026-10-27). Funcionalidades completadas: S18–S27, S28b, S28c, S28d (generación World Labs Marble, deshacer turno en UE, soporte múltiples instancias, rigs y animaciones interactivas, componente C++ 3DGS, memoria y plan).
+* **Última decisión técnica**: D13–D21 de `implementation_plan.md` §5, componente nativo C++ de 3DGS libre MIT (`UDbvGaussianSplatComponent`) y liberación de v0.2.0.
+* **Próximo paso**: S28 (import_world y colocación automática avanzada de cielo/iluminación) y S29 (MCPs de terceros).
 
 ## Checklist de Tareas
 
@@ -65,7 +65,9 @@
 - [x] **S28d · Importación de escenarios World Labs (Splat + Collider Mesh) [v0.2]** (REQ-42) — Detección e importación directa de manifiestos JSON (individual o carpeta completa `Wordsmith/storage/generations/worldlabs/`): descarga de splat `.spz`, malla de colisión `.glb` y miniatura `.webp`, guardado en biblioteca con metadatos de escala/suelo (`metric_scale_factor`, `ground_plane_offset`), y soporte en UI y backend con tests unitarios en Rust y Vitest.
 - [ ] **S29 · MCPs de terceros** (REQ-21) — Ajustes, stdio/HTTP, asistente y ACP, permisos.
 - [x] ~~**S30 · Actualizador** (REQ-39)~~ — retirado por el usuario el 2026-10-26: Microsoft Store gestiona las actualizaciones en Windows.
-- [ ] `/test` · `/code-simplify` · `/ship` v0.2.0.
+- [x] **`/test`** (v0.2.0) — 170 tests Rust, 269 Vitest (29 suites), 34 Python, lint 0 errores.
+- [x] **`/code-simplify`** (v0.2.0) — limpieza de temporales en jobs World Labs, unificación de retornos en generateView.js, doc IA actualizada.
+- [x] **`/ship` v0.2.0** (2026-10-27) — Minor bump a v0.2.0, CHANGELOG y notas de release ES/EN, README ES/EN y walkthrough actualizados, tag v0.2.0.
 
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 

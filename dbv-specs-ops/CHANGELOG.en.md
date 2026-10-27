@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 > This file mirrors [`CHANGELOG.md`](./CHANGELOG.md) (Spanish). Both are kept in sync: **every changelog entry is written in both languages, in the same commit.**
 
----
-
 ## [Unreleased]
+
+## [0.2.0] - 2026-10-27
+
+### Added
 
 - **Photorealistic world generation with World Labs Marble (REQ-18, S27):** full integration with World Labs Marble API (`/marble/v1/worlds:generate`, `/operations/{id}`, `/worlds/{id}`). Allows generating photorealistic worlds from text or reference images (models `marble-1.1` and `marble-1.0-draft`), upfront credit cost estimation, live polling progress, and automatic download of `.spz` Gaussian splats, `.glb` physical collider meshes, and semantic scale/ground metadata into the library. Tools `generate_world` and `export_world_mesh` are exposed in both the integrated assistant and the MCP server, complete with balance queries (`generation_worldlabs_balance`) and a dedicated tab in the Generate view.
 - **One-click assistant turn undo (REQ-40, S26):** footer in assistant responses with the «↩️ Undo this turn» button to roll back all modifications performed in Unreal Engine during that turn in a single step. Implemented in the Unreal plugin via `get_undo_count()` and `undo_turn(count, expected_current)` executed via `register_slate_post_tick_callback` to bypass active transaction locks. Includes safety checks and warnings if the editor's undo buffer was modified externally, plus interactive prompts to optionally delete assets created during the turn.
@@ -112,3 +114,7 @@ First release: connection to Unreal 5.8 through MCP, project preparation, conver
 - **[Important]** The result of an image generation (`text_to_image`, `image_to_image`) was stored as the thumbnail and the asset had no file: "Make 3D…" with that image failed.
 - **[Important]** A job id could clash between the window and an agent's `--mcp` if both launched in the same millisecond; it now carries the process id.
 - Review nits (3): early `return`s outside guard clauses in `tools::build`, `resolve_source` and `uploadable`.
+
+[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.1.0

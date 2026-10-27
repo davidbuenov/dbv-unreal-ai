@@ -1,47 +1,56 @@
-# 🧭 Walkthrough — DBV Unreal AI v0.1.0
+# 🧭 Walkthrough — DBV Unreal AI v0.2.0
 
-> **Fecha:** 2026-10-24 · **Versión:** 0.1.0 (primera) · **Autores:** David Bueno Vallejo y David Bueno Carmona
-> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) v1.3 · **Plan:** [`implementation_plan.md`](./implementation_plan.md) §2 (S1–S11) y §4 (S12–S17)
+> **Fecha:** 2026-10-27 · **Versión:** 0.2.0 · **Autores:** David Bueno Vallejo y David Bueno Carmona
+> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md)
 
 ## Qué es
 
-Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cualquier IA a un proyecto abierto de Unreal Engine 5.8 por su servidor MCP experimental, prepara el proyecto si hace falta, deja que la IA actúe en el editor **con permiso** y genera assets 3D con Tripo que llegan importados al editor y quedan en una biblioteca reutilizable.
+Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cualquier IA a proyectos abiertos de Unreal Engine 5.8 por su servidor MCP experimental, prepara el proyecto si hace falta, deja que la IA actúe en el editor **con permiso**, permite deshacer turnos completos con un clic, genera modelos 3D con Tripo y mundos fotorrealistas con World Labs Marble, y gestiona memoria persistente del proyecto y tareas comprobadas en el editor.
 
-## Qué se entrega
+## Qué se entrega en v0.2.0
 
 | Área | Qué hace | Requisitos |
 | --- | --- | --- |
-| Conexión | Detecta los editores abiertos y se conecta a `127.0.0.1:8000/mcp`; píldora con proyecto, versión y puerto | REQ-01, REQ-02, REQ-03 |
-| Preparación | Diagnóstico punto por punto; «Preparar» enseña el diff, guarda copia, activa plugins, arranque automático del MCP e instala el toolset DBV (Python o C++); «Revertir» | REQ-04, REQ-05 |
-| Toolset DBV (0.2.0) | `run_python` (transacción), `validate_python` contra el motor en marcha, `describe_python_api`, `import_model` (glTF por Interchange; Skeletal Mesh y animaciones), `place_asset`, `play_animation`, `get_scene_summary` | REQ-06, REQ-16, REQ-19, REQ-25, REQ-26 |
-| Conversación | IA local, de nube o agentes ACP (Claude Code…), con las herramientas del editor; tarjeta de aprobación para lo que modifica; registro de acciones; adjuntos 📎 (imágenes y documentos) | REQ-08…REQ-14, REQ-32 |
-| Tripo | Las 18 operaciones v3 con coste de la tabla oficial: texto/imagen/multivista → modelo, variantes, rig, 101 animaciones, convertir, retopología, texturizar, segmentar, imágenes, splats; saldo | REQ-15, REQ-16, REQ-29, REQ-33, RNF-04 |
-| Trabajos | Consola con la petición exacta (sin clave) y progreso, en Generar y en la conversación, también los de un agente | REQ-27 |
-| Biblioteca | Miniaturas, tipos y origen (modelo → rig → animación), importar modelos e imágenes u otra biblioteca, renombrar, carpeta configurable, visor 3D, «Enviar a Unreal» | REQ-17, REQ-19, REQ-28, REQ-30, REQ-31 |
-| MCP propio | `dbv-unreal-ai --mcp` por stdio: puente al editor, biblioteca y toda la API de Tripo para Claude Code, Cursor o Gemini CLI | REQ-20 |
-| Interfaz | Español/inglés, temas Claro/Oscuro/Sepia, chincheta «siempre encima», logo de la Unreal Dev Community Málaga | REQ-24, DESIGN.md |
+| Generación de mundos (World Labs) | Integración completa con World Labs Marble API (`marble-1.1`, `marble-1.0-draft`): texto/imagen → mundo, estimación de créditos, descarga automática de `.spz`, mallas `.glb` y metadatos de escala a la biblioteca, pestaña dedicada en Generar y herramientas para el asistente y MCP | REQ-18, S27 |
+| Deshacer turno de la IA | Botón «↩️ Deshacer este turno» en la conversación que revierte en bloque las transacciones en Unreal Engine vía Slate post-tick callback, con detección de cambios externos y borrado opcional de assets generados | REQ-40, S26 |
+| Múltiples instancias | Detección y gestión de editores abiertos concurrentemente en puertos contiguos (8000, 8001…), propuesta de puerto libre al preparar, verificación de identidad por `get_project_info` y selector dinámico en la píldora | REQ-07, S24 |
+| Animaciones y personajes | Selector interactivo de rig en el visor 3D que acopla clips esqueléticos a cualquier cuerpo de la biblioteca en tiempo real, con desempaquetado de sobres IPC y corrección de etiquetas modales | REQ-16, REQ-31 |
+| Componente C++ 3DGS | Módulo C++ `DBVUnrealAICpp` con `UDbvGaussianSplatComponent` y `ADbvGaussianSplatActor` (licencia MIT) para carga nativa de `.spz` y `.ply`, renderizado anisótropo y colocación sincronizada en el nivel | REQ-41, REQ-42, S28b |
+| Visor 3D y miniaturas | Miniaturas automáticas fuera de pantalla con Three.js, iluminación de estudio de 3 puntos, sombreado suave con arcilla mate neutra para mallas de colisión y conmutador visual con render fotorrealista | REQ-31, REQ-42, S28c |
+| Importación de escenarios | Soporte para manifiestos JSON de World Labs (archivos o carpetas completas), progreso en vivo por pasos, bloqueo de botones y deduplicación por `world_id` | REQ-42, S28d |
+| Memoria del proyecto | `dbv-unreal-ai/memory.md` y `task.md` junto al `.uproject` con control de concurrencia atómico; propuestas automáticas de la IA al decidir y consulta por herramientas MCP | REQ-34, REQ-35 |
+| Vista Plan y verificación | Gestión visual de tareas con criterios de «hecho» comprobados en el editor (`asset exists`, `actor exists`, `level is`), estimación de costes y planificación asistida | REQ-36, REQ-37 |
+| Captura del viewport | `unreal_capture_viewport` para modelos con visión con rejilla en metros y etiquetado de actores | REQ-13 |
+| Tripo en vivo | Verificado contra la API real de Tripo (105 créditos gastados): generación, rigging, animación y reproducción en el viewport de Unreal 5.8.4 | REQ-15, REQ-16 |
 
 ## Cómo probarlo
 
 1. `npm install` y `npm run tauri dev` (en la raíz).
-2. Abre tu proyecto de Unreal 5.8; la app se conecta sola si el servidor MCP está activo. Si no, **Proyecto → Preparar proyecto…** con el editor cerrado. Con el toolset 0.1.0 instalado, la preparación propone actualizarlo a 0.2.0.
-3. **Ajustes:** conecta una IA y pega tu clave de Tripo (verás el saldo).
-4. **Conversación:** «Resume el nivel abierto», «Coloca un cubo de 100 cm delante de la cámara»; con 📎, una imagen de referencia.
-5. **Generar:** un prompt o una imagen, variantes 1–4, la tarjeta de coste con lo que se envía; abajo, la consola de cada trabajo.
-6. **Biblioteca:** «Ver en 3D», «Riggear…», «Animar…» (bailes) y «Enviar a Unreal».
+2. Abre uno o más proyectos de Unreal 5.8; la píldora detecta los editores y permite alternar entre proyectos.
+3. **Ajustes:** conecta una IA y configura tus claves de Tripo y World Labs (en el llavero del sistema).
+4. **Generar:**
+   - En **Modelos (Tripo)**: genera un modelo, riggealo o anímalo.
+   - En **Mundos (World Labs)**: escribe un prompt o sube una imagen de referencia para generar un entorno fotorrealista con splats gaussianos y malla de colisión.
+5. **Biblioteca:** visualiza los modelos y mundos generados en 3D con Three.js; abre un clip de animación y elige qué personaje de la biblioteca debe interpretarlo.
+6. **Enviar a Unreal:** coloca el modelo o el actor Gaussian Splatting con su collider directamente en el nivel abierto.
+7. **Conversación:** pide cambios a la IA; tras una ejecución que altere el nivel, pulsa «↩️ Deshacer este turno» para revertir todas las acciones de ese turno en bloque.
+8. **Plan:** crea tareas y objetivos, o pide a la IA que planifique tu escena; marca tareas comprobando automáticamente su cumplimiento en el editor.
 
 ## Verificación
 
-- **Automática (en verde el 2026-10-24):** 137 tests de Rust (`cargo test`), 236 de Vitest (`npm run test:ai`), 25 de Python del toolset (`npm run test:python`), `cargo clippy -D warnings`, `dbv-lint.py` sin errores y el banco E2E en Edge (`npm run test:e2e`), que pinta la app real con un backend simulado e incluye el visor 3D con un GLB de prueba.
-- **En vivo contra Unreal 5.8.2 (DBVMCPFirst):** conexión, herramientas del editor, toolset Python, Python validado y ejecutado, importación y colocación de un GLB real de Tripo. El usuario instaló el toolset C++ desde la interfaz y arrancó el editor.
-- **Eval de IA:** `qwen3:8b` con el prompt completo de la app, 5/5 en las tareas del banco (`scripts/eval/unreal-eval.mjs`).
+- **Automática (en verde el 2026-10-27):**
+  - 170 tests de Rust (`cargo test --manifest-path src-tauri/Cargo.toml`).
+  - 269 tests de Vitest en 29 suites (`npx vitest run`).
+  - 34 tests de Python del toolset (`python -I -m unittest discover -s tests/python -v`).
+  - Linter determinista `dbv-lint.py` en 9 ficheros Python: 0 errores, 0 avisos.
+- **En vivo contra Unreal 5.8.4:**
+  - Carga de nivel con gaussian splatting desde conversación, inserción y posicionamiento automático de más de 30 actores en escena.
+  - Generación, rig y animación con Tripo verificados con saldo real.
+  - Componente C++ `DBVUnrealAICpp` compilado e integrado en proyecto de Unreal.
 
-## Lo que falta verificar (ver «Deuda técnica» en [`task.md`](./task.md))
+## Revisión de código y estándares
 
-- Todo Tripo salvo texto → modelo, contra la API real: imagen → modelo, `/v3/files`, rig, retarget, convert y el resto (se probó contra un servidor simulado hecho a partir de la documentación). Hace falta la clave del usuario y su permiso para gastar créditos.
-- Personajes en Unreal (S17): importar un GLB riggeado de Tripo y reproducir su animación en el editor; la variante C++ recompilada con `play_animation`.
-- macOS y Linux en máquina real; el log local rotativo (RNF-08); las guías conceptuales de la API (REQ-25); la captura del viewport para modelos con visión (REQ-13).
-
-## Revisión
-
-Dos revisiones de `/code-simplify` (v0.1 y v0.1.x). La segunda encontró y corrigió un **Crítico**: la subida a Tripo de cualquier fichero local con una ruta escrita por la IA (ahora solo imágenes y modelos con tope de tamaño). Detalle en [`CHANGELOG.md`](./CHANGELOG.md).
+- Revisión exhaustiva `/code-simplify` completada:
+  - Garantizada limpieza de carpetas temporales ante cancelaciones o errores en operaciones World Labs.
+  - Regla de un solo `return` + guard clauses aplicada en comandos Rust, JavaScript (`generateView.js`) y Python.
+  - Documentación de IA actualizada en `docs/IA.md` y `docs/IA.en.md`.

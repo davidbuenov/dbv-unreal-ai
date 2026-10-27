@@ -4,7 +4,7 @@
 
 **🇪🇸 Español · [🇬🇧 English](./README.en.md)**
 
-> Copiloto de IA nativo para Unreal Engine 5.8: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo directamente en el editor.
+> Copiloto de IA nativo para Unreal Engine 5.8: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo y World Labs directamente en el editor.
 
 ## 📑 Índice
 
@@ -33,7 +33,7 @@
 
 **No necesitas Rust, Node.js ni ninguna herramienta de programación.** Descarga el instalador de tu sistema desde la **[última Release de GitHub](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)**: se compila automáticamente en cada versión para Windows, macOS (Intel y Apple Silicon) y Linux.
 
-Solo necesitas **Unreal Engine 5.8** para trabajar con un proyecto y, si quieres conversar, una IA (local, con clave de API o tu suscripción): la guía [`docs/IA.md`](./docs/IA.md) explica cada opción. La clave de [Tripo](https://www.tripo3d.ai) es opcional y solo hace falta para generar modelos 3D.
+Solo necesitas **Unreal Engine 5.8** para trabajar con un proyecto y, si quieres conversar, una IA (local, con clave de API o tu suscripción): la guía [`docs/IA.md`](./docs/IA.md) explica cada opción. Las claves de [Tripo](https://www.tripo3d.ai) y [World Labs](https://platform.worldlabs.ai) son opcionales y solo hacen falta para generar modelos y mundos 3D.
 
 > **Actualizaciones:** la app todavía no se actualiza sola. Para pasar a una versión nueva, descarga e instala el instalador nuevo desde Releases; la biblioteca, las conexiones y las claves se conservan.
 
@@ -87,9 +87,9 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 
 ## 📌 Sobre el proyecto
 
-**DBV Unreal AI** (`dbv-unreal-ai`) es una aplicación de escritorio nativa (Windows, macOS y Linux) que conversa contigo y actúa sobre el proyecto de Unreal Engine 5.8 que tengas abierto. Usa la IA que prefieras —un modelo local (Ollama, LM Studio), una API en la nube o tu suscripción de Claude Code, Codex o Copilot (Gemini CLI, con acceso de pago)— y la conecta con el editor a través de su servidor MCP integrado. Si el proyecto aún no está preparado, la aplicación lo prepara por ti. Genera modelos 3D con Tripo, los guarda en una biblioteca local y los lleva al editor con un clic.
+**DBV Unreal AI** (`dbv-unreal-ai`) es una aplicación de escritorio nativa (Windows, macOS y Linux) que conversa contigo y actúa sobre el proyecto de Unreal Engine 5.8 que tengas abierto. Usa la IA que prefieras —un modelo local (Ollama, LM Studio), una API en la nube o tu suscripción de Claude Code, Codex o Copilot (Gemini CLI, con acceso de pago)— y la conecta con el editor a través de su servidor MCP integrado. Si el proyecto aún no está preparado, la aplicación lo prepara por ti. Genera modelos 3D con Tripo y mundos fotorrealistas con World Labs Marble, los guarda en una biblioteca local y los lleva al editor con un clic.
 
-**Construido con:** Rust, Tauri v2, HTML/CSS/JavaScript sin bundler, Unreal Engine 5.8 (MCP + Python).
+**Construido con:** Rust, Tauri v2, HTML/CSS/JavaScript sin bundler, Unreal Engine 5.8 (MCP + Python + C++).
 
 ---
 
@@ -97,22 +97,19 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 
 ## 🚧 Estado
 
-**v0.1.0** (2026-10-24, primera versión). Funciona y está verificado en vivo contra Unreal 5.8.2:
+**v0.2.0** (2026-10-27). Funciona y está verificado en vivo contra Unreal 5.8.4:
 
+- **Generación de mundos fotorrealistas con World Labs Marble (REQ-18):** generación desde texto o imagen (`marble-1.1`), cálculo de créditos, descarga automática de splats gaussianos `.spz`, mallas físicas `.glb` y metadatos de escala a la biblioteca;
+- **Componente nativo C++ de 3D Gaussian Splatting (REQ-41, REQ-42):** módulo `DBVUnrealAICpp` con `UDbvGaussianSplatComponent` y colocación sincronizada de splats `.spz` y mallas en el nivel mediante «Enviar a Unreal»;
+- **Deshacer turno con un clic (REQ-40):** botón «↩️ Deshacer este turno» en la conversación que revierte en bloque las transacciones en Unreal Engine vía Slate post-tick callback;
+- **Múltiples instancias de Unreal (REQ-07):** detección y gestión de editores concurrentes en puertos contiguos (8000, 8001…) con verificación de identidad y selector dinámico;
+- **Selector y acoplamiento interactivo de personajes en animaciones (REQ-16, REQ-31):** el visor 3D enlaza en tiempo real los tracks de animación del clip seleccionado al rig de cualquier personaje de la biblioteca;
+- **Memoria persistente y planificación interactiva (REQ-34..REQ-37):** gestión de `dbv-unreal-ai/memory.md` y `task.md` con comprobación de criterios de «hecho» en el editor y vista interactiva Plan;
+- **Captura visual del viewport (REQ-13):** `unreal_capture_viewport` para modelos multimodales con rejilla en metros y etiquetado;
+- **Tripo verificado en vivo (REQ-15, REQ-16):** modelos, rigs y animaciones comprobados contra la API real de Tripo y colocados en el editor como Skeletal Mesh y Animation Sequence;
 - conexión con el editor por MCP, diagnóstico y preparación del proyecto con diff y «Revertir»;
-- conversación con IA local, en la nube o agentes de suscripción, con las herramientas del editor;
-- **nada que modifique el proyecto se ejecuta sin tu permiso**, y el Python se comprueba contra el motor antes de pedírtelo;
-- Tripo texto → modelo, biblioteca local y «Enviar a Unreal» (importación glTF con materiales y texturas);
-- servidor MCP propio para usar todo lo anterior desde otros agentes.
-
-También en v0.1.0, construido y probado contra un Tripo simulado (**falta probarlo con la API real de Tripo y con el motor**):
-
-- **toda la API de Tripo** para la IA y los agentes: texto o imagen → modelo, variantes, rig, 101 animaciones (bailes, emociones, deportes…), convertir, retopología, texturizar, segmentar, multivista, imágenes y saldo de la cuenta;
-- **consola** de cada trabajo con la petición exacta que se envía a Tripo y su progreso, también en la conversación cuando genera un agente;
-- **visor 3D** en la biblioteca y en la conversación;
-- **imágenes y documentos de referencia** adjuntos a la conversación;
-- biblioteca con **importación** de tus modelos, **carpeta configurable** y nombres cortos con sentido;
-- personajes de Tripo en Unreal como Skeletal Mesh reproduciendo su animación.
+- conversación con IA local, en la nube o agentes de suscripción, con aprobación explícita de modificaciones y validación previa de Python;
+- servidor MCP propio (`dbv-unreal-ai --mcp`) para usar todas las herramientas desde agentes externos.
 
 Hoja de ruta en [`SPECIFICATIONS.md`](./dbv-specs-ops/docs/SPECIFICATIONS.md).
 

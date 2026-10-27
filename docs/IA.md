@@ -16,7 +16,7 @@ La IA en **DBV Unreal AI** es **opcional**. Sin conectar ninguna, la aplicación
 
 Para conectar una IA: **Ajustes → Conectar una IA**, o abre la **Conversación** (`Ctrl+Mayús+I`, `Cmd+Shift+I` en macOS) y, si no hay ninguna conectada, se abre el asistente de conexión.
 
-> 🎨 **Tripo es aparte.** Generar modelos 3D usa tu **clave de Tripo** (Ajustes → Tripo) y gasta créditos de tu cuenta de Tripo, sea cual sea la IA de la conversación.
+> 🎨 **Tripo y World Labs son aparte.** Generar modelos 3D y mundos fotorrealistas usa tu clave de Tripo o World Labs (Ajustes) y gasta créditos de tu cuenta correspondiente, sea cual sea la IA de la conversación.
 
 ---
 

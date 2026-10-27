@@ -4,7 +4,7 @@
 
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
 
-> Native AI copilot for Unreal Engine 5.8: connect any AI (local or cloud) to your open project, prepare it when needed and generate assets with Tripo straight into the editor.
+> Native AI copilot for Unreal Engine 5.8: connect any AI (local or cloud) to your open project, prepare it when needed and generate assets with Tripo and World Labs straight into the editor.
 
 ## 📑 Table of Contents
 
@@ -33,7 +33,7 @@
 
 **You don't need Rust, Node.js or any programming tool.** Download the installer for your system from the **[latest GitHub Release](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)**: it is built automatically for every version for Windows, macOS (Intel and Apple Silicon) and Linux.
 
-You only need **Unreal Engine 5.8** to work on a project and, to chat, an AI (local, with an API key or your subscription): the [`docs/IA.en.md`](./docs/IA.en.md) guide explains each option. A [Tripo](https://www.tripo3d.ai) key is optional and only needed to generate 3D models.
+You only need **Unreal Engine 5.8** to work on a project and, to chat, an AI (local, with an API key or your subscription): the [`docs/IA.en.md`](./docs/IA.en.md) guide explains each option. [Tripo](https://www.tripo3d.ai) and [World Labs](https://platform.worldlabs.ai) keys are optional and only needed to generate 3D models and worlds.
 
 > **Updates:** the app does not update itself yet. To move to a new version, download and run the new installer from Releases; your library, connections and keys are kept.
 
@@ -87,9 +87,9 @@ These channels are not available yet; they will arrive in an upcoming version. I
 
 ## 📌 About
 
-**DBV Unreal AI** (`dbv-unreal-ai`) is a native desktop application (Windows, macOS and Linux) that talks with you and acts on the Unreal Engine 5.8 project you have open. It uses the AI you prefer —a local model (Ollama, LM Studio), a cloud API or your Claude Code, Codex or Copilot subscription (Gemini CLI, with paid access)— and connects it to the editor through its built-in MCP server. If the project is not ready yet, the app prepares it for you. It generates 3D models with Tripo, keeps them in a local library and brings them into the editor with one click.
+**DBV Unreal AI** (`dbv-unreal-ai`) is a native desktop application (Windows, macOS and Linux) that talks with you and acts on the Unreal Engine 5.8 project you have open. It uses the AI you prefer —a local model (Ollama, LM Studio), a cloud API or your Claude Code, Codex or Copilot subscription (Gemini CLI, with paid access)— and connects it to the editor through its built-in MCP server. If the project is not ready yet, the app prepares it for you. It generates 3D models with Tripo and photorealistic worlds with World Labs Marble, keeps them in a local library and brings them into the editor with one click.
 
-**Built with:** Rust, Tauri v2, bundler-free HTML/CSS/JavaScript, Unreal Engine 5.8 (MCP + Python).
+**Built with:** Rust, Tauri v2, bundler-free HTML/CSS/JavaScript, Unreal Engine 5.8 (MCP + Python + C++).
 
 ---
 
@@ -97,22 +97,19 @@ These channels are not available yet; they will arrive in an upcoming version. I
 
 ## 🚧 Status
 
-**v0.1.0** (2026-10-24, first release). Working and verified live against Unreal 5.8.2:
+**v0.2.0** (2026-10-27). Working and verified live against Unreal 5.8.4:
 
+- **Photorealistic world generation with World Labs Marble (REQ-18):** generation from text or image (`marble-1.1`), credit estimation, automatic download of `.spz` Gaussian splats, `.glb` physical collider meshes, and scale metadata into the library;
+- **Native C++ 3D Gaussian Splatting component (REQ-41, REQ-42):** `DBVUnrealAICpp` module with `UDbvGaussianSplatComponent` and synchronized placement of `.spz` splats and collision meshes into the level via "Send to Unreal";
+- **One-click assistant turn undo (REQ-40):** «↩️ Undo this turn» button in conversation rolling back editor transactions in Unreal Engine via Slate post-tick callback;
+- **Multiple Unreal Engine instances (REQ-07):** concurrent editor detection across ports (8000, 8001…) with identity verification and dynamic project switcher;
+- **Interactive character rig attachment in animations (REQ-16, REQ-31):** 3D viewer binds animation clip tracks in real time to any library character rig;
+- **Persistent project memory and interactive planning (REQ-34..REQ-37):** management of `dbv-unreal-ai/memory.md` and `task.md` with in-editor done criteria verification and interactive Plan view;
+- **Viewport visual capture (REQ-13):** `unreal_capture_viewport` for multimodal models with metric grid and nearby actor labels;
+- **Live verified Tripo integration (REQ-15, REQ-16):** models, rigs and animations tested against the real Tripo API and imported into the editor as Skeletal Mesh and Animation Sequence;
 - MCP connection with the editor, project readiness check and preparation with diff and "Revert";
-- conversation with local, cloud or subscription AIs using the editor tools;
-- **nothing that modifies the project runs without your permission**, and Python is checked against the engine before asking;
-- Tripo text-to-model, local library and "Send to Unreal" (glTF import with materials and textures);
-- own MCP server to use all of the above from other agents.
-
-Also in v0.1.0, built and tested against a simulated Tripo (**still to be tested with the real Tripo API and the engine**):
-
-- **the whole Tripo API** for the AI and agents: text or image → model, variants, rig, 101 animations (dances, emotions, sports…), convert, retopology, texture, segmentation, multiview, images and the account balance;
-- a **console** for every job with the exact request sent to Tripo and its progress, also in the conversation when an agent generates;
-- a **3D viewer** in the library and in the conversation;
-- **reference images and documents** attached to the conversation;
-- a library that **imports** your own models, with a **configurable folder** and short meaningful names;
-- Tripo characters in Unreal as a Skeletal Mesh playing their animation.
+- conversation with local, cloud or subscription AIs with explicit approval for modifications and proactive Python validation;
+- own MCP server (`dbv-unreal-ai --mcp`) to use all tools from external agents.
 
 Roadmap in [`SPECIFICATIONS.md`](./dbv-specs-ops/docs/SPECIFICATIONS.md).
 
