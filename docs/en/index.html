@@ -9,7 +9,7 @@
   <!-- Open Graph / Social Media -->
   <meta property="og:title" content="DBV Unreal AI — Native AI Copilot for Unreal Engine 5.8" />
   <meta property="og:description" content="Connect local or cloud AIs to Unreal Engine 5.8. Generate Gaussian Splats and 3D models directly in your editor with complete control, privacy by design, and one-click undo." />
-  <meta property="og:image" content="https://davidbuenov.github.io/dbv-unreal-ai/screenshots/01-hero-conversation.png" />
+  <meta property="og:image" content="https://davidbuenov.github.io/dbv-unreal-ai/screenshots/02-unreal-engine-nivel.png" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
 
@@ -29,6 +29,7 @@
       </a>
       <nav class="nav-links">
         <a href="#workflow">How it works</a>
+        <a href="#demo">Video</a>
         <a href="#gallery">Screenshots</a>
         <a href="#features">Features</a>
         <a href="#ai">AI &amp; Privacy</a>
@@ -72,11 +73,11 @@
         <div class="window-frame">
           <div class="window-titlebar">
             <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
-            <span class="window-title">DBV Unreal AI — Real-time Conversation &amp; Editor Bridge</span>
+            <span class="window-title">DBV Unreal AI — Real-time AI Assistant (Claude Code)</span>
           </div>
           <img
-            src="../screenshots/01-hero-conversation.png"
-            alt="DBV Unreal AI — Copilot conversation, Python validation card, and one-click turn undo"
+            src="../screenshots/01-conversacion-agente.png"
+            alt="DBV Unreal AI — AI assistant locating pirate ships in library and placing them on water surface at exact coordinates"
             class="hero-screenshot zoomable"
             loading="eager"
           />
@@ -105,6 +106,40 @@
         <p>
           <strong>DBV Unreal AI</strong> interfaces directly with Unreal Engine 5.8’s experimental Model Context Protocol (MCP) server through a dedicated Python and C++ toolset. Before executing any code, Python scripts are statically validated against the running engine’s API. If an action alters the level, you inspect the exact code beforehand. And if anything doesn't match your vision, the <strong>«Undo this turn»</strong> button rolls back all transactions in one atomic step.
         </p>
+      </div>
+    </section>
+
+    <!-- ─── Video Demo & Cinematic Render ───────────────────────────────── -->
+    <section class="demo-video-section" id="demo">
+      <div class="demo-video-inner">
+        <p class="hero-eyebrow">
+          <span>🎬 Unreal Engine 5.8 Demo</span>
+          <span>· Movie Render Queue</span>
+        </p>
+        <h2>From generated environment to real-time cinematic render</h2>
+        <p class="section-sub">
+          Experience the end-to-end fidelity: a photorealistic world generated and imported into Unreal Engine with DBV Unreal AI, rendered at 1080p using Movie Render Queue with native lighting and post-processing.
+        </p>
+        <div class="video-frame-wrapper">
+          <div class="window-frame">
+            <div class="window-titlebar">
+              <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+              <span class="window-title">Unreal Engine 5.8 — Cinematic Render (Movie Render Queue 1080p)</span>
+            </div>
+            <div class="video-container">
+              <video
+                controls
+                playsinline
+                preload="metadata"
+                poster="../screenshots/02-unreal-engine-nivel.png"
+                class="demo-video"
+              >
+                <source src="../assets/demo-generacion-unreal.mp4" type="video/mp4" />
+                Your browser does not support HTML5 video. You can view the video directly at assets/demo-generacion-unreal.mp4.
+              </video>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -160,51 +195,74 @@
         <div class="showcase-grid">
 
           <article class="showcase-card">
-            <img src="../screenshots/01-hero-conversation.png" alt="Interactive conversation with Python approval card and one-click turn undo" class="zoomable" loading="lazy" />
+            <img src="../screenshots/02-unreal-engine-nivel.png" alt="Unreal Engine 5.8 viewport showing generated landscape and over 30 actors placed by the AI" class="zoomable" loading="lazy" />
             <div class="showcase-body">
-              <span class="showcase-tag">Conversation &amp; Control</span>
-              <h3>Code Approval &amp; 1-Click Undo</h3>
-              <p>Review the full Python script the AI proposes before execution. When a turn finishes, «Undo this turn» reverts all editor transactions performed during that turn.</p>
+              <span class="showcase-tag">Unreal Engine 5.8</span>
+              <h3>Level Populated &amp; Arranged by AI</h3>
+              <p>Scene assembled with terrain and 30+ generated 3D actors placed at exact coordinates and rotations (medieval market stalls, barn, pirates, hay bales).</p>
             </div>
           </article>
 
           <article class="showcase-card">
-            <img src="../screenshots/02-library-3d-viewer.png" alt="Interactive 3D viewer in library with character rig selector for animation clips" class="zoomable" loading="lazy" />
+            <img src="../screenshots/01-conversacion-agente.png" alt="Conversation with Claude Code locating pirate ships in the library and placing them on the water" class="zoomable" loading="lazy" />
             <div class="showcase-body">
-              <span class="showcase-tag">Library &amp; 3D Viewer</span>
-              <h3>Three.js Viewer &amp; Rig Binding</h3>
-              <p>3D asset preview with 3-point studio lighting. When opening an animation clip, bind its motion tracks to any character rig in your library in real time.</p>
+              <span class="showcase-tag">Conversation &amp; Agent</span>
+              <h3>AI Assistant with Claude Code</h3>
+              <p>Natural dialogue queries local library, determines the exact water surface waterline, and positions both ships with accurate yaw rotation and scaling.</p>
             </div>
           </article>
 
           <article class="showcase-card">
-            <img src="../screenshots/03-generate-worldlabs-tripo.png" alt="World Labs Marble generation tab with credit cost estimation" class="zoomable" loading="lazy" />
+            <img src="../screenshots/04-biblioteca-escenarios.png" alt="World Labs Marble photorealistic environment library" class="zoomable" loading="lazy" />
             <div class="showcase-body">
-              <span class="showcase-tag">3D &amp; World Generation</span>
-              <h3>World Labs Marble &amp; Tripo 3D</h3>
-              <p>Generate photorealistic worlds from text or image with upfront credit estimation, live polling progress, and automatic download of <code>.spz</code> splats and physical collider meshes.</p>
-            </div>
-          </article>
-
-        </div>
-
-        <div class="showcase-grid showcase-grid--bottom">
-
-          <article class="showcase-card">
-            <img src="../screenshots/04-plan-tasks.png" alt="Plan view with tasks and done criteria verified directly in the Unreal editor" class="zoomable" loading="lazy" />
-            <div class="showcase-body">
-              <span class="showcase-tag">Interactive Planning</span>
-              <h3>Project Memory &amp; Engine-Checked Tasks</h3>
-              <p>Goals and tasks synced with <code>task.md</code>. Done criteria (such as «actor exists», «asset exists») are checked inside the running Unreal editor by strict app code.</p>
+              <span class="showcase-tag">World Labs Marble</span>
+              <h3>Photorealistic 3D Environments</h3>
+              <p>Catalog of full 3D worlds: stormy ocean, desert dunes, tropical islands, alien expanses with Gaussian Splats (<code>.spz</code>) and physical colliders (<code>.glb</code>).</p>
             </div>
           </article>
 
           <article class="showcase-card">
-            <img src="../screenshots/05-project-readiness.png" alt="Step-by-step diagnostic of editor plugins and project preparation" class="zoomable" loading="lazy" />
+            <img src="../screenshots/03-biblioteca-objetos.png" alt="3D object library with meshes, skeletal rigs and animations" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Object Library</span>
+              <h3>3D Models, Rigs &amp; Animations</h3>
+              <p>One-click direct actions: «Send to Unreal», «Rig character...», «Animate...», and immediate 3D studio preview.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="../screenshots/05-visor-3d.png" alt="Interactive 3D viewer inspecting collision mesh and Gaussian Splats" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Interactive 3D Viewer</span>
+              <h3>Mesh &amp; Splat Inspection</h3>
+              <p>Three.js modal: inspect physics collision meshes and bounding volumes before deploying the asset to the Unreal Engine project.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="../screenshots/06-generar-modelos.png" alt="Tripo 3D model generation panel" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Tripo 3D Generation</span>
+              <h3>3D Generation from Text or Image</h3>
+              <p>Asset generation with transparent credit balance, smart low-poly triangle budgeting, multi-variant sampling, and texture quality presets.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="../screenshots/07-proyecto-diagnostico.png" alt="Unreal Engine 5.8 project diagnostics and MCP server verification" class="zoomable" loading="lazy" />
             <div class="showcase-body">
               <span class="showcase-tag">Engine Diagnostics</span>
-              <h3>Preparation with Diff &amp; Revert</h3>
-              <p>Item-by-item verification of UE 5.8 installation, network port, Epic plugins, and DBV toolset. Every change is previewed through a visual INI diff.</p>
+              <h3>Connection &amp; MCP on Port 8000</h3>
+              <p>Item-by-item verification of UE 5.8.4, active MCP server, Epic core plugins, and DBV toolset readiness with one-click preparation.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="../screenshots/08-plan-tareas.png" alt="Plan view with tasks and project memory" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Assisted Planning</span>
+              <h3>Tasks &amp; Project Memory</h3>
+              <p>Roadmap goals and execution tasks synchronized with persistent project memory, verified directly inside the running Unreal editor.</p>
             </div>
           </article>
 

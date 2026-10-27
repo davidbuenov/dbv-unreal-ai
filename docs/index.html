@@ -9,7 +9,7 @@
   <!-- Open Graph / Redes Sociales -->
   <meta property="og:title" content="DBV Unreal AI — Copiloto de IA nativo para Unreal Engine 5.8" />
   <meta property="og:description" content="Conecta tu IA local o en la nube a Unreal Engine 5.8. Genera mundos Gaussian Splatting y modelos 3D directamente en el editor con control absoluto y privacidad por diseño." />
-  <meta property="og:image" content="https://davidbuenov.github.io/dbv-unreal-ai/screenshots/01-hero-conversation.png" />
+  <meta property="og:image" content="https://davidbuenov.github.io/dbv-unreal-ai/screenshots/02-unreal-engine-nivel.png" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
 
@@ -29,6 +29,7 @@
       </a>
       <nav class="nav-links">
         <a href="#workflow">Cómo funciona</a>
+        <a href="#demo">Vídeo</a>
         <a href="#gallery">Capturas</a>
         <a href="#features">Características</a>
         <a href="#ai">IA y Privacidad</a>
@@ -72,11 +73,11 @@
         <div class="window-frame">
           <div class="window-titlebar">
             <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
-            <span class="window-title">DBV Unreal AI — Conversación &amp; Control en tiempo real</span>
+            <span class="window-title">DBV Unreal AI — Asistente de IA (Claude Code) en tiempo real</span>
           </div>
           <img
-            src="screenshots/01-hero-conversation.png"
-            alt="DBV Unreal AI — Conversación con el copiloto, tarjeta de validación de código Python y botón para deshacer el turno"
+            src="screenshots/01-conversacion-agente.png"
+            alt="DBV Unreal AI — Asistente de IA localizando barcos piratas en la biblioteca y colocándolos en el nivel sobre la superficie del agua en coordenadas exactas"
             class="hero-screenshot zoomable"
             loading="eager"
           />
@@ -105,6 +106,40 @@
         <p>
           <strong>DBV Unreal AI</strong> conecta tu modelo de IA directamente al servidor experimental Model Context Protocol (MCP) de Unreal Engine 5.8 a través de un toolset propio en Python y C++. Antes de ejecutar una sola línea de código, el script se valida estáticamente contra el motor en marcha. Si algo modifica el nivel, tú ves el código completo y decides si autorizarlo. Y si el resultado no te convence, el botón <strong>«Deshacer este turno»</strong> devuelve el editor exactamente al estado previo.
         </p>
+      </div>
+    </section>
+
+    <!-- ─── Vídeo de Demostración & Render en Unreal Engine ───────────────── -->
+    <section class="demo-video-section" id="demo">
+      <div class="demo-video-inner">
+        <p class="hero-eyebrow">
+          <span>🎬 Demostración en Unreal Engine 5.8</span>
+          <span>· Movie Render Queue</span>
+        </p>
+        <h2>Del escenario generado al render cinematográfico en tiempo real</h2>
+        <p class="section-sub">
+          Comprueba la calidad del flujo de trabajo: un entorno fotorrealista generado e importado a Unreal Engine con DBV Unreal AI, capturado a 1080p mediante Movie Render Queue con iluminación y postprocesado cinematográfico.
+        </p>
+        <div class="video-frame-wrapper">
+          <div class="window-frame">
+            <div class="window-titlebar">
+              <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+              <span class="window-title">Unreal Engine 5.8 — Render cinematográfico (Movie Render Queue 1080p)</span>
+            </div>
+            <div class="video-container">
+              <video
+                controls
+                playsinline
+                preload="metadata"
+                poster="screenshots/02-unreal-engine-nivel.png"
+                class="demo-video"
+              >
+                <source src="assets/demo-generacion-unreal.mp4" type="video/mp4" />
+                Tu navegador no soporta la reproducción de vídeo HTML5. Puedes ver el vídeo directamente en assets/demo-generacion-unreal.mp4.
+              </video>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -155,56 +190,79 @@
     <section class="showcase" id="gallery">
       <div class="showcase-inner">
         <h2>Capturas reales de la aplicación</h2>
-        <p class="section-sub">Haz clic sobre cualquier captura para ampliarla en detalle. Interfaz limpia construida con Tauri v2 y Vanilla JS sin intermediarios pesados.</p>
+        <p class="section-sub">Haz clic sobre cualquier captura para ampliarla en alta resolución. Interfaz limpia construida con Tauri v2 y Vanilla JS sin intermediarios pesados.</p>
 
         <div class="showcase-grid">
 
           <article class="showcase-card">
-            <img src="screenshots/01-hero-conversation.png" alt="Conversación interactiva con tarjeta de código y botón de deshacer" class="zoomable" loading="lazy" />
+            <img src="screenshots/02-unreal-engine-nivel.png" alt="Viewport de Unreal Engine 5.8 con el nivel poblado por más de 30 objetos y personajes colocados por la IA" class="zoomable" loading="lazy" />
             <div class="showcase-body">
-              <span class="showcase-tag">Conversación &amp; Control</span>
-              <h3>Aprobación de código y Deshacer en 1 Clic</h3>
-              <p>Visualiza el script de Python que la IA propone ejecutar. Al terminar el turno, el botón «Deshacer este turno» revierte en bloque todas las transacciones generadas en Unreal Engine.</p>
+              <span class="showcase-tag">Unreal Engine 5.8</span>
+              <h3>Nivel poblado y coordinado por IA</h3>
+              <p>Escenario montado con terreno fotorrealista y más de 30 actores generados y posicionados en el espacio 3D (mercado medieval, granero, piratas, atrezzo).</p>
             </div>
           </article>
 
           <article class="showcase-card">
-            <img src="screenshots/02-library-3d-viewer.png" alt="Visor 3D interactivo en la biblioteca con selector de personaje para clips de animación" class="zoomable" loading="lazy" />
+            <img src="screenshots/01-conversacion-agente.png" alt="Conversación con Claude Code localizando barcos en la biblioteca y colocándolos en el agua" class="zoomable" loading="lazy" />
             <div class="showcase-body">
-              <span class="showcase-tag">Biblioteca &amp; Visor 3D</span>
-              <h3>Visor Three.js y Selector de Rigs</h3>
-              <p>Previsualización 3D con iluminación de estudio a 3 puntos. Al abrir un clip de animación esquelético, puedes acoplarlo en tiempo real a cualquier personaje de tu biblioteca para verlo bailar.</p>
+              <span class="showcase-tag">Conversación &amp; Agente</span>
+              <h3>Asistente con Claude Code</h3>
+              <p>El agente busca en la biblioteca local, calcula la rasante exacta de la superficie del agua y posiciona los barcos en el nivel con rotación y escala precisas.</p>
             </div>
           </article>
 
           <article class="showcase-card">
-            <img src="screenshots/03-generate-worldlabs-tripo.png" alt="Pestaña de generación de mundos con World Labs Marble y estimación de créditos" class="zoomable" loading="lazy" />
+            <img src="screenshots/04-biblioteca-escenarios.png" alt="Biblioteca de escenarios fotorrealistas generados con World Labs Marble" class="zoomable" loading="lazy" />
             <div class="showcase-body">
-              <span class="showcase-tag">Generación 3D y Entornos</span>
-              <h3>World Labs Marble &amp; Tripo 3D</h3>
-              <p>Genera mundos fotorrealistas desde texto o imagen con cálculo transparente de créditos, sondeo en vivo y descarga automática del splat <code>.spz</code> y la malla colisionadora.</p>
-            </div>
-          </article>
-
-        </div>
-
-        <div class="showcase-grid showcase-grid--bottom">
-
-          <article class="showcase-card">
-            <img src="screenshots/04-plan-tasks.png" alt="Vista Plan con tareas y criterios comprobados directamente en el editor de Unreal" class="zoomable" loading="lazy" />
-            <div class="showcase-body">
-              <span class="showcase-tag">Planificación Asistida</span>
-              <h3>Memoria del Proyecto &amp; Tareas Comprobadas</h3>
-              <p>Objetivos y tareas vinculados a <code>task.md</code>. Los criterios de cumplimiento («asset exists», «actor exists») son verificados directamente dentro de Unreal por código estricto de la app.</p>
+              <span class="showcase-tag">World Labs Marble</span>
+              <h3>Biblioteca de mundos y paisajes</h3>
+              <p>Catálogo de entornos fotorrealistas: océanos, parques, desiertos, costas y planetas alienígenas con Gaussian Splats (<code>.spz</code>) y colisión física (<code>.glb</code>).</p>
             </div>
           </article>
 
           <article class="showcase-card">
-            <img src="screenshots/05-project-readiness.png" alt="Diagnóstico punto por punto de los plugins del editor y preparación del proyecto" class="zoomable" loading="lazy" />
+            <img src="screenshots/03-biblioteca-objetos.png" alt="Biblioteca de modelos 3D, rigs esqueléticos y animaciones con acciones directas" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Biblioteca de Objetos</span>
+              <h3>Modelos 3D, Rigs y Animaciones</h3>
+              <p>Gestión directa de assets con botones de «Enviar a Unreal», «Riggear...», «Animar...» y previsualización 3D inmediata.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="screenshots/05-visor-3d.png" alt="Visor 3D interactivo con malla de colisión y splats gaussianos" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Visor 3D Integrado</span>
+              <h3>Inspección de mallas y Gaussian Splats</h3>
+              <p>Modal 3D con Three.js: inspecciona la malla de colisión para física en Unreal y el volumen de renderizado antes de importar al nivel.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="screenshots/06-generar-modelos.png" alt="Panel de generación de modelos 3D con Tripo" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Generación Tripo</span>
+              <h3>Modelos 3D desde texto o imagen</h3>
+              <p>Creación de assets con saldo visible de créditos, control de triángulos (low poly inteligente), generación de variantes y calidad de textura.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="screenshots/07-proyecto-diagnostico.png" alt="Diagnóstico del proyecto y servidor MCP en Unreal Engine 5.8" class="zoomable" loading="lazy" />
             <div class="showcase-body">
               <span class="showcase-tag">Diagnóstico del Motor</span>
-              <h3>Preparación con Diff y Reversión</h3>
-              <p>Comprobación punto por punto de la instalación de UE 5.8, puerto de red, plugins de Epic y toolset de DBV. Todo cambio se anticipa con un diff visual de ficheros INI.</p>
+              <h3>Conexión y plugins MCP en puerto 8000</h3>
+              <p>Comprobación punto por punto de Unreal Engine (5.8.4), servidor MCP activo, plugins de Epic y toolset de DBV listo con preparación en 1 clic.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <img src="screenshots/08-plan-tareas.png" alt="Vista Plan con tareas y memoria de contexto del proyecto" class="zoomable" loading="lazy" />
+            <div class="showcase-body">
+              <span class="showcase-tag">Planificación Asistida</span>
+              <h3>Tareas y Memoria del Proyecto</h3>
+              <p>Objetivos y tareas vinculados a la memoria del proyecto, con verificación de criterios de finalización dentro del propio editor.</p>
             </div>
           </article>
 

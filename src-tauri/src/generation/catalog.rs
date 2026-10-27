@@ -222,7 +222,6 @@ pub const OPERATIONS: [Operation; 20] = [
     },
 ];
 
-
 /// Animaciones de un rig `v1.0-20240301` (bípedo, `spec: tripo`): 101 presets `preset:biped:<nombre>`, por grupos.
 pub const BIPED_PRESETS: [(&str, &str); 7] = [
     ("basic", "idle walk run run_upstairs turn jump jump_down jump_rope_01 jump_rope_02 fall climb dive swim surf flip sit standing_relax look_around wait swagger"),
@@ -235,7 +234,24 @@ pub const BIPED_PRESETS: [(&str, &str); 7] = [
 ];
 
 /// Animaciones de los rigs v2.0/v2.5/v3.0 (cualquier tipo): 16 presets `preset:<nombre>`.
-pub const GENERIC_PRESETS: [&str; 16] = ["idle", "walk", "run", "dive", "climb", "jump", "slash", "shoot", "hurt", "fall", "turn", "quadruped:walk", "hexapod:walk", "octopod:walk", "serpentine:march", "aquatic:march"];
+pub const GENERIC_PRESETS: [&str; 16] = [
+    "idle",
+    "walk",
+    "run",
+    "dive",
+    "climb",
+    "jump",
+    "slash",
+    "shoot",
+    "hurt",
+    "fall",
+    "turn",
+    "quadruped:walk",
+    "hexapod:walk",
+    "octopod:walk",
+    "serpentine:march",
+    "aquatic:march",
+];
 
 /// Modelo de generación que se manda si la petición no trae uno. Tripo lo hizo obligatorio en 2026
 /// («HTTP 400: model is required», visto con la API real el 2026-10-26): antes tenía un valor por defecto.
@@ -243,31 +259,60 @@ pub const DEFAULT_MODEL: &str = "v3.1-20260211";
 
 /// Operaciones que exigen `model` (las que generan una malla desde texto o imágenes).
 pub fn needs_model(op: &Operation) -> bool {
-    matches!(op.name, "text_to_model" | "image_to_model" | "multiview_to_model")
+    matches!(
+        op.name,
+        "text_to_model" | "image_to_model" | "multiview_to_model"
+    )
 }
 
 /// ¿El rig se hizo con el modelo v1.0 (el de los 101 presets bípedos)? Sin dato, se supone que sí (es el defecto).
 pub fn is_v1_rig(rig_request: &Value) -> bool {
-    rig_request.get("model").and_then(Value::as_str).is_none_or(|m| m.starts_with("v1.0"))
+    rig_request
+        .get("model")
+        .and_then(Value::as_str)
+        .is_none_or(|m| m.starts_with("v1.0"))
 }
 
 /// Nombre completo de una animación para un rig: acepta `dance_01`, `preset:biped:dance_01` o `preset:walk`.
 pub fn preset_id(name: &str, v1_rig: bool) -> Result<String, String> {
-    let short = name.trim().trim_start_matches("preset:").trim_start_matches("biped:");
-    let valid = if v1_rig { BIPED_PRESETS.iter().any(|(_, list)| list.split(' ').any(|n| n == short)) } else { GENERIC_PRESETS.contains(&short) };
-    let id = if v1_rig { format!("preset:biped:{short}") } else { format!("preset:{short}") };
+    let short = name
+        .trim()
+        .trim_start_matches("preset:")
+        .trim_start_matches("biped:");
+    let valid = if v1_rig {
+        BIPED_PRESETS
+            .iter()
+            .any(|(_, list)| list.split(' ').any(|n| n == short))
+    } else {
+        GENERIC_PRESETS.contains(&short)
+    };
+    let id = if v1_rig {
+        format!("preset:biped:{short}")
+    } else {
+        format!("preset:{short}")
+    };
     if valid {
         Ok(id)
     } else {
-        Err(format!("«{name}» is not an animation of this rig. {}", preset_help(v1_rig)))
+        Err(format!(
+            "«{name}» is not an animation of this rig. {}",
+            preset_help(v1_rig)
+        ))
     }
 }
 
 /// Lista de animaciones para el modelo.
 pub fn preset_help(v1_rig: bool) -> String {
     if v1_rig {
-        let groups: Vec<String> = BIPED_PRESETS.iter().map(|(group, list)| format!("{group}: {list}")).collect();
-        format!("Rig v1.0 biped animations ({}): {}", 101, groups.join(" | "))
+        let groups: Vec<String> = BIPED_PRESETS
+            .iter()
+            .map(|(group, list)| format!("{group}: {list}"))
+            .collect();
+        format!(
+            "Rig v1.0 biped animations ({}): {}",
+            101,
+            groups.join(" | ")
+        )
     } else {
         format!("Rig v2/v3 animations: {}", GENERIC_PRESETS.join(", "))
     }
@@ -283,7 +328,11 @@ fn flag(params: &Value, key: &str) -> bool {
 }
 
 fn text(params: &Value, key: &str) -> String {
-    params.get(key).and_then(Value::as_str).unwrap_or("").to_string()
+    params
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 /// Suplementos de las generaciones de modelo (tabla «Add-ons» de los precios).
@@ -293,22 +342,40 @@ fn model_addons(params: &Value) -> f64 {
         "extreme" => 20.0,
         _ => 0.0,
     };
-    let geometry = if text(params, "geometry_quality") == "detailed" { 20.0 } else { 0.0 };
+    let geometry = if text(params, "geometry_quality") == "detailed" {
+        20.0
+    } else {
+        0.0
+    };
     let quad = if flag(params, "quad") { 5.0 } else { 0.0 };
-    let low_poly = if flag(params, "smart_low_poly") { 10.0 } else { 0.0 };
-    let parts = if flag(params, "generate_parts") { 20.0 } else { 0.0 };
+    let low_poly = if flag(params, "smart_low_poly") {
+        10.0
+    } else {
+        0.0
+    };
+    let parts = if flag(params, "generate_parts") {
+        20.0
+    } else {
+        0.0
+    };
     quality + geometry + quad + low_poly + parts
 }
 
 /// ¿Lleva textura? Por defecto sí; `pbr` la fuerza; `generate_parts` exige quitarla.
 fn textured(params: &Value) -> bool {
-    params.get("texture").and_then(Value::as_bool).unwrap_or(true) || flag(params, "pbr")
+    params
+        .get("texture")
+        .and_then(Value::as_bool)
+        .unwrap_or(true)
+        || flag(params, "pbr")
 }
 
 fn image_model_cost(model: &str, quality: &str) -> f64 {
     let base: f64 = match model {
         m if m.starts_with("banana_pro") => 15.0,
-        m if m.starts_with("banana2") || m.starts_with("chat_image_2") || m == "chat_image_1.5" => 10.0,
+        m if m.starts_with("banana2") || m.starts_with("chat_image_2") || m == "chat_image_1.5" => {
+            10.0
+        }
         _ => 5.0,
     };
     let high = match quality {
@@ -323,13 +390,32 @@ fn image_model_cost(model: &str, quality: &str) -> f64 {
 /// Créditos estimados de una operación con estos parámetros (tabla de precios oficial). Es una estimación
 /// para avisar ANTES de gastar; el real llega con la tarea (`credits_consumed`) y el saldo lo confirma.
 pub fn estimate(op: &Operation, params: &Value) -> f64 {
-    let animations = params.get("animations").and_then(Value::as_array).map(|a| a.len()).unwrap_or(1).max(1);
-    let advanced_convert = ["quad", "flatten_bottom", "pivot_to_center_bottom"].iter().any(|k| flag(params, k)) || ["face_limit", "texture_size", "texture_format", "scale_factor"].iter().any(|k| params.get(*k).is_some());
+    let animations = params
+        .get("animations")
+        .and_then(Value::as_array)
+        .map(|a| a.len())
+        .unwrap_or(1)
+        .max(1);
+    let advanced_convert = ["quad", "flatten_bottom", "pivot_to_center_bottom"]
+        .iter()
+        .any(|k| flag(params, k))
+        || [
+            "face_limit",
+            "texture_size",
+            "texture_format",
+            "scale_factor",
+        ]
+        .iter()
+        .any(|k| params.get(*k).is_some());
     match op.name {
         "text_to_model" => (if textured(params) { 20.0 } else { 10.0 }) + model_addons(params),
-        "image_to_model" | "multiview_to_model" => (if textured(params) { 30.0 } else { 20.0 }) + model_addons(params),
+        "image_to_model" | "multiview_to_model" => {
+            (if textured(params) { 30.0 } else { 20.0 }) + model_addons(params)
+        }
         "image_to_splat" => 30.0,
-        "text_to_image" | "image_to_image" => image_model_cost(&text(params, "model"), &text(params, "quality")),
+        "text_to_image" | "image_to_image" => {
+            image_model_cost(&text(params, "model"), &text(params, "quality"))
+        }
         "image_to_multiview" => 10.0,
         "edit_multiview" => 5.0,
         "texture" => match text(params, "texture_quality").as_str() {
@@ -386,15 +472,25 @@ pub const SOURCE_FIELDS: [&str; 3] = ["input", "inputs", "ref_image"];
 
 /// Comprueba lo mínimo antes de gastar: los campos obligatorios. Devuelve el error para el modelo.
 pub fn validate(op: &Operation, params: &Value) -> Result<(), String> {
-    let has = |key: &str| params.get(key).is_some_and(|v| !v.is_null() && v.as_str() != Some(""));
+    let has = |key: &str| {
+        params
+            .get(key)
+            .is_some_and(|v| !v.is_null() && v.as_str() != Some(""))
+    };
     let missing: Vec<&str> = match op.name {
         "text_to_model" | "text_to_image" => ["prompt"].into_iter().filter(|k| !has(k)).collect(),
         "generate_world" => ["prompt"].into_iter().filter(|k| !has(k)).collect(),
         "export_world_mesh" => ["id"].into_iter().filter(|k| !has(k)).collect(),
         "multiview_to_model" => ["inputs"].into_iter().filter(|k| !has(k)).collect(),
-        "convert" => ["input", "format"].into_iter().filter(|k| !has(k)).collect(),
+        "convert" => ["input", "format"]
+            .into_iter()
+            .filter(|k| !has(k))
+            .collect(),
 
-        "smart_segment" => ["input", "seg_type"].into_iter().filter(|k| !has(k)).collect(),
+        "smart_segment" => ["input", "seg_type"]
+            .into_iter()
+            .filter(|k| !has(k))
+            .collect(),
         "retarget" => {
             if has("input") && (has("animation") || has("animations")) {
                 vec![]
@@ -404,9 +500,18 @@ pub fn validate(op: &Operation, params: &Value) -> Result<(), String> {
         }
         _ => ["input"].into_iter().filter(|k| !has(k)).collect(),
     };
-    let too_many = op.name == "retarget" && params.get("animations").and_then(Value::as_array).is_some_and(|a| a.len() > 5);
+    let too_many = op.name == "retarget"
+        && params
+            .get("animations")
+            .and_then(Value::as_array)
+            .is_some_and(|a| a.len() > 5);
     if !missing.is_empty() {
-        return Err(format!("{} needs: {}. Parameters: {}", op.name, missing.join(", "), op.params));
+        return Err(format!(
+            "{} needs: {}. Parameters: {}",
+            op.name,
+            missing.join(", "),
+            op.params
+        ));
     }
     if too_many {
         return Err("retarget accepts at most 5 animations per task".into());
@@ -425,39 +530,118 @@ mod tests {
     fn el_coste_sigue_la_tabla_oficial() {
         let text = find("text_to_model").unwrap();
         assert_eq!(estimate(text, &json!({ "prompt": "x" })), 20.0);
-        assert_eq!(estimate(text, &json!({ "prompt": "x", "smart_low_poly": true })), 30.0, "medido en Holo-Companion");
-        assert_eq!(estimate(text, &json!({ "prompt": "x", "texture": false })), 10.0);
-        assert_eq!(estimate(text, &json!({ "prompt": "x", "texture_quality": "detailed", "geometry_quality": "detailed", "quad": true })), 55.0);
-        assert_eq!(estimate(find("image_to_model").unwrap(), &json!({ "input": "a.png" })), 30.0);
+        assert_eq!(
+            estimate(text, &json!({ "prompt": "x", "smart_low_poly": true })),
+            30.0,
+            "medido en Holo-Companion"
+        );
+        assert_eq!(
+            estimate(text, &json!({ "prompt": "x", "texture": false })),
+            10.0
+        );
+        assert_eq!(
+            estimate(
+                text,
+                &json!({ "prompt": "x", "texture_quality": "detailed", "geometry_quality": "detailed", "quad": true })
+            ),
+            55.0
+        );
+        assert_eq!(
+            estimate(
+                find("image_to_model").unwrap(),
+                &json!({ "input": "a.png" })
+            ),
+            30.0
+        );
         assert_eq!(estimate(find("rig").unwrap(), &json!({})), 25.0);
-        assert_eq!(estimate(find("retarget").unwrap(), &json!({ "animations": ["preset:biped:dance_01", "preset:biped:wave_goodbye_01", "preset:biped:idle"] })), 30.0);
+        assert_eq!(
+            estimate(
+                find("retarget").unwrap(),
+                &json!({ "animations": ["preset:biped:dance_01", "preset:biped:wave_goodbye_01", "preset:biped:idle"] })
+            ),
+            30.0
+        );
         assert_eq!(estimate(find("rig_check").unwrap(), &json!({})), 0.0);
-        assert_eq!(estimate(find("convert").unwrap(), &json!({ "format": "FBX" })), 5.0);
-        assert_eq!(estimate(find("convert").unwrap(), &json!({ "format": "FBX", "pivot_to_center_bottom": true })), 10.0);
+        assert_eq!(
+            estimate(find("convert").unwrap(), &json!({ "format": "FBX" })),
+            5.0
+        );
+        assert_eq!(
+            estimate(
+                find("convert").unwrap(),
+                &json!({ "format": "FBX", "pivot_to_center_bottom": true })
+            ),
+            10.0
+        );
     }
 
     /// Las 101 animaciones del rig v1.0 (bailes incluidos) y las 16 de los rigs nuevos. @spec REQ-16
     #[test]
     fn traduce_y_valida_los_nombres_de_animacion() {
-        assert_eq!(BIPED_PRESETS.iter().map(|(_, l)| l.split(' ').count()).sum::<usize>(), 101);
-        assert_eq!(preset_id("dance_01", true).unwrap(), "preset:biped:dance_01");
-        assert_eq!(preset_id("preset:biped:wave_goodbye_01", true).unwrap(), "preset:biped:wave_goodbye_01");
+        assert_eq!(
+            BIPED_PRESETS
+                .iter()
+                .map(|(_, l)| l.split(' ').count())
+                .sum::<usize>(),
+            101
+        );
+        assert_eq!(
+            preset_id("dance_01", true).unwrap(),
+            "preset:biped:dance_01"
+        );
+        assert_eq!(
+            preset_id("preset:biped:wave_goodbye_01", true).unwrap(),
+            "preset:biped:wave_goodbye_01"
+        );
         assert_eq!(preset_id("walk", false).unwrap(), "preset:walk");
-        assert!(preset_id("dance_01", false).unwrap_err().contains("Rig v2/v3"), "un rig v3 no tiene bailes");
+        assert!(
+            preset_id("dance_01", false)
+                .unwrap_err()
+                .contains("Rig v2/v3"),
+            "un rig v3 no tiene bailes"
+        );
         assert!(preset_id("moonwalk", true).is_err());
-        assert!(is_v1_rig(&json!({ "model": "v1.0-20240301" })) && is_v1_rig(&json!({})) && !is_v1_rig(&json!({ "model": "v3.0-20260909" })));
+        assert!(
+            is_v1_rig(&json!({ "model": "v1.0-20240301" }))
+                && is_v1_rig(&json!({}))
+                && !is_v1_rig(&json!({ "model": "v3.0-20260909" }))
+        );
     }
 
     /// @spec REQ-33
     #[test]
     fn cubre_toda_la_api_que_crea_tareas_y_valida_lo_obligatorio() {
         let names: Vec<&str> = OPERATIONS.iter().map(|op| op.name).collect();
-        for expected in ["text_to_model", "image_to_model", "multiview_to_model", "rig", "retarget", "rig_check", "convert", "texture", "retopology", "segment"] {
+        for expected in [
+            "text_to_model",
+            "image_to_model",
+            "multiview_to_model",
+            "rig",
+            "retarget",
+            "rig_check",
+            "convert",
+            "texture",
+            "retopology",
+            "segment",
+        ] {
             assert!(names.contains(&expected), "{expected}");
         }
-        assert_eq!(names.len(), names.iter().collect::<std::collections::HashSet<_>>().len(), "nombres únicos");
-        assert!(validate(find("convert").unwrap(), &json!({ "input": "task_1" })).unwrap_err().contains("format"));
-        assert!(validate(find("retarget").unwrap(), &json!({ "input": "task_1", "animations": ["a", "b", "c", "d", "e", "f"] })).unwrap_err().contains("5"));
+        assert_eq!(
+            names.len(),
+            names.iter().collect::<std::collections::HashSet<_>>().len(),
+            "nombres únicos"
+        );
+        assert!(
+            validate(find("convert").unwrap(), &json!({ "input": "task_1" }))
+                .unwrap_err()
+                .contains("format")
+        );
+        assert!(validate(
+            find("retarget").unwrap(),
+            &json!({ "input": "task_1", "animations": ["a", "b", "c", "d", "e", "f"] })
+        )
+        .unwrap_err()
+        .contains("5"));
         assert!(validate(find("rig").unwrap(), &json!({ "input": "pirata-1" })).is_ok());
     }
 }

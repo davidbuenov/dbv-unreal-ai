@@ -338,6 +338,49 @@ section > *, .nav-inner, .footer-inner {
   margin-top: 16px;
 }
 
+/* ─── Vídeo de Demostración ─────────────────────────────────────────────── */
+.demo-video-section {
+  padding: 68px 24px 76px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.demo-video-inner {
+  max-width: var(--max-width);
+  margin-inline: auto;
+}
+.demo-video-section h2 {
+  font-size: 2rem;
+  letter-spacing: -0.015em;
+  margin-bottom: 12px;
+  color: #fff;
+}
+.video-frame-wrapper {
+  max-width: 960px;
+  margin: 32px auto 0;
+  box-shadow: 0 20px 48px var(--shadow);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.video-container {
+  position: relative;
+  width: 100%;
+  background-color: #05070a;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.demo-video {
+  width: 100%;
+  height: auto;
+  max-height: 540px;
+  display: block;
+  background-color: #000;
+  outline: none;
+}
+
 /* ─── Steps: Del prompt al nivel de Unreal ───────────────────────────────── */
 .steps {
   padding: 64px 24px 80px;
@@ -424,14 +467,10 @@ section > *, .nav-inner, .footer-inner {
 }
 .showcase-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
   margin-top: 36px;
   text-align: left;
-}
-.showcase-grid--bottom {
-  grid-template-columns: repeat(2, 1fr);
-  margin-top: 22px;
 }
 .showcase-card {
   background-color: var(--bg-secondary);
@@ -833,7 +872,7 @@ section > *, .nav-inner, .footer-inner {
 }
 
 /* ─── Responsive ──────────────────────────────────────────────────────────── */
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .hero { grid-template-columns: 1fr; padding-top: 40px; }
   .feature-grid { grid-template-columns: repeat(2, 1fr); }
   .step-grid { grid-template-columns: repeat(2, 1fr); }
@@ -844,9 +883,17 @@ section > *, .nav-inner, .footer-inner {
 @media (max-width: 900px) {
   .ai-grid { grid-template-columns: 1fr; }
   .download-grid { grid-template-columns: 1fr; }
-  .showcase-grid, .showcase-grid--bottom { grid-template-columns: 1fr; }
   .nav-links { display: none; }
   .btn-nav { display: inline-flex; }
+}
+
+@media (max-width: 680px) {
+  .showcase-grid { grid-template-columns: 1fr; }
+  .feature-grid { grid-template-columns: 1fr; }
+  .step-grid { grid-template-columns: 1fr; }
+  .stats-inner { grid-template-columns: repeat(2, 1fr); }
+  .footer-inner { flex-direction: column; }
+  .footer-links { flex-wrap: wrap; gap: 32px; }
 }
 
 @media (max-width: 600px) {
