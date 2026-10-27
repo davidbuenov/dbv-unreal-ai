@@ -240,6 +240,52 @@ section > *, .nav-inner, .footer-inner {
   font-size: 13px;
   line-height: 1.5;
 }
+.hero-ecosystem {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.hero-ecosystem-label {
+  display: block;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.hero-ecosystem-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.eco-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+.eco-pill:hover {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
+}
+.eco-pill-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  flex-shrink: 0;
+}
 
 .hero-shot {
   position: relative;
@@ -310,6 +356,149 @@ section > *, .nav-inner, .footer-inner {
 .stat-label {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+/* ─── Ecosistema y Aplicaciones Compatibles ──────────────────────────────── */
+.ecosystem-section {
+  padding: 80px 24px;
+  background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
+  border-bottom: 1px solid var(--border);
+}
+.ecosystem-inner {
+  max-width: var(--max-width);
+  margin-inline: auto;
+  text-align: center;
+}
+.ecosystem-section h2 {
+  font-size: 2.1rem;
+  letter-spacing: -0.015em;
+  margin-bottom: 12px;
+  color: #fff;
+}
+.ecosystem-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 40px;
+  text-align: left;
+}
+.ecosystem-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.ecosystem-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background 0.3s ease;
+}
+.ecosystem-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 16px 36px var(--shadow);
+}
+.ecosystem-card:hover::before {
+  background: linear-gradient(90deg, var(--accent), #818cf8);
+}
+.ecosystem-card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.ecosystem-icon-wrapper {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background-color: var(--bg-tertiary);
+  transition: transform 0.2s ease;
+}
+.ecosystem-card:hover .ecosystem-icon-wrapper {
+  transform: scale(1.06);
+}
+.ecosystem-icon-wrapper.unreal {
+  background: radial-gradient(circle, rgba(14, 17, 40, 0.9) 0%, rgba(11, 15, 23, 0.95) 100%);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.ecosystem-icon-wrapper.worldlabs {
+  background: radial-gradient(circle, rgba(30, 30, 38, 0.9) 0%, rgba(11, 15, 23, 0.95) 100%);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.ecosystem-icon-wrapper.tripo {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, rgba(11, 15, 23, 0.95) 100%);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+.ecosystem-icon {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+.ecosystem-card-titles h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+}
+.ecosystem-type {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 3px;
+}
+.ecosystem-card-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+  flex-grow: 1;
+}
+.ecosystem-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+.ecosystem-badges .badge {
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.ecosystem-link {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s ease, transform 0.15s ease;
+  margin-top: auto;
+}
+.ecosystem-link:hover {
+  color: var(--accent-hover);
+  transform: translateX(3px);
 }
 
 /* ─── Manifiesto / Por qué ────────────────────────────────────────────────── */
@@ -559,6 +748,18 @@ section > *, .nav-inner, .footer-inner {
 .feature-icon {
   font-size: 24px;
   margin-bottom: 12px;
+}
+.feature-icon--svg {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 28px;
+  margin-bottom: 12px;
+}
+.feature-icon--svg img {
+  width: 26px;
+  height: 26px;
+  display: block;
 }
 .feature-card h3 {
   font-size: 15px;
@@ -874,6 +1075,7 @@ section > *, .nav-inner, .footer-inner {
 /* ─── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1200px) {
   .hero { grid-template-columns: 1fr; padding-top: 40px; }
+  .ecosystem-grid { grid-template-columns: repeat(2, 1fr); }
   .feature-grid { grid-template-columns: repeat(2, 1fr); }
   .step-grid { grid-template-columns: repeat(2, 1fr); }
   .showcase-grid { grid-template-columns: repeat(2, 1fr); }
@@ -888,6 +1090,7 @@ section > *, .nav-inner, .footer-inner {
 }
 
 @media (max-width: 680px) {
+  .ecosystem-grid { grid-template-columns: 1fr; }
   .showcase-grid { grid-template-columns: 1fr; }
   .feature-grid { grid-template-columns: 1fr; }
   .step-grid { grid-template-columns: 1fr; }

@@ -6,6 +6,12 @@
 
 > Copiloto de IA nativo para Unreal Engine 5.8: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo y World Labs directamente en el editor.
 
+<p align="center">
+  <a href="https://www.unrealengine.com" target="_blank"><img src="https://img.shields.io/badge/Unreal_Engine-5.8-0E1128?style=for-the-badge&logo=unrealengine&logoColor=white" alt="Unreal Engine 5.8"></a>
+  <a href="https://www.worldlabs.ai" target="_blank"><img src="https://img.shields.io/badge/World_Labs-Marble_3DGS-1A1A1A?style=for-the-badge&logoColor=white" alt="World Labs Marble"></a>
+  <a href="https://www.tripo3d.ai" target="_blank"><img src="https://img.shields.io/badge/Tripo_3D-AI_Generation-6366F1?style=for-the-badge&logoColor=white" alt="Tripo 3D"></a>
+</p>
+
 ## 📑 Índice
 
 - [Descárgalo e instálalo](#install)
@@ -14,6 +20,7 @@
   - [Linux](#install-linux)
   - [Próximamente: Homebrew, Microsoft Store y Uptodown](#install-soon)
 - [Sobre el proyecto](#about)
+- [Aplicaciones compatibles y ecosistema](#ecosystem)
 - [Estado](#status)
 - [Cómo funciona](#how)
 - [Requisitos](#requirements)
@@ -90,6 +97,20 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 **DBV Unreal AI** (`dbv-unreal-ai`) es una aplicación de escritorio nativa (Windows, macOS y Linux) que conversa contigo y actúa sobre el proyecto de Unreal Engine 5.8 que tengas abierto. Usa la IA que prefieras —un modelo local (Ollama, LM Studio), una API en la nube o tu suscripción de Claude Code, Codex o Copilot (Gemini CLI, con acceso de pago)— y la conecta con el editor a través de su servidor MCP integrado. Si el proyecto aún no está preparado, la aplicación lo prepara por ti. Genera modelos 3D con Tripo y mundos fotorrealistas con World Labs Marble, los guarda en una biblioteca local y los lleva al editor con un clic.
 
 **Construido con:** Rust, Tauri v2, HTML/CSS/JavaScript sin bundler, Unreal Engine 5.8 (MCP + Python + C++).
+
+---
+
+<a name="ecosystem"></a>
+
+## 🔗 Aplicaciones compatibles y ecosistema conectado
+
+**DBV Unreal AI** actúa como puente nativo y centro de control entre tu entorno de desarrollo y los principales estándares de generación espacial y modelado 3D por IA:
+
+| Icono | Aplicación / Plataforma | Tipo de Conexión en DBV Unreal AI | Capacidades integradas |
+| :---: | :--- | :--- | :--- |
+| <a href="https://www.unrealengine.com"><img src="docs/assets/unreal-engine.svg" width="40" height="40" alt="Unreal Engine 5.8"></a> | **[Unreal Engine 5.8](https://www.unrealengine.com)** | **Nativa (Local)**<br>MCP HTTP en puerto 8000+ & Python/C++ | • Conexión bidireccional y auto-diagnóstico del editor en tiempo real.<br>• Validación estática de Python con diff y aprobación previa obligatoria.<br>• Componente nativo C++ libre `UDbvGaussianSplatComponent` para 3DGS.<br>• Soporte multi-instancia y reversión de transacciones por turno en 1 clic. |
+| <a href="https://www.worldlabs.ai"><img src="docs/assets/world-labs.svg" width="40" height="40" alt="World Labs"></a> | **[World Labs (Marble)](https://www.worldlabs.ai)** | **API Cloud / Llavero seguro**<br>Key en almacén de credenciales del SO | • Generación de mundos fotorrealistas persistentes con modelos `marble-1.1`.<br>• Descarga de Gaussian Splats (`.spz`) y mallas físicas con colisión (`.glb`).<br>• Inspección previa en visor 3D local con Three.js.<br>• Botón «Enviar a Unreal» para colocación instantánea sincronizada. |
+| <a href="https://www.tripo3d.ai"><img src="docs/assets/tripo3d.svg" width="40" height="40" alt="Tripo3D"></a> | **[Tripo3D](https://www.tripo3d.ai)** | **API Cloud / Llavero seguro**<br>Superficie completa de 18 operaciones | • Generación de mallas 3D desde descripciones de texto o imágenes.<br>• Saldo visible de créditos y optimización poligonal inteligente.<br>• Auto-rigging esquelético y aplicación de clips de animación dinámicos.<br>• Importación directa como Static Mesh, Skeletal Mesh y Animation Sequence. |
 
 ---
 
