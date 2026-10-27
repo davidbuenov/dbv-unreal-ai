@@ -340,7 +340,11 @@ pub fn resume_orphans(context: &JobContext) -> Vec<String> {
         let context = context.clone();
         std::thread::spawn(move || {
             let body = request.params.clone();
-            drive(&context, record, &cancel, |client, mut report| finish_task(client, &request, body, task_id, &context.library, &cancel, context.polling, &mut report));
+            let client = match &context.base_url {
+                Some(base) => TripoClient::with_base_url(&context.key, base),
+                None => TripoClient::new(&context.key),
+            };
+            drive(&context, record, &cancel, |mut report| finish_task(&client, &request, body, task_id, &context.library, &cancel, context.polling, &mut report));
         });
     }
     ids
@@ -348,17 +352,124 @@ pub fn resume_orphans(context: &JobContext) -> Vec<String> {
 
 /// El cuerpo del trabajo: corre la operación y va dejando el estado en el fichero.
 fn run_job(context: &JobContext, record: JobRecord, request: &OperationRequest, cancel: &AtomicBool) {
-    drive(context, record, cancel, |client, mut report| run_operation(client, request, &context.library, cancel, context.polling, &mut report));
+    if request.operation.category == "worldlabs" {
+        drive(context, record, cancel, |mut report| run_worldlabs_operation(context, request, cancel, &mut report));
+    } else {
+        let client = match &context.base_url {
+            Some(base) => TripoClient::with_base_url(&context.key, base),
+            None => TripoClient::new(&context.key),
+        };
+        drive(context, record, cancel, |mut report| run_operation(&client, request, &context.library, cancel, context.polling, &mut report));
+    }
+}
+
+fn run_worldlabs_operation(context: &JobContext, request: &OperationRequest, cancel: &AtomicBool, report: &mut impl FnMut(JobEvent)) -> Result<Outcome, UnrealError> {
+    let client = match &context.base_url {
+        Some(base) => super::worldlabs::WorldLabsClient::with_base_url(&context.key, base),
+        None => super::worldlabs::WorldLabsClient::new(&context.key),
+    };
+
+    report(JobEvent::Request { endpoint: request.operation.endpoint, body: &request.params });
+    report(JobEvent::Stage("submitted", None));
+
+    let started = std::time::Instant::now();
+    let outcome = match request.operation.name {
+        "generate_world" => {
+            let prompt = request.params.get("prompt").and_then(Value::as_str).unwrap_or("");
+            let model = request.params.get("model").and_then(Value::as_str);
+            let image_base64 = request.params.get("image").and_then(Value::as_str).and_then(|p| {
+                let path = Path::new(p);
+                if path.is_file() {
+                    std::fs::read(path).ok().map(|b| {
+                        use base64::Engine;
+                        base64::engine::general_purpose::STANDARD.encode(&b)
+                    })
+                } else {
+                    None
+                }
+            });
+
+            let op_id = client.generate_world(prompt, model, image_base64.as_deref())?;
+            report(JobEvent::Task(&op_id));
+            report(JobEvent::Stage("running", None));
+
+            let world_id = loop {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(UnrealError::Protocol("cancelado por el usuario".into()));
+                }
+                if started.elapsed() > context.polling.max_wait {
+                    return Err(UnrealError::Timeout(format!("la operación {op_id} no terminó a tiempo")));
+                }
+                let op = client.operation(&op_id)?;
+                if op.done {
+                    if let Some(err) = op.error {
+                        return Err(UnrealError::Protocol(format!("World Labs falló: {err}")));
+                    }
+                    break op.world_id.ok_or_else(|| UnrealError::Protocol("World Labs terminó sin world_id".into()))?;
+                }
+                report(JobEvent::Stage("running", op.progress));
+                std::thread::sleep(context.polling.interval);
+            };
+
+            report(JobEvent::Stage("downloading", None));
+            let world_json = client.world(&world_id)?;
+
+            let temp_dir = std::env::temp_dir().join(format!("dbv_worldlabs_{}_{}", crate::library::now_secs(), world_id));
+            std::fs::create_dir_all(&temp_dir).map_err(|e| crate::unreal::io_error(&temp_dir, &e))?;
+            let temp_manifest = temp_dir.join("manifest.json");
+            let manifest_value = serde_json::json!({
+                "id": world_id,
+                "prompt": prompt,
+                "rawResponse": world_json
+            });
+            std::fs::write(&temp_manifest, serde_json::to_string_pretty(&manifest_value).unwrap_or_default())
+                .map_err(|e| crate::unreal::io_error(&temp_manifest, &e))?;
+
+            let entry = context.library.import_worldlabs_manifest(&temp_manifest, Some(&request.name))?;
+            let _ = std::fs::remove_dir_all(&temp_dir);
+            Outcome { entry: Some(entry), output: world_json, task_id: op_id }
+        }
+        "export_world_mesh" => {
+            let world_id = request.params.get("world_id")
+                .or_else(|| request.params.get("id"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let op_id = client.export_mesh(world_id)?;
+            report(JobEvent::Task(&op_id));
+            report(JobEvent::Stage("running", None));
+
+            loop {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(UnrealError::Protocol("cancelado por el usuario".into()));
+                }
+                if started.elapsed() > context.polling.max_wait {
+                    return Err(UnrealError::Timeout(format!("la exportación {op_id} no terminó a tiempo")));
+                }
+                let op = client.operation(&op_id)?;
+                if op.done {
+                    if let Some(err) = op.error {
+                        return Err(UnrealError::Protocol(format!("World Labs falló: {err}")));
+                    }
+                    break;
+                }
+                report(JobEvent::Stage("running", op.progress));
+                std::thread::sleep(context.polling.interval);
+            }
+
+            report(JobEvent::Stage("downloading", None));
+            let world_json = client.world(world_id)?;
+            Outcome { entry: None, output: world_json, task_id: op_id }
+        }
+        other => return Err(UnrealError::NotFound(format!("operación de World Labs no implementada: {other}"))),
+    };
+    Ok(outcome)
 }
 
 /// Lleva un trabajo (nuevo o reanudado): traduce los eventos al fichero de trabajo y deja el resultado.
-fn drive(context: &JobContext, mut record: JobRecord, cancel: &AtomicBool, work: impl FnOnce(&TripoClient, &mut dyn FnMut(JobEvent)) -> Result<Outcome, UnrealError>) {
-    let client = match &context.base_url {
-        Some(base) => TripoClient::with_base_url(&context.key, base),
-        None => TripoClient::new(&context.key),
-    };
+fn drive(context: &JobContext, mut record: JobRecord, cancel: &AtomicBool, work: impl FnOnce(&mut dyn FnMut(JobEvent)) -> Result<Outcome, UnrealError>) {
+
     let mut last_progress: Option<i64> = None;
-    let result = work(&client, &mut |event| {
+    let result = work(&mut |event| {
         match event {
             JobEvent::Request { endpoint, body } => {
                 record.endpoint = endpoint.to_string();

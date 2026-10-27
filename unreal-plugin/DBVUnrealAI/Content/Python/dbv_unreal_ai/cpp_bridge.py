@@ -65,3 +65,16 @@ def load_gaussian_splat(source_file: str, actor_label: str) -> str:
     """Ver ``editor.load_gaussian_splat``."""
     return editor.load_gaussian_splat(_text(source_file), _text(actor_label) or "DBV_GaussianSplat")
 
+
+def get_undo_count() -> str:
+    """Ver ``editor.get_undo_count``."""
+    return editor.get_undo_count()
+
+
+def undo_turn(count: str, expected_current: str) -> str:
+    """Ver ``editor.undo_turn``."""
+    c = int(_text(count) or "0")
+    exp = int(_text(expected_current) or "0")
+    return editor.undo_turn(c, exp)
+
+

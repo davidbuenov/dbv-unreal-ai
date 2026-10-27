@@ -199,10 +199,30 @@ export function start() {
   views.settings = createSettingsView($('#view-settings'), { toast, state, openConnect: () => loadAi().then((app) => app.openConnect()) });
 
   function paintPill() {
-    const pill = pillState(state.connection);
     const node = $('#unreal-pill');
-    node.textContent = pill.text;
-    node.className = pill.className;
+    const conns = (state.connections ?? []).filter((c) => c && c.status === 'online');
+    if (conns.length > 1) {
+      const active = state.connection;
+      const select = el(
+        'select',
+        {
+          attrs: { 'aria-label': t('unreal.selectActiveProject') },
+          style: 'background: transparent; border: none; color: inherit; font: inherit; cursor: pointer; padding: 0 4px; outline: none;',
+        },
+        ...conns.map((c) => {
+          const opt = el('option', { text: `${c.projectName} (:${c.endpoint?.port ?? 8000})`, attrs: { value: c.projectPath || c.projectName } });
+          if ((c.projectPath || c.projectName) === (active?.projectPath || active?.projectName)) opt.selected = true;
+          return opt;
+        }),
+      );
+      select.addEventListener('change', () => state.setActiveProject(select.value));
+      node.replaceChildren(select);
+      node.className = 'pill pill--online';
+    } else {
+      const pill = pillState(state.connection);
+      node.textContent = pill.text;
+      node.className = pill.className;
+    }
   }
   let memoryProject = null;
   state.subscribe((connection) => {
@@ -277,7 +297,60 @@ export function start() {
       // Memoria del proyecto (REQ-34, REQ-35): ficha de contexto y botón «Recordar».
       contextNotes: () => projectMemory.contextNotes(),
       rememberRequest: (language) => rememberRequest(language),
-      extraTools: ({ panel, conversationId, vision = false }) => {
+      beforeTurn: async () => {
+        let startUndo = null;
+        if (state.connection?.status === 'online') {
+          try {
+            startUndo = await api.unrealGetUndoCount(state.connection.endpoint);
+          } catch {
+            startUndo = null;
+          }
+        }
+        const result = { startUndo, importedAssets: [] };
+        return result;
+      },
+      afterTurn: async (turnContext) => {
+        let undoInfo = null;
+        if (state.connection?.status === 'online' && turnContext?.startUndo != null) {
+          try {
+            const endUndo = await api.unrealGetUndoCount(state.connection.endpoint);
+            if (endUndo != null && endUndo > turnContext.startUndo) {
+              undoInfo = {
+                count: endUndo - turnContext.startUndo,
+                expectedCurrent: endUndo,
+                importedAssets: turnContext.importedAssets ?? [],
+                undone: false,
+              };
+            }
+          } catch {
+            undoInfo = null;
+          }
+        }
+        return undoInfo;
+      },
+      onUndoTurn: async (undoInfo, { setDone, setWarning }) => {
+        if (state.connection?.status !== 'online') {
+          setWarning(t('unreal.pill.offline'));
+        } else {
+          const res = await api.unrealUndoTurn(state.connection.endpoint, undoInfo.count, undoInfo.expectedCurrent);
+          if (res.success) {
+            setDone();
+            toast(t('unreal.undoDone'));
+            if (undoInfo.importedAssets?.length) {
+              const del = await confirm(t('unreal.undoDeleteAssets'));
+              if (del) {
+                for (const assetId of undoInfo.importedAssets) {
+                  await api.libraryRemove(assetId);
+                }
+                await refreshLibrary();
+              }
+            }
+          } else {
+            setWarning(res.error || t('unreal.undoMismatch'));
+          }
+        }
+      },
+      extraTools: ({ panel, conversationId, vision = false, turnContext = null }) => {
         if (!memories.has(conversationId)) memories.set(conversationId, createPermissionMemory());
         const askApproval = (request) => {
           const card = createApprovalCard(request);
@@ -310,10 +383,20 @@ export function start() {
           balance: api.generationBalance,
           rename: api.libraryRename,
           listLibrary: api.libraryList,
-          send: (entry) => (state.connection?.status === 'online' ? sendToUnreal({ backend: sendBackend(state.connection) }, entry, { project: state.connection.projectPath }) : Promise.resolve({ ok: false, error: 'no Unreal project connected' })),
+          send: async (entry) => {
+            let sendResult = { ok: false, error: 'no Unreal project connected' };
+            if (state.connection?.status === 'online') {
+              sendResult = await sendToUnreal({ backend: sendBackend(state.connection) }, entry, { project: state.connection.projectPath });
+              if (sendResult.ok && entry?.id && turnContext?.importedAssets) {
+                turnContext.importedAssets.push(entry.id);
+              }
+            }
+            return sendResult;
+          },
           askApproval,
           confirmCost: (request) => confirmCost(confirm, request),
         });
+
         // Como mucho una propuesta de memoria por turno: cada turno pide sus herramientas de nuevo.
         let proposed = false;
         const memory = state.connection?.projectPath

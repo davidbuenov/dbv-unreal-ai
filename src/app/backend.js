@@ -28,6 +28,25 @@ export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_p
 export const unrealPrepareApply = (path, variant, port) => call('unreal_prepare_apply', { path, variant, port: port ?? null });
 export const unrealPrepareRevert = (path, backup) => call('unreal_prepare_revert', { path, backup });
 export const unrealCaptureViewport = (endpoint, annotate) => call('unreal_capture_viewport', { endpoint, annotate: Boolean(annotate) });
+export const unrealGetUndoCount = async (endpoint) => {
+  let count = null;
+  const res = await unrealCallTool(endpoint, '', 'get_undo_count', {});
+  if (res.ok && res.value) {
+    const data = typeof res.value === 'string' ? JSON.parse(res.value) : res.value;
+    count = data.active_undo_count ?? null;
+  }
+  return count;
+};
+export const unrealUndoTurn = async (endpoint, count, expectedCurrent) => {
+  let result = { success: false, error: 'unknown error' };
+  const res = await unrealCallTool(endpoint, '', 'undo_turn', { count, expected_current: expectedCurrent ?? 0 });
+  if (res.ok && res.value) {
+    result = typeof res.value === 'string' ? JSON.parse(res.value) : res.value;
+  } else if (!res.ok) {
+    result = { success: false, error: res.error ?? 'unreal call failed' };
+  }
+  return result;
+};
 export const appMcpCommand = (port, project = null) => call('app_mcp_command', { port, project });
 /** Imagen (base64) o documento que el usuario eligió para adjuntar a la conversación (REQ-32). */
 export const aiReadAttachment = (path) => call('ai_read_attachment', { path });
@@ -46,6 +65,7 @@ export const generationPrepare = (tool, args) => call('generation_prepare', { to
 export const generationLaunch = (tool, args) => call('generation_launch', { tool, args, confirmCost: true });
 export const generationOperations = (operation) => call('generation_operations', { operation: operation || null });
 export const generationBalance = () => call('generation_balance');
+export const generationWorldLabsBalance = () => call('generation_worldlabs_balance');
 export const generationSuggestName = (prompt) => call('generation_suggest_name', { prompt });
 export const generationPresets = () => call('generation_presets');
 /** Trabajos de la sesión (también los de un agente), con su consola. */

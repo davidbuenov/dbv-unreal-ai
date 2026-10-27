@@ -10,8 +10,13 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createChatPanel } from '../../src/ai/chatPanel.js';
+import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 
-beforeAll(() => window.DBV_I18N.setLang('es'));
+beforeAll(() => {
+  window.DBV_I18N.register(APP_TRANSLATIONS);
+  window.DBV_I18N.setLang('es');
+});
+
 
 function panelWithMessages() {
   const host = document.createElement('div');
@@ -66,4 +71,41 @@ describe('orden de la conversación', () => {
     empty.finish('');
     expect(host.querySelectorAll('.ai-msg--assistant')).toHaveLength(1);
   });
+
+  it('el pie del turno enseña «Deshacer este turno» y gestiona la llamada y avisos @spec REQ-40', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    let undoCalled = null;
+    const panel = createChatPanel({
+      host,
+      callbacks: {
+        onUndoTurn: async (info, handles) => {
+          undoCalled = info;
+          if (info.count === 1) handles.setDone();
+          else handles.setWarning('El historial ha cambiado');
+        },
+      },
+      renderMarkdown: (target, markdown) => (target.textContent = markdown),
+    });
+
+    const bubble = panel.addAssistant('He colocado 3 luces.');
+    bubble.setUndo({ count: 1, expectedCurrent: 5 });
+    const btn = host.querySelector('.ai-msg__undo-btn');
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain('Deshacer');
+
+    btn.click();
+    await Promise.resolve();
+    expect(undoCalled).toEqual({ count: 1, expectedCurrent: 5, undone: true });
+    expect(btn.textContent).toContain('deshecho');
+    expect(btn.disabled).toBe(true);
+
+    const bubble2 = panel.addAssistant('He cambiado el sol.');
+    bubble2.setUndo({ count: 2, expectedCurrent: 8 });
+    const btn2 = host.querySelectorAll('.ai-msg__undo-btn')[1];
+    btn2.click();
+    await Promise.resolve();
+    expect(host.textContent).toContain('El historial ha cambiado');
+  });
 });
+

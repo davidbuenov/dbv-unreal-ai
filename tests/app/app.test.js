@@ -37,6 +37,19 @@ describe('conexión y píldora (REQ-01, REQ-02)', () => {
     expect(state.connection).toEqual({ projectName: 'A', status: 'online' });
     expect(seen).toEqual(['connecting', 'online']);
   });
+
+  it('el estado gestiona múltiples proyectos y permite conmutar el activo @spec REQ-07', () => {
+    const state = createState();
+    state.setConnection({ projectPath: 'C:/P1/P1.uproject', projectName: 'P1', status: 'online', endpoint: { port: 8000 } });
+    state.setConnection({ projectPath: 'C:/P2/P2.uproject', projectName: 'P2', status: 'online', endpoint: { port: 8001 } });
+    expect(state.connections.length).toBe(2);
+    expect(state.connection.projectName).toBe('P1');
+    state.setActiveProject('C:/P2/P2.uproject');
+    expect(state.connection.projectName).toBe('P2');
+    state.removeConnection('C:/P2/P2.uproject');
+    expect(state.connections.length).toBe(1);
+    expect(state.connection.projectName).toBe('P1');
+  });
 });
 
 describe('preparación (REQ-04, REQ-05)', () => {
@@ -123,11 +136,15 @@ describe('privacidad y coste (RNF-IA.2, RNF-04)', () => {
     expect(seen.choices.at(-1).key).toBe('cancel');
   });
 
-  it('el formulario de Generar se traduce en la misma herramienta que usa la IA @spec REQ-15, REQ-29, REQ-32', () => {
+  it('el formulario de Generar se traduce en la misma herramienta que usa la IA @spec REQ-15, REQ-18, REQ-29, REQ-32', () => {
     expect(formArgs({ mode: 'text', prompt: ' chest ', name: 'Cofre ', variants: '3', faceLimit: '3000', lowPoly: true, textureQuality: 'detailed' })).toEqual({
       tool: 'generate_3d_model',
       args: { prompt: 'chest', name: 'Cofre', variants: 3, options: { texture_quality: 'detailed' }, face_limit: 3000, smart_low_poly: true },
     });
     expect(formArgs({ mode: 'image', image: 'C:/refs/barco.png', name: 'Barco', variants: '1', textureQuality: 'standard' })).toEqual({ tool: 'image_to_3d_model', args: { image: 'C:/refs/barco.png', name: 'Barco', variants: 1 } });
+    expect(formArgs({ mode: 'world', prompt: ' Sci-Fi Colony ', name: 'Colonia ', worldModel: 'marble-1.1' })).toEqual({
+      tool: 'generate_world',
+      args: { prompt: 'Sci-Fi Colony', name: 'Colonia', model: 'marble-1.1' },
+    });
   });
 });

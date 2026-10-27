@@ -165,7 +165,35 @@ def fake_unreal() -> types.ModuleType:
     module.AnimationMode = types.SimpleNamespace(ANIMATION_SINGLE_NODE="single-node")
     module.AnimationLibrary = types.SimpleNamespace(get_animation_track_names=lambda animation: list(animation.tracks))
     module.ScopedEditorTransaction = lambda description: contextlib.nullcontext()
+    module.ToolsetLibrary = types.SimpleNamespace(
+        active_undo_count=5,
+        undo_count_invoked=0,
+        get_active_undo_count=lambda: module.ToolsetLibrary.active_undo_count,
+        undo_transaction=lambda is_user=False: _mock_undo(module.ToolsetLibrary),
+    )
+    module.registered_post_tick = []
+    module.register_slate_post_tick_callback = lambda cb: _mock_register_post_tick(module, cb)
+    module.unregister_slate_post_tick_callback = lambda h: _mock_unregister_post_tick(module, h)
     return module
+
+
+def _mock_undo(toolset) -> bool:
+    toolset.undo_count_invoked += 1
+    toolset.active_undo_count = max(0, toolset.active_undo_count - 1)
+    return True
+
+
+def _mock_register_post_tick(module, cb) -> int:
+    module.registered_post_tick.append(cb)
+    handle = len(module.registered_post_tick)
+    # Ejecutamos el callback simulando el post-tick de Slate
+    cb(0.016)
+    return handle
+
+
+def _mock_unregister_post_tick(module, handle) -> None:
+    pass
+
 
 
 sys.modules["unreal"] = fake_unreal()
@@ -266,5 +294,41 @@ class PlayAnimationTests(unittest.TestCase):
         self.assertIn("no skeletal mesh actor", json.loads(editor.play_animation("Linterna", "/Game/anim"))["error"])
 
 
+class UndoTurnTests(unittest.TestCase):
+    """Pruebas de deshacer transacciones de un turno de la IA."""
+
+    def setUp(self) -> None:
+        unreal_mod = sys.modules["unreal"]
+        unreal_mod.ToolsetLibrary.active_undo_count = 5
+        unreal_mod.ToolsetLibrary.undo_count_invoked = 0
+
+    def test_get_undo_count_devuelve_el_conteo(self) -> None:
+        """@spec REQ-40"""
+        report = json.loads(editor.get_undo_count())
+        self.assertEqual(report["active_undo_count"], 5)
+
+    def test_undo_turn_ejecuta_deshacer_en_slate_post_tick(self) -> None:
+        """@spec REQ-40"""
+        report = json.loads(editor.undo_turn(2, 5))
+        self.assertTrue(report["success"])
+        self.assertEqual(report["undone"], 2)
+        unreal_mod = sys.modules["unreal"]
+        self.assertEqual(unreal_mod.ToolsetLibrary.undo_count_invoked, 2)
+        self.assertEqual(unreal_mod.ToolsetLibrary.active_undo_count, 3)
+
+    def test_undo_turn_rechaza_si_historial_cambio(self) -> None:
+        """@spec REQ-40"""
+        report = json.loads(editor.undo_turn(2, expected_current=10))
+        self.assertFalse(report["success"])
+        self.assertIn("El historial ha cambiado", report["error"])
+
+    def test_undo_turn_rechaza_conteo_invalido(self) -> None:
+        """@spec REQ-40"""
+        report = json.loads(editor.undo_turn(0, 5))
+        self.assertFalse(report["success"])
+        self.assertIn("positive", report["error"])
+
+
 if __name__ == "__main__":
     unittest.main()
+

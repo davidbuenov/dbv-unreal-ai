@@ -182,7 +182,10 @@ pub fn is_worldlabs_manifest(value: &Value) -> bool {
         || value.pointer("/rawResponse/assets/mesh/collider_mesh_url").is_some()
         || value.pointer("/rawResponse/world_marble_url").is_some()
         || value.get("world_marble_url").is_some()
+        || value.pointer("/assets/splats").is_some()
+        || value.pointer("/assets/mesh/collider_mesh_url").is_some()
 }
+
 
 /// Nombre legible a partir del nombre de un fichero (`linterna_hierro-02.glb` → «Linterna hierro 02»).
 pub fn name_from_file(path: &Path) -> String {
@@ -670,9 +673,11 @@ impl Library {
 
             // 1. Splat URL (.spz)
             let splat_url = json.pointer("/rawResponse/assets/splats/spz_urls/full_res")
+                .or_else(|| json.pointer("/assets/splats/spz_urls/full_res"))
                 .or_else(|| json.get("sceneUrl"))
                 .or_else(|| json.get("scene_url"))
                 .or_else(|| json.pointer("/rawResponse/assets/splats/spz_urls/500k"))
+                .or_else(|| json.pointer("/assets/splats/spz_urls/500k"))
                 .and_then(|v| v.as_str());
 
             let mut splat_filename = None;
@@ -686,6 +691,7 @@ impl Library {
 
             // 2. Collider Mesh URL (.glb)
             let collider_url = json.pointer("/rawResponse/assets/mesh/collider_mesh_url")
+                .or_else(|| json.pointer("/assets/mesh/collider_mesh_url"))
                 .or_else(|| json.get("colliderMeshUrl"))
                 .or_else(|| json.get("collider_mesh_url"))
                 .and_then(|v| v.as_str());
@@ -702,6 +708,7 @@ impl Library {
 
             // 3. Thumbnail URL (.webp)
             let thumbnail_url = json.pointer("/rawResponse/assets/thumbnail_url")
+                .or_else(|| json.pointer("/assets/thumbnail_url"))
                 .or_else(|| json.get("previewUrl"))
                 .or_else(|| json.get("preview_url"))
                 .and_then(|v| v.as_str());
@@ -722,19 +729,26 @@ impl Library {
             files.push("manifest.json".to_string());
 
             let metric_scale = json.pointer("/rawResponse/assets/splats/semantics_metadata/metric_scale_factor")
+                .or_else(|| json.pointer("/semantics_metadata/metric_scale_factor"))
+                .or_else(|| json.pointer("/assets/splats/semantics_metadata/metric_scale_factor"))
                 .and_then(|v| v.as_f64())
                 .unwrap_or(1.0);
 
             let ground_offset = json.pointer("/rawResponse/assets/splats/semantics_metadata/ground_plane_offset")
+                .or_else(|| json.pointer("/semantics_metadata/ground_plane_offset"))
+                .or_else(|| json.pointer("/assets/splats/semantics_metadata/ground_plane_offset"))
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
 
             let prompt = json.get("prompt")
                 .or_else(|| json.pointer("/rawResponse/world_prompt/text_prompt"))
+                .or_else(|| json.pointer("/world_prompt/text_prompt"))
                 .or_else(|| json.pointer("/rawResponse/assets/caption"))
+                .or_else(|| json.pointer("/assets/caption"))
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string();
+
 
             let entry = LibraryEntry {
                 id,

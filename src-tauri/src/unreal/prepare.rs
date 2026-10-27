@@ -81,6 +81,7 @@ pub struct Readiness {
     pub project: UProject,
     pub engine: Option<EngineInstall>,
     pub mcp: McpSettings,
+    pub proposed_port: u16,
     pub checks: Vec<Check>,
     /// Versión del toolset instalada en el proyecto, si lo está.
     pub toolset_installed: Option<String>,
@@ -186,8 +187,22 @@ pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealErro
     let toolset_enabled = project.plugins.iter().any(|p| p.name == PYTHON_PLUGIN && p.enabled);
     checks.push(Check { id: "toolset".into(), ok: toolset_enabled && installed.as_deref() == Some(bundled.as_str()), detail: installed.clone().unwrap_or_default() });
     let ready = checks.iter().all(|c| c.ok);
-    let result = Readiness { project, engine, mcp, checks, toolset_installed: installed, toolset_bundled: bundled, ready };
+    let proposed_port = propose_free_port(&mcp);
+    let result = Readiness { project, engine, mcp, proposed_port, checks, toolset_installed: installed, toolset_bundled: bundled, ready };
     Ok(result)
+}
+
+/// Propone un puerto libre a partir de 8000 para no chocar con otros proyectos o editores abiertos (REQ-07).
+pub fn propose_free_port(mcp: &McpSettings) -> u16 {
+    let mut candidate = mcp.port;
+    if mcp.auto_start != Some(true) || candidate == discovery::DEFAULT_MCP_PORT {
+        let mut port = discovery::DEFAULT_MCP_PORT;
+        while port < 65535 && discovery::port_listening(port) {
+            port += 1;
+        }
+        candidate = port;
+    }
+    candidate
 }
 
 // ─── Plan ────────────────────────────────────────────────────────────
@@ -517,5 +532,13 @@ mod tests {
         assert_eq!(parse_association("{0A1B}"), None);
         assert_eq!(Variant::parse(Some("CPP")), Variant::Cpp);
         assert_eq!(Variant::parse(None), Variant::Python);
+    }
+
+    /// @spec REQ-07
+    #[test]
+    fn propone_puerto_libre_distinto_si_el_puerto_base_esta_en_uso() {
+        let mcp = McpSettings { port: 8000, path: "/mcp".into(), auto_start: None };
+        let port = propose_free_port(&mcp);
+        assert!(port >= 8000);
     }
 }

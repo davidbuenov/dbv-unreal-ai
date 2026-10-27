@@ -210,6 +210,8 @@ pub fn run() {
             #[cfg(desktop)]
             generation::commands::generation_balance,
             #[cfg(desktop)]
+            generation::commands::generation_worldlabs_balance,
+            #[cfg(desktop)]
             generation::commands::generation_suggest_name,
             #[cfg(desktop)]
             generation::commands::generation_presets,

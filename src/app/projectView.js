@@ -64,6 +64,20 @@ export function createProjectView(host, deps) {
     deps.state.setConnection({ projectPath: project.path, projectName: project.name, engineVersion: project.engineAssociation, endpoint, status: 'connecting', toolsets: 0 });
     const result = await api.unrealConnect(endpoint);
     if (result.ok) {
+      let identity = null;
+      try {
+        const info = await api.unrealCallTool(endpoint, '', 'get_project_info', {});
+        if (info.ok && info.value) {
+          identity = typeof info.value === 'string' ? JSON.parse(info.value) : info.value;
+        }
+      } catch {
+        // Ignorar si el toolset no está listo
+      }
+      if (identity?.project_name && project.name && identity.project_name.toLowerCase() !== project.name.toLowerCase()) {
+        deps.state.setConnection({ status: 'offline' }, true);
+        deps.toast(t('unreal.identityMismatch', { port: String(mcp.port), found: identity.project_name, expected: project.name }), 'error');
+        return;
+      }
       deps.state.setConnection({ status: 'online', toolsets: result.value.length }, true);
       deps.toast(t('project.connected', { n: String(result.value.length) }));
       await api.unrealRememberProject(project.path);
@@ -213,7 +227,7 @@ export function createProjectView(host, deps) {
     const project = readiness.project;
     const variant = el('select', { attrs: { 'aria-label': t('project.variant') } }, el('option', { text: t('project.variant.python'), attrs: { value: 'python' } }), el('option', { text: t('project.variant.cpp'), attrs: { value: 'cpp' } }));
     if (!project.hasCpp) variant.disabled = true;
-    const port = el('input', { attrs: { type: 'number', min: '1024', max: '65535', value: String(readiness.mcp.port), 'aria-label': t('project.port') } });
+    const port = el('input', { attrs: { type: 'number', min: '1024', max: '65535', value: String(readiness.proposedPort ?? readiness.mcp.port), 'aria-label': t('project.port') } });
     let backup = null;
     try {
       backup = localStorage.getItem(BACKUP_KEY + selected);

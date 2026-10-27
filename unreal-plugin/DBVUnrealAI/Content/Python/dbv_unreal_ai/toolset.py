@@ -146,6 +146,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
         """
         return editor.get_scene_summary(name_filter, class_filter, limit)
 
+    @toolset_registry.tool_call
     @staticmethod
     def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat") -> str:
         """Load a 3D Gaussian Splat (.spz or .ply) into a native ADbvGaussianSplatActor in the scene.
@@ -158,6 +159,31 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             JSON with success, actor, source_file.
         """
         return editor.load_gaussian_splat(source_file, actor_label)
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def get_undo_count() -> str:
+        """Get the active transaction count from the Unreal undo buffer.
+
+        Returns:
+            JSON with active_undo_count.
+        """
+        return editor.get_undo_count()
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def undo_turn(count: int, expected_current: int = 0) -> str:
+        """Undo a specified number of transactions performed during an AI assistant turn.
+
+        Args:
+            count: Number of transactions to undo.
+            expected_current: Expected current active undo count to prevent undoing user actions.
+
+        Returns:
+            JSON with success, undone count, error.
+        """
+        return editor.undo_turn(count, expected_current)
+
 
 
 def register() -> bool:

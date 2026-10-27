@@ -191,7 +191,42 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
     });
   }
 
+  function renderUndoFooter(targetBubble, undoInfo) {
+    if (!undoInfo || undoInfo.count <= 0) return;
+    let footer = targetBubble.querySelector('.ai-msg__footer');
+    if (!footer) {
+      footer = el('div', 'ai-msg__footer');
+      targetBubble.append(footer);
+    }
+    footer.replaceChildren();
+    const undoBtn = button(undoInfo.undone ? t('unreal.undoDone') : t('unreal.undoTurn'), async () => {
+      if (undoInfo.undone || undoBtn.disabled) return;
+      undoBtn.disabled = true;
+      const statusSpan = el('span', 'ai-msg__undo-status');
+      footer.append(statusSpan);
+      if (callbacks.onUndoTurn) {
+        await callbacks.onUndoTurn(undoInfo, {
+          setDone() {
+            undoInfo.undone = true;
+            undoBtn.textContent = t('unreal.undoDone');
+            undoBtn.disabled = true;
+            statusSpan.remove();
+          },
+          setWarning(msg) {
+            undoBtn.disabled = false;
+            statusSpan.className = 'ai-msg__undo-warning';
+            statusSpan.textContent = ` ⚠️ ${msg}`;
+          },
+        });
+      }
+    }, 'button button--compact button--ghost ai-msg__undo-btn');
+    if (undoInfo.undone) undoBtn.disabled = true;
+    footer.append(undoBtn);
+    scrollToEnd();
+  }
+
   return {
+
     input,
     setFiles(list) {
       files = list;
@@ -392,9 +427,16 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
           else if (thoughtStart === null) bubble.remove();
           scrollToEnd();
         },
+        setUndo(undoInfo) {
+          renderUndoFooter(bubble, undoInfo);
+        },
       };
+      if (initial && toolsOffered?.undoInfo) {
+        renderUndoFooter(bubble, toolsOffered.undoInfo);
+      }
       return api;
     },
+
     addStep(label) {
       messages.append(el('div', 'ai-step', `⋯ ${label}`));
       scrollToEnd();
@@ -407,8 +449,14 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
       messages.append(node);
       scrollToEnd();
     },
+    setLastAssistantUndo(undoInfo) {
+      const assistants = messages.querySelectorAll('.ai-msg--assistant');
+      const last = assistants[assistants.length - 1];
+      if (last && undoInfo) renderUndoFooter(last, undoInfo);
+    },
     focus() {
       input.focus();
     },
+
   };
 }

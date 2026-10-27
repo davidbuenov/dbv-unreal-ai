@@ -38,7 +38,8 @@ pub struct Operation {
 }
 
 /// Todas las operaciones de la API v3 que crean una tarea.
-pub const OPERATIONS: [Operation; 18] = [
+pub const OPERATIONS: [Operation; 20] = [
+
     Operation {
         name: "text_to_model",
         endpoint: "/generation/text-to-model",
@@ -201,7 +202,26 @@ pub const OPERATIONS: [Operation; 18] = [
         params: "input (required: rig), animation (one preset) or animations (up to 5), out_format (glb | fbx), export_with_geometry (default true), animate_in_place",
         pricing: "10 per animation",
     },
+    Operation {
+        name: "generate_world",
+        endpoint: "/marble/v1/worlds:generate",
+        produces: "world",
+        category: "worldlabs",
+        summary: "Generate photorealistic 3D worlds with World Labs Marble. Produces splats (.spz), collider mesh (.glb), panorama and scale metadata in the library as kind \"world\".",
+        params: "prompt (required), name (required), model (marble-1.1 default | marble-1.0-draft), image (reference image path)",
+        pricing: "1580 credits for marble-1.1; 230 credits for marble-1.0-draft",
+    },
+    Operation {
+        name: "export_world_mesh",
+        endpoint: "/marble/v1/worlds/{id}:export",
+        produces: "model",
+        category: "worldlabs",
+        summary: "Export high-resolution 3D mesh (GLB) from an existing World Labs world.",
+        params: "id (required, library id of the world), name",
+        pricing: "3500",
+    },
 ];
+
 
 /// Animaciones de un rig `v1.0-20240301` (bípedo, `spec: tripo`): 101 presets `preset:biped:<nombre>`, por grupos.
 pub const BIPED_PRESETS: [(&str, &str); 7] = [
@@ -348,6 +368,15 @@ pub fn estimate(op: &Operation, params: &Value) -> f64 {
         }
         "rig" => 25.0,
         "retarget" => 10.0 * animations as f64,
+        "generate_world" => {
+            let m = text(params, "model");
+            if m.contains("draft") || m == "marble-1.0-draft" {
+                230.0
+            } else {
+                1580.0
+            }
+        }
+        "export_world_mesh" => 3500.0,
         _ => 0.0,
     }
 }
@@ -360,8 +389,11 @@ pub fn validate(op: &Operation, params: &Value) -> Result<(), String> {
     let has = |key: &str| params.get(key).is_some_and(|v| !v.is_null() && v.as_str() != Some(""));
     let missing: Vec<&str> = match op.name {
         "text_to_model" | "text_to_image" => ["prompt"].into_iter().filter(|k| !has(k)).collect(),
+        "generate_world" => ["prompt"].into_iter().filter(|k| !has(k)).collect(),
+        "export_world_mesh" => ["id"].into_iter().filter(|k| !has(k)).collect(),
         "multiview_to_model" => ["inputs"].into_iter().filter(|k| !has(k)).collect(),
         "convert" => ["input", "format"].into_iter().filter(|k| !has(k)).collect(),
+
         "smart_segment" => ["input", "seg_type"].into_iter().filter(|k| !has(k)).collect(),
         "retarget" => {
             if has("input") && (has("animation") || has("animations")) {

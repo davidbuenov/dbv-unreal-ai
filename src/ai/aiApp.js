@@ -159,6 +159,7 @@ export function createAiApp(deps) {
     callbacks: {
       onSend: (text) => ask(text),
       onStop: () => stop(),
+      onUndoTurn: (undoInfo, handles) => host.onUndoTurn?.(undoInfo, handles),
       onSelectConnection: async (id) => {
         const saved = await backend.aiSetPreferences({ active: id });
         if (saved.ok) file = saved.value;
@@ -273,9 +274,10 @@ export function createAiApp(deps) {
     panel.clearMessages();
     for (const entry of current.entries) {
       if (entry.role === 'user') panel.addUser(entry.content);
-      else if (entry.role === 'assistant') panel.addAssistant(entry.content);
+      else if (entry.role === 'assistant') panel.addAssistant(entry.content, { undoInfo: entry.undoInfo });
       else panel.addNote(entry.content, entry.tone ?? 'info');
     }
+
     if (!current.entries.length) panel.showSuggestions([t('ai.suggestLevel'), t('ai.suggestPlace'), t('ai.suggestGenerate')]);
     renderContextPreview();
   }
@@ -573,7 +575,9 @@ export function createAiApp(deps) {
     cancelled = false;
     panel.setBusy(true);
     let useTools = connection.supportsTools !== false;
+    const turnContext = await host.beforeTurn?.();
     const mentioned = [];
+
     for (const path of mentionedPaths(text, files)) {
       const content = await readText(path);
       if (content !== null) mentioned.push({ path, content });
@@ -598,8 +602,9 @@ export function createAiApp(deps) {
       const check = makeChecker();
       // Herramientas propias de la app (Unreal, generación, biblioteca): las aporta el host.
       // `vision`: el modelo ve imágenes (p. ej. la captura del viewport, REQ-13).
-      const extra = host.extraTools?.({ panel, conversationId: current.id, vision: seen }) ?? [];
+      const extra = host.extraTools?.({ panel, conversationId: current.id, vision: seen, turnContext }) ?? [];
       const toolset = [...createTools({
+
         listFiles: async () => files,
         readText,
         search: async (query) => {
@@ -652,8 +657,13 @@ export function createAiApp(deps) {
         // Un diff escrito en un formato que la app no entiende: no hay nada que revisar, y mejor decirlo que dejarlo como un bloque de código más.
         if (!blocks.length && looksLikeEdit(finalText)) panel.addNote(t('ai.unparsedEdit'), 'error');
       }
-      if (finalText) current.entries.push({ role: 'assistant', content: finalText });
+      const undoInfo = await host.afterTurn?.(turnContext, result);
+      if (finalText) {
+        current.entries.push({ role: 'assistant', content: finalText, ...(undoInfo ? { undoInfo } : {}) });
+        if (undoInfo) panel.setLastAssistantUndo(undoInfo);
+      }
       const error = result.messages.find((m) => m.role === 'error' && m.kind !== 'cancelled');
+
       if (error) {
         const message = `${t(`ai.error.${error.kind}`)} ${error.content}`;
         panel.addNote(message, 'error');

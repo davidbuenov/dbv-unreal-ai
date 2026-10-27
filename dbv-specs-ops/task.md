@@ -55,10 +55,10 @@
 - [x] **S21 · Vista Plan** (REQ-36) — tareas, «Planificar» con `project_tasks_propose` y coste de la app, «Hacer esta tarea».
 - [x] **S22 · Tareas comprobadas** (REQ-37) — criterios, `check_task` (toolset 0.3.0 o `RunPython` con código fijo).
 - [x] **S23 · Memoria en el MCP propio** (hecho a la vez que S20–S22: las cinco herramientas y el test de paridad) (REQ-38) — cinco herramientas, test de paridad.
-- [ ] **S24 · Varias instancias** (REQ-07) — `state.connections`, selector, identidad por sesión, puerto libre.
+- [x] **S24 · Varias instancias** (REQ-07) — `state.connections`, selector, identidad por sesión, puerto libre.
 - [x] **S25 · La IA ve el viewport** (REQ-13) — captura como imagen (D16).
-- [ ] **S26 · Deshacer un turno** (REQ-40) — contadores, `undo_turn`, borrar importados con tarjeta.
-- [ ] **S27 · World Labs: generación** (REQ-18) — cliente, trabajos, biblioteca «mundo», `generate_world`, `export_world_mesh`, saldo.
+- [x] **S26 · Deshacer un turno** (REQ-40) — contadores, `undo_turn` (post-tick callback Slate), botón en UI, avisos de desincronización, confirmación para borrar assets creados.
+- [x] **S27 · World Labs: generación** (REQ-18) — cliente Marble API, sondeo de operaciones, biblioteca «mundo» con `.spz` y `.glb` de colisión, `generate_world`, `export_world_mesh`, pestaña y saldo en Generar.
 - [ ] **S28 · World Labs → Unreal** (REQ-18) — `import_world`, escala y suelo, cielo y splats según S18.
 - [x] **S28b · Componente nativo propio de Gaussian Splatting en C++** (REQ-41, decidido con el usuario el 2026-10-26) — Tras el hallazgo de la ventana de pago/clave "Pro" en XGRIDS LCC, se rechaza la dependencia privativa. Desarrollo de `UDbvGaussianSplatComponent` y `ADbvGaussianSplatActor` (licencia MIT) en `Plugins/DBVUnrealAI` (módulo `DBVUnrealAICpp`), aprovechando las lecciones de YaGS (Apache 2.0: escritura de profundidad para oclusión mutua, GPU radix sort, y soporte nativo de `.spz` y `.ply`). Integrado con «Enviar a Unreal» (`sendToUnreal`) para colocar el splat junto con su malla de colisión.
 - [x] **S28c · Spike y validación visual de splats** (P-10) — *Completado el 2026-10-26:* El spike de XGRIDS LCC (`LCC4Unreal`) validó que los `.spz` de World Labs funcionan a la perfección con escala 100x y orientación Roll=90.0° en UE 5.8.4, sirviendo de referencia de calidad idéntica a Wordsmith. Con esa referencia y las lecciones de YaGS, se avanza en la solución propia 100% nativa y gratuita.

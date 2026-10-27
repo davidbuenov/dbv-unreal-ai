@@ -287,3 +287,40 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
 
     return _json(result)
 
+
+def get_undo_count() -> str:
+    """Número de transacciones activas en el historial de deshacer de Unreal. @spec REQ-40"""
+    count = 0
+    if hasattr(unreal, "ToolsetLibrary") and hasattr(unreal.ToolsetLibrary, "get_active_undo_count"):
+        count = int(unreal.ToolsetLibrary.get_active_undo_count())
+    result = {"active_undo_count": count}
+    return _json(result)
+
+
+def undo_turn(count: int, expected_current: int = 0) -> str:
+    """Deshace ``count`` transacciones en Unreal mediante callback post-tick de Slate. @spec REQ-40"""
+    result = {"success": False, "undone": 0, "error": None}
+    if count <= 0:
+        result["error"] = "count must be positive"
+    elif not hasattr(unreal, "ToolsetLibrary") or not hasattr(unreal.ToolsetLibrary, "undo_transaction"):
+        result["error"] = "ToolsetLibrary.undo_transaction no disponible en este motor"
+    else:
+        current = int(unreal.ToolsetLibrary.get_active_undo_count())
+        if expected_current > 0 and current not in (expected_current, expected_current + 1):
+            result["error"] = f"El historial ha cambiado (esperado ~{expected_current}, encontrado {current})"
+        else:
+            handle_ref = [None]
+
+            def _deferred_undo(delta_time):
+                try:
+                    for _ in range(count):
+                        unreal.ToolsetLibrary.undo_transaction(False)
+                finally:
+                    if handle_ref[0] is not None:
+                        unreal.unregister_slate_post_tick_callback(handle_ref[0])
+
+            handle_ref[0] = unreal.register_slate_post_tick_callback(_deferred_undo)
+            result["success"] = True
+            result["undone"] = count
+    return _json(result)
+

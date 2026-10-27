@@ -148,7 +148,12 @@
 .ai-msg--user { align-self: flex-end; max-width: 88%; background: var(--accent-subtle, var(--bg-tertiary)); white-space: pre-wrap; }
 .ai-msg--assistant { background: var(--bg-secondary); white-space: pre-wrap; }
 .ai-msg--assistant.md { white-space: normal; }
+.ai-msg__footer { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.ai-msg__undo-btn { font-size: 11px; padding: 2px 8px; border-radius: var(--radius); }
+.ai-msg__undo-warning { font-size: 11px; color: var(--status-warning, #d97706); }
+.ai-msg__undo-status { font-size: 11px; }
 .ai-step { font-size: 11px; color: var(--text-muted); font-style: italic; }
+
 .ai-form__advice { display: grid; gap: 6px; margin: 4px 0; }
 .ai-form__advice:empty, .ai-panel__warning:empty { display: none; }
 .ai-advice { font-size: 12px; padding: 6px 8px; border-radius: var(--radius); background: var(--bg-tertiary); color: var(--text-secondary); border-left: 3px solid var(--status-warning); }

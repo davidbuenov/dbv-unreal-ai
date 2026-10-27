@@ -17,6 +17,8 @@ pub mod commands;
 pub mod jobs;
 pub mod tools;
 pub mod tripo;
+pub mod worldlabs;
+
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};

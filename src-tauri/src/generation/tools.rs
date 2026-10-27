@@ -39,7 +39,7 @@ impl Launch {
 }
 
 /// Herramientas que lanzan una operación con coste.
-pub const LAUNCHERS: [&str; 5] = ["generate_3d_model", "image_to_3d_model", "rig_model", "animate_model", "tripo_run"];
+pub const LAUNCHERS: [&str; 7] = ["generate_3d_model", "image_to_3d_model", "rig_model", "animate_model", "tripo_run", "generate_world", "export_world_mesh"];
 
 fn tool(name: &str, description: &str, properties: Value, required: &[&str]) -> Value {
     json!({ "name": name, "description": description, "inputSchema": { "type": "object", "properties": properties, "required": required } })
@@ -99,7 +99,20 @@ pub fn specs(confirm: bool) -> Vec<Value> {
             json!({ "operation": { "type": "string" }, "params": { "type": "object" }, "name": { "type": "string" }, "variants": variants, "parent": { "type": "string", "description": "Library id this result derives from." } }),
             &["operation", "params"],
         ),
+        tool(
+            "generate_world",
+            &format!("Generate a photorealistic 3D world with World Labs Marble (1580 credits for marble-1.1; 230 credits for marble-1.0-draft). Produces splats (.spz), collider mesh (.glb), panorama and scale metadata saved in the library as kind \"world\". Does NOT export HQ mesh: use export_world_mesh.{ask}"),
+            json!({ "prompt": { "type": "string" }, "name": name, "model": { "type": "string", "enum": ["marble-1.1", "marble-1.0-draft"], "description": "marble-1.1 (full, 1580 credits) or marble-1.0-draft (draft, 230 credits)" }, "image": { "type": "string", "description": "Optional local reference image path" } }),
+            &["prompt", "name"],
+        ),
+        tool(
+            "export_world_mesh",
+            &format!("Export high-resolution 3D mesh (GLB) from an existing World Labs world in the library (3500 credits).{ask}"),
+            json!({ "id": { "type": "string", "description": "Library id of the world (kind \"world\")" }, "name": { "type": "string" } }),
+            &["id"],
+        ),
     ];
+
     let mut all: Vec<Value> = launchers.into_iter().map(|spec| with_confirm(spec, confirm)).collect();
     all.push(tool(
         "tripo_operations",
@@ -213,8 +226,35 @@ pub fn build(tool: &str, args: &Value, library: &Library) -> Result<Launch, Stri
             let parent = Some(text(args, "parent")).filter(|p| !p.is_empty()).or_else(|| params.get("input").and_then(Value::as_str).and_then(|i| library.get(i)).map(|e| e.id));
             Launch { operation, params, name, variants: variants_of(args), parent }
         }
-        other => return Err(format!("{other} does not launch a Tripo operation")),
+        "generate_world" => {
+            let prompt = text(args, "prompt");
+            if prompt.is_empty() {
+                return Err("the prompt is empty".into());
+            }
+            let name = required_name(args)?;
+            let model_str = text(args, "model");
+            let model = if model_str.is_empty() { "marble-1.1" } else { &model_str };
+            let mut params = Map::new();
+            params.insert("prompt".into(), json!(prompt));
+            params.insert("model".into(), json!(model));
+            if let Some(img) = args.get("image").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
+                params.insert("image".into(), json!(img.trim()));
+            }
+            Launch { operation: op("generate_world")?, params: Value::Object(params), name, variants: 1, parent: None }
+        }
+        "export_world_mesh" => {
+            let id = text(args, "id");
+            let entry = library.get(&id).ok_or_else(|| format!("no library asset with id «{id}». Call library_list."))?;
+            if entry.kind != "world" {
+                return Err(format!("«{}» is a {}, not a world: export_world_mesh only works on world assets", entry.name, entry.kind));
+            }
+            let name = Some(text(args, "name")).filter(|n| !n.is_empty()).unwrap_or_else(|| format!("{} (HQ mesh)", entry.name));
+            let params = json!({ "id": id, "world_id": entry.parameters.get("world_id").and_then(Value::as_str).unwrap_or(&id) });
+            Launch { operation: op("export_world_mesh")?, params, name, variants: 1, parent: Some(id) }
+        }
+        other => return Err(format!("{other} does not launch a generation operation")),
     };
+
     Ok(launch)
 }
 

@@ -204,14 +204,19 @@ pub fn generation_launch(app: AppHandle, ai: State<'_, AiState>, state: State<'_
     if total > 0.0 && !confirm_cost {
         return Err(UnrealError::Protocol("falta confirmar el coste antes de generar".into()));
     }
-    let key = ai.secrets.get(&key_account("tripo")).ok_or_else(|| UnrealError::NotFound("no hay clave de Tripo: añádela en Ajustes".into()))?;
+    let service = if launch.operation.category == "worldlabs" { "worldlabs" } else { "tripo" };
+    let key = ai.secrets.get(&key_account(service)).ok_or_else(|| {
+        let name = if service == "worldlabs" { "World Labs" } else { "Tripo" };
+        UnrealError::NotFound(format!("no hay clave de {name}: añádela en Ajustes"))
+    })?;
     let budget = load_settings(&app).budget_credits;
     let spent = session_spent(&app, &state);
     if !within_budget(spent, total, budget) {
         return Err(UnrealError::Protocol(format!("superaría el tope de {budget} créditos de esta sesión (llevas {spent} y esto son {total})")));
     }
     let context = job_context(&app, &state, key)?;
-    Ok(start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone()))
+    let job_ids = start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone());
+    Ok(job_ids)
 }
 
 /// Contexto de los trabajos de la ventana: cada cambio llega a la interfaz como evento.
@@ -235,14 +240,24 @@ fn job_context(app: &AppHandle, state: &GenerationState, key: String) -> Result<
 /// Catálogo de operaciones de Tripo (para `tripo_operations` del asistente integrado). @spec REQ-33
 #[tauri::command]
 pub fn generation_operations(operation: Option<String>) -> Result<String, UnrealError> {
-    tools::operations_text(&serde_json::json!({ "operation": operation.unwrap_or_default() })).map_err(UnrealError::NotFound)
+    let text = tools::operations_text(&serde_json::json!({ "operation": operation.unwrap_or_default() })).map_err(UnrealError::NotFound)?;
+    Ok(text)
 }
 
 /// Saldo de la cuenta de Tripo. @spec REQ-33
 #[tauri::command]
 pub async fn generation_balance(ai: State<'_, AiState>) -> Result<Balance, UnrealError> {
     let key = ai.secrets.get(&key_account("tripo")).ok_or_else(|| UnrealError::NotFound("no hay clave de Tripo: añádela en Ajustes".into()))?;
-    tauri::async_runtime::spawn_blocking(move || TripoClient::new(&key).balance()).await.map_err(|error| UnrealError::Io(error.to_string()))?
+    let balance = tauri::async_runtime::spawn_blocking(move || TripoClient::new(&key).balance()).await.map_err(|error| UnrealError::Io(error.to_string()))??;
+    Ok(balance)
+}
+
+/// Saldo de la cuenta de World Labs. @spec REQ-18
+#[tauri::command]
+pub async fn generation_worldlabs_balance(ai: State<'_, AiState>) -> Result<super::worldlabs::WorldLabsCredits, UnrealError> {
+    let key = ai.secrets.get(&key_account("worldlabs")).ok_or_else(|| UnrealError::NotFound("no hay clave de World Labs: añádela en Ajustes".into()))?;
+    let balance = tauri::async_runtime::spawn_blocking(move || super::worldlabs::WorldLabsClient::new(&key).credits()).await.map_err(|error| UnrealError::Io(error.to_string()))??;
+    Ok(balance)
 }
 
 /// El evento que recibe la interfaz a partir del fichero de trabajo.
