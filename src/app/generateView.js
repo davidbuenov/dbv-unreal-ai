@@ -149,11 +149,14 @@ export function createGenerateView(host, deps) {
     async function suggest() {
       const currentPrompt = mode === 'world' ? worldPrompt.value.trim() : prompt.value.trim();
       const text = mode === 'image' ? baseName(image) : currentPrompt;
-      if (!text) return (mode === 'world' ? worldPrompt : prompt).focus();
-      const fromAi = await deps.suggestName?.(text).catch(() => null);
-      const fallback = fromAi ? null : await api.generationSuggestName(text);
-      name.value = fromAi || (fallback?.ok ? fallback.value : '');
-      return refreshEstimate();
+      if (!text) {
+        (mode === 'world' ? worldPrompt : prompt).focus();
+      } else {
+        const fromAi = await deps.suggestName?.(text).catch(() => null);
+        const fallback = fromAi ? null : await api.generationSuggestName(text);
+        name.value = fromAi || (fallback?.ok ? fallback.value : '');
+        refreshEstimate();
+      }
     }
 
     const textPane = el('div', { className: 'stack' }, el('label', {}, t('gen.prompt'), prompt), el('div', { className: 'row' }, el('label', {}, t('gen.faceLimit'), faces), el('label', { className: 'row' }, lowPoly, t('gen.lowPoly'))));
@@ -192,17 +195,22 @@ export function createGenerateView(host, deps) {
     const start = button(
       t('gen.start'),
       async () => {
+        let ids = null;
         const textVal = mode === 'world' ? worldPrompt.value.trim() : prompt.value.trim();
-        if ((mode === 'text' || mode === 'world') && !textVal) return (mode === 'world' ? worldPrompt : prompt).focus();
-        if (mode === 'image' && !image) return deps.toast(t('gen.noImage'), 'error');
-        if (!name.value.trim()) await suggest();
-        const { tool, args } = formArgs(values());
-        const ids = await confirmAndLaunch(deps, tool, args);
-        if (ids) {
-          deps.onSpent();
-          watcher.poke();
+        if ((mode === 'text' || mode === 'world') && !textVal) {
+          (mode === 'world' ? worldPrompt : prompt).focus();
+        } else if (mode === 'image' && !image) {
+          deps.toast(t('gen.noImage'), 'error');
+        } else {
+          if (!name.value.trim()) await suggest();
+          const { tool, args } = formArgs(values());
+          ids = await confirmAndLaunch(deps, tool, args);
+          if (ids) {
+            deps.onSpent();
+            watcher.poke();
+          }
         }
-        return null;
+        return ids;
       },
       'btn-primary',
     );

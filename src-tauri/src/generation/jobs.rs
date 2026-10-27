@@ -425,8 +425,9 @@ fn run_worldlabs_operation(context: &JobContext, request: &OperationRequest, can
             std::fs::write(&temp_manifest, serde_json::to_string_pretty(&manifest_value).unwrap_or_default())
                 .map_err(|e| crate::unreal::io_error(&temp_manifest, &e))?;
 
-            let entry = context.library.import_worldlabs_manifest(&temp_manifest, Some(&request.name))?;
+            let entry_result = context.library.import_worldlabs_manifest(&temp_manifest, Some(&request.name));
             let _ = std::fs::remove_dir_all(&temp_dir);
+            let entry = entry_result?;
             Outcome { entry: Some(entry), output: world_json, task_id: op_id }
         }
         "export_world_mesh" => {
