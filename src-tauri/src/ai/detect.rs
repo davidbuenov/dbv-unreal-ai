@@ -60,9 +60,52 @@ fn extensions() -> Vec<String> {
     }
 }
 
-/// Ruta de un programa del PATH, o `None`.
+/// Rutas de búsqueda combinando PATH y carpetas estándar de usuario (Windows / Unix).
+pub fn extended_path() -> String {
+    let mut dirs: Vec<PathBuf> = std::env::split_paths(&std::env::var("PATH").unwrap_or_default()).collect();
+
+    if cfg!(windows) {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            let p = PathBuf::from(&local);
+            dirs.push(p.join("agy").join("bin"));
+            dirs.push(p.join("Programs").join("Antigravity").join("bin"));
+            dirs.push(p.join("Programs").join("Antigravity IDE").join("bin"));
+            dirs.push(p.join("Microsoft").join("WinGet").join("Links"));
+        }
+        if let Ok(user) = std::env::var("USERPROFILE") {
+            let p = PathBuf::from(&user);
+            dirs.push(p.join(".antigravity").join("bin"));
+            dirs.push(p.join(".local").join("bin"));
+            dirs.push(p.join("AppData").join("Roaming").join("npm"));
+        }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let p = PathBuf::from(&appdata);
+            dirs.push(p.join("npm"));
+        }
+    } else {
+        if let Ok(home) = std::env::var("HOME") {
+            let p = PathBuf::from(&home);
+            dirs.push(p.join(".local").join("bin"));
+            dirs.push(p.join(".antigravity").join("bin"));
+            dirs.push(p.join(".npm-global").join("bin"));
+        }
+        dirs.push(PathBuf::from("/usr/local/bin"));
+        dirs.push(PathBuf::from("/opt/homebrew/bin"));
+    }
+
+    dirs.retain(|d| d.is_dir());
+    std::env::join_paths(dirs).unwrap_or_default().to_string_lossy().to_string()
+}
+
+/// Ruta de un programa del PATH (o carpetas conocidas), o `None`.
 pub fn which(name: &str) -> Option<PathBuf> {
-    find_in(name, &std::env::var("PATH").unwrap_or_default(), &extensions())
+    let path_var = extended_path();
+    let exts = extensions();
+    let mut result = find_in(name, &path_var, &exts);
+    if result.is_none() && name == "antigravity" {
+        result = find_in("agy", &path_var, &exts);
+    }
+    result
 }
 
 fn get_json(url: &str) -> Option<Value> {
@@ -138,4 +181,17 @@ mod tests {
             assert!(args.is_empty());
         }
     }
+
+    #[test]
+    fn busca_antigravity_con_fallback_a_agy() {
+        let dir = tempfile::tempdir().unwrap();
+        let agy_file = dir.path().join("agy.exe");
+        std::fs::write(&agy_file, "").unwrap();
+        let path = std::env::join_paths([dir.path()]).unwrap();
+        let found = find_in("antigravity", path.to_str().unwrap(), &[".exe".into()]);
+        assert_eq!(found, None);
+        let found_agy = find_in("agy", path.to_str().unwrap(), &[".exe".into()]);
+        assert_eq!(found_agy, Some(agy_file));
+    }
 }
+
