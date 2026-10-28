@@ -66,11 +66,12 @@ Si tienes **Claude Pro/Max, ChatGPT Plus o GitHub Copilot**, puedes conectar su 
 | Agente | Qué debe estar instalado | Cómo se ejecuta |
 | --- | --- | --- |
 | **Claude Code** | Claude Code y [Node.js](https://nodejs.org) | `npx -y @agentclientprotocol/claude-agent-acp` |
+| **Google Antigravity CLI** | [Antigravity CLI](https://antigravity.google/product/antigravity-cli) (`agy`) | `agy_acp_server` o `agy --acp` |
 | **Codex (OpenAI)** | Codex y Node.js | `npx -y @zed-industries/codex-acp` |
-| **Gemini CLI** | Gemini CLI | `gemini --acp` |
 | **GitHub Copilot CLI** | GitHub Copilot CLI | `copilot --acp` |
+| **Gemini CLI** | [Gemini CLI](https://github.com/google-gemini/gemini-cli) (para API / Vertex AI) | `gemini --acp` |
 
-> ℹ️ **Gemini CLI y Antigravity CLI.** Desde el 18 de junio de 2026, Google sustituyó Gemini CLI por [Antigravity CLI](https://antigravity.google/product/antigravity-cli) para las cuentas gratuitas y las de Google One (suscripciones de Gemini incluidas). Gemini CLI sigue funcionando con accesos de pago (clave de API, Vertex AI o Gemini Code Assist). La app todavía no conecta Antigravity CLI; mientras tanto, con una cuenta de Google gratuita o de Google One usa Gemini con clave de API (sección 2).
+> ℹ️ **Google Antigravity CLI y Gemini CLI.** Google utiliza [Antigravity CLI](https://antigravity.google/product/antigravity-cli) para suscripciones de Google One, Gemini Advanced y cuentas gratuitas. Por su parte, [Gemini CLI](https://github.com/google-gemini/gemini-cli) se reserva para accesos de pago directo por uso (clave de API, Vertex AI o Gemini Code Assist). DBV Unreal AI soporta ambos según el tipo de cuenta que poseas.
 
 **Pasos:**
 1. Instala el agente y comprueba que está en el `PATH` de tu terminal.

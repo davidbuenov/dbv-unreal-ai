@@ -1,7 +1,7 @@
 {
   "name": "dbv-unreal-ai",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
@@ -11,9 +11,11 @@
     "test:python": "python -I -m unittest discover -s tests/python",
     "lint": "python dbv-specs-ops/scripts/dbv-lint.py unreal-plugin tests/python",
     "test:all": "npm test && npm run test:ai && npm run test:python && npm run lint",
-    "eval:unreal": "node scripts/eval/unreal-eval.mjs"
+    "eval:unreal": "node scripts/eval/unreal-eval.mjs",
+    "tauri:windows:build": "tauri-windows-bundle build --runner npm"
   },
   "devDependencies": {
+    "@choochmeque/tauri-windows-bundle": "^0.1.29",
     "@tauri-apps/cli": "^2",
     "jsdom": "^29.1.1",
     "vitest": "^5.0.5"

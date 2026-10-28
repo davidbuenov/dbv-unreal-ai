@@ -118,8 +118,13 @@ These channels are not available yet; they will arrive in an upcoming version. I
 
 ## 🚧 Status
 
-**v0.2.0** (2026-10-27). Working and verified live against Unreal 5.8.4:
+**v0.2.1** (2026-10-28). Minor release focused on usability, transparent AI connectivity, built-in help, and store preparation:
 
+- **Clear tripartite AI classification (REQ-43):** three distinct categories (Local AIs 100% offline, Subscription AIs via CLI agents, and Cloud AIs with API key) with live reactive status badges (`✓ Active` / `✓ Connected`);
+- **Official Google Antigravity CLI support (REQ-44):** integrated `agy` agent support for Google One and Gemini Advanced subscriptions without API keys;
+- **Integrated Help Center (REQ-46):** instant help via the header (?) button or global **`F1`** shortcut, featuring Unreal Engine 5.8 setup guides, AI comparison tables, and shortcuts;
+- **Redesigned "About" dialog (REQ-45):** platform telemetry, project links, and environment diagnostics matching DBV Typst Editor aesthetics;
+- **Microsoft Store packaging:** complete MSIX configuration with `@choochmeque/tauri-windows-bundle` and anti-placeholder asset verification;
 - **Photorealistic world generation with World Labs Marble (REQ-18):** generation from text or image (`marble-1.1`), credit estimation, automatic download of `.spz` Gaussian splats, `.glb` physical collider meshes, and scale metadata into the library;
 - **Native C++ 3D Gaussian Splatting component (REQ-41, REQ-42):** `DBVUnrealAICpp` module with `UDbvGaussianSplatComponent` and synchronized placement of `.spz` splats and collision meshes into the level via "Send to Unreal";
 - **One-click assistant turn undo (REQ-40):** «↩️ Undo this turn» button in conversation rolling back editor transactions in Unreal Engine via Slate post-tick callback;

@@ -42,7 +42,7 @@ pub struct Detection {
 }
 
 /// Programas que interesan: los agentes y lo que necesitan sus adaptadores.
-pub const TOOLS: &[&str] = &["claude", "gemini", "codex", "copilot", "node", "npx"];
+pub const TOOLS: &[&str] = &["claude", "gemini", "antigravity", "agy", "agy_acp_server", "codex", "copilot", "node", "npx"];
 
 /// Busca `name` en las carpetas de `path_var` (respeta `PATHEXT` en Windows).
 pub fn find_in(name: &str, path_var: &str, extensions: &[String]) -> Option<PathBuf> {

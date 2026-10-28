@@ -280,6 +280,58 @@
 .ai-conn__name { flex: 1 1 auto; font-weight: 600; }
 .ai-detect__detail,
 .ai-conn__detail { color: var(--text-muted); font-size: 12px; }
+
+/* ─── Categorías y Badges Semánticos (v0.2.1) ─────────────────────────────────── */
+.ai-cat-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius);
+}
+.ai-cat-card--agent { border-left-color: #a371f7; }
+.ai-cat-card--cloud { border-left-color: #d29922; }
+.ai-cat-card--local { border-left-color: #3fb950; }
+.ai-cat-card__header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ai-cat-card__title { margin: 0; font-size: 13px; font-weight: 600; }
+.ai-cat-card--agent .ai-cat-card__title { color: #a371f7; }
+.ai-cat-card--cloud .ai-cat-card__title { color: #d29922; }
+.ai-cat-card--local .ai-cat-card__title { color: #3fb950; }
+.ai-cat-card__hint { margin: 0; font-size: 11px; color: var(--text-muted); }
+.ai-help-link { font-size: 12px; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; text-align: left; }
+.ai-help-link:hover { color: var(--accent-hover); }
+
+.ai-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.ai-badge--agent { background: rgba(163, 113, 247, 0.18); color: #c09aff; border: 1px solid rgba(163, 113, 247, 0.35); }
+.ai-badge--cloud { background: rgba(210, 153, 34, 0.18); color: #e3b341; border: 1px solid rgba(210, 153, 34, 0.35); }
+.ai-badge--local { background: rgba(63, 185, 80, 0.18); color: #56d364; border: 1px solid rgba(63, 185, 80, 0.35); }
+.ai-badge--connected {
+  background: rgba(63, 185, 80, 0.15);
+  color: #56d364;
+  border: 1px solid rgba(63, 185, 80, 0.35);
+  text-transform: none;
+  font-weight: 500;
+  font-size: 11px;
+}
+.ai-badge--active {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  text-transform: none;
+  font-weight: 600;
+  font-size: 11px;
+}
+
 @media (max-width: 600px) {
   .ai-form__row { grid-template-columns: minmax(0, 1fr); }
   .ai-form__row .ai-form__hint { grid-column: 1; }

@@ -11,6 +11,21 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.2.1] - 2026-10-28
+
+### Added
+
+- **Reorganización tripartita de conexiones de IA (REQ-43):** el asistente «Conectar una IA» estructura visualmente las opciones en tres tarjetas semánticas independientes: IAs por Suscripción (`--ai-agent`, violeta `#a371f7`), IAs en la nube con clave de API (`--ai-cloud`, ámbar `#d29922`) e IAs Locales offline (`--ai-local`, verde `#3fb950`). Las conexiones guardadas muestran badges claros con su origen y categoría.
+- **Integración formal de Google Antigravity CLI (REQ-44):** soporte nativo para conectar suscripciones de Google (Google One / Gemini Advanced) mediante [Google Antigravity CLI](https://antigravity.google/product/antigravity-cli) (`agy` / `agy_acp_server`), conviviendo con [Gemini CLI](https://github.com/google-gemini/gemini-cli) (para acceso de pago por API o Vertex AI).
+- **Centro de Ayuda integrado y atajo global `F1` (REQ-46):** nuevo botón `?` en la barra superior y atajo `F1` para abrir un centro de ayuda con pestañas interactivas sobre Unreal Engine 5.8, modalidades de IA, atajos de teclado y enlaces oficiales.
+- **Renovación del modal «Acerca de» (REQ-45):** nuevo diseño enriquecido al estilo de DBV Typst Editor con logo, enlaces con iconos a web y GitHub, telemetría del entorno en tiempo de ejecución (SO, motor objetivo, agentes compatibles, conectores 3D) y mención de autoría y licencia MIT.
+- **Preparación para Microsoft Store:** configuración de empaquetado MSIX con `@choochmeque/tauri-windows-bundle`, script `tauri:windows:build`, verificación de assets anti-placeholder de la tienda (Square150x150, Square44x44, StoreLogo, Wide310x150), política de privacidad y fichas de publicación bilingües.
+- **Clarificación de estado en agentes detectados (Feedback UX):** las herramientas CLI ya conectadas ocultan el botón «Conectar» y muestran de forma reactiva su distintivo de estado (`✓ Activa` / `✓ Conectada`), sincronizándose en tiempo real al agregar, cambiar o eliminar conexiones.
+
+### Fixed
+
+- **Limpieza de warning de compilación Rust (S35):** eliminación del import innecesario `use std::io::Read;` en `src-tauri/src/generation/worldlabs.rs`, dejando la compilación en cero advertencias.
+
 ## [0.2.0] - 2026-10-27
 
 ### Added

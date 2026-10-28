@@ -69,6 +69,14 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
         "codex" => (need("npx")?, vec!["-y".into(), CODEX_ADAPTER.into()]),
         // `--acp` es el flag actual (registro ACP, Gemini CLI 0.65); `--experimental-acp` era el de las primeras versiones.
         "gemini" => (need("gemini")?, vec!["--acp".into()]),
+        // Antigravity CLI: prefiere agy_acp_server si está en PATH, o agy con --acp
+        "antigravity" | "agy" => {
+            if let Some(server) = which("agy_acp_server") {
+                (server, Vec::new())
+            } else {
+                (need("agy")?, vec!["--acp".into()])
+            }
+        }
         "copilot" => (need("copilot")?, vec!["--acp".into()]),
         other => return Err(AiError::Config(format!("agente desconocido: {other}"))),
     };

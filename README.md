@@ -118,8 +118,13 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 
 ## 🚧 Estado
 
-**v0.2.0** (2026-10-27). Funciona y está verificado en vivo contra Unreal 5.8.4:
+**v0.2.1** (2026-10-28). Versión menor centrada en usabilidad, claridad de conexión a IAs, ayuda integrada y preparación para tiendas:
 
+- **Clasificación clara en «Conectar una IA» (REQ-43):** tres categorías semánticas jerarquizadas (IAs Locales 100% offline, IAs por Suscripción mediante agentes CLI e IAs en la nube con API key) con distintivos de estado dinámicos en vivo (`✓ Activa` / `✓ Conectada`);
+- **Soporte oficial de Google Antigravity CLI (REQ-44):** integración de `agy` para suscripciones Pro, Plus y Google One / Gemini Advanced sin claves de API;
+- **Centro de Ayuda integrado (REQ-46):** acceso rápido desde la cabecera (?) o con el atajo global **`F1`**, con guías de Unreal Engine 5.8, tabla comparativa de IAs y atajos;
+- **Modal «Acerca de» renovado (REQ-45):** ficha técnica de entorno, enlaces de proyecto y telemetría de plataforma con el diseño refinado de DBV Typst Editor;
+- **Empaquetado para Microsoft Store:** configuración MSIX completa con `@choochmeque/tauri-windows-bundle` y verificación de assets anti-placeholder;
 - **Generación de mundos fotorrealistas con World Labs Marble (REQ-18):** generación desde texto o imagen (`marble-1.1`), cálculo de créditos, descarga automática de splats gaussianos `.spz`, mallas físicas `.glb` y metadatos de escala a la biblioteca;
 - **Componente nativo C++ de 3D Gaussian Splatting (REQ-41, REQ-42):** módulo `DBVUnrealAICpp` con `UDbvGaussianSplatComponent` y colocación sincronizada de splats `.spz` y mallas en el nivel mediante «Enviar a Unreal»;
 - **Deshacer turno con un clic (REQ-40):** botón «↩️ Deshacer este turno» en la conversación que revierte en bloque las transacciones en Unreal Engine vía Slate post-tick callback;

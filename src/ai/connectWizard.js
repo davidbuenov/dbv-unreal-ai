@@ -21,6 +21,7 @@ export const INSTALL_LINKS = {
   ollama: 'https://ollama.com/download',
   lmStudio: 'https://lmstudio.ai',
   claude: 'https://docs.anthropic.com/en/docs/claude-code/setup',
+  antigravity: 'https://antigravity.google/product/antigravity-cli',
   gemini: 'https://github.com/google-gemini/gemini-cli',
   codex: 'https://github.com/openai/codex',
   copilot: 'https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli',
@@ -73,6 +74,9 @@ function field(labelText, control, hint = '') {
 export function createConnectWizard({ host, backend, onChanged, onAgent, notify }) {
   let providers = [];
   let file = { connections: [], active: null, showAi: true };
+  let detectedSection = null;
+  let mineSection = null;
+  let formSection = null;
 
   async function render() {
     host.replaceChildren();
@@ -82,6 +86,9 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
     detected.append(el('h3', 'ai-form__title', t('ai.detectedTitle')), el('p', 'ai-form__hint', t('ai.detecting')));
     const mine = el('section', 'ai-form__section');
     const form = el('section', 'ai-form__section hidden');
+    detectedSection = detected;
+    mineSection = mine;
+    formSection = form;
     const show = el('label', 'ai-form__toggle');
     const showBox = document.createElement('input');
     showBox.type = 'checkbox';
@@ -100,11 +107,30 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
     renderDetection(detected, form);
   }
 
+  const isAgentMatch = (connection, name) => {
+    if (connection.provider !== 'agent') return false;
+    if (connection.baseUrl === `acp:${name}` || connection.model === name) return true;
+    if (name === 'antigravity' && (connection.baseUrl === 'acp:antigravity' || connection.model === 'antigravity' || connection.model === 'agy')) return true;
+    return false;
+  };
+
+  const isAgentConnected = (name) => file.connections.some((c) => isAgentMatch(c, name));
+  const isAgentActive = (name) => file.connections.some((c) => c.id === file.active && isAgentMatch(c, name));
+
   async function renderDetection(section, form) {
     const result = await backend.aiDetect();
     const detection = result.ok ? result.value : { servers: [], tools: [] };
     section.replaceChildren(el('h3', 'ai-form__title', t('ai.detectedTitle')));
-    const list = el('ul', 'ai-detect');
+
+    // 1. IAs Locales (100% Offline y Privacidad)
+    const localCard = el('div', 'ai-cat-card ai-cat-card--local');
+    const localHeader = el('div', 'ai-cat-card__header');
+    localHeader.append(
+      el('h4', 'ai-cat-card__title', t('ai.cat.local')),
+      el('p', 'ai-cat-card__hint', t('ai.cat.localHint')),
+    );
+    localCard.append(localHeader);
+    const localList = el('ul', 'ai-detect');
     for (const server of detection.servers) {
       const item = el('li', `ai-detect__item${server.running ? ' is-ok' : ''}`);
       item.append(el('span', 'ai-detect__mark', server.running ? '✓' : '○'));
@@ -116,24 +142,89 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
         item.append(el('span', 'ai-detect__detail', t('ai.notRunning')));
         item.append(button(t('ai.howToInstall'), () => backend.openExternalUrl(INSTALL_LINKS[server.provider]), 'button button--compact button--ghost'));
       }
-      list.append(item);
+      localList.append(item);
     }
+    localCard.append(localList);
+
+    // 2. IAs por Suscripción (Agentes ACP)
+    const agentCard = el('div', 'ai-cat-card ai-cat-card--agent');
+    const agentHeader = el('div', 'ai-cat-card__header');
+    agentHeader.append(
+      el('h4', 'ai-cat-card__title', t('ai.cat.subscription')),
+      el('p', 'ai-cat-card__hint', t('ai.cat.subscriptionHint')),
+    );
+    agentCard.append(agentHeader);
+    const agentList = el('ul', 'ai-detect');
     const node = detection.tools.find((tool) => tool.name === 'node');
-    for (const tool of detection.tools.filter((x) => ['claude', 'gemini', 'codex', 'copilot'].includes(x.name))) {
-      const item = el('li', `ai-detect__item${tool.path ? ' is-ok' : ''}`);
-      item.append(el('span', 'ai-detect__mark', tool.path ? '✓' : '○'));
-      item.append(el('span', 'ai-detect__name', t(`ai.agent.${tool.name}`)));
-      if (tool.path) {
+
+    function appendAgentItem(tool, agentKey, agentLabel) {
+      const hasPath = Boolean(tool?.path);
+      const item = el('li', `ai-detect__item${hasPath ? ' is-ok' : ''}`);
+      item.append(el('span', 'ai-detect__mark', hasPath ? '✓' : '○'));
+      item.append(el('span', 'ai-detect__name', agentLabel));
+      if (hasPath) {
         item.append(el('span', 'ai-detect__detail', t('ai.agentInstalled')));
-        if (onAgent) item.append(button(t('ai.connectAgent'), () => onAgent({ ...tool, nodeAvailable: Boolean(node?.path) }), 'button button--primary button--compact'));
+        if (isAgentConnected(agentKey)) {
+          const active = isAgentActive(agentKey);
+          item.append(el('span', `ai-badge ${active ? 'ai-badge--active' : 'ai-badge--connected'}`, active ? `✓ ${t('ai.active')}` : `✓ ${t('ai.connected')}`));
+        } else if (onAgent) {
+          item.append(
+            button(
+              t('ai.connectAgent'),
+              async () => {
+                await onAgent({ ...tool, nodeAvailable: Boolean(node?.path) });
+                const refreshed = await backend.aiConnections();
+                if (refreshed.ok) file = refreshed.value;
+                if (mineSection && formSection) renderConnections(mineSection, formSection);
+                if (detectedSection && formSection) renderDetection(detectedSection, formSection);
+              },
+              'button button--primary button--compact',
+            ),
+          );
+        }
       } else {
         item.append(el('span', 'ai-detect__detail', t('ai.notInstalled')));
-        item.append(button(t('ai.howToInstall'), () => backend.openExternalUrl(INSTALL_LINKS[tool.name]), 'button button--compact button--ghost'));
+        item.append(button(t('ai.howToInstall'), () => backend.openExternalUrl(INSTALL_LINKS[agentKey]), 'button button--compact button--ghost'));
       }
-      list.append(item);
+      agentList.append(item);
     }
-    section.append(list);
-    section.append(button(t('ai.addCloud'), () => openForm(form, { provider: 'anthropic' }), 'button button--compact'));
+
+    // Antigravity CLI (detectado como agy_acp_server o agy o antigravity)
+    const agyTool = detection.tools.find((tool) => ['antigravity', 'agy', 'agy_acp_server'].includes(tool.name) && tool.path);
+    if (detection.tools.length > 0) {
+      appendAgentItem(agyTool ? { name: 'antigravity', path: agyTool.path, nodeAvailable: true } : null, 'antigravity', t('ai.agent.antigravity'));
+    }
+
+    // Otros agentes estándar
+    for (const tool of detection.tools.filter((x) => ['claude', 'gemini', 'codex', 'copilot'].includes(x.name))) {
+      appendAgentItem(tool, tool.name, t(`ai.agent.${tool.name}`));
+    }
+    if (detection.tools.length > 0) {
+      agentCard.append(agentList);
+    }
+
+    // 3. IAs en la nube con clave de API
+    const cloudCard = el('div', 'ai-cat-card ai-cat-card--cloud');
+    const cloudHeader = el('div', 'ai-cat-card__header');
+    cloudHeader.append(
+      el('h4', 'ai-cat-card__title', t('ai.cat.cloud')),
+      el('p', 'ai-cat-card__hint', t('ai.cat.cloudHint')),
+    );
+    const cloudAction = el('div', 'ai-cat-card__actions');
+    cloudAction.append(button(t('ai.addCloud'), () => openForm(form, { provider: 'anthropic' }), 'button button--compact'));
+    cloudCard.append(cloudAction);
+
+    // Enlace de ayuda interactiva hacia el Centro de Ayuda
+    const helpBtn = el('button', 'ai-help-link', t('ai.helpLink'));
+    helpBtn.type = 'button';
+    helpBtn.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('dbv-open-help', { detail: { tab: 'ai' } }));
+    });
+
+    const cards = [localCard];
+    if (detection.tools.length > 0) cards.push(agentCard);
+    cards.push(cloudCard, helpBtn);
+    section.append(...cards);
   }
 
   function renderConnections(section, form) {
@@ -155,10 +246,24 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
         if (saved.ok) {
           file = saved.value;
           onChanged(file);
+          if (detectedSection && formSection) renderDetection(detectedSection, formSection);
         }
       });
       const provider = providers.find((p) => p.provider === connection.provider);
-      item.append(radio, el('span', 'ai-conn__name', connection.name), el('span', 'ai-conn__detail', `${provider?.cloud ? '☁ ' : ''}${connection.model}`));
+      
+      // Badge semántico de categoría
+      let badgeClass = 'ai-badge--local';
+      let badgeText = t('ai.badge.local');
+      if (connection.provider === 'agent') {
+        badgeClass = 'ai-badge--agent';
+        badgeText = t('ai.badge.agent');
+      } else if (provider?.cloud) {
+        badgeClass = 'ai-badge--cloud';
+        badgeText = t('ai.badge.cloud');
+      }
+      const badge = el('span', `ai-badge ${badgeClass}`, badgeText);
+
+      item.append(radio, el('span', 'ai-conn__name', connection.name), badge, el('span', 'ai-conn__detail', `${provider?.cloud ? '☁ ' : ''}${connection.model}`));
       // Un agente no tiene nada que editar: su cuenta y su modelo los lleva él.
       if (connection.provider !== 'agent') item.append(button(t('ai.edit'), () => openForm(form, connection), 'button button--compact button--ghost'));
       item.append(
@@ -168,6 +273,7 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
             file = deleted.value;
             onChanged(file);
             renderConnections(section, form);
+            if (detectedSection && formSection) renderDetection(detectedSection, formSection);
           } else notify(deleted.error.message, 'error');
         }, 'button button--compact button--ghost'),
       );
@@ -333,7 +439,8 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
       key.value = '';
       section.classList.add('hidden');
       onChanged(file);
-      renderConnections(host.querySelectorAll('.ai-form__section')[1], section);
+      if (mineSection) renderConnections(mineSection, section);
+      if (detectedSection) renderDetection(detectedSection, section);
       notify(t('ai.saved'));
     }, 'button button--primary button--compact');
     const cancel = button(t('action.cancel'), () => section.classList.add('hidden'), 'button button--compact button--ghost');

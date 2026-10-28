@@ -40,6 +40,7 @@
         <button id="btn-pin" class="btn-icon" data-i18n-title="action.alwaysOnTop" title="Mantener la ventana encima" aria-pressed="false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 17v5M8.5 12.5L5 14l7-7 7 7-3.5-1.5M8.5 12.5L7 6l5-2 5 2-1.5 6.5M8.5 12.5h7"/></svg>
         </button>
+        <button id="btn-help" class="btn-icon" data-i18n-title="toolbar.help" title="Ayuda (F1)">?</button>
         <button id="btn-about" class="btn-icon" data-i18n-title="toolbar.about" title="Acerca de">ⓘ</button>
       </header>
 
@@ -72,14 +73,67 @@
       <div id="app-modal-card" class="modal-card" role="dialog" aria-modal="true"></div>
     </div>
 
+    <!-- Modal Acerca de (Typst Style) -->
     <div id="about-modal" class="modal-overlay hidden">
-      <div class="modal-card">
-        <img class="about-logo" src="assets/logo.png" alt="Unreal Dev Community Málaga" width="96" height="96" />
-        <h3 data-i18n="about.title">Acerca de DBV Unreal AI</h3>
-        <p id="about-version"></p>
-        <p data-i18n="about.authors">David Bueno Vallejo y David Bueno Carmona · MIT</p>
-        <p class="hint" data-i18n="about.builtWith">Construido con dbv-specs-ops.</p>
-        <div class="modal-actions"><button id="about-close" data-i18n="about.close">Cerrar</button></div>
+      <div class="modal-card about-card">
+        <button id="about-close" class="btn-icon about-close-btn" data-i18n-title="action.close" title="Cerrar">✕</button>
+        <div class="about-header">
+          <img class="about-logo" src="assets/logo.png" alt="Logo" width="64" height="64" />
+          <div class="about-title-block">
+            <h3 class="about-app-title" data-i18n="about.title">DBV Unreal AI</h3>
+            <p id="about-version" class="about-version-text"></p>
+          </div>
+        </div>
+        <p class="about-desc" data-i18n="about.description">Copiloto de IA nativo y generación 3D para Unreal Engine 5.8.</p>
+        <div class="about-links">
+          <a href="https://davidbuenov.com" target="_blank" rel="noopener noreferrer" class="about-link" id="about-link-web">
+            <span class="about-link-icon">🌐</span> davidbuenov.com
+          </a>
+          <a href="https://github.com/davidbuenov/dbv-unreal-ai" target="_blank" rel="noopener noreferrer" class="about-link" id="about-link-github">
+            <span class="about-link-icon">🐙</span> github.com/davidbuenov/dbv-unreal-ai
+          </a>
+        </div>
+        <div class="about-telemetry">
+          <div class="about-telemetry-row">
+            <span class="about-label" data-i18n="about.platform">Plataforma</span>
+            <span class="about-val mono" id="about-platform-val">windows</span>
+          </div>
+          <div class="about-telemetry-row">
+            <span class="about-label" data-i18n="about.engine">Motor objetivo</span>
+            <span class="about-val mono" data-i18n="about.engineVal">Unreal Engine 5.8 (MCP HTTP)</span>
+          </div>
+          <div class="about-telemetry-row">
+            <span class="about-label" data-i18n="about.agents">Agentes ACP</span>
+            <span class="about-val mono" data-i18n="about.agentsVal">Claude Code, Antigravity, Gemini, Codex, Copilot</span>
+          </div>
+          <div class="about-telemetry-row">
+            <span class="about-label" data-i18n="about.generators">Generación 3D</span>
+            <span class="about-val mono" data-i18n="about.generatorsVal">Tripo3D v3 · World Labs Marble</span>
+          </div>
+        </div>
+        <div class="about-footer">
+          <p class="about-store" data-i18n="about.storeNote">Instalado desde Microsoft Store — se actualiza automáticamente.</p>
+          <hr class="about-divider" />
+          <p class="about-license" data-i18n="about.authors">David Bueno Vallejo y David Bueno Carmona · Licencia MIT</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Centro de Ayuda -->
+    <div id="help-modal" class="modal-overlay hidden">
+      <div class="modal-card help-card">
+        <button id="help-close" class="btn-icon help-close-btn" data-i18n-title="action.close" title="Cerrar">✕</button>
+        <div class="help-header">
+          <span class="help-icon">📖</span>
+          <h3 data-i18n="help.title">Ayuda y Guías</h3>
+        </div>
+        <div class="help-tabs">
+          <button type="button" class="help-tab-btn active" data-help-tab="ue" data-i18n="help.tab.ue">Unreal 5.8</button>
+          <button type="button" class="help-tab-btn" data-help-tab="ai" data-i18n="help.tab.ai">Guía de IAs</button>
+          <button type="button" class="help-tab-btn" data-help-tab="shortcuts" data-i18n="help.tab.shortcuts">Atajos</button>
+          <button type="button" class="help-tab-btn" data-help-tab="links" data-i18n="help.tab.links">Enlaces</button>
+        </div>
+        <div id="help-content" class="help-body"></div>
       </div>
     </div>
 

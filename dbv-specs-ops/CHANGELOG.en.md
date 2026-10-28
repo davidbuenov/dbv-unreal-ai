@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-28
+
+### Added
+
+- **Tripartite AI connection organization (REQ-43):** the «Connect an AI» wizard visually categorizes AI providers into three distinct semantic cards: Subscription AIs (`--ai-agent`, violet `#a371f7`), Cloud AIs with API keys (`--ai-cloud`, amber `#d29922`), and 100% offline Local AIs (`--ai-local`, green `#3fb950`). Active and saved connections clearly display semantic origin badges.
+- **Formal Google Antigravity CLI integration (REQ-44):** native support to connect Google subscriptions (Google One / Gemini Advanced) via [Google Antigravity CLI](https://antigravity.google/product/antigravity-cli) (`agy` / `agy_acp_server`), coexisting with [Gemini CLI](https://github.com/google-gemini/gemini-cli) (for pay-per-use API and Vertex AI access).
+- **Integrated Help Center and global `F1` shortcut (REQ-46):** new `?` button on the top toolbar and `F1` shortcut to open an interactive help center with tabs covering Unreal Engine 5.8 requirements, AI modalities, global keyboard shortcuts, and official documentation links.
+- **Enriched «About» modal (REQ-45):** renewed Typst-style About dialog featuring the official logo, clickable website and GitHub links, live runtime platform telemetry (OS, target engine, supported ACP agents, 3D generators), and MIT licensing attribution.
+- **Microsoft Store packaging preparation:** MSIX packaging configuration via `@choochmeque/tauri-windows-bundle`, `tauri:windows:build` script, anti-placeholder store assets verification (Square150x150, Square44x44, StoreLogo, Wide310x150), privacy policy, and bilingual submission listings.
+- **Connection status clarification for detected agents (UX Feedback):** already connected CLI tools hide the "Connect" button and display their real-time reactive status badge (`✓ Active` / `✓ Connected`), synchronizing dynamically when adding, switching, or deleting connections.
+
+### Fixed
+
+- **Rust unused import compiler warning (S35):** removed redundant `use std::io::Read;` in `src-tauri/src/generation/worldlabs.rs`, achieving a clean 0-warning compilation.
+
 ## [0.2.0] - 2026-10-27
 
 ### Added

@@ -1,8 +1,8 @@
 # 🏗 Arquitectura Técnica: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` → se valida y completa en `/plan`
-> **Estado:** Borrador
-> **Última Revisión:** 2026-10-26 (hechos y módulos de la v0.2)
+> **Estado:** Borrador v0.2.1
+> **Última Revisión:** 2026-10-28 (soporte Antigravity CLI y reorganización tripartita de IAs v0.2.1)
 
 ---
 
@@ -87,6 +87,16 @@ Llamadas de solo lectura por HTTP desde la máquina de desarrollo:
 - `src-tauri/src/ai/mcp_hub.rs` — clientes MCP de terceros por stdio y HTTP (D20).
 - `src/app/planView.js` — vista Plan. Toolset DBV 0.3.0: `check_task`, `undo_turn`, `import_world`.
 - `tauri-plugin-updater` + `tauri-plugin-process` (D21).
+
+### Módulos y Cambios de la v0.2.1 (2026-10-28)
+
+- **Detección y lanzamiento de Antigravity CLI (`src-tauri/src/ai/detect.rs` y `acp.rs`):**
+  - Detección de binario `agy` en el `PATH` o `agy_acp_server`.
+  - Lanzamiento del servidor ACP con `agy_acp_server` (o `agy --acp` si disponible), configurando las variables de entorno recomendadas (`AGY_ACP_DEFAULT_MODEL`, etc.).
+  - Coexistencia con `gemini-cli` (`gemini --acp`), manteniendo enlaces y documentación oficial para ambos.
+- **Frontend `src/ai/connectWizard.js` y `ai.css`:**
+  - Rediseño modular dividiendo la lista de proveedores en 3 contenedores semánticos (`ai-category-subscriptions`, `ai-category-cloud`, `ai-category-local`).
+  - Badges semánticos para conexiones activas y persistidas en `state.connections`.
 
 ---
 

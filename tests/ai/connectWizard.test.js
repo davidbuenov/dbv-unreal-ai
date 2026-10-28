@@ -234,3 +234,76 @@ describe('elegir el modelo de la lista del proveedor', () => {
     expect(modelInput(context.host).classList.contains('hidden')).toBe(false);
   });
 });
+
+describe('estado de conexión de agentes CLI', () => {
+  it('un agente instalado no conectado muestra el botón Conectar', async () => {
+    document.body.innerHTML = '<div id="host"></div>';
+    const backend = {
+      aiProviders: vi.fn(async () => ok(providers)),
+      aiConnections: vi.fn(async () => ok({ connections: [], active: null, showAi: true })),
+      aiDetect: vi.fn(async () =>
+        ok({
+          servers: [],
+          tools: [
+            { name: 'claude', path: 'C:\\claude.exe' },
+            { name: 'node', path: 'C:\\node.exe' },
+          ],
+        }),
+      ),
+      aiSaveConnection: vi.fn(),
+      aiSetPreferences: vi.fn(),
+      openExternalUrl: vi.fn(),
+    };
+    const host = document.getElementById('host');
+    const wizard = createConnectWizard({ host, backend, onChanged: vi.fn(), onAgent: vi.fn(), notify: vi.fn() });
+    await wizard.open();
+    await vi.waitFor(() => expect(host.querySelector('.ai-cat-card--agent')).not.toBeNull());
+
+    const claudeItem = [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes('Claude Code'));
+    expect(claudeItem).toBeTruthy();
+    const connectBtn = claudeItem.querySelector('button');
+    expect(connectBtn).toBeTruthy();
+    expect(connectBtn.textContent).toBe('Conectar');
+  });
+
+  it('un agente ya conectado no muestra el botón Conectar sino el badge Conectada o Activa', async () => {
+    document.body.innerHTML = '<div id="host"></div>';
+    const existing = {
+      id: 'agent-claude-123',
+      name: 'Claude Code (agente)',
+      provider: 'agent',
+      baseUrl: 'acp:claude',
+      model: 'claude',
+    };
+    const backend = {
+      aiProviders: vi.fn(async () => ok(providers)),
+      aiConnections: vi.fn(async () => ok({ connections: [existing], active: 'agent-claude-123', showAi: true })),
+      aiDetect: vi.fn(async () =>
+        ok({
+          servers: [],
+          tools: [
+            { name: 'claude', path: 'C:\\claude.exe' },
+            { name: 'node', path: 'C:\\node.exe' },
+          ],
+        }),
+      ),
+      aiSaveConnection: vi.fn(),
+      aiSetPreferences: vi.fn(),
+      openExternalUrl: vi.fn(),
+    };
+    const host = document.getElementById('host');
+    const wizard = createConnectWizard({ host, backend, onChanged: vi.fn(), onAgent: vi.fn(), notify: vi.fn() });
+    await wizard.open();
+    await vi.waitFor(() => expect(host.querySelector('.ai-cat-card--agent')).not.toBeNull());
+
+    const claudeItem = [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes('Claude Code'));
+    expect(claudeItem).toBeTruthy();
+    // No debe tener botón Conectar
+    expect(claudeItem.querySelector('button')).toBeNull();
+    // Debe tener el badge de activa
+    const badge = claudeItem.querySelector('.ai-badge');
+    expect(badge).toBeTruthy();
+    expect(badge.textContent).toBe('✓ Activa');
+  });
+});
+

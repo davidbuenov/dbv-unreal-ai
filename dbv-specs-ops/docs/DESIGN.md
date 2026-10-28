@@ -1,8 +1,8 @@
 # 🎨 Sistema de Diseño: DBV Unreal AI
 
 > **Fase:** `/spec` (Especificación Visual)
-> **Estado:** Borrador
-> **Última Revisión:** 2026-10-26 (componentes de la v0.2)
+> **Estado:** Borrador v0.2.1
+> **Última Revisión:** 2026-10-28 (componentes v0.2 y división de IAs v0.2.1)
 > **Aplica a:** la aplicación de escritorio (Tauri v2, Vanilla JS/CSS sin bundler).
 
 ---
@@ -189,6 +189,27 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 - **Deshacer este turno (REQ-40):** botón secundario pequeño al pie de la respuesta de la IA, solo si el turno modificó el editor. Si no puede deshacer con seguridad, muestra el aviso en `warning` en esa misma línea, sin modal.
 - **Actualización disponible (REQ-39):** franja discreta bajo la barra superior (no un modal) con la versión, «Ver novedades», «Actualizar» (primario) y «Más tarde». Las notas se muestran en Markdown seguro.
 - **MCPs de terceros (REQ-21):** sección en Ajustes con una fila por servidor (nombre, tipo, estado, número de herramientas) y un interruptor por proyecto. El comando de un servidor stdio se ve completo en `--font-mono` en el diálogo de confirmación.
+
+### Decisiones de diseño v0.2.1 (2026-10-28)
+
+- **Modal «Conectar una IA» estructurado (REQ-43):**
+  - Se sustituye la lista plana por **tres secciones o tarjetas visuales claramente jerarquizadas**:
+    1. **Suscripción (Agentes de terminal / ACP):** borde o acento en `ai-agent` (`#a371f7`). Incluye Claude Code, Antigravity CLI, GitHub Copilot CLI, OpenAI Codex y Gemini CLI. Cada elemento muestra estado («instalado» / «no instalado») y acciones («Conectar» / «Cómo instalarlo»).
+    2. **Claves de API en la nube (Pago por uso):** borde o acento en `ai-cloud` (`#d29922`). Acceso directo al formulario de configuración de claves en el llavero (OpenAI, Anthropic, Gemini API, OpenRouter).
+    3. **IAs Locales (Offline y Privacidad):** borde o acento en `ai-local` (`#3fb950`). Ollama y LM Studio con detección de puerto en ejecución («en marcha» / «no está en marcha»).
+- **Píldoras y badges de categoría (REQ-43):**
+  - En la sección **«Tus conexiones»**, cada fila muestra una píldora semántica con color de fondo atenuado y texto de alto contraste:
+    - `[Suscripción]` con color `ai-agent`.
+    - `[API Cloud]` con color `ai-cloud`.
+    - `[Local]` con color `ai-local`.
+- **Integración visual de Google Antigravity CLI (REQ-44):**
+  - Se incluye en el bloque de Suscripción con su icono distintivo y enlace directo a la web oficial `https://antigravity.google/product/antigravity-cli`.
+  - El texto informativo clarifica: *«Para usar tu suscripción de Google (Google One / Gemini Advanced), usa Google Antigravity CLI. Gemini CLI se reserva para claves de API, Vertex AI o Gemini Code Assist.»*
+- **Modal «Acerca de» enriquecido (REQ-45):**
+  - Card central con logo circular de 64x64 px, título en `heading`, versión en `caption`, bloque de enlaces sociales/web con iconos SVG de 16x16 px, y tarjeta interna de datos del sistema (`surface` elevado) con formato clave-valor en `--font-mono`.
+- **Centro de Ayuda integrado (REQ-46):**
+  - Modal con botón `?` en el header y atajo `F1`.
+  - Estructura con pestañas superiores compactas o índice lateral para navegar entre: Unreal Engine 5.8, Conectar IAs, Atajos de teclado y Enlaces a la documentación. Textos legibles en `body` y bloques de código de comandos en `mono`.
 
 ---
 

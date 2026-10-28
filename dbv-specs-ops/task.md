@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.2.0 entregada** (2026-10-27). Funcionalidades completadas: S18–S27, S28b, S28c, S28d (generación World Labs Marble, deshacer turno en UE, soporte múltiples instancias, rigs y animaciones interactivas, componente C++ 3DGS, memoria y plan).
-* **Última decisión técnica**: D13–D21 de `implementation_plan.md` §5, componente nativo C++ de 3DGS libre MIT (`UDbvGaussianSplatComponent`) y liberación de v0.2.0.
-* **Próximo paso**: S28 (import_world y colocación automática avanzada de cielo/iluminación) y S29 (MCPs de terceros).
+* **Estado actual**: **v0.2.1 completada** (2026-10-28). Reorganización tripartita de IAs, soporte formal de Google Antigravity CLI, Centro de Ayuda (F1), Acerca de enriquecido y preparación para Microsoft Store.
+* **Última decisión técnica**: Refinamiento reactivo del estado de agentes en UI (ocultar botón Conectar y mostrar badge Activa/Conectada) y configuración MSIX para Microsoft Store.
+* **Próximo paso**: Cierre de `/ship` v0.2.1 (commit y tag).
 
 ## Checklist de Tareas
 
@@ -69,6 +69,19 @@
 - [x] **`/code-simplify`** (v0.2.0) — limpieza de temporales en jobs World Labs, unificación de retornos en generateView.js, doc IA actualizada.
 - [x] **`/ship` v0.2.0** (2026-10-27) — Minor bump a v0.2.0, CHANGELOG y notas de release ES/EN, README ES/EN y walkthrough actualizados, tag v0.2.0.
 
+## v0.2.1 — Conexión estructurada de IAs, Antigravity CLI, Ayuda y Acerca de (REQ-43..REQ-46)
+- [x] **`/spec` v0.2.1** — Especificación de clasificación tripartita, Antigravity CLI (`agy`), modal Acerca de enriquecido y Centro de Ayuda integrado.
+- [x] **`/plan` v0.2.1** — Plan de implementación detallado para frontend, backend y documentación.
+- [x] **S31 · Detección y ejecución de Antigravity CLI en Rust** (`detect.rs`, `acp.rs`) — Detección de `agy` o `agy_acp_server`, lanzamiento ACP, manejo de enlaces de instalación.
+- [x] **S32 · Reorganización visual del modal en 3 categorías** (`connectWizard.js`, `ai.css`) — Secciones de Suscripción (`--ai-agent`), Cloud API (`--ai-cloud`) y Local (`--ai-local`).
+- [x] **S33 · Badges semánticos en conexiones guardadas** (`connectWizard.js`, `connections.js`, `ai.css`) — Píldoras de categoría clara en «Tus conexiones».
+- [x] **S34 · Documentación y textos bilingües** (`translations.js`, `IA.md`, `IA.en.md`) — Enlaces duales oficiales a Google Antigravity y Gemini CLI.
+- [x] **S35 · Limpieza del warning de compilación Rust** (`worldlabs.rs`) — Retirar `use std::io::Read;`.
+- [x] **S36 · Renovación del modal Acerca de** (`index.html`, `main.js`, `styles.css`) — Diseño Typst-style con logo, links a web/github, telemetría de entorno (`window.__TAURI__` / OS) y licencia.
+- [x] **S37 · Centro de Ayuda interactivo y atajo F1** (`index.html`, `helpModal.js`, `styles.css`) — Pestañas temáticas (UE 5.8, Conexión de IAs, Atajos, Enlaces).
+- [x] **`/test` v0.2.1** — Pruebas unitarias de Rust (`cargo test`: 170 passed) y frontend (`npx vitest run`: 269 passed).
+- [x] **`/ship` v0.2.1** — Actualización de versiones a 0.2.1, CHANGELOG y notas de release ES/EN.
+
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
 - [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).
@@ -76,7 +89,7 @@
 - [x] README (ES/EN): sección «Descárgalo e instálalo» por sistema operativo con los instaladores de la Release, avisos de SmartScreen y Gatekeeper, y canales «próximamente» (2026-10-25).
 - [ ] **Canales de distribución** (anunciados como «próximamente» en el README): tap de Homebrew `davidbuenov/homebrew-dbv-unreal-ai` que se actualice solo en cada Release (como el de dbv-md-reader); Microsoft Store (MSIX firmado por la Store, ver `dbv-specs-ops/docs/MARKETPLACE_PUBLISHING.md`); ficha en Uptodown para Windows y macOS. Al publicarlos, cambiar la sección «Próximamente» del README.
 - [ ] **Actualizaciones:** la app no se actualiza sola (`includeUpdaterJson: false`, sin plugin updater). Decidir si se añade el updater de Tauri para los instaladores de Releases o se delega en Store/Homebrew.
-- [ ] **Antigravity CLI como quinto agente** (pendiente de `/spec` + `/plan`, requisito nuevo). Datos del 2026-10-25: el CLI es `agy` (instalador por script, no npm) y **no** tiene modo ACP (issue #31 de `google-antigravity/antigravity-cli`, abierta). El ACP oficial es un binario aparte de Google, `agy_acp_server`, publicado en el registro ACP como `antigravity-acp` (v1.4.3, por plataforma, con SHA-256; Linux lleva `--uid=`). Decidir: descargarlo y verificarlo desde la app o pedir su ruta; arranque en frío de ~16 s en Windows (`AGY_ACP_DEFAULT_MODEL` lo reduce); `session/load` no reproduce el historial.
+- [x] **Antigravity CLI como quinto agente** (formalizado en v0.2.1 con REQ-44). Datos del 2026-10-25: el CLI es `agy` (instalador por script, no npm). El ACP oficial corre vía `agy_acp_server` o `agy --acp`. Enlace: `https://antigravity.google/product/antigravity-cli`.
 
 
 - [ ] **Idioma chino (`zh-CN`)** — aplazado por el usuario el 2026-10-26 (la comunidad de Tripo en China es grande; dbv-md-reader añadió coreano). Al retomarlo: un tercer idioma en `i18n.js` y en los dos `translations.js` (~900 textos), selector y detección de `zh-*`; `LANGUAGE` de `context.js` y `agentPreamble` (hoy `lang === 'es' ? … : 'Answer in English.'`: un tercer idioma caería en inglés); los errores del backend en Rust están en español; `README.zh-CN.md` e `IA.zh-CN.md`; revisión por una persona nativa; investigar el acceso desde China (proveedores como DeepSeek o Qwen, y si Tripo tiene allí otra plataforma).
@@ -100,11 +113,11 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-26, usabilidad y mejoras de visor 3D e importación (REQ-31, REQ-42).
-> **Exact point / Punto exacto:** (1) Miniatura clicable en biblioteca para abrir visor 3D directamente; (2) Visor 3D mejorado con iluminación de estudio a 3 puntos, normales suaves, doble cara y acabado arcilla neutro para mallas de colisión; (3) Modal conmutador entre malla de colisión 3D y render fotorrealista para escenarios World Labs; (4) Indicador de progreso en vivo («Importando 1/7: …») y bloqueo de botones durante la carga; (5) Deduplicación automática en backend. 168 tests Rust y 264 Vitest en verde.
+> **Last update / Última actualización:** 2026-10-28, entrega v0.2.1 completada.
+> **Exact point / Punto exacto:** (1) Conexiones estructuradas en 3 categorías semánticas; (2) Google Antigravity CLI integrado; (3) Centro de Ayuda interactivo (F1) y Acerca de enriquecido; (4) Preparación para Microsoft Store (MSIX y assets anti-placeholder verificados); (5) Warning Rust limpiado. 170 tests Rust y 271 tests Vitest pasando.
 > **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, toolset C++ 0.2.0): Nivel activo `/Game/DBV/Maps/PruebasGaussianSplat`.
-> **Pending / Pendiente:** (1) S28b: desarrollo del componente nativo de 3DGS en C++ (`UDbvGaussianSplatComponent` / `ADbvGaussianSplatActor`) bajo licencia MIT 100% abierta; (2) Conectar colocación alineada splat + colisión al pulsar «Enviar a Unreal»; (3) S24: varias instancias de Unreal; (4) S26: deshacer un turno.
-> **Next step / Próximo paso:** S28b (desarrollo de componente nativo de 3DGS en C++ en `Plugins/DBVUnrealAI` / integración del pipeline de colocación sincronizada de splat + colisión en Unreal).
+> **Pending / Pendiente:** (1) S28: cielo y automatización de iluminación; (2) S29: MCPs de terceros (REQ-21); (3) Subida de paquete MSIX a Partner Center de Microsoft Store.
+> **Next step / Próximo paso:** Cierre de release v0.2.1 con commit y tag en git.
 
 
 

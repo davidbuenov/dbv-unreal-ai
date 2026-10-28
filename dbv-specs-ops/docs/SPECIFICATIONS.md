@@ -1,8 +1,8 @@
 # 📋 Especificaciones: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` (Especificación)
-> **Estado:** Validado para `/plan` (v1.4: alcance de la v0.2.0 acordado con el usuario el 2026-10-26 —§3.7 y §3.8, REQ-34..REQ-40, y REQ-07, REQ-13, REQ-18, REQ-21 concretados—; v1.3: añadidos REQ-27..REQ-33 tras la primera prueba del usuario; v1.2 del documento — P-01..P-04 resueltas por el usuario el 2026-10-24; incorporado lo aprendido en MCPCLiente y la verificación en vivo contra DBVMCPFirst; P-05 y P-06 se deciden en `/plan`)
-> **Última Revisión:** 2026-10-26
+> **Estado:** Validado para `/plan` v0.2.1 (v1.5: clasificación tripartita de IAs, Antigravity CLI, Acerca de enriquecido y Centro de Ayuda —§3.9, REQ-43..REQ-46—; v1.4: alcance de la v0.2.0 —§3.7 y §3.8, REQ-34..REQ-40—)
+> **Última Revisión:** 2026-10-28
 
 ---
 
@@ -154,6 +154,31 @@ Origen: el usuario probó la app con Claude Code y pidió un pirata. Hallazgos: 
 
 - [ ] ~~**REQ-39 · Actualizaciones de la app:**~~ *Retirado el 2026-10-26 por el usuario al aprobar el plan: en Windows la app se publicará en Microsoft Store, que gestiona las actualizaciones. Se conserva el texto como referencia si hiciera falta para macOS o Linux.* la app comprueba al arrancar (y desde Ajustes) si hay una versión nueva en las Releases de GitHub, con el actualizador de Tauri y paquetes **firmados**. Si la hay, enseña la versión y sus notas, y el usuario decide: actualizar ahora, más tarde u omitir esa versión. **Nunca se instala sola.** La comprobación se puede desactivar. En los formatos que el actualizador no cubre (`.deb`), avisa y enlaza la Release. No envía nada más que la petición de `latest.json` (RNF-IA.2). *Aceptación:* contra una Release de prueba, una instalación de la versión anterior detecta la nueva, verifica la firma y se actualiza; con una firma no válida, se niega.
 - [ ] **REQ-40 · Deshacer un turno de la IA:** cada respuesta de la IA que haya modificado el editor lleva **«Deshacer este turno»**, que deshace en el editor todas las modificaciones hechas en ese turno con las herramientas de la app (`run_python`, importar, colocar, `play_animation`, herramientas de Epic), sin tocar lo que el usuario hizo antes ni después. Antes de deshacer se comprueba que las transacciones de ese turno son las últimas del historial de deshacer del editor. Si no lo son (el usuario hizo algo entretanto), se avisa y no se deshace nada a medias. Los assets importados (que no siempre entran en la transacción) se borran solo con confirmación aparte, y los ficheros de texto siguen el punto de restauración de RF-IA-02. *Aceptación:* contra el editor real, un turno que coloca tres actores y cambia una luz se deshace por completo con un clic; si después el usuario mueve un actor a mano, el botón avisa en lugar de deshacer.
+
+### 3.9. Conexión de IA estructurada y soporte Antigravity CLI [v0.2.1]
+
+- [ ] **REQ-43 · Clasificación tripartita en «Conectar una IA» (Suscripción, API Cloud, Local) [v0.2.1]:** el modal y el subsistema de conexiones dividen claramente la selección y el estado en tres categorías semánticas independientes:
+  1. **IAs por Suscripción (Agentes CLI / ACP):** herramientas de terminal conectadas a cuentas Pro/Plus/Team (Claude Code, Google Antigravity CLI, GitHub Copilot CLI, OpenAI Codex, Gemini CLI). Token semántico `--ai-agent` (violeta `#a371f7`).
+  2. **IAs por Clave de API en la nube (Pago por uso):** acceso directo a modelos en la nube mediante API key custodiada en el keyring (Anthropic Claude, OpenAI, Google Gemini API / AI Studio, OpenRouter, proveedores compatibles). Token semántico `--ai-cloud` (ámbar `#d29922`).
+  3. **IAs Locales (100% Offline y Privacidad):** servidores locales en el equipo (Ollama, LM Studio). Token semántico `--ai-local` (verde `#3fb950`).
+  En «Tus conexiones», cada conexión guardada luce un badge/píldora con su categoría y color semántico. *Aceptación:* el modal ya no muestra una lista plana indiferenciada; las tres secciones están visualmente separadas y agrupadas; los badges identifican inequívocamente el tipo de conexión activa y guardada.
+- [ ] **REQ-44 · Integración de Google Antigravity CLI (`agy`) para suscripciones de Google [v0.2.1]:** soporte nativo para la conexión por suscripción de Google a través de [Google Antigravity - Antigravity CLI](https://antigravity.google/product/antigravity-cli) (`agy` / `agy_acp_server`), conviviendo con la referencia a [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) (para acceso de pago por clave de API, Vertex AI o Gemini Code Assist).
+  - Detección: comprueba la presencia de `agy` en el `PATH` o `agy_acp_server`. Si no está instalado, ofrece el botón «Cómo instalarlo» con enlace oficial a `https://antigravity.google/product/antigravity-cli`.
+  - Servidor ACP: lanza el agente vía `agy_acp_server` o `agy --acp`.
+  - Nota de compatibilidad: se mantiene la ayuda y advertencia sobre el corte del 18 de junio de 2026, indicando con claridad qué herramienta corresponde a suscripción (Antigravity CLI) y cuál a API/Vertex (Gemini CLI).
+  *Aceptación:* `detect_ai_cli` reporta el estado de Antigravity CLI; la UI permite conectarlo como agente ACP; el preámbulo y la ayuda diferencian con precisión Antigravity CLI de Gemini CLI.
+- [ ] **REQ-45 · Modal «Acerca de» enriquecido y telemetría de entorno [v0.2.1]:** renovación del modal «Acerca de» siguiendo el estándar visual de DBV Typst Editor:
+  - Identidad gráfica con logo oficial y versión de la app.
+  - Enlaces oficiales con icono: sitio web del autor (`davidbuenov.com`) y repositorio GitHub (`github.com/davidbuenov/dbv-unreal-ai`).
+  - Datos de plataforma y componentes en tiempo de ejecución: sistema operativo (`windows`, `macos`, `linux`), motor objetivo (`Unreal Engine 5.8.x via MCP HTTP`), subsistema de IA y conectores 3D (`Tripo3D v3 · World Labs Marble`).
+  - Pie con mención de licencia MIT, autoría y distribución.
+  *Aceptación:* el modal muestra el logo, la versión, los enlaces clicables y la ficha de plataforma sin errores de layout ni textos faltantes.
+- [ ] **REQ-46 · Centro de Ayuda integrado y atajos de teclado [v0.2.1]:** panel modal de ayuda interactiva accesible mediante el botón `?` en la barra superior o mediante la tecla `F1`:
+  - Pestaña / sección 1: *Unreal Engine 5.8* (plugins necesarios, arranque MCP y puertos).
+  - Pestaña / sección 2: *Guía de IAs* (explicación de la diferencia entre Suscripción, API Cloud y Locales).
+  - Pestaña / sección 3: *Atajos de teclado* (`F1` ayuda, `Ctrl+Mayús+I` conversación, `Esc` cerrar modales, navegación de vistas).
+  - Pestaña / sección 4: *Enlaces a documentación* (acceso directo a `docs/IA.md`, `README.md` y web oficial).
+  *Aceptación:* pulsar `F1` o el icono `?` abre el modal de ayuda con navegación clara por pestañas o bloques temáticos; traducción completa en español e inglés.
 
 ## 🏗️ 4. Propuesta de Solución Técnica (Resumen)
 
