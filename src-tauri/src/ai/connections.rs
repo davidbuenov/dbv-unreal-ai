@@ -139,7 +139,7 @@ impl Connection {
     pub fn validate(&self) -> Result<(), AiError> {
         let url = self.base_url.trim();
         if self.provider == ProviderKind::Agent {
-            let known = ["acp:claude", "acp:gemini", "acp:codex", "acp:copilot", "acp:custom"];
+            let known = ["acp:claude", "acp:gemini", "acp:codex", "acp:copilot", "acp:antigravity", "acp:agy", "acp:custom"];
             if !known.contains(&url) {
                 return Err(AiError::Config(format!("agente no reconocido ({url})")));
             }
@@ -287,6 +287,8 @@ mod tests {
         connection.id = "a1".into();
         connection.provider = ProviderKind::Agent;
         connection.base_url = "acp:claude".into();
+        assert!(connection.validate().is_ok());
+        connection.base_url = "acp:antigravity".into();
         assert!(connection.validate().is_ok());
         connection.base_url = "acp:../../x".into();
         assert!(connection.validate().is_err());
