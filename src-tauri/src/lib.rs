@@ -40,13 +40,41 @@ pub mod mcp_server;
 #[cfg(desktop)]
 pub mod paths;
 
+/// Resuelve la ruta al ejecutable para el comando MCP.
+///
+/// En Windows, si la aplicación está instalada desde Microsoft Store / MSIX dentro de `\WindowsApps\`,
+/// la ejecución directa por un proceso externo Win32 (como el runtime de Go de un agente ACP) falla
+/// con `ERROR_ACCESS_DENIED` (error 5) debido a las restricciones de AppModel y permisos de WindowsApps.
+/// En ese caso, si existe el alias de ejecución en `%LOCALAPPDATA%\Microsoft\WindowsApps\dbv-unreal-ai.exe`,
+/// se devuelve la ruta al alias (usando `symlink_metadata` para detectar el reparse point AppExecLink).
+#[cfg(desktop)]
+fn resolve_mcp_executable(current_exe: std::path::PathBuf) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        let exe_str = current_exe.to_string_lossy();
+        if exe_str.contains(r"\WindowsApps\") || exe_str.contains(r"/WindowsApps/") {
+            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+                let alias_path = std::path::Path::new(&local_app_data)
+                    .join("Microsoft")
+                    .join("WindowsApps")
+                    .join("dbv-unreal-ai.exe");
+                if std::fs::symlink_metadata(&alias_path).is_ok() {
+                    return alias_path;
+                }
+            }
+        }
+    }
+    current_exe
+}
+
 /// Orden con la que un agente ACP lanza el servidor MCP propio de la app (REQ-11, REQ-20):
 /// este mismo ejecutable con `--mcp`, el puerto del editor conectado y, si lo hay, el `.uproject` (sin él el agente
 /// no ve la memoria del proyecto, REQ-38).
 #[cfg(desktop)]
 #[tauri::command]
 fn app_mcp_command(port: u16, project: Option<String>) -> Result<serde_json::Value, String> {
-    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    let raw_exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    let exe = resolve_mcp_executable(raw_exe);
     let mut args = vec!["--mcp".to_string(), "--port".to_string(), port.to_string()];
     if let Some(project) = project.filter(|p| !p.trim().is_empty()) {
         args.extend(["--project".to_string(), project]);
@@ -57,7 +85,10 @@ fn app_mcp_command(port: u16, project: Option<String>) -> Result<serde_json::Val
 /// Diagnóstico para una incidencia (RNF-08): versión, sistema, instalaciones de Unreal y editores
 /// abiertos. Nunca lleva claves, prompts ni contenido de proyectos.
 #[cfg(desktop)]
-pub fn diagnostics(engines: &[unreal::discovery::EngineInstall], editors: &[unreal::commands::EditorStatus]) -> serde_json::Value {
+pub fn diagnostics(
+    engines: &[unreal::discovery::EngineInstall],
+    editors: &[unreal::commands::EditorStatus],
+) -> serde_json::Value {
     serde_json::json!({
         "app": "DBV Unreal AI",
         "version": env!("CARGO_PKG_VERSION"),
@@ -73,7 +104,10 @@ pub fn diagnostics(engines: &[unreal::discovery::EngineInstall], editors: &[unre
 #[tauri::command]
 async fn app_diagnostics() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let editors: Vec<unreal::commands::EditorStatus> = unreal::discovery::running_editors().into_iter().map(unreal::commands::editor_status).collect();
+        let editors: Vec<unreal::commands::EditorStatus> = unreal::discovery::running_editors()
+            .into_iter()
+            .map(unreal::commands::editor_status)
+            .collect();
         diagnostics(&unreal::discovery::find_engines(), &editors)
     })
     .await
@@ -85,7 +119,9 @@ async fn app_diagnostics() -> Result<serde_json::Value, String> {
 #[allow(clippy::expect_used)]
 pub fn run() {
     #[allow(unused_mut)]
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_dialog::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init());
 
     #[cfg(desktop)]
     {
@@ -273,8 +309,29 @@ mod tests {
     /// @spec RNF-08
     #[test]
     fn el_diagnostico_no_lleva_secretos_y_describe_el_entorno() {
-        let engines = vec![EngineInstall { version: "5.8.2".into(), major: 5, minor: 8, patch: 2, root: "D:/UE_5.8".into(), editor: "D:/UE_5.8/x.exe".into(), editor_exists: true }];
-        let editors = vec![EditorStatus { editor: RunningEditor { pid: 1, executable: "x".into(), project: Some("D:/P/P.uproject".into()) }, project: None, mcp: Some(McpSettings { port: 8000, path: "/mcp".into(), auto_start: Some(true) }), listening: true }];
+        let engines = vec![EngineInstall {
+            version: "5.8.2".into(),
+            major: 5,
+            minor: 8,
+            patch: 2,
+            root: "D:/UE_5.8".into(),
+            editor: "D:/UE_5.8/x.exe".into(),
+            editor_exists: true,
+        }];
+        let editors = vec![EditorStatus {
+            editor: RunningEditor {
+                pid: 1,
+                executable: "x".into(),
+                project: Some("D:/P/P.uproject".into()),
+            },
+            project: None,
+            mcp: Some(McpSettings {
+                port: 8000,
+                path: "/mcp".into(),
+                auto_start: Some(true),
+            }),
+            listening: true,
+        }];
         let report = diagnostics(&engines, &editors);
         assert_eq!(report["engines"][0]["version"], "5.8.2");
         assert_eq!(report["editors"][0]["port"], 8000);
@@ -283,5 +340,41 @@ mod tests {
         for secret in ["key", "token", "prompt", "password"] {
             assert!(!text.contains(secret), "{secret} en el diagnóstico");
         }
+    }
+
+    /// @spec REQ-20
+    #[test]
+    fn resolve_mcp_executable_preserva_rutas_normales_y_fallback_seguro() {
+        let normal = std::path::PathBuf::from(r"C:\Program Files\DBV Unreal AI\dbv-unreal-ai.exe");
+        assert_eq!(resolve_mcp_executable(normal.clone()), normal);
+
+        let store_ficticia = std::path::PathBuf::from(
+            r"C:\Program Files\WindowsApps\davidbuenov.DBVUnrealAI_ficticio\dbv-unreal-ai.exe",
+        );
+        let res = resolve_mcp_executable(store_ficticia.clone());
+        assert!(!res.as_os_str().is_empty());
+    }
+
+    /// @spec REQ-20
+    #[test]
+    fn app_mcp_command_genera_argumentos_correctos() {
+        let res = app_mcp_command(8123, Some("D:/Project/Test.uproject".into()))
+            .expect("app_mcp_command con proyecto");
+        assert_eq!(
+            res["args"],
+            serde_json::json!([
+                "--mcp",
+                "--port",
+                "8123",
+                "--project",
+                "D:/Project/Test.uproject"
+            ])
+        );
+
+        let sin_proyecto = app_mcp_command(8000, None).expect("app_mcp_command sin proyecto");
+        assert_eq!(
+            sin_proyecto["args"],
+            serde_json::json!(["--mcp", "--port", "8000"])
+        );
     }
 }

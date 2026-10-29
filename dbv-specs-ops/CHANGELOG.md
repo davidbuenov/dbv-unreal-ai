@@ -11,6 +11,12 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.2.4] - 2026-10-29
+
+### Fixed
+
+- **Arranque del servidor MCP propio en la versión de Microsoft Store (REQ-20):** en instalaciones desde la Store (MSIX), los agentes de IA externos (como Google Antigravity mediante `agy_acp_server`) recibían un error de `fork/exec ... dbv-unreal-ai.exe: Acceso denegado` al intentar lanzar el subproceso MCP directamente sobre `C:\Program Files\WindowsApps` debido a restricciones de seguridad del AppModel de Windows. Se ha añadido la declaración `appExecutionAliases` en el manifiesto y la resolución en backend Rust (`src-tauri/src/lib.rs`) hacia el alias `%LOCALAPPDATA%\Microsoft\WindowsApps\dbv-unreal-ai.exe` (detectado con `symlink_metadata`), permitiendo que cualquier agente externo lance el MCP propio de forma limpia e instantánea.
+
 ## [0.2.3] - 2026-10-29
 
 La conexión a IAs y su guía pasan a ser las mismas de todas las apps DBV: las de [`dbv-tauri-starter`](https://github.com/davidbuenov/dbv-tauri-starter) `template-v0.4.0`, donde se probaron agente por agente en la app real.

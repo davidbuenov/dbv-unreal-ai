@@ -75,11 +75,24 @@ Identidad en `bundle.config.json`:
 - Assets de `src-tauri/gen/windows/Assets/` sin rectángulos de relleno (entre 471 y 998 colores cada uno).
 - Tests: Vitest 294, Rust 177, Python y banco e2e en verde.
 
-**Pasos en Partner Center** (nuevo envío del producto existente):
+---
 
-1. **Paquetes:** subir `dbv-unreal-ai_0.2.3.0.msixbundle` y retirar del envío el `0.2.1.0`/`0.2.2.0` si siguiera listado.
-2. **Fichas de Store (es-ES y en-US):** pegar «Novedades de esta versión» (v0.2.3) y, en «Descripción», la línea nueva del Centro de Ayuda (guía para conectar cada IA) desde `descripcionStore_es.md` y `descripcionStore_en.md`. El resto de la ficha no cambia.
-3. **Notas para la certificación:** pegar las de `descripcionStore_*.md`; esta versión añade el párrafo sobre los agentes por suscripción (programas que instala el usuario y que la app solo lanza; pueden abrir el navegador para iniciar sesión).
-4. **Enviar a certificación.**
+## 5. Envío de la v0.2.4 (mantenimiento y fix MCP, 2026-10-29)
 
-**Sin verificar dentro del MSIX instalado** (igual que en `dbv-tauri-starter`): los agentes ACP como procesos hijos desde el paquete (deberían funcionar con `runFullTrust`; el servidor de Antigravity se busca en `%LOCALAPPDATA%\agy\acp-server`, que el paquete puede leer) y el almacén de credenciales. Comprobarlo con la versión de la Store en cuanto esté publicada.
+**Paquete generado** con `npm run tauri:windows:build`:
+
+| Fichero | Uso |
+| --- | --- |
+| `src-tauri/target/msix/dbv-unreal-ai_0.2.4.0.msixbundle` | **El que se sube** a Partner Center (Paquetes) |
+| `src-tauri/target/msix/dbv-unreal-ai_0.2.4.0_x64.msix` | El paquete x64 que va dentro del bundle |
+
+**Comprobado antes de subir:**
+
+- `Identity`: `Name="davidbuenov.DBVUnrealAI"`, `Publisher="CN=13EE2A5D-F49E-48C9-8873-941069B15D63"`, `Version="0.2.4.0"`, `x64`.
+- **Extensiones:** añadido `uap3:AppExecutionAlias` (`alias="dbv-unreal-ai"`) en `bundle.config.json` para que los agentes externos puedan arrancar el subproceso MCP vía `%LOCALAPPDATA%\Microsoft\WindowsApps\dbv-unreal-ai.exe` sin error de acceso denegado en `WindowsApps`.
+- Tests: Vitest 294, Rust 179 pasando al 100%.
+
+**Pasos en Partner Center**:
+1. **Paquetes:** subir `dbv-unreal-ai_0.2.4.0.msixbundle` y retirar del envío el anterior.
+2. **Novedades de esta versión:** «Corrección en la inicialización del servidor MCP propio al conectar agentes externos de IA».
+3. **Enviar a certificación.**

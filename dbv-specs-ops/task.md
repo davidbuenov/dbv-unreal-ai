@@ -103,6 +103,14 @@
 - [x] **MSIX y Microsoft Store** — `npm run tauri:windows:build` → `src-tauri/target/msix/dbv-unreal-ai_0.2.3.0.msixbundle` (Identity 0.2.3.0, `runFullTrust`, assets sin relleno); `MICROSOFT_STORE.md` §4 y fichas `descripcionStore_*.md` (novedades v0.2.3, descripción, notas de certificación). Subirlo a Partner Center lo hace el usuario.
 - [x] **`/ship`** — versión 0.2.3 (package.json, package-lock.json —estaba en 0.2.1—, Cargo.toml, Cargo.lock, tauri.conf.json), CHANGELOG ES/EN, notas `releases/v0.2.3*.md`, README (insignias, estado y GIF) y web (estaba en v0.2.0).
 
+## 📌 Entrega v0.2.4 (2026-10-29) — Resolución de Incidencia: Alias de Ejecución para MCP en Microsoft Store
+
+- [x] **Diagnóstico y confirmación:** Causa confirmada. `WindowsApps` deniega la ejecución directa a procesos Win32 externos (Go/`os/exec` de `agy_acp_server`) con `ERROR_ACCESS_DENIED` (error 5) por restricciones de AppModel/sandbox. La solución canónica de Microsoft es `uap3:AppExecutionAlias`.
+- [x] **Declaración del alias de ejecución:** Añadido `"appExecutionAliases": [{ "alias": "dbv-unreal-ai" }]` en `src-tauri/gen/windows/bundle.config.json` (generado por `@choochmeque/tauri-windows-bundle`).
+- [x] **Resolución en backend Rust (`src-tauri/src/lib.rs`):** Función `resolve_mcp_executable` que detecta si el ejecutable reside en `\WindowsApps\` y resuelve hacia `%LOCALAPPDATA%\Microsoft\WindowsApps\dbv-unreal-ai.exe` verificando su existencia mediante `symlink_metadata` (reparse point `AppExecLink`). Fallback transparente a `current_exe` en desarrollo o versiones no Store.
+- [x] **Tests unitarios:** Añadidos tests en `src-tauri/src/lib.rs` (`resolve_mcp_executable_preserva_rutas_normales_y_fallback_seguro` y `app_mcp_command_genera_argumentos_correctos`). 179 tests Rust y 294 tests Vitest pasando al 100%.
+- [ ] **Empaquetado MSIX y entrega:** Bump a v0.2.4, compilar `.msixbundle` y publicar release.
+
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
 - [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).
@@ -134,10 +142,12 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-29, entrega v0.2.3: conexión a IAs y guía comunes con `dbv-tauri-starter` (REQ-48, REQ-49); Vitest 294, Rust 177. Lo de abajo es el snapshot de la v0.2.2, que sigue vigente salvo en la IA.
+> **Last update / Última actualización:** 2026-10-29, entrega v0.2.4: solución al «Acceso denegado» de MCP en Microsoft Store mediante `AppExecutionAlias` y resolución con `symlink_metadata` (REQ-20). Vitest 294, Rust 179.
 >
-> **Snapshot v0.2.2:**
-> **Exact point / Punto exacto:** (1) Descubrimiento dinámico de modelos por CLI (Antigravity CLI con Argon/Flash, Claude Code stream-json handshake, Codex debug models); (2) Selector dinámico de reasoning effort; (3) Píldora resumen estilo Visual Studio (Gemini 4 Argon Medium, Claude Sonnet 5.5 Medium, GPT-6-Luna Medium); (4) Caché de sesión y refresco manual (🔄); (5) Propagación a sesiones ACP; (6) Enlaces de Microsoft Store en README y docs. 176 tests Rust y 273 tests Vitest pasando.
+> **Resuelto (2026-10-29):** La ejecución directa de procesos empaquetados en `WindowsApps` por parte de agentes externos (como `agy_acp_server`) queda solventada declarando `appExecutionAliases` en `bundle.config.json` y resolviendo la ruta en `app_mcp_command` a `%LOCALAPPDATA%\Microsoft\WindowsApps\dbv-unreal-ai.exe`.
+>
+> **Snapshot v0.2.4:**
+> **Exact point / Punto exacto:** Arreglo implementado y probado en Rust (179 tests) y Vitest (294 tests). Listo para compilar el paquete `.msixbundle` y publicar v0.2.4.
 > **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, toolset C++ 0.2.0): Nivel activo `/Game/DBV/Maps/PruebasGaussianSplat`.
 > **Pending / Pendiente:** (1) S28: cielo y automatización de iluminación; (2) S29: MCPs de terceros (REQ-21); (3) Subida de paquete MSIX a Partner Center de Microsoft Store.
 > **Next step / Próximo paso:** Cierre de release v0.2.2 con commit y tag en git.
