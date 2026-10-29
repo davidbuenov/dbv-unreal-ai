@@ -42,6 +42,115 @@ export function defaultName(provider, model) {
   return model ? `${label} · ${model}` : label;
 }
 
+const DEFAULT_AGENT_LABELS = {
+  antigravity: 'Gemini 4 Argon',
+  agy: 'Gemini 4 Argon',
+  claude: 'Claude Sonnet 5.5',
+  codex: 'GPT-6-Luna',
+  gemini: 'Gemini 3.8 Pro',
+  copilot: 'Claude Sonnet 5.5',
+};
+
+const KNOWN_MODEL_LABELS = {
+  'gemini-4-argon': 'Gemini 4 Argon',
+  'gemini-3.8-flash': 'Gemini 3.8 Flash',
+  'gemini-3.8-pro': 'Gemini 3.8 Pro',
+  'gemini-3.8-flash-lite': 'Gemini 3.8 Flash Lite',
+  'claude-opus-5-5': 'Claude Opus 5.5',
+  'claude-sonnet-5-5': 'Claude Sonnet 5.5',
+  'claude-fable-5-1': 'Claude Fable 5.1',
+  'claude-haiku-5-5': 'Claude Haiku 5.5',
+  'claude-haiku-4-5': 'Claude Haiku 4.5',
+  'claude-sonnet-5': 'Claude Sonnet 5',
+  'claude-opus-5': 'Claude Opus 5',
+  'claude-fable-5': 'Claude Fable 5',
+  'gpt-6-luna': 'GPT-6-Luna',
+  'gpt-5.6-terra': 'GPT-5.6-Terra',
+  'gpt-5.6-luna': 'GPT-5.6-Luna',
+  'gpt-oss-120b': 'GPT-OSS 120B',
+};
+
+const EFFORT_SHORT_LABELS = {
+  off: 'Off',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'XHigh',
+  max: 'Max',
+  ultra: 'Ultra',
+};
+
+/**
+ * Normaliza la respuesta de `aiListAgentModels` tanto si viene como objetos
+ * `{ id, label, efforts, defaultEffort }` del backend Rust como si viene como
+ * lista de strings simples en mocks de test.
+ */
+export function normalizeAgentModels(rawList, fallbackId = 'default') {
+  if (!Array.isArray(rawList) || rawList.length === 0) {
+    return [
+      {
+        id: fallbackId,
+        label: DEFAULT_AGENT_LABELS[fallbackId] || fallbackId,
+        efforts: ['low', 'medium', 'high'],
+        defaultEffort: 'medium',
+      },
+    ];
+  }
+  return rawList.map((entry) => {
+    if (typeof entry === 'string') {
+      return {
+        id: entry,
+        label: entry,
+        efforts: ['low', 'medium', 'high'],
+        defaultEffort: 'medium',
+      };
+    }
+    const efforts = Array.isArray(entry.efforts) && entry.efforts.length > 0
+      ? entry.efforts
+      : ['low', 'medium', 'high'];
+    return {
+      id: entry.id,
+      label: entry.label || entry.id,
+      efforts,
+      defaultEffort: entry.defaultEffort || (efforts.includes('medium') ? 'medium' : efforts[0]),
+    };
+  });
+}
+
+function isGenericOrCorruptedModel(modelId, agentKey) {
+  if (!modelId) return true;
+  if (modelId === agentKey || ['antigravity', 'agy', 'claude', 'codex', 'gemini', 'copilot', 'claude-sonnet'].includes(modelId)) {
+    return true;
+  }
+  if (modelId.includes('|') || modelId.includes('**') || modelId.length > 64) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Formatea el resumen estilo Visual Studio (`"Gemini 4 Argon Medium"`, `"Claude Sonnet 5.5 Medium"`).
+ */
+export function formatAgentSummary(connection, agentKey, models = null) {
+  const rawModel = connection?.model || '';
+  let matched = null;
+  if (Array.isArray(models) && models.length > 0) {
+    matched = models.find((m) => m.id === rawModel || rawModel.startsWith(`${m.id}-`)) || models[0];
+  }
+  let modelLabel = matched?.label;
+  if (!modelLabel) {
+    if (isGenericOrCorruptedModel(rawModel, agentKey)) {
+      modelLabel = DEFAULT_AGENT_LABELS[agentKey] || agentKey;
+    } else {
+      modelLabel = KNOWN_MODEL_LABELS[rawModel] || rawModel;
+    }
+  }
+  const rawEffort = connection?.reasoningEffort
+    || (connection?.reasoning === false ? 'off' : matched?.defaultEffort || 'medium');
+  const effortLabel = EFFORT_SHORT_LABELS[rawEffort] || EFFORT_SHORT_LABELS.medium;
+  return `${modelLabel} ${effortLabel}`;
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -77,6 +186,49 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
   let detectedSection = null;
   let mineSection = null;
   let formSection = null;
+  const agentModelsCache = new Map();
+  const agentModelsInflight = new Map();
+
+  function updateAgentSummaries(agentKey, models) {
+    const conn = file.connections.find((c) => isAgentMatch(c, agentKey));
+    if (!conn) return;
+    if (Array.isArray(models) && models.length > 0 && isGenericOrCorruptedModel(conn.model, agentKey)) {
+      conn.model = models[0].id;
+    }
+    const summaryText = formatAgentSummary(conn, agentKey, models);
+    host.querySelectorAll(`[data-agent-summary="${agentKey}"]`).forEach((node) => {
+      node.textContent = summaryText;
+    });
+    host.querySelectorAll(`[data-conn-summary="${agentKey}"]`).forEach((node) => {
+      node.textContent = summaryText;
+    });
+  }
+
+  async function loadAgentModels(agentKey, forceRefresh = false) {
+    if (!forceRefresh && agentModelsCache.has(agentKey)) {
+      return agentModelsCache.get(agentKey);
+    }
+    if (!forceRefresh && agentModelsInflight.has(agentKey)) {
+      return agentModelsInflight.get(agentKey);
+    }
+    if (typeof backend.aiListAgentModels !== 'function') {
+      const fallback = normalizeAgentModels([], agentKey);
+      agentModelsCache.set(agentKey, fallback);
+      return fallback;
+    }
+    const promise = (async () => {
+      const res = forceRefresh
+        ? await backend.aiListAgentModels(agentKey, true)
+        : await backend.aiListAgentModels(agentKey);
+      const models = normalizeAgentModels(res?.ok ? res.value : [], agentKey);
+      agentModelsCache.set(agentKey, models);
+      agentModelsInflight.delete(agentKey);
+      updateAgentSummaries(agentKey, models);
+      return models;
+    })();
+    agentModelsInflight.set(agentKey, promise);
+    return promise;
+  }
 
   async function render() {
     host.replaceChildren();
@@ -116,6 +268,121 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
 
   const isAgentConnected = (name) => file.connections.some((c) => isAgentMatch(c, name));
   const isAgentActive = (name) => file.connections.some((c) => c.id === file.active && isAgentMatch(c, name));
+
+  async function toggleAgentSettings(item, connection, agentKey) {
+    const existingPanel = item.parentElement?.querySelector(`.ai-agent-settings[data-agent="${agentKey}"]`);
+    if (existingPanel) {
+      existingPanel.remove();
+      return;
+    }
+    item.parentElement?.querySelectorAll('.ai-agent-settings').forEach((p) => p.remove());
+
+    const panel = el('div', 'ai-agent-settings');
+    panel.dataset.agent = agentKey;
+
+    const rowModel = el('div', 'ai-agent-settings__row');
+    const labelModel = el('label', 'ai-agent-settings__label', t('ai.agentModel'));
+    const modelControl = el('div', 'ai-agent-settings__control');
+    const modelSelect = el('select', 'form-row__input ai-agent-settings__select');
+    const optLoading = document.createElement('option');
+    optLoading.textContent = '…';
+    modelSelect.append(optLoading);
+
+    const refreshBtn = button('🔄', async () => {
+      refreshBtn.disabled = true;
+      modelSelect.disabled = true;
+      const refreshedModels = await loadAgentModels(agentKey, true);
+      populateModelAndEffort(refreshedModels);
+      modelSelect.disabled = false;
+      refreshBtn.disabled = false;
+      notify(t('ai.agentModelsRefreshed'));
+    }, 'button button--compact button--ghost ai-agent-refresh');
+    refreshBtn.title = t('ai.agentRefreshModels');
+
+    modelControl.append(modelSelect, refreshBtn);
+    rowModel.append(labelModel, modelControl);
+
+    const rowReasoning = el('div', 'ai-agent-settings__row');
+    const labelReasoning = el('label', 'ai-agent-settings__label', t('ai.agentReasoning'));
+    const reasoningSelect = el('select', 'form-row__input ai-agent-settings__select');
+    rowReasoning.append(labelReasoning, reasoningSelect);
+
+    function populateEffortOptions(selectedModel, preferredEffort) {
+      reasoningSelect.replaceChildren();
+      const supported = Array.isArray(selectedModel?.efforts) && selectedModel.efforts.length > 0
+        ? selectedModel.efforts
+        : ['low', 'medium', 'high'];
+      const keys = ['off', ...supported.filter((k) => k !== 'off')];
+      const targetEffort = keys.includes(preferredEffort)
+        ? preferredEffort
+        : (selectedModel?.defaultEffort && keys.includes(selectedModel.defaultEffort) ? selectedModel.defaultEffort : 'medium');
+      for (const key of keys) {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = t(`ai.reasoning.${key}`);
+        if (key === targetEffort) {
+          opt.selected = true;
+        }
+        reasoningSelect.append(opt);
+      }
+    }
+
+    let currentModels = [];
+    function populateModelAndEffort(models) {
+      currentModels = models;
+      modelSelect.replaceChildren();
+      const matched = models.find((m) => m.id === connection.model || (connection.model && connection.model.startsWith(`${m.id}-`))) || models[0];
+      for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.label;
+        if (matched && m.id === matched.id) {
+          opt.selected = true;
+        }
+        modelSelect.append(opt);
+      }
+      const initialEffort = connection.reasoningEffort ?? (connection.reasoning === false ? 'off' : matched?.defaultEffort || 'medium');
+      populateEffortOptions(matched, initialEffort);
+    }
+
+    modelSelect.addEventListener('change', () => {
+      const selected = currentModels.find((m) => m.id === modelSelect.value) || currentModels[0];
+      populateEffortOptions(selected, reasoningSelect.value);
+    });
+
+    populateEffortOptions(null, connection.reasoningEffort ?? (connection.reasoning === false ? 'off' : 'medium'));
+
+    const rowActions = el('div', 'ai-agent-settings__actions');
+    const saveBtn = button(t('ai.save'), async () => {
+      saveBtn.disabled = true;
+      const updated = {
+        ...connection,
+        model: modelSelect.value,
+        reasoningEffort: reasoningSelect.value,
+        reasoning: reasoningSelect.value !== 'off',
+      };
+      const active = isAgentActive(agentKey) || connection.id === file.active;
+      const saved = await backend.aiSaveConnection(updated, null, active);
+      if (saved.ok) {
+        file = saved.value.file;
+        onChanged(file);
+        notify(t('ai.agentSettingsSaved'));
+        panel.remove();
+        if (mineSection && formSection) renderConnections(mineSection, formSection);
+        if (detectedSection && formSection) renderDetection(detectedSection, formSection);
+      } else {
+        notify(saved.error.message, 'error');
+        saveBtn.disabled = false;
+      }
+    }, 'button button--primary button--compact');
+    rowActions.append(saveBtn);
+
+    panel.append(rowModel, rowReasoning, rowActions);
+    item.after(panel);
+
+    const models = await loadAgentModels(agentKey, false);
+    populateModelAndEffort(models);
+  }
 
   async function renderDetection(section, form) {
     const result = await backend.aiDetect();
@@ -166,7 +433,25 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
         item.append(el('span', 'ai-detect__detail', t('ai.agentInstalled')));
         if (isAgentConnected(agentKey)) {
           const active = isAgentActive(agentKey);
+          const conn = file.connections.find((c) => isAgentMatch(c, agentKey));
+          if (conn) {
+            const summaryBadge = el(
+              'span',
+              'ai-agent-summary',
+              formatAgentSummary(conn, agentKey, agentModelsCache.get(agentKey)),
+            );
+            summaryBadge.dataset.agentSummary = agentKey;
+            item.append(summaryBadge);
+            if (!agentModelsCache.has(agentKey)) {
+              void loadAgentModels(agentKey, false);
+            }
+          }
           item.append(el('span', `ai-badge ${active ? 'ai-badge--active' : 'ai-badge--connected'}`, active ? `✓ ${t('ai.active')}` : `✓ ${t('ai.connected')}`));
+          if (conn) {
+            const gearBtn = button('⚙️', () => toggleAgentSettings(item, conn, agentKey), 'button button--compact button--ghost ai-agent-gear');
+            gearBtn.title = t('ai.agentSettings');
+            item.append(gearBtn);
+          }
         } else if (onAgent) {
           item.append(
             button(
@@ -263,9 +548,25 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
       }
       const badge = el('span', `ai-badge ${badgeClass}`, badgeText);
 
-      item.append(radio, el('span', 'ai-conn__name', connection.name), badge, el('span', 'ai-conn__detail', `${provider?.cloud ? '☁ ' : ''}${connection.model}`));
-      // Un agente no tiene nada que editar: su cuenta y su modelo los lleva él.
-      if (connection.provider !== 'agent') item.append(button(t('ai.edit'), () => openForm(form, connection), 'button button--compact button--ghost'));
+      const agentKey = connection.provider === 'agent'
+        ? (connection.baseUrl.replace(/^acp:/, '') || connection.model)
+        : null;
+      const detailText = connection.provider === 'agent'
+        ? formatAgentSummary(connection, agentKey, agentModelsCache.get(agentKey))
+        : `${provider?.cloud ? '☁ ' : ''}${connection.model}`;
+      const detailEl = el('span', 'ai-conn__detail', detailText);
+      if (agentKey) {
+        detailEl.dataset.connSummary = agentKey;
+      }
+
+      item.append(radio, el('span', 'ai-conn__name', connection.name), badge, detailEl);
+      if (connection.provider === 'agent') {
+        const gearBtn = button('⚙️', () => toggleAgentSettings(item, connection, agentKey), 'button button--compact button--ghost ai-agent-gear');
+        gearBtn.title = t('ai.agentSettings');
+        item.append(gearBtn);
+      } else {
+        item.append(button(t('ai.edit'), () => openForm(form, connection), 'button button--compact button--ghost'));
+      }
       item.append(
         button(t('ai.delete'), async () => {
           const deleted = await backend.aiDeleteConnection(connection.id);

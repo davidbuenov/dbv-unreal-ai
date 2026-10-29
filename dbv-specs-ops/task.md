@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.2.1 completada** (2026-10-28). Reorganización tripartita de IAs, soporte formal de Google Antigravity CLI, Centro de Ayuda (F1), Acerca de enriquecido y preparación para Microsoft Store.
-* **Última decisión técnica**: Refinamiento reactivo del estado de agentes en UI (ocultar botón Conectar y mostrar badge Activa/Conectada) y configuración MSIX para Microsoft Store.
-* **Próximo paso**: Cierre de `/ship` v0.2.1 (commit y tag).
+* **Estado actual**: **v0.2.2 en desarrollo** (2026-10-28). Selección dinámica de modelo y esfuerzo de razonamiento en agentes CLI (REQ-47).
+* **Última decisión técnica**: Inclusión de botón de ajustes ⚙️ en agentes conectados, consulta dinámica de modelos CLI con versión mínima Gemini 3.8 Flash para Antigravity CLI, y paso de flags `--model` y reasoning a ACP.
+* **Próximo paso**: Ejecución de `/build` v0.2.2 (Slices S38 y S39).
 
 ## Checklist de Tareas
 
@@ -82,6 +82,15 @@
 - [x] **`/test` v0.2.1** — Pruebas unitarias de Rust (`cargo test`: 170 passed) y frontend (`npx vitest run`: 269 passed).
 - [x] **`/ship` v0.2.1** — Actualización de versiones a 0.2.1, CHANGELOG y notas de release ES/EN.
 
+## v0.2.2 — Modelos Dinámicos y Razonamiento en Agentes CLI (REQ-47)
+- [x] **`/spec` v0.2.2** — Especificación REQ-47: consulta dinámica de modelos CLI (mínimo Gemini 3.8 Flash para Antigravity), selector de modelo y razonamiento, y botón ⚙️ en agentes conectados.
+- [x] **`/plan` v0.2.2** — Architect review adversarial, ampliación de `Connection` y `AgentSpec`, diseño UI inline.
+- [x] **S38 · Backend: consulta dinámica de modelos y paso a ACP** (`commands.rs`, `detect.rs`, `connections.rs`, `acp.rs`) — Comando `ai_list_agent_models`, campos `reasoning_effort` en `Connection` y propagación de `--model` y reasoning en lanzamiento ACP.
+- [x] **S39 · Frontend: botón de ajustes ⚙️ y panel inline** (`connectWizard.js`, `backend.js`, `ai.css`, `translations.js`) — Componente de ajustes inline por agente, selectores dinámicos, guardado reactivo y textos ES/EN.
+- [x] **`/test` v0.2.2** — Pruebas unitarias de Rust y Vitest para listado de modelos reales de agentes (`agy`, `claude`, `codex`), caché de sesión, botón de refresco, resumen estilo Visual Studio y persistencia de `reasoning_effort`.
+- [x] **`/code-simplify` v0.2.2** — Revisión de código y cumplimiento (0 warnings en Rust, 0 errores en `dbv-lint`).
+- [x] **`/ship` v0.2.2** — Bump de versión a 0.2.2, CHANGELOG y notas de release.
+
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
 - [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).
@@ -113,11 +122,11 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-28, entrega v0.2.1 completada.
-> **Exact point / Punto exacto:** (1) Conexiones estructuradas en 3 categorías semánticas; (2) Google Antigravity CLI integrado; (3) Centro de Ayuda interactivo (F1) y Acerca de enriquecido; (4) Preparación para Microsoft Store (MSIX y assets anti-placeholder verificados); (5) Warning Rust limpiado. 170 tests Rust y 271 tests Vitest pasando.
+> **Last update / Última actualización:** 2026-10-29, entrega v0.2.2 completada.
+> **Exact point / Punto exacto:** (1) Descubrimiento dinámico de modelos por CLI (Antigravity CLI con Argon/Flash, Claude Code stream-json handshake, Codex debug models); (2) Selector dinámico de reasoning effort; (3) Píldora resumen estilo Visual Studio (Gemini 4 Argon Medium, Claude Sonnet 5.5 Medium, GPT-6-Luna Medium); (4) Caché de sesión y refresco manual (🔄); (5) Propagación a sesiones ACP; (6) Enlaces de Microsoft Store en README y docs. 176 tests Rust y 273 tests Vitest pasando.
 > **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, toolset C++ 0.2.0): Nivel activo `/Game/DBV/Maps/PruebasGaussianSplat`.
 > **Pending / Pendiente:** (1) S28: cielo y automatización de iluminación; (2) S29: MCPs de terceros (REQ-21); (3) Subida de paquete MSIX a Partner Center de Microsoft Store.
-> **Next step / Próximo paso:** Cierre de release v0.2.1 con commit y tag en git.
+> **Next step / Próximo paso:** Cierre de release v0.2.2 con commit y tag en git.
 
 
 

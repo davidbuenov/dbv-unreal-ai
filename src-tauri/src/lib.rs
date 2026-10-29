@@ -126,6 +126,8 @@ pub fn run() {
             #[cfg(desktop)]
             ai::commands::ai_list_models,
             #[cfg(desktop)]
+            ai::commands::ai_list_agent_models,
+            #[cfg(desktop)]
             ai::commands::ai_model_info,
             #[cfg(desktop)]
             ai::commands::ai_chat,

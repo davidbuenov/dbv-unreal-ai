@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-29
+
+### Added
+
+- **Live CLI model discovery, session caching, and Visual Studio-style summary badge for agents (REQ-47):**
+  - **Live CLI querying (`ai_list_agent_models`):** `agy models` for Google Antigravity CLI (`Gemini 4 Argon`, `Gemini 3.8 Flash`, `Claude Opus 5.5`, `Claude Sonnet 5.5`, `GPT-OSS 120B`), `--input-format=stream-json` `initialize` control handshake for Claude Code (`Claude Sonnet 5.5`, `Claude Opus 5.5`, `Claude Fable 5.1`, `Claude Haiku 5.5` with `supportedEffortLevels`), and `codex debug models` (with auto-detection at `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin`) for OpenAI Codex CLI (`GPT-6-Luna`, `GPT-5.6-Terra`, `GPT-5.6-Luna`).
+  - **Visual Studio-style active summary pill (`.ai-agent-summary`):** each connected agent displays its active model and difficulty directly in the list (e.g., `Gemini 4 Argon Medium`, `Claude Sonnet 5.5 Medium`, `GPT-6-Luna Medium`) at a glance.
+  - **Session cache and manual refresh (`🔄`):** queries the CLI once per session when opening "Connect an AI" and caches the catalog in memory, with a `🔄` button in the ⚙️ panel to re-query on demand.
+  - **Full ACP propagation:** resolves `<model>-<effort>` and `--effort` for Antigravity CLI, passes `ANTHROPIC_MODEL` via environment for Claude Code ACP, and `-c model=... -c model_reasoning_effort=...` for Codex ACP, plus `session/set_config_option`.
+- **Official Microsoft Store links:** updated `README.md`, `README.en.md`, `docs/index.html`, and `docs/en/index.html` with direct Microsoft Store download URLs (`9n5ls7zkgth5` in Spanish and English).
+
 ## [0.2.1] - 2026-10-28
 
 ### Added

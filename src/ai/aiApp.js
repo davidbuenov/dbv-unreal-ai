@@ -822,7 +822,11 @@ export function createAiApp(deps) {
     agentTurn = { proposal: createProposal(), bubble };
     let finalText = '';
     try {
-      const spec = { id: agentId(connection) };
+      const spec = {
+        id: agentId(connection),
+        model: connection.model || undefined,
+        reasoningEffort: connection.reasoningEffort || undefined,
+      };
       panel.addStep(t('ai.agentStarting').replace('{agent}', providerName(connection)));
       // El agente trabaja en su propio proceso: el host sigue desde aquí lo que lance (p. ej. trabajos de Tripo).
       host.onTurnStart?.({ panel, agent: true, isBusy: () => busy });

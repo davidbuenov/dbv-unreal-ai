@@ -94,9 +94,11 @@ Llamadas de solo lectura por HTTP desde la máquina de desarrollo:
   - Detección de binario `agy` en el `PATH` o `agy_acp_server`.
   - Lanzamiento del servidor ACP con `agy_acp_server` (o `agy --acp` si disponible), configurando las variables de entorno recomendadas (`AGY_ACP_DEFAULT_MODEL`, etc.).
   - Coexistencia con `gemini-cli` (`gemini --acp`), manteniendo enlaces y documentación oficial para ambos.
+  - **Consulta dinámica de modelos del agente (`ai_list_agent_models` en `commands.rs`):** introspección del CLI para listar modelos disponibles en tiempo real (mínimo Gemini 3.8 Flash para Antigravity CLI / Gemini) y configuración de nivel de razonamiento (`reasoning_effort`: off/low/medium/high).
 - **Frontend `src/ai/connectWizard.js` y `ai.css`:**
   - Rediseño modular dividiendo la lista de proveedores en 3 contenedores semánticos (`ai-category-subscriptions`, `ai-category-cloud`, `ai-category-local`).
   - Badges semánticos para conexiones activas y persistidas en `state.connections`.
+  - Botón de ajustes ⚙️ en cada agente conectado para seleccionar modelo y razonamiento inline.
 
 ---
 

@@ -210,6 +210,12 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 - **Centro de Ayuda integrado (REQ-46):**
   - Modal con botón `?` en el header y atajo `F1`.
   - Estructura con pestañas superiores compactas o índice lateral para navegar entre: Unreal Engine 5.8, Conectar IAs, Atajos de teclado y Enlaces a la documentación. Textos legibles en `body` y bloques de código de comandos en `mono`.
+- **Configuración de Modelos y Razonamiento en Agentes CLI (REQ-47):**
+  - Botón de ajustes ⚙️ (`ai-agent-settings-btn`) situado en cada agente conectado o activo en el modal de conexión.
+  - Al pulsarlo, despliega un panel integrado (`ai-agent-settings-panel`) con:
+    - Selector desplegable de modelo poblado dinámicamente mediante consulta al CLI (con Gemini 3.8 Flash como base para Antigravity).
+    - Selector de nivel de razonamiento / pensamiento (*reasoning effort*): Desactivado, Bajo, Medio, Alto.
+    - Botón de confirmación y guardado reactivo sin cerrar el modal.
 
 ---
 

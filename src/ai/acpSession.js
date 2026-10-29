@@ -118,7 +118,7 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
   async function ensureSession(nextSpec) {
     await ensureListener();
     const currentRoot = getRoot();
-    if (sessionId && spec && spec.id === nextSpec.id && spec.command === nextSpec.command && root === currentRoot) return { fresh: false };
+    if (sessionId && spec && spec.id === nextSpec.id && spec.model === nextSpec.model && spec.reasoningEffort === nextSpec.reasoningEffort && spec.command === nextSpec.command && root === currentRoot) return { fresh: false };
     await backend.acpStop();
     const started = await backend.acpStart(nextSpec, currentRoot);
     if (!started.ok) throw Object.assign(new Error(started.error.message), { kind: started.error.kind });
@@ -135,6 +135,20 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
     spec = nextSpec;
     root = currentRoot;
     sessionId = session.value.sessionId;
+    if (nextSpec.model && nextSpec.model !== nextSpec.id && nextSpec.model !== 'antigravity' && nextSpec.model !== 'agy') {
+      await backend.acpRequest('session/set_config_option', {
+        sessionId,
+        configId: 'model',
+        value: nextSpec.model,
+      });
+    }
+    if (nextSpec.reasoningEffort && nextSpec.reasoningEffort !== 'off') {
+      await backend.acpRequest('session/set_config_option', {
+        sessionId,
+        configId: 'effort',
+        value: nextSpec.reasoningEffort,
+      });
+    }
     return { fresh: true, agentInfo: init.value?.agentInfo ?? null, images: Boolean(init.value?.agentCapabilities?.promptCapabilities?.image) };
   }
 

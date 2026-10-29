@@ -413,10 +413,8 @@ impl Library {
 
             for entry in entries.iter() {
                 let world_id = entry.parameters.get("world_id").and_then(|v| v.as_str()).unwrap_or_default();
-                if !world_id.is_empty() {
-                    if !seen_world_ids.insert(world_id.to_string()) {
-                        to_remove_ids.push(entry.id.clone());
-                    }
+                if !world_id.is_empty() && !seen_world_ids.insert(world_id.to_string()) {
+                    to_remove_ids.push(entry.id.clone());
                 }
             }
 
@@ -472,12 +470,13 @@ impl Library {
                                     p.id != entry.id && (slug(&p.name) == slug(base_candidate) || p.primary_file().as_deref().and_then(|pf| Path::new(pf).file_stem()).and_then(|s| s.to_str()).is_some_and(|s| s.to_lowercase() == base_candidate))
                                 }) {
                                     entry.parent = Some(parent.id.clone());
-                                    if entry.thumbnail.is_none() && parent.thumbnail.is_some() {
-                                        let p_thumb = parent.thumbnail.as_ref().unwrap();
-                                        let from = self.root.join(&parent.id).join(p_thumb);
-                                        let to = self.root.join(&entry.id).join(p_thumb);
-                                        if from.is_file() && std::fs::copy(&from, &to).is_ok() {
-                                            entry.thumbnail = Some(p_thumb.clone());
+                                    if entry.thumbnail.is_none() {
+                                        if let Some(p_thumb) = &parent.thumbnail {
+                                            let from = self.root.join(&parent.id).join(p_thumb);
+                                            let to = self.root.join(&entry.id).join(p_thumb);
+                                            if from.is_file() && std::fs::copy(&from, &to).is_ok() {
+                                                entry.thumbnail = Some(p_thumb.clone());
+                                            }
                                         }
                                     }
                                 }
@@ -591,13 +590,15 @@ impl Library {
                         .to_lowercase();
                     if ex_stem == base_candidate || slug(&existing.name) == slug(base_candidate) {
                         parent_id = Some(existing.id.clone());
-                        if companion_thumbnail.is_none() && existing.thumbnail.is_some() {
-                            if let Ok(parent_thumb_path) = self.file_path(&existing.id, existing.thumbnail.as_ref().unwrap()) {
-                                if parent_thumb_path.is_file() {
-                                    let thumb_ext = extension(&parent_thumb_path);
-                                    let thumb_name = format!("thumbnail.{thumb_ext}");
-                                    if std::fs::copy(&parent_thumb_path, dir.join(&thumb_name)).is_ok() {
-                                        inherited_thumbnail = Some(thumb_name);
+                        if companion_thumbnail.is_none() {
+                            if let Some(thumb) = &existing.thumbnail {
+                                if let Ok(parent_thumb_path) = self.file_path(&existing.id, thumb) {
+                                    if parent_thumb_path.is_file() {
+                                        let thumb_ext = extension(&parent_thumb_path);
+                                        let thumb_name = format!("thumbnail.{thumb_ext}");
+                                        if std::fs::copy(&parent_thumb_path, dir.join(&thumb_name)).is_ok() {
+                                            inherited_thumbnail = Some(thumb_name);
+                                        }
                                     }
                                 }
                             }

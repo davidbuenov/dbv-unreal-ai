@@ -97,7 +97,7 @@ impl WorldLabsClient {
             .header("Wl-Api-Key", &self.key)
             .header("Authorization", &format!("Bearer {}", self.key))
             .header("Content-Type", "application/json")
-            .send_json(&Value::Object(body))
+            .send_json(Value::Object(body))
             .map_err(|error| UnrealError::Unreachable(format!("no se pudo conectar con World Labs: {error}")))?;
 
         let status = response.status().as_u16();

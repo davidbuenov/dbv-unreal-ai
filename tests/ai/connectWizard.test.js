@@ -299,11 +299,138 @@ describe('estado de conexión de agentes CLI', () => {
     const claudeItem = [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes('Claude Code'));
     expect(claudeItem).toBeTruthy();
     // No debe tener botón Conectar
-    expect(claudeItem.querySelector('button')).toBeNull();
+    const connectBtn = [...claudeItem.querySelectorAll('button')].find((b) => b.textContent.includes('Conectar'));
+    expect(connectBtn).toBeUndefined();
+    // Debe tener el botón de ajustes ⚙️ (REQ-47)
+    expect(claudeItem.querySelector('.ai-agent-gear')).toBeTruthy();
     // Debe tener el badge de activa
     const badge = claudeItem.querySelector('.ai-badge');
     expect(badge).toBeTruthy();
     expect(badge.textContent).toBe('✓ Activa');
+  });
+
+  it('el botón de ajustes ⚙️ despliega los modelos dinámicos y el nivel de razonamiento (REQ-47)', async () => {
+    const backend = {
+      aiDetect: () => Promise.resolve({
+        ok: true,
+        value: {
+          servers: [],
+          tools: [{ name: 'antigravity', path: 'C:/agy.exe' }, { name: 'node', path: 'C:/node.exe' }],
+        },
+      }),
+      aiProviders: () => Promise.resolve({ ok: true, value: [] }),
+      aiConnections: () => Promise.resolve({
+        ok: true,
+        value: {
+          connections: [{ id: 'c1', name: 'Antigravity', provider: 'agent', baseUrl: 'acp:antigravity', model: 'antigravity' }],
+          active: 'c1',
+          showAi: true,
+        },
+      }),
+      aiListAgentModels: vi.fn(() => Promise.resolve({ ok: true, value: ['gemini-3.8-flash', 'gemini-3.8-pro', 'gemini-3.8-flash-lite'] })),
+      aiSaveConnection: vi.fn(() => Promise.resolve({ ok: true, value: { file: { connections: [], active: null } } })),
+      aiSetPreferences: vi.fn(),
+      openExternalUrl: vi.fn(),
+    };
+    const host = document.getElementById('host');
+    const wizard = createConnectWizard({ host, backend, onChanged: vi.fn(), onAgent: vi.fn(), notify: vi.fn() });
+    await wizard.open();
+    await vi.waitFor(() => expect(host.querySelector('.ai-cat-card--agent')).not.toBeNull());
+
+    const agyItem = [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes('Antigravity'));
+    expect(agyItem).toBeTruthy();
+    const gear = agyItem.querySelector('.ai-agent-gear');
+    expect(gear).toBeTruthy();
+
+    gear.click();
+    await vi.waitFor(() => expect(backend.aiListAgentModels).toHaveBeenCalledWith('antigravity'));
+    const panel = host.querySelector('.ai-agent-settings');
+    expect(panel).toBeTruthy();
+    const selects = panel.querySelectorAll('select');
+    expect(selects.length).toBe(2);
+    // Verifica que el modelo contiene gemini-3.8-flash
+    const modelOpts = [...selects[0].options].map((o) => o.value);
+    expect(modelOpts).toContain('gemini-3.8-flash');
+  });
+
+  it('muestra el resumen estilo Visual Studio ("Gemini 4 Argon Medium"), cachea en sesión y permite refrescar manualmente (REQ-47)', async () => {
+    const richModels = [
+      { id: 'gemini-4-argon', label: 'Gemini 4 Argon', efforts: ['low', 'medium', 'high'], defaultEffort: 'medium' },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', efforts: ['low', 'medium', 'high'], defaultEffort: 'medium' },
+      { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', efforts: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffort: 'medium' },
+    ];
+    const backend = {
+      aiDetect: () => Promise.resolve({
+        ok: true,
+        value: {
+          servers: [],
+          tools: [
+            { name: 'antigravity', path: 'C:/agy.exe' },
+            { name: 'codex', path: 'C:/codex.exe' },
+            { name: 'node', path: 'C:/node.exe' },
+          ],
+        },
+      }),
+      aiProviders: () => Promise.resolve({ ok: true, value: [] }),
+      aiConnections: () => Promise.resolve({
+        ok: true,
+        value: {
+          connections: [
+            { id: 'c1', name: 'Antigravity', provider: 'agent', baseUrl: 'acp:antigravity', model: 'antigravity', reasoningEffort: 'medium' },
+          ],
+          active: 'c1',
+          showAi: true,
+        },
+      }),
+      aiListAgentModels: vi.fn(() => Promise.resolve({ ok: true, value: richModels })),
+      aiSaveConnection: vi.fn((conn) => Promise.resolve({
+        ok: true,
+        value: { file: { connections: [conn], active: conn.id, showAi: true } },
+      })),
+      aiSetPreferences: vi.fn(),
+      openExternalUrl: vi.fn(),
+    };
+    const host = document.getElementById('host');
+    const notify = vi.fn();
+    const wizard = createConnectWizard({ host, backend, onChanged: vi.fn(), onAgent: vi.fn(), notify });
+    await wizard.open();
+    await vi.waitFor(() => expect(host.querySelector('.ai-cat-card--agent')).not.toBeNull());
+    await vi.waitFor(() => expect(backend.aiListAgentModels).toHaveBeenCalledTimes(1));
+
+    const summary = host.querySelector('[data-agent-summary="antigravity"]');
+    expect(summary).toBeTruthy();
+    expect(summary.textContent).toBe('Gemini 4 Argon Medium');
+
+    const connSummary = host.querySelector('[data-conn-summary="antigravity"]');
+    expect(connSummary).toBeTruthy();
+    expect(connSummary.textContent).toBe('Gemini 4 Argon Medium');
+
+    // Al abrir los ajustes ⚙️ reutiliza la caché de sesión sin volver a invocar al CLI
+    const agyItem = [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes('Antigravity'));
+    agyItem.querySelector('.ai-agent-gear').click();
+    await settle();
+    expect(backend.aiListAgentModels).toHaveBeenCalledTimes(1);
+
+    const panel = host.querySelector('.ai-agent-settings');
+    const [modelSelect, reasoningSelect] = panel.querySelectorAll('select');
+    expect([...modelSelect.options].map((o) => o.textContent)).toEqual([
+      'Gemini 4 Argon',
+      'Gemini 3.8 Flash',
+      'Claude Sonnet 5.5',
+    ]);
+
+    // Al cambiar a Claude Sonnet 5.5 aparecen sus niveles de esfuerzo específicos (xhigh, max)
+    modelSelect.value = 'claude-sonnet-5-5';
+    modelSelect.dispatchEvent(new Event('change'));
+    const effortValues = [...reasoningSelect.options].map((o) => o.value);
+    expect(effortValues).toEqual(['off', 'low', 'medium', 'high', 'xhigh', 'max']);
+
+    // El botón 🔄 fuerza la recarga (forceRefresh = true)
+    const refreshBtn = panel.querySelector('.ai-agent-refresh');
+    expect(refreshBtn).toBeTruthy();
+    refreshBtn.click();
+    await vi.waitFor(() => expect(backend.aiListAgentModels).toHaveBeenCalledWith('antigravity', true));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalled());
   });
 });
 

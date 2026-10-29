@@ -181,6 +181,17 @@ pub async fn ai_list_models(app: AppHandle, state: State<'_, AiState>, connectio
         .map_err(|error| AiError::Server(error.to_string()))?
 }
 
+/// Consulta los modelos disponibles para un agente CLI específico en tiempo real,
+/// usando la caché de sesión salvo que `force_refresh` sea `Some(true)`.
+/// @spec REQ-47
+#[tauri::command]
+pub async fn ai_list_agent_models(agent_id: String, force_refresh: Option<bool>) -> Result<Vec<detect::AgentModelOption>, AiError> {
+    let refresh = force_refresh.unwrap_or(false);
+    tauri::async_runtime::spawn_blocking(move || detect::agent_model_options(&agent_id, refresh))
+        .await
+        .map_err(|error| AiError::Server(error.to_string()))
+}
+
 /// Evento `ai-stream`: un trozo de la respuesta de la petición `request_id`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -280,6 +291,7 @@ mod tests {
             supports_tools: None,
             supports_images: None,
             reasoning: None,
+            reasoning_effort: None,
             max_output_tokens: None,
         }
     }

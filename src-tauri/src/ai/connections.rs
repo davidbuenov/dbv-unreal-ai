@@ -109,6 +109,10 @@ pub struct Connection {
     /// rápido, y es lo que ya hacían las conexiones anteriores a la 0.13.1.
     #[serde(default)]
     pub reasoning: Option<bool>,
+    /// Nivel de esfuerzo de razonamiento / pensamiento para agentes CLI
+    /// ("off", "low", "medium", "high").
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     /// Máximo de tokens que el modelo puede generar en una respuesta.
     /// `None` = el de su proveedor (`default_max_output`).
     #[serde(default)]
@@ -209,6 +213,7 @@ mod tests {
             supports_tools: Some(true),
             supports_images: Some(true),
             reasoning: None,
+            reasoning_effort: None,
             max_output_tokens: None,
         }
     }

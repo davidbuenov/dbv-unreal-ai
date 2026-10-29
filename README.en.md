@@ -15,10 +15,11 @@
 ## 📑 Table of Contents
 
 - [Download and install](#install)
-  - [Windows](#install-windows)
+  - [Microsoft Store (Windows)](#install-msstore)
+  - [Windows (Releases)](#install-windows)
   - [macOS](#install-macos)
   - [Linux](#install-linux)
-  - [Coming soon: Homebrew, Microsoft Store and Uptodown](#install-soon)
+  - [Coming soon: Homebrew and Uptodown](#install-soon)
 - [About](#about)
 - [Compatible Applications & Ecosystem](#ecosystem)
 - [Status](#status)
@@ -44,11 +45,26 @@ You only need **Unreal Engine 5.8** to work on a project and, to chat, an AI (lo
 
 > **Updates:** the app does not update itself yet. To move to a new version, download and run the new installer from Releases; your library, connections and keys are kept.
 
+<a name="install-msstore"></a>
+
+### 🛒 Microsoft Store (Windows - Official & Recommended)
+
+You can now install **DBV Unreal AI** for free directly from the Microsoft Store, officially signed by Microsoft with no SmartScreen warnings and automatic updates:
+
+<p align="center">
+  <a href="https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN" target="_blank">
+    <img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Free download and install on Windows | Microsoft Store" height="56">
+  </a>
+</p>
+
+- 🇬🇧 **English:** [dbv-unreal-ai - Free download and install on Windows | Microsoft Store](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
+- 🇪🇸 **Español:** [DBV Unreal AI: descarga e instalación gratuitas en Windows | Microsoft Store](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
+
 <a name="install-windows"></a>
 
-### 🪟 Windows
+### 🪟 Windows (Manual installers from Releases)
 
-**[⬇️ Download from Releases](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)** one of these two (Windows 10 and 11, 64-bit):
+If you prefer not to use the store, **[⬇️ Download from Releases](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)** one of these two (Windows 10 and 11, 64-bit):
 
 - **`DBV.Unreal.AI_x.y.z_x64-setup.exe`** — the recommended one: double-click and you're done.
 - **`DBV.Unreal.AI_x.y.z_x64_en-US.msi`** — the same program as an MSI package, meant for managed installs (companies, classrooms).
@@ -82,10 +98,9 @@ The `DBV.Unreal.AI_universal.app.tar.gz` file in the Release is the same app com
 
 ### 🔜 Coming soon
 
-These channels are not available yet; they will arrive in an upcoming version. In the meantime, use the Releases installers above.
+These channels are not available yet; they will arrive in an upcoming version. In the meantime, use the Microsoft Store or the Releases installers above.
 
 - **🍺 Homebrew (macOS):** `brew install --cask` from a dedicated tap that updates itself with every Release.
-- **🛒 Microsoft Store (Windows):** a package signed by the Store, with no SmartScreen warning and automatic updates.
 - **🟢 Uptodown:** direct download of the latest version for Windows and macOS.
 
 ---

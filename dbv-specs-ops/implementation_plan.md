@@ -1,26 +1,15 @@
 ---
-# Frontmatter de la fase vigente: v0.2.0 (§5). El de la v0.1 se conserva en el historial de git (commit 0320758).
+# Frontmatter de la fase vigente: v0.2.2 (§7). El de la v0.1 y v0.2 se conserva en el historial de git.
 dependencies:
-  - Código de la v0.1.0 (Tauri v2, subsistema de IA de 3 niveles, ACP, MCP propio, núcleo de trabajos D9, herramientas únicas D10)
-  - Crates nuevos previstos: tauri-plugin-updater 2 y tauri-plugin-process 2 (REQ-39); ninguno más (el cliente MCP stdio y World Labs usan ureq/serde ya presentes)
-  - Unreal Engine 5.8.2 con ToolsetRegistry (unreal.ToolsetLibrary.get_active_undo_count / undo_transaction, REQ-40) y EditorToolset (CaptureViewport, REQ-13)
-  - API de World Labs Marble (api.worldlabs.ai/marble/v1, documentación del 2026-10-26) — sin llamadas reales en tests
-  - Plugin de Gaussian Splatting de terceros (P-09): ninguno se redistribuye; candidatos XGrids LCC (lista UE 5.8 y SPZ) y NanoGS (PLY, 5.6+)
-  - Clave de firma del actualizador generada por el usuario (P-08) y guardada en los secretos de GitHub
+  - Código de la v0.2.1 (Tauri v2, subsistema de IA de 3 niveles, ACP, Antigravity CLI, Ayuda F1, Acerca de enriquecido)
+  - Comandos CLI de agentes en PATH (`claude`, `agy` / `antigravity`, `copilot`, `gemini`, `codex`)
+  - Catálogo de modelos Gemini modernos (mínimo Gemini 3.8 Flash)
 risks:
-  - "R-16: memory.md ajeno o con secretos → dato y no orden, rechazo de entradas con forma de clave, toda escritura revisada"
-  - "Dos procesos (ventana y --mcp) escriben la misma memoria → edición con hash base y escritura atómica: una edición sobre texto viejo falla, nunca pisa"
-  - "R-18: historial de deshacer compartido → contador antes/después del turno; se niega si cambió"
-  - "R-19: MCP de terceros por stdio = ejecutar un programa → comando visible y confirmado, todo de modificación por defecto"
-  - "R-12/P-09: sin plugin de splats con importación por script verificada → los splats quedan en la biblioteca con guía; el resto del mundo se importa igual"
-  - "R-17: clave del actualizador → sin secreto, el workflow compila sin artefactos de actualización en vez de fallar"
-  - "REQ-07 cambia el estado central (state.connection) → slice propio temprano y getter compatible para no tocar todas las vistas"
-  - "Créditos reales (Tripo, World Labs) → nunca en tests ni en CI; las pruebas reales solo con el usuario delante (S18)"
+  - "R-20: Consulta a CLI de modelos lenta o bloqueante → timeout estricto (1.5s) y fallback al catálogo canónico actualizado (Gemini 3.8 Flash mínimo)"
+  - "R-21: Incompatibilidad de flags de reasoning entre diferentes CLI → mapeo seguro de reasoning_effort (off, low, medium, high) según el agente"
 rollback_strategy: >
-  Cada slice es un commit propio en master; revertir un slice es `git revert <commit>`. La memoria del proyecto
-  solo escribe en `dbv-unreal-ai/` del proyecto (que el usuario controla con su git) y se prueba sobre proyectos
-  temporales. El toolset sube de versión (0.3.0): la preparación actualiza y su «Revertir» vuelve a la anterior.
-  El actualizador solo se activa con la clave pública configurada: sin ella, la app se comporta como la v0.1.
+  Reversión mediante `git revert`. Los campos nuevos en `Connection` (`reasoning_effort`) son opcionales (`Option<String>`),
+  por lo que las conexiones existentes mantienen plena compatibilidad hacia atrás.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -147,3 +136,22 @@ rollback_strategy: >
 - `cargo test`, `npm run test:ai`, tests Python del toolset, banco E2E y `dbv-lint.py --changed`, como en la v0.1.
 - Evals de §8 con `--prompt full`: «recuerda que…» → tarjeta y cero escrituras sin aceptar; una convención guardada se respeta en una conversación nueva; una tarea solo acaba hecha si su comprobación pasa.
 - Sin el usuario no se puede verificar: gasto real (Tripo, World Labs), el editor abierto (S18, S25, S26, S28), la firma del actualizador (P-08), macOS y Linux reales.
+
+---
+
+## 7. Plan v0.2.2 — Selección Dinámica de Modelo y Nivel de Razonamiento en Agentes CLI (REQ-47)
+
+### S38 · Comando de consulta dinámica de modelos de agentes (`commands.rs`, `detect.rs`, `acp.rs`)
+- Nuevo comando Tauri `ai_list_agent_models(agent_id: String) -> Result<Vec<String>, AiError>`.
+- Introspección dinámica del CLI con timeout estricto (1.5 s).
+- Catálogo para Antigravity CLI garantizando modelos modernos: `gemini-3.8-flash` (mínimo), `gemini-3.8-pro`, `gemini-3.8-flash-lite`.
+- Catálogo para Claude Code (`claude-3-7-sonnet-latest`, `claude-3-5-sonnet-latest`, etc.), Copilot, Gemini CLI y Codex.
+- Soporte en `Connection` y `AgentSpec` para `model` y `reasoning_effort` (`off`, `low`, `medium`, `high`).
+- Inyección de flags `--model <model>` y parámetros de reasoning en `acp.rs`.
+
+### S39 · Interfaz de configuración inline en modal de conexión (`connectWizard.js`, `ai.css`, `translations.js`)
+- Botón de engranaje ⚙️ (`ai-agent-settings-btn`) en cada fila de agente conectado/activo.
+- Despliegue de tarjeta de ajustes (`ai-agent-settings-panel`) con selectores de Modelo y Razonamiento.
+- Guardado reactivo con `aiSaveConnection` y actualización en caliente de la conexión activa.
+- Textos bilingües (ES/EN) en `translations.js`.
+
