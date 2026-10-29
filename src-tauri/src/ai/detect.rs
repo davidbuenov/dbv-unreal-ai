@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Un modelo disponible en un agente CLI, con su nombre legible y niveles de esfuerzo admitidos.
-/// @spec REQ-47
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentModelOption {
@@ -59,9 +58,52 @@ pub const TOOLS: &[&str] = &["claude", "gemini", "antigravity", "agy", "agy_acp_
 
 /// Busca `name` en las carpetas de `path_var` (respeta `PATHEXT` en Windows).
 pub fn find_in(name: &str, path_var: &str, extensions: &[String]) -> Option<PathBuf> {
-    std::env::split_paths(path_var).find_map(|dir| {
-        extensions.iter().map(|ext| dir.join(format!("{name}{ext}"))).find(|candidate| candidate.is_file())
-    })
+    find_all_in(name, path_var, extensions).into_iter().next()
+}
+
+/// Todas las apariciones de `name` en `path_var`, en el orden del PATH (una por carpeta).
+pub fn find_all_in(name: &str, path_var: &str, extensions: &[String]) -> Vec<PathBuf> {
+    std::env::split_paths(path_var)
+        .filter_map(|dir| extensions.iter().map(|ext| dir.join(format!("{name}{ext}"))).find(|candidate| candidate.is_file()))
+        .collect()
+}
+
+/// VS Code instala en el PATH un lanzador `copilot` (`…/bin/copilot-shim/`) que no es la CLI de Copilot:
+/// la ejecuta si está instalada y, si no, avisa («GitHub Copilot CLI was not found») y termina con 127.
+pub fn is_vscode_copilot_shim(path: &Path) -> bool {
+    path.parent()
+        .and_then(Path::file_name)
+        .is_some_and(|dir| dir.eq_ignore_ascii_case("copilot-shim"))
+}
+
+/// El programa responde a `--version` con éxito en menos de 5 s.
+fn answers_version(path: &Path) -> bool {
+    let (cmd, args) = launcher(path);
+    let mut command = std::process::Command::new(cmd);
+    command
+        .args(args)
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let Ok(mut child) = command.spawn() else { return false };
+    let started = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) if started.elapsed() < Duration::from_secs(5) => std::thread::sleep(Duration::from_millis(50)),
+            _ => {
+                let _ = child.kill();
+                return false;
+            }
+        }
+    }
 }
 
 fn extensions() -> Vec<String> {
@@ -81,6 +123,8 @@ pub fn extended_path() -> String {
         if let Ok(local) = std::env::var("LOCALAPPDATA") {
             let p = PathBuf::from(&local);
             dirs.push(p.join("agy").join("bin"));
+            // Servidor ACP de Antigravity (zip del registro ACP), donde lo indica docs/IA.md.
+            dirs.push(p.join("agy").join("acp-server"));
             dirs.push(p.join("Programs").join("Antigravity").join("bin"));
             dirs.push(p.join("Programs").join("Antigravity IDE").join("bin"));
             dirs.push(p.join("Programs").join("OpenAI").join("Codex").join("bin"));
@@ -101,6 +145,7 @@ pub fn extended_path() -> String {
             let p = PathBuf::from(&home);
             dirs.push(p.join(".local").join("bin"));
             dirs.push(p.join(".antigravity").join("bin"));
+            dirs.push(p.join(".local").join("share").join("agy-acp-server"));
             dirs.push(p.join(".npm-global").join("bin"));
         }
         dirs.push(PathBuf::from("/usr/local/bin"));
@@ -115,9 +160,20 @@ pub fn extended_path() -> String {
 pub fn which(name: &str) -> Option<PathBuf> {
     let path_var = extended_path();
     let exts = extensions();
+    // Copilot: se prefiere la CLI de verdad; el lanzador de VS Code solo vale si hay CLI detrás.
+    if name == "copilot" {
+        let found = find_all_in(name, &path_var, &exts);
+        let real = found.iter().find(|path| !is_vscode_copilot_shim(path)).cloned();
+        return real.or_else(|| found.into_iter().find(|path| answers_version(path)));
+    }
     let mut result = find_in(name, &path_var, &exts);
     if result.is_none() && name == "antigravity" {
         result = find_in("agy", &path_var, &exts);
+    }
+    // El servidor ACP de Antigravity se distribuye como `agy_acp_server.exe` en Windows y como
+    // `agy_acp_server.par` en macOS y Linux (registro ACP).
+    if result.is_none() && name == "agy_acp_server" {
+        result = find_in("agy_acp_server.par", &path_var, &exts);
     }
     result
 }
@@ -180,7 +236,6 @@ fn effort_rank(effort: &str) -> u8 {
 
 /// Parsea la salida de `agy models` (`<id>\t<displayName>`) agrupando las variantes
 /// por familia de modelo y sus niveles de dificultad (`low`, `medium`, `high`).
-/// @spec REQ-47
 pub fn parse_agy_models(stdout: &str) -> Vec<AgentModelOption> {
     let suffixes = ["-low", "-medium", "-high", "-xhigh", "-max", "-ultra"];
     let label_suffixes = [" (low)", " (medium)", " (high)", " (xhigh)", " (max)", " (ultra)"];
@@ -244,7 +299,6 @@ pub fn parse_agy_models(stdout: &str) -> Vec<AgentModelOption> {
 }
 
 /// Parsea la respuesta JSON de control `initialize` de Claude Code (`claude -p --input-format=stream-json`).
-/// @spec REQ-47
 pub fn parse_claude_models(stdout: &str) -> Vec<AgentModelOption> {
     let mut options: Vec<AgentModelOption> = Vec::new();
     let mut default_resolved: Option<String> = None;
@@ -307,7 +361,6 @@ pub fn parse_claude_models(stdout: &str) -> Vec<AgentModelOption> {
 }
 
 /// Parsea el catálogo JSON de `codex debug models` o `~/.codex/models_cache.json`.
-/// @spec REQ-47
 pub fn parse_codex_models(json_text: &str) -> Vec<AgentModelOption> {
     let Ok(val) = serde_json::from_str::<Value>(json_text.trim()) else { return Vec::new() };
     let Some(models) = val["models"].as_array() else { return Vec::new() };
@@ -439,7 +492,6 @@ fn query_codex_models() -> Vec<AgentModelOption> {
 
 /// Consulta los modelos y niveles de razonamiento disponibles para un agente CLI,
 /// usando la caché de sesión salvo que `force_refresh` sea `true`.
-/// @spec REQ-47
 pub fn agent_model_options(agent_id: &str, force_refresh: bool) -> Vec<AgentModelOption> {
     let key = match agent_id {
         "agy" | "antigravity" => "antigravity",
@@ -592,7 +644,6 @@ pub fn agent_model_options(agent_id: &str, force_refresh: bool) -> Vec<AgentMode
 }
 
 /// Devuelve los identificadores de modelo disponibles para un agente CLI.
-/// @spec REQ-47
 pub fn agent_models(agent_id: &str) -> Vec<String> {
     agent_model_options(agent_id, false).into_iter().map(|m| m.id).collect()
 }
@@ -629,6 +680,22 @@ mod tests {
         } else {
             assert!(args.is_empty());
         }
+    }
+
+    #[test]
+    fn el_lanzador_copilot_de_vs_code_no_tapa_a_la_cli_de_verdad() {
+        let base = tempfile::tempdir().unwrap();
+        let shim_dir = base.path().join("Microsoft VS Code").join("bin").join("copilot-shim");
+        let npm_dir = base.path().join("npm");
+        std::fs::create_dir_all(&shim_dir).unwrap();
+        std::fs::create_dir_all(&npm_dir).unwrap();
+        std::fs::write(shim_dir.join("copilot.exe"), "").unwrap();
+        std::fs::write(npm_dir.join("copilot.exe"), "").unwrap();
+        let path = std::env::join_paths([&shim_dir, &npm_dir]).unwrap();
+        let found = find_all_in("copilot", path.to_str().unwrap(), &[".exe".into()]);
+        assert_eq!(found, vec![shim_dir.join("copilot.exe"), npm_dir.join("copilot.exe")]);
+        assert!(is_vscode_copilot_shim(&found[0]));
+        assert!(!is_vscode_copilot_shim(&found[1]));
     }
 
     #[test]

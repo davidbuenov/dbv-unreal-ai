@@ -4,12 +4,9 @@
 // Licensed under the MIT License. See LICENSE for details.
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
-//
-// @spec REQ-09, REQ-11, RF-IA-02 — requisitos del catálogo de IA (SPECIFICATIONS.md §3.5) que cubre este fichero.
-//
 
 import { describe, expect, it, vi } from 'vitest';
-import { createAcpSession, describeUpdate, insideProject, sliceLines } from '../../src/ai/acpSession.js';
+import { createAcpSession, describeUpdate, insideProject, pickAuthMethod, sliceLines } from '../../src/ai/acpSession.js';
 import { createChangesCard, createPermissionCard, permissionDiffs } from '../../src/ai/acpView.js';
 
 /** Transporte simulado: guarda lo que se envía y deja inyectar mensajes del agente. */
@@ -54,6 +51,7 @@ function setup(overrides = {}) {
     stageWrite: async (relative, content) => staged.push({ relative, content }),
     onUpdate: (update) => updates.push(update),
     ...(overrides.mcpServers ? { mcpServers: overrides.mcpServers } : {}),
+    ...(overrides.onAuthenticate ? { onAuthenticate: overrides.onAuthenticate } : {}),
   });
   return { backend, session, updates, staged };
 }
@@ -180,17 +178,65 @@ describe('tarjetas de permiso y de cambios', () => {
   });
 });
 
-describe('servidores MCP para el agente (DBV Unreal AI)', () => {
-  it('session/new recibe el servidor MCP propio de la app @spec REQ-11, REQ-20', async () => {
-    const server = { name: 'dbv-unreal-ai', command: 'C:/app/dbv-unreal-ai.exe', args: ['--mcp', '--port', '8000'], env: [] };
+describe('servidores MCP que la app ofrece al agente', () => {
+  it('session/new recibe el servidor MCP propio de la app', async () => {
+    const server = { name: 'mi-app', command: 'C:/app/mi-app.exe', args: ['--mcp', '--port', '8000'], env: [] };
     const { backend, session } = setup({ mcpServers: async () => [server] });
     await session.ensureSession({ id: 'claude' });
     expect(backend.sent.find((m) => m.method === 'session/new').params.mcpServers).toEqual([server]);
   });
 
-  it('si el host no da una lista válida, se manda una vacía @spec REQ-11', async () => {
+  it('si el host no da una lista válida, se manda una vacía', async () => {
     const { backend, session } = setup({ mcpServers: async () => null });
     await session.ensureSession({ id: 'claude' });
     expect(backend.sent.find((m) => m.method === 'session/new').params.mcpServers).toEqual([]);
+  });
+});
+
+describe('inicio de sesión que pide el agente (ACP `authenticate`)', () => {
+  const METHODS = [{ id: 'oauth-personal', name: 'Log in with Google' }, { id: 'gemini-api-key', name: 'Gemini API key' }];
+
+  /** Agente que exige `authenticate` antes de `session/new`, como `agy_acp_server`. */
+  function requireAuth(backend, { authOk = true } = {}) {
+    let authenticated = false;
+    backend.acpRequest = vi.fn(async (method, params) => {
+      backend.sent.push({ method, params });
+      if (method === 'initialize') return { ok: true, value: { authMethods: METHODS } };
+      if (method === 'authenticate') {
+        authenticated = authOk;
+        return authOk ? { ok: true, value: {} } : { ok: false, error: { kind: 'badRequest', message: 'inicio de sesión cancelado' } };
+      }
+      if (method === 'session/new') return authenticated ? { ok: true, value: { sessionId: 's1' } } : { ok: false, error: { kind: 'badRequest', message: 'Authentication required' } };
+      return { ok: false, error: { kind: 'badRequest', message: 'x' } };
+    });
+  }
+
+  it('elige el primer método que anuncia el agente', () => {
+    expect(pickAuthMethod(METHODS)).toEqual(METHODS[0]);
+    expect(pickAuthMethod([])).toBeNull();
+    expect(pickAuthMethod(undefined)).toBeNull();
+  });
+
+  it('si session/new pide autenticarse, avisa, llama a authenticate y reintenta', async () => {
+    const onAuthenticate = vi.fn();
+    const { backend, session } = setup({ onAuthenticate });
+    requireAuth(backend);
+    await expect(session.ensureSession({ id: 'antigravity' })).resolves.toMatchObject({ fresh: true });
+    expect(onAuthenticate).toHaveBeenCalledWith(METHODS[0]);
+    expect(backend.sent.map((m) => m.method)).toEqual(['initialize', 'session/new', 'authenticate', 'session/new']);
+    expect(backend.sent.find((m) => m.method === 'authenticate').params).toEqual({ methodId: 'oauth-personal' });
+  });
+
+  it('si el inicio de sesión falla, el error es de autenticación y no se reintenta', async () => {
+    const { backend, session } = setup();
+    requireAuth(backend, { authOk: false });
+    await expect(session.ensureSession({ id: 'antigravity' })).rejects.toMatchObject({ kind: 'auth', message: 'inicio de sesión cancelado' });
+    expect(backend.sent.filter((m) => m.method === 'session/new')).toHaveLength(1);
+  });
+
+  it('un agente que no pide autenticarse no recibe authenticate', async () => {
+    const { backend, session } = setup();
+    await session.ensureSession({ id: 'claude' });
+    expect(backend.sent.some((m) => m.method === 'authenticate')).toBe(false);
   });
 });

@@ -58,7 +58,7 @@ export const aiSetPreferences = ({ active, showAi } = {}) => call('ai_set_prefer
 export const aiProviders = () => call('ai_providers');
 export const aiDetect = () => call('ai_detect');
 export const aiListModels = (connection, apiKey) => call('ai_list_models', { connection, apiKey: apiKey ?? null });
-/** Modelos disponibles para un agente CLI específico (antigravity, claude, codex, etc.). @spec REQ-47 */
+/** Modelos disponibles para un agente CLI específico (antigravity, claude, codex, etc.). */
 export const aiListAgentModels = (agentId, forceRefresh = false) =>
   call('ai_list_agent_models', { agentId, forceRefresh: Boolean(forceRefresh) });
 /** Tamaño, contexto máximo y capacidades del modelo (solo Ollama; `null` en el resto). */

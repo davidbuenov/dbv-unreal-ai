@@ -1,8 +1,8 @@
 # 🏬 Publicación en Microsoft Store: DBV Unreal AI
 
-> **Estado:** 📦 Preparado para empaquetado y certificación en Partner Center.  
-> **Versión base:** `v0.2.1`  
-> **Última revisión:** 2026-10-28  
+> **Estado:** 📦 Paquete de la `v0.2.3` generado y listo para subir a Partner Center (§4).  
+> **Versión base:** `v0.2.3`  
+> **Última revisión:** 2026-10-29  
 
 Documento operativo: checklist accionable para empaquetar y publicar **DBV Unreal AI** en la **Microsoft Store** mediante paquetes MSIX auto-firmados por la tienda, siguiendo las lecciones y estándares de `MARKETPLACE_PUBLISHING.md`.
 
@@ -56,3 +56,30 @@ Identidad en `bundle.config.json`:
    - Copiar textos de `descripcionStore_es.md` (Español) y `descripcionStore_en.md` (Inglés).
 7. **Notas para la certificación:** Indicar que la conexión a Unreal Engine usa el servidor MCP local en `localhost:8000` y que la IA externa es completamente opcional y desactivada por defecto.
 8. **Subir paquete y enviar a certificación.**
+
+---
+
+## 4. Envío de la v0.2.3 (actualización, 2026-10-29)
+
+**Paquete generado** con `npm run tauri:windows:build`:
+
+| Fichero | Uso |
+| --- | --- |
+| `src-tauri/target/msix/dbv-unreal-ai_0.2.3.0.msixbundle` | **El que se sube** a Partner Center (Paquetes) |
+| `src-tauri/target/msix/dbv-unreal-ai_0.2.3.0_x64.msix` | El paquete x64 que va dentro del bundle |
+
+**Comprobado antes de subir:**
+
+- `Identity`: `Name="davidbuenov.DBVUnrealAI"`, `Publisher="CN=13EE2A5D-F49E-48C9-8873-941069B15D63"`, `Version="0.2.3.0"`, `x64` (coinciden con `bundle.config.json` y con el producto de Partner Center).
+- Capacidades: `internetClient` y `runFullTrust` (necesaria para lanzar los agentes de IA y el `--mcp` como procesos).
+- Assets de `src-tauri/gen/windows/Assets/` sin rectángulos de relleno (entre 471 y 998 colores cada uno).
+- Tests: Vitest 294, Rust 177, Python y banco e2e en verde.
+
+**Pasos en Partner Center** (nuevo envío del producto existente):
+
+1. **Paquetes:** subir `dbv-unreal-ai_0.2.3.0.msixbundle` y retirar del envío el `0.2.1.0`/`0.2.2.0` si siguiera listado.
+2. **Fichas de Store (es-ES y en-US):** pegar «Novedades de esta versión» (v0.2.3) y, en «Descripción», la línea nueva del Centro de Ayuda (guía para conectar cada IA) desde `descripcionStore_es.md` y `descripcionStore_en.md`. El resto de la ficha no cambia.
+3. **Notas para la certificación:** pegar las de `descripcionStore_*.md`; esta versión añade el párrafo sobre los agentes por suscripción (programas que instala el usuario y que la app solo lanza; pueden abrir el navegador para iniciar sesión).
+4. **Enviar a certificación.**
+
+**Sin verificar dentro del MSIX instalado** (igual que en `dbv-tauri-starter`): los agentes ACP como procesos hijos desde el paquete (deberían funcionar con `runFullTrust`; el servidor de Antigravity se busca en `%LOCALAPPDATA%\agy\acp-server`, que el paquete puede leer) y el almacén de credenciales. Comprobarlo con la versión de la Store en cuanto esté publicada.

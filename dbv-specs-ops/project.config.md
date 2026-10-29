@@ -20,7 +20,7 @@
 - **Technologies / Stack:** Tauri v2 (WebView nativo del SO) + Vanilla JS/HTML/CSS sin bundler, partiendo de dbv-tauri-starter; motor de IA de tres niveles (local / nube con llavero del SO / agentes ACP) como en dbv-typst-editor; Unreal Engine 5.8 vía su servidor MCP integrado (ModelContextProtocol + ToolsetRegistry + PythonScriptPlugin) y un toolset C++ de preparación como en DBVMCPFirst; APIs de Tripo 3D y World Labs
 - **Agent Readiness (Web):** Not Applicable
 - **Desktop AI Assistant (Local/Cloud/ACP):** Yes
-- **Framework Version:** 3.1.0
+- **Framework Version:** 3.2.0
 
 
 ---

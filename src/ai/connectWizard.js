@@ -24,7 +24,7 @@ export const INSTALL_LINKS = {
   antigravity: 'https://antigravity.google/product/antigravity-cli',
   gemini: 'https://github.com/google-gemini/gemini-cli',
   codex: 'https://github.com/openai/codex',
-  copilot: 'https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli',
+  copilot: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
   node: 'https://nodejs.org',
 };
 
@@ -188,6 +188,12 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
   let formSection = null;
   const agentModelsCache = new Map();
   const agentModelsInflight = new Map();
+
+  /** Abre la guía de conexión de IAs (se carga solo ahora), opcionalmente en una sección. */
+  async function openGuide(section) {
+    const guide = await import('./guide.js');
+    return guide.openGuide({ section, openExternalUrl: (url) => backend.openExternalUrl(url) });
+  }
 
   function updateAgentSummaries(agentKey, models) {
     const conn = file.connections.find((c) => isAgentMatch(c, agentKey));
@@ -469,15 +475,27 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
         }
       } else {
         item.append(el('span', 'ai-detect__detail', t('ai.notInstalled')));
-        item.append(button(t('ai.howToInstall'), () => backend.openExternalUrl(INSTALL_LINKS[agentKey]), 'button button--compact button--ghost'));
+        // Copilot: lo habitual es tener solo el lanzador `copilot` de VS Code; la guía explica cómo instalar la CLI.
+        const install = agentKey === 'copilot' ? () => openGuide('copilot') : () => backend.openExternalUrl(INSTALL_LINKS[agentKey]);
+        item.append(button(t('ai.howToInstall'), install, 'button button--compact button--ghost'));
       }
       agentList.append(item);
     }
 
-    // Antigravity CLI (detectado como agy_acp_server o agy o antigravity)
-    const agyTool = detection.tools.find((tool) => ['antigravity', 'agy', 'agy_acp_server'].includes(tool.name) && tool.path);
-    if (detection.tools.length > 0) {
-      appendAgentItem(agyTool ? { name: 'antigravity', path: agyTool.path, nodeAvailable: true } : null, 'antigravity', t('ai.agent.antigravity'));
+    // Antigravity: la CLI `agy` no habla ACP; solo se puede conectar con su servidor `agy_acp_server`.
+    const agyServer = detection.tools.find((tool) => tool.name === 'agy_acp_server' && tool.path);
+    const agyCli = detection.tools.find((tool) => ['antigravity', 'agy'].includes(tool.name) && tool.path);
+    if (detection.tools.length > 0 && !agyServer && agyCli) {
+      const item = el('li', 'ai-detect__item');
+      item.append(
+        el('span', 'ai-detect__mark', '○'),
+        el('span', 'ai-detect__name', t('ai.agent.antigravity')),
+        el('span', 'ai-detect__detail', t('ai.agentNoAcp')),
+        button(t('ai.howToInstall'), () => openGuide('antigravity'), 'button button--compact button--ghost'),
+      );
+      agentList.append(item);
+    } else if (detection.tools.length > 0) {
+      appendAgentItem(agyServer ? { name: 'antigravity', path: agyServer.path, nodeAvailable: true } : null, 'antigravity', t('ai.agent.antigravity'));
     }
 
     // Otros agentes estándar
@@ -499,11 +517,11 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
     cloudAction.append(button(t('ai.addCloud'), () => openForm(form, { provider: 'anthropic' }), 'button button--compact'));
     cloudCard.append(cloudAction);
 
-    // Enlace de ayuda interactiva hacia el Centro de Ayuda
+    // La guía de conexión de IAs, dentro de la app (la misma en todas las apps DBV).
     const helpBtn = el('button', 'ai-help-link', t('ai.helpLink'));
     helpBtn.type = 'button';
     helpBtn.addEventListener('click', () => {
-      document.dispatchEvent(new CustomEvent('dbv-open-help', { detail: { tab: 'ai' } }));
+      void openGuide();
     });
 
     const cards = [localCard];

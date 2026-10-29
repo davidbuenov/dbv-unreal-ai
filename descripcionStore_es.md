@@ -25,7 +25,7 @@ Características principales:
 • Deshacer seguro de turnos y acciones con un solo clic en Unreal Engine
 • Sistema de Memoria y Plan del Proyecto independiente y versionable en disco
 • Detección automática de múltiples instancias y proyectos de Unreal Engine en paralelo
-• Centro de Ayuda interactivo (F1) con guías de Unreal Engine 5.8, atajos y catálogo de IAs
+• Centro de Ayuda interactivo (F1) con guías de Unreal Engine 5.8, atajos y la guía completa para conectar cada IA, disponible sin conexión
 • Interfaz cuidada con diseño cálido, modo oscuro y temas de alto contraste
 • Totalmente privado: tus proyectos y niveles no salen de tu equipo
 • Licencia de código abierto MIT
@@ -34,12 +34,12 @@ Características principales:
 
 ## Novedades de esta versión
 
-v0.2.1:
-• Clasificación tripartita clara en la conexión a IAs: IAs Locales (100% offline), IAs por Suscripción (Agentes CLI) e IAs en la nube con clave de API, con distintivos de estado visuales y reactivos en vivo.
-• Soporte e integración formal de Google Antigravity CLI (agy) para suscripciones de Google One y Gemini Advanced, conviviendo con Gemini CLI para acceso directo por API.
-• Nuevo Centro de Ayuda integrado accesible con el botón (?) en cabecera y el atajo global F1, con guías de Unreal Engine 5.8, catálogo comparativo de IAs y atajos.
-• Modal «Acerca de» renovado con diseño DBV Typst Editor, ficha técnica del entorno y enlaces oficiales.
-• Preparación integral de empaquetado MSIX para distribución en Microsoft Store.
+v0.2.3:
+• Todos los agentes por suscripción funcionan: Google Antigravity (con su servidor oficial agy_acp_server e inicio de sesión con tu cuenta de Google), Codex, GitHub Copilot y Claude Code.
+• Inicio de sesión guiado: si el agente lo pide, la app lo solicita con tu cuenta y te avisa de que puede abrirse el navegador.
+• Guía completa para conectar cada IA dentro de la app (F1 → Guía de IAs y desde «Conectar una IA»), sin conexión y con botón Copiar para cada orden de instalación.
+• Si un agente está instalado pero le falta algo (el servidor de Antigravity o la CLI de Copilot), la app lo dice y te lleva a las instrucciones.
+• Panel del asistente más claro: las etiquetas de contexto ya no se cortan.
 
 ---
 
@@ -92,3 +92,4 @@ Las funciones de Inteligencia Artificial son 100% opcionales y están desactivad
 - La app funciona plenamente sin IA configurada (preparación de proyectos, inspección, visualización 3D y biblioteca de assets).
 - Si el usuario decide conectar una IA, puede elegir entre IAs 100% locales (Ollama o LM Studio sin salida a red), agentes CLI con sus propias credenciales, o modelos en la nube mediante su propia clave privada custodiada en el sistema.
 - Ningún dato ni proyecto sale del equipo sin la acción y consentimiento explícito del usuario.
+- Los agentes por suscripción (Claude Code, Codex, Gemini CLI, Google Antigravity, GitHub Copilot CLI) son programas aparte que el usuario instala y en los que inicia sesión por su cuenta; la app solo los lanza, con la carpeta del proyecto como directorio de trabajo, cuando el usuario conecta uno. Si un agente pide iniciar sesión, puede abrir el navegador del sistema para que el usuario entre en ese servicio.

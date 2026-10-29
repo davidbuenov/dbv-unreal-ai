@@ -37,9 +37,10 @@ use super::detect::{launcher, which};
 use super::files::{is_skipped_dir, is_text_document};
 use super::AiError;
 
-/// Paquetes de npm de los adaptadores ACP (comprobados en npm el 2026-10-02).
+/// Paquetes de npm de los adaptadores ACP (los del registro ACP, comprobados el 2026-10-29: el de Codex
+/// se mudó de `@zed-industries/codex-acp`, parado en la 0.16.0, a `@agentclientprotocol/codex-acp`).
 pub const CLAUDE_ADAPTER: &str = "@agentclientprotocol/claude-agent-acp";
-pub const CODEX_ADAPTER: &str = "@zed-industries/codex-acp";
+pub const CODEX_ADAPTER: &str = "@agentclientprotocol/codex-acp";
 
 /// Tamaño máximo de un fichero del punto de restauración (los .md son pequeños;
 /// uno enorme no se vigila).
@@ -76,7 +77,6 @@ impl AgentSpec {
 }
 
 /// Programa y argumentos para lanzar un agente reconocido.
-/// @spec REQ-47
 pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError> {
     let need = |name: &str| which(name).ok_or_else(|| AiError::Config(format!("no se encuentra «{name}» en el PATH")));
     let (program, mut args): (PathBuf, Vec<String>) = match spec.id.as_str() {
@@ -84,14 +84,14 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
         "codex" => (need("npx")?, vec!["-y".into(), CODEX_ADAPTER.into()]),
         // `--acp` es el flag actual (registro ACP, Gemini CLI 0.65); `--experimental-acp` era el de las primeras versiones.
         "gemini" => (need("gemini")?, vec!["--acp".into()]),
-        // Antigravity CLI: prefiere agy_acp_server si está en PATH, o agy con --acp
-        "antigravity" | "agy" => {
-            if let Some(server) = which("agy_acp_server") {
-                (server, Vec::new())
-            } else {
-                (need("agy")?, vec!["--acp".into()])
-            }
-        }
+        // Antigravity: la CLI `agy` no habla ACP (no tiene `--acp`); lo hace su servidor `agy_acp_server`,
+        // que se instala aparte desde el registro ACP. En Linux el registro lo lanza con `--uid=`.
+        "antigravity" | "agy" => (
+            which("agy_acp_server").ok_or_else(|| {
+                AiError::Config("Antigravity necesita su servidor ACP «agy_acp_server» (registro ACP): la CLI «agy» no habla ACP".into())
+            })?,
+            if cfg!(target_os = "linux") { vec!["--uid=".into()] } else { Vec::new() },
+        ),
         "copilot" => (need("copilot")?, vec!["--acp".into()]),
         other => return Err(AiError::Config(format!("agente desconocido: {other}"))),
     };
@@ -101,44 +101,14 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
         .as_deref()
         .map(str::trim)
         .filter(|m| !m.is_empty() && *m != spec.id && *m != "antigravity" && *m != "agy");
-    let clean_effort = spec
-        .reasoning_effort
-        .as_deref()
-        .map(str::trim)
-        .filter(|e| !e.is_empty() && *e != "off");
 
     match spec.id.as_str() {
         "claude" => {
             // @agentclientprotocol/claude-agent-acp recibe el modelo y el esfuerzo por variable de entorno y session/set_config_option.
         }
-        "codex" => {
-            if let Some(model) = clean_model {
-                args.push("-c".into());
-                args.push(format!("model=\"{model}\""));
-            }
-            if let Some(effort) = clean_effort {
-                args.push("-c".into());
-                args.push(format!("model_reasoning_effort=\"{effort}\""));
-            }
-        }
-        "antigravity" | "agy" => {
-            if let Some(model) = clean_model {
-                let resolved = if let Some(effort) = clean_effort.filter(|e| matches!(*e, "low" | "medium" | "high")) {
-                    if model.ends_with("-low") || model.ends_with("-medium") || model.ends_with("-high") {
-                        model.to_string()
-                    } else {
-                        format!("{model}-{effort}")
-                    }
-                } else {
-                    model.to_string()
-                };
-                args.push("--model".into());
-                args.push(resolved);
-            }
-            if let Some(effort) = clean_effort {
-                args.push("--effort".into());
-                args.push(effort.into());
-            }
+        "codex" | "antigravity" | "agy" => {
+            // Sin flags: un flag desconocido hace que el adaptador imprima la ayuda y termine. El modelo
+            // llega por entorno (`agent_env`) y por `session/set_config_option`.
         }
         _ => {
             if let Some(model) = clean_model {
@@ -154,7 +124,6 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
 }
 
 /// Variables de entorno adicionales para configurar el modelo y esfuerzo al lanzar el agente ACP.
-/// @spec REQ-47
 pub fn agent_env(spec: &AgentSpec) -> Vec<(String, String)> {
     let mut envs = Vec::new();
     let clean_model = spec
@@ -175,6 +144,19 @@ pub fn agent_env(spec: &AgentSpec) -> Vec<(String, String)> {
             }
             if spec.reasoning_effort.as_deref() == Some("off") {
                 envs.push(("MAX_THINKING_TOKENS".into(), "0".into()));
+            }
+        }
+        "codex" => {
+            // @agentclientprotocol/codex-acp: `CODEX_CONFIG` es un JSON que se mezcla con la configuración de la sesión.
+            let mut config = serde_json::Map::new();
+            if let Some(model) = clean_model {
+                config.insert("model".into(), json!(model));
+            }
+            if let Some(effort) = clean_effort {
+                config.insert("model_reasoning_effort".into(), json!(effort));
+            }
+            if !config.is_empty() {
+                envs.push(("CODEX_CONFIG".into(), Value::Object(config).to_string()));
             }
         }
         "antigravity" | "agy" => {
@@ -608,12 +590,27 @@ mod tests {
             model: Some("gemini-4-argon".into()),
             reasoning_effort: Some("medium".into()),
         };
-        if let Ok((_bin, args)) = agent_command(&agy_spec) {
-            assert!(args.contains(&"--model".to_string()));
-            assert!(args.contains(&"gemini-4-argon-medium".to_string()));
-            assert!(args.contains(&"--effort".to_string()));
-            assert!(args.contains(&"medium".to_string()));
+        // Antigravity solo se lanza con `agy_acp_server`, sin flags; el modelo va por entorno.
+        match agent_command(&agy_spec) {
+            Ok((_bin, args)) => assert!(!args.iter().any(|a| a == "--acp" || a == "--model" || a == "--effort" || a == "medium")),
+            Err(error) => assert!(error.to_string().contains("agy_acp_server")),
         }
+        assert_eq!(agent_env(&agy_spec), vec![("AGY_ACP_DEFAULT_MODEL".to_string(), "gemini-4-argon-medium".to_string())]);
+        // Codex: sin flags (el adaptador no documenta `-c`); modelo y esfuerzo van en `CODEX_CONFIG`.
+        let codex_spec = AgentSpec {
+            id: "codex".into(),
+            model: Some("gpt-6-luna".into()),
+            reasoning_effort: Some("high".into()),
+        };
+        if let Ok((_bin, args)) = agent_command(&codex_spec) {
+            assert_eq!(args.last().map(String::as_str), Some(CODEX_ADAPTER));
+        }
+        let env = agent_env(&codex_spec);
+        assert_eq!(env.len(), 1);
+        assert_eq!(env[0].0, "CODEX_CONFIG");
+        let config: Value = serde_json::from_str(&env[0].1).unwrap();
+        assert_eq!(config, json!({ "model": "gpt-6-luna", "model_reasoning_effort": "high" }));
+        assert!(agent_env(&AgentSpec::new("codex")).is_empty());
         let claude_spec = AgentSpec {
             id: "claude".into(),
             model: Some("claude-sonnet-5-5".into()),

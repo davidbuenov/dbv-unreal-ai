@@ -109,9 +109,16 @@ Para que un modelo de IA actúe como copiloto fiable sin romper los archivos del
 El protocolo **ACP** permite a la aplicación desktop comunicarse con agentes CLI instalados localmente que utilizan suscripciones existentes:
 
 - **Claude Code**: Lanzado vía `npx -y @agentclientprotocol/claude-agent-acp`.
-- **Codex CLI**: Lanzado vía `npx -y @zed-industries/codex-acp`.
-- **Gemini CLI**: Lanzado con `gemini --experimental-acp`.
+- **Codex CLI**: Lanzado vía `npx -y @agentclientprotocol/codex-acp` (el adaptador del registro ACP; el antiguo `@zed-industries/codex-acp` se quedó en la 0.16.0 y no entiende los modelos actuales). Modelo y razonamiento por la variable `CODEX_CONFIG` (JSON), no por flags.
+- **Gemini CLI**: Lanzado con `gemini --acp`.
+- **Google Antigravity**: Lanzado con `agy_acp_server`, su servidor ACP oficial, que se instala aparte desde el [registro ACP](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json). La CLI `agy` **no** habla ACP (no tiene `--acp`).
 - **GitHub Copilot CLI**: Lanzado con `copilot --acp`.
+
+**Nunca se pasan flags desconocidos** a un agente o adaptador: si no reconoce uno, imprime su ayuda y termina. Lo que no esté documentado como flag va por entorno o por `session/set_config_option`.
+
+**Inicio de sesión (`authenticate`):** si `session/new` responde *Authentication required*, el cliente llama a `authenticate` con el primer método que el agente anunció en `initialize` (`authMethods`; p. ej. *Log in with Google*, *Login with ChatGPT*) y reintenta. Puede abrir el navegador; las credenciales las guarda el agente.
+
+**Fuente única:** la implementación de referencia es [`dbv-tauri-starter`](https://github.com/davidbuenov/dbv-tauri-starter) y su `scripts/sync-ai.mjs` comprueba y propaga a cada app los ficheros canónicos y la guía de usuario.
 
 ### Punto de restauración y control de cambios:
 Antes de ceder el turno al agente CLI, el backend toma una foto en memoria (`Snapshot`) de todos los archivos de texto del proyecto. Al finalizar el turno del agente, se calcula el diff exacto (`DiskChange`) de lo que el agente haya modificado en disco, permitiendo al usuario ver el resumen completo y deshacer cambios indeseados con un clic.
@@ -122,4 +129,4 @@ Antes de ceder el turno al agente CLI, el backend toma una foto en memoria (`Sna
 
 - **Plantilla de referencia ejecutable**: [`dbv-tauri-starter`](https://github.com/davidbuenov/dbv-tauri-starter).
 - **Implementación completa en producción**: [`dbv-typst-editor`](https://github.com/davidbuenov/dbv-typst-editor).
-- **Guía de usuario bilingüe**: [`docs/templates/IA.template.md`](./templates/IA.template.md).
+- **Guía de usuario bilingüe (única para todas las apps)**: [`docs/templates/IA.template.md`](./templates/IA.template.md) e [`IA.en.template.md`](./templates/IA.en.template.md). Cada app la genera con `node scripts/sync-ai.mjs --apply <app>` desde `dbv-tauri-starter`; lo propio de la app va debajo de la marca `<!-- dbv-ia:fin-guia-comun`. **Dentro de la app** se muestra la misma guía, sin conexión, con `src/ai/guide.js` (texto en `src/ai/guideContent.js`, también generado): no se escribe una ayuda de IA aparte.

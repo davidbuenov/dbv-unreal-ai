@@ -45,11 +45,11 @@ Lee el fichero `project.config.md`:
 - Si **no existe** ese campo → pregunta al usuario:
   > *"¿Qué versión de dbv-specs-ops estás usando? Puedes encontrarla buscando en tu `CHANGELOG.md` el primer commit del proyecto, o mirando qué ficheros de plataforma tienes (`.windsurfrules` fue añadido en v1.1.0, `project.config.md` en v1.2.0)."*
 
-La versión más reciente del framework es: **3.1.0**
+La versión más reciente del framework es: **3.2.0**
 
 > Esta es la **única** línea de este documento donde se escribe la versión actual. Las Fases 4 y 6 se refieren a ella como «la versión más reciente de la Fase 1» — no copies el número en otros sitios.
 
-Si el usuario ya tiene la **v3.1.0**, informa de que el proyecto está al día. No hay nada que hacer.
+Si el usuario ya tiene la **v3.2.0**, informa de que el proyecto está al día. No hay nada que hacer.
 </version_detection_phase>
 
 ---
@@ -305,6 +305,16 @@ Usa esta tabla para calcular qué hay que actualizar según la versión actual d
 | CAMPO AÑADIDO | `project.config.md` | ⚠️ No sobrescribir. Opcional: bloque `## Release de GitHub` (`GitHub Release: automático \| manual \| no`). Si falta, `/ship` pregunta la primera vez. |
 | SIN CAMBIOS (protegido) | `memory.md` | **No añadas la sección `🚫 Rejection Memory` durante la actualización.** La IA la crea en el trabajo normal la primera vez que tenga algo que registrar (`<procedural_graph>` de `MASTER_PROMPT.md`). |
 | MODIFICADO | `docs/UPGRADE_PROMPT.md` | Este archivo actualizado con la versión v3.1.0. |
+| CAMPO AÑADIDO | `project.config.md` | ⚠️ No sobrescribir. Ver Fase 4: solo `Framework Version`. |
+
+### v3.2.0 (cambios desde v3.1.0)
+| Acción | Fichero | Nota |
+|---|---|---|
+| MODIFICADO | `docs/templates/IA.template.md`, `docs/templates/IA.en.template.md` | Guía de conexión de IAs **única para todas las apps DBV**: local, nube con clave de API y agentes por suscripción (Claude Code, Codex, Gemini CLI, Google Antigravity con su `agy_acp_server`, GitHub Copilot CLI), inicio de sesión ACP, ⚙️ modelo y razonamiento, y problemas frecuentes. Termina en la marca `<!-- dbv-ia:fin-guia-comun`. |
+| MODIFICADO | `docs/AI_DESKTOP_ARCHITECTURE.md` | Adaptadores ACP actuales (`@agentclientprotocol/codex-acp`, `gemini --acp`, `agy_acp_server`), regla de no pasar flags desconocidos, `authenticate` y fuente única de la guía (dentro de la app con `guide.js`). |
+| MODIFICADO | `docs/MASTER_PROMPT.md` | `/ship`: la parte común de `docs/IA.md` no se edita a mano; se genera desde la plantilla (`scripts/sync-ai.mjs` de `dbv-tauri-starter`). |
+| SIN CAMBIOS (protegido) | `docs/IA.md`, `docs/IA.en.md` del proyecto | **No los regeneres durante la actualización.** Si el proyecto usa la IA de `dbv-tauri-starter`, se regeneran con su `node scripts/sync-ai.mjs --apply <ruta-app>`, que conserva lo que la app tenga debajo de la marca. Díselo al usuario en el resumen. |
+| MODIFICADO | `docs/UPGRADE_PROMPT.md` | Este archivo actualizado con la versión v3.2.0. |
 | CAMPO AÑADIDO | `project.config.md` | ⚠️ No sobrescribir. Ver Fase 4: solo `Framework Version`. |
 </upgrade_manifest_phase>
 

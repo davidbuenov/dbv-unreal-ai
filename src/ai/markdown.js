@@ -1,26 +1,28 @@
 // =============================================================================
-// DBV Typst Editor — Renderizador de Markdown seguro (RF-92, RF-96.6)
+// DBV Unreal AI — Renderizador de Markdown seguro
 // Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
 // Licensed under the MIT License. See LICENSE for details.
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
 // Pinta Markdown que viene de FUERA de la aplicación: respuestas de un modelo
-// de IA y la documentación de Typst. Con `withGlobalTauri`, un `<img onerror>`
-// colado en el DOM podría invocar comandos del backend (R-A4), así que aquí no
-// hay `innerHTML`: se construyen nodos y todo texto entra por `textContent`.
+// de IA, documentación y la guía de conexión de IAs. Con `withGlobalTauri`, un
+// `<img onerror>` colado en el DOM podría invocar comandos del backend, así que
+// aquí no hay `innerHTML`: se construyen nodos y todo texto entra por `textContent`.
 // El HTML que traiga el texto se ve tal cual, como texto.
 //
-// Subconjunto suficiente para los dos usos: encabezados (con `{#ancla}`),
-// párrafos, listas anidadas, citas, tablas, bloques de código con lenguaje,
-// regla horizontal y, en línea, código, negrita, cursiva y enlaces. Los enlaces
-// solo se siguen si son `typst:` (documentación) o `http(s):`, y siempre a
-// través de los callbacks: nunca un `href` navegable.
+// Subconjunto suficiente para esos usos: encabezados (con `{#ancla}` o, si no,
+// el ancla de GitHub), párrafos, listas anidadas (también con líneas en blanco
+// dentro de un elemento y numeración que sigue), citas, tablas, bloques de código
+// con lenguaje, regla horizontal y, en línea, código, negrita, cursiva y enlaces.
+// Los enlaces solo se siguen si son `typst:` (documentación), `http(s):` o `#ancla`,
+// y siempre a través de los callbacks: nunca un `href` navegable.
 
 /**
  * @typedef {object} RenderOptions
  * @property {(target: string) => void} [onDocLink] Enlace `typst:ruta#ancla`.
  * @property {(url: string) => void} [onExternalLink] Enlace `http(s):`.
+ * @property {(anchor: string) => void} [onAnchorLink] Enlace `#ancla` dentro del mismo texto.
  * @property {(code: string, lang: string) => HTMLElement[]} [codeActions] Botones bajo cada bloque de código.
  */
 
@@ -42,7 +44,21 @@ export function classifyLink(url) {
   let kind = null;
   if (value.startsWith('typst:')) kind = 'doc';
   else if (/^https?:\/\//i.test(value)) kind = 'external';
+  else if (/^#[\w-]+$/u.test(value)) kind = 'anchor';
   return kind;
+}
+
+/**
+ * Ancla de un encabezado como la calcula GitHub: minúsculas, sin el marcado ni la
+ * puntuación, espacios a guiones (`Google Antigravity: instalar…` → `google-antigravity-instalar…`).
+ */
+export function slugify(text) {
+  return String(text ?? '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+    .trim()
+    .replace(/\s/g, '-');
 }
 
 /**
@@ -88,18 +104,19 @@ function appendSegments(parent, segments, options) {
 
 function appendLink(parent, segment, options) {
   const kind = classifyLink(segment.url);
-  const handler = kind === 'doc' ? options.onDocLink : kind === 'external' ? options.onExternalLink : null;
+  const handlers = { doc: options.onDocLink, external: options.onExternalLink, anchor: options.onAnchorLink };
+  const handler = kind ? handlers[kind] : null;
   if (!handler) {
     parent.append(document.createTextNode(segment.text));
     return;
   }
   const link = el('a', `md-link md-link--${kind}`);
   link.href = '#';
-  link.title = segment.url;
+  if (kind !== 'anchor') link.title = segment.url;
   appendInline(link, segment.text, options);
   link.addEventListener('click', (event) => {
     event.preventDefault();
-    handler(kind === 'doc' ? segment.url.slice('typst:'.length) : segment.url);
+    handler(kind === 'doc' ? segment.url.slice('typst:'.length) : kind === 'anchor' ? segment.url.slice(1) : segment.url);
   });
   parent.append(link);
 }
@@ -168,22 +185,33 @@ export function parseBlocks(markdown) {
     }
     if (LIST_ITEM.test(line)) {
       const items = [];
-      const baseIndent = line.match(LIST_ITEM)[1].length;
-      const ordered = /\d/.test(line.match(LIST_ITEM)[2]);
+      const first = line.match(LIST_ITEM);
+      const baseIndent = first[1].length;
+      const ordered = /\d/.test(first[2]);
+      const indentOf = (text) => text.match(/^\s*/)[0].length;
       while (index < lines.length) {
         const current = lines[index];
         const item = current.match(LIST_ITEM);
         if (item && item[1].length === baseIndent) {
-          items.push({ text: item[3], sub: [] });
+          items.push({ text: item[3], sub: [], contentIndent: baseIndent + item[2].length + 1 });
           index += 1;
-        } else if (current.trim() && items.length && (current.match(/^\s*/)[0].length > baseIndent)) {
-          items.at(-1).sub.push(current.slice(baseIndent + 2));
+        } else if (current.trim() && items.length && indentOf(current) > baseIndent) {
+          items.at(-1).sub.push(current.slice(Math.min(items.at(-1).contentIndent, indentOf(current))));
           index += 1;
+        } else if (!current.trim() && items.length) {
+          // Una línea en blanco no corta la lista si sigue el mismo elemento (sangrado) u otro elemento.
+          let next = index + 1;
+          while (next < lines.length && !lines[next].trim()) next += 1;
+          const nextItem = lines[next]?.match(LIST_ITEM);
+          if (next >= lines.length || (indentOf(lines[next]) <= baseIndent && !(nextItem && nextItem[1].length === baseIndent))) break;
+          if (indentOf(lines[next]) > baseIndent) items.at(-1).sub.push('');
+          index = next;
         } else break;
       }
       blocks.push({
         type: 'list',
         ordered,
+        start: ordered ? Number.parseInt(first[2], 10) : 1,
         items: items.map((item) => ({ text: item.text, children: item.sub.length ? parseBlocks(item.sub.join('\n')) : [] })),
       });
       continue;
@@ -209,7 +237,7 @@ function renderBlocks(blocks, parent, options) {
   for (const block of blocks) {
     if (block.type === 'heading') {
       const node = el(`h${Math.min(6, block.level + 1)}`, 'md-heading');
-      if (block.anchor) node.dataset.anchor = block.anchor;
+      node.dataset.anchor = block.anchor ?? slugify(block.text);
       appendInline(node, block.text, options);
       parent.append(node);
     } else if (block.type === 'paragraph') {
@@ -231,6 +259,7 @@ function renderBlocks(blocks, parent, options) {
       parent.append(wrap);
     } else if (block.type === 'list') {
       const list = el(block.ordered ? 'ol' : 'ul', 'md-list');
+      if (block.ordered && block.start > 1) list.start = block.start;
       for (const item of block.items) {
         const li = el('li');
         appendInline(li, item.text, options);

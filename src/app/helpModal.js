@@ -5,10 +5,29 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-46
+// @spec REQ-46, REQ-48
 //
+// La pestaña «Guía de IAs» pinta la guía común de todas las apps DBV (`src/ai/guide.js`, texto
+// generado desde dbv-specs-ops), no un texto propio: así la ayuda y `docs/IA.md` no se desvían.
 
 import { getLanguage, t } from '../ai/i18nBridge.js';
+
+/** La guía usa los estilos de la IA, que normalmente se cargan con ella: se piden aquí si faltan. */
+function ensureAiStyles() {
+  if (document.getElementById('ai-styles')) return;
+  const link = document.createElement('link');
+  link.id = 'ai-styles';
+  link.rel = 'stylesheet';
+  link.href = 'ai/ai.css';
+  document.head.appendChild(link);
+}
+
+/** Pinta la guía común en `container` (se carga solo al abrir la pestaña) si la pestaña sigue abierta. */
+async function renderAiGuide(container, stillOpen) {
+  ensureAiStyles();
+  const [{ renderGuide }, backend] = await Promise.all([import('../ai/guide.js'), import('../ai/backend.js')]);
+  if (stillOpen()) renderGuide(container, { openExternalUrl: (url) => backend.openExternalUrl(url) });
+}
 
 export function createHelpModal(modalElement, contentElement) {
   let activeTab = 'ue';
@@ -32,48 +51,8 @@ export function createHelpModal(modalElement, contentElement) {
         </div>
       `;
     },
-    ai: () => {
-      const isEs = getLanguage() === 'es';
-      return `
-        <div class="help-section">
-          <h4>${isEs ? 'Modalidades de IA disponibles' : 'Available AI Modalities'}</h4>
-          <p>${isEs
-            ? 'Puedes conectar tres tipos de IA según tu preferencia de coste y privacidad:'
-            : 'You can connect three types of AI according to your cost and privacy preferences:'}</p>
-          <table class="help-table">
-            <thead>
-              <tr>
-                <th>${isEs ? 'Tipo' : 'Type'}</th>
-                <th>${isEs ? 'Ejemplos' : 'Examples'}</th>
-                <th>${isEs ? 'Privacidad / Coste' : 'Privacy / Cost'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong style="color: #a371f7;">${isEs ? 'Suscripción' : 'Subscription'}</strong></td>
-                <td>Claude Code, Antigravity CLI, Gemini CLI, Codex, Copilot CLI</td>
-                <td>${isEs ? 'Usa tu suscripción activa (Pro/Plus/Google One) a través de su agente CLI.' : 'Uses your active subscription (Pro/Plus/Google One) via CLI agent.'}</td>
-              </tr>
-              <tr>
-                <td><strong style="color: #d29922;">${isEs ? 'API Cloud' : 'Cloud API'}</strong></td>
-                <td>Anthropic Claude, OpenAI, Google AI Studio, OpenRouter</td>
-                <td>${isEs ? 'Pago directo por tokens consumidos. Requiere API key custodiada en el sistema.' : 'Pay-per-token directly. Requires API key stored securely.'}</td>
-              </tr>
-              <tr>
-                <td><strong style="color: #3fb950;">${isEs ? 'Local' : 'Local'}</strong></td>
-                <td>Ollama (11434), LM Studio (1234)</td>
-                <td>${isEs ? '100% privado y gratuito. Nada sale de tu máquina.' : '100% private and free. Nothing leaves your machine.'}</td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="help-box" style="margin-top: 6px;">
-            ${isEs
-              ? '💡 <em>Google Antigravity CLI</em> es el agente oficial para cuentas gratuitas y Google One / Gemini Advanced. Para claves directas de API, utiliza <em>Google AI Studio</em> o <em>Gemini CLI</em>.'
-              : '💡 <em>Google Antigravity CLI</em> is the official agent for free and Google One / Gemini Advanced accounts. For direct API keys, use <em>Google AI Studio</em> or <em>Gemini CLI</em>.'}
-          </p>
-        </div>
-      `;
-    },
+    // La pinta `renderAiGuide` (DOM seguro, no HTML en texto): aquí solo el aviso mientras se carga.
+    ai: () => `<p class="hint">${getLanguage() === 'es' ? 'Cargando la guía…' : 'Loading the guide…'}</p>`,
     shortcuts: () => {
       const isEs = getLanguage() === 'es';
       return `
@@ -116,6 +95,12 @@ export function createHelpModal(modalElement, contentElement) {
     contentElement.innerHTML = fn();
     for (const btn of modalElement.querySelectorAll('[data-help-tab]')) {
       btn.classList.toggle('active', btn.dataset.helpTab === activeTab);
+    }
+    modalElement.querySelector('.help-card')?.classList.toggle('help-card--wide', activeTab === 'ai');
+    if (activeTab === 'ai') {
+      renderAiGuide(contentElement, () => activeTab === 'ai').catch((error) => {
+        contentElement.textContent = String(error?.message ?? error);
+      });
     }
   }
 

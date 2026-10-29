@@ -423,6 +423,10 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
   flex-direction: column;
   gap: 12px;
 }
+.help-card--wide { width: min(900px, 94vw); }
+/* Con la guía de IAs (larga y con tablas): las pestañas no se encogen y el cuerpo no se ensancha. */
+.help-card > *:not(.help-body) { flex: 0 0 auto; }
+.help-card--wide .help-body { display: block; min-width: 0; }
 .help-close-btn { position: absolute; top: 12px; right: 12px; }
 .help-header { display: flex; align-items: center; gap: 8px; }
 .help-icon { font-size: 20px; }

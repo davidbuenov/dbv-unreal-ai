@@ -11,6 +11,26 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.2.3] - 2026-10-29
+
+La conexión a IAs y su guía pasan a ser las mismas de todas las apps DBV: las de [`dbv-tauri-starter`](https://github.com/davidbuenov/dbv-tauri-starter) `template-v0.4.0`, donde se probaron agente por agente en la app real.
+
+### Fixed
+
+- **Google Antigravity ya conversa (REQ-49):** la app lanzaba `agy --acp`, que no existe (la CLI `agy` no habla ACP). Ahora se conecta con su servidor oficial `agy_acp_server`, del registro ACP, que también se busca en `%LOCALAPPDATA%\agy\acp-server` (Windows) y `~/.local/share/agy-acp-server` (macOS/Linux). Con solo `agy`, «Conectar una IA» lo dice y enlaza a las instrucciones.
+- **Inicio de sesión de los agentes (REQ-49):** si el agente responde *Authentication required*, la app le pide `authenticate` con su método habitual (*Log in with Google*, *Login with ChatGPT*) y reintenta; el panel avisa de que puede abrirse el navegador.
+- **Codex ya no responde «Internal error» (REQ-49):** el adaptador pasa a `@agentclientprotocol/codex-acp` (el de `@zed-industries` se quedó en la 0.16.0 y no entiende los modelos actuales); modelo y razonamiento van en `CODEX_CONFIG` en vez de flags `-c`.
+- **GitHub Copilot (REQ-49):** el `copilot` que VS Code pone en el `PATH` es un lanzador; se prefiere la CLI de verdad y el lanzador solo cuenta si responde. Sin CLI, Copilot aparece como no instalado y «Cómo instalarlo» lleva a la guía.
+- **Panel del asistente:** el contenedor lleva la clase `ai-panel`, así que cabecera, contexto y caja de escritura no se encogen y las fichas de contexto ya no se cortan.
+
+### Changed
+
+- **Guía de IAs común, dentro de la app (REQ-48):** la pestaña *Guía de IAs* del Centro de Ayuda (`F1`) muestra la guía completa de todas las apps DBV (local, nube con clave, suscripción con cada agente, inicio de sesión, ⚙️ modelo y razonamiento, problemas frecuentes), sin conexión y con botón *Copiar* en cada bloque de órdenes. También la abren «¿Dudas sobre qué IA elegir o cómo instalarla? Abre la guía» y «Cómo instalarlo» de Antigravity y Copilot, que saltan a su sección. `docs/IA.md` y `docs/IA.en.md` se generan desde la misma plantilla; lo propio de Unreal y Tripo va al final.
+- **Modelo y razonamiento sin flags no documentados:** Antigravity los recibe por `AGY_ACP_DEFAULT_MODEL` y `session/set_config_option`; ningún agente recibe ya un flag que su adaptador no documente.
+- **Framework** `dbv-specs-ops` 3.1.0 → 3.2.0.
+- **Microsoft Store:** paquete `dbv-unreal-ai_0.2.3.0.msixbundle` y documentación del envío al día (`MICROSOFT_STORE.md` §4; novedades, descripción y notas para la certificación en `descripcionStore_es.md` y `descripcionStore_en.md`).
+- **Banco e2e reparado:** fallaba desde la v0.2.0 porque su backend simulado no conocía la memoria del proyecto (la conexión automática con el editor se quedaba en «Sin editor») y un test exigía una lista exacta de llamadas que la v0.2.0 amplió con consultas de solo lectura. Ahora pasa entero, comprueba también la guía de F1 y el «Acerca de» (REQ-45, que no tenía prueba) y acepta `E2E_PORT` para no chocar con un navegador abierto en modo depuración en el 9333.
+
 ## [0.2.2] - 2026-10-29
 
 ### Added

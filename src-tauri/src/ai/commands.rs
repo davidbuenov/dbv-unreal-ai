@@ -183,7 +183,6 @@ pub async fn ai_list_models(app: AppHandle, state: State<'_, AiState>, connectio
 
 /// Consulta los modelos disponibles para un agente CLI específico en tiempo real,
 /// usando la caché de sesión salvo que `force_refresh` sea `Some(true)`.
-/// @spec REQ-47
 #[tauri::command]
 pub async fn ai_list_agent_models(agent_id: String, force_refresh: Option<bool>) -> Result<Vec<detect::AgentModelOption>, AiError> {
     let refresh = force_refresh.unwrap_or(false);

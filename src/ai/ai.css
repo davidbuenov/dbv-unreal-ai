@@ -28,9 +28,15 @@
 }
 .ai-sidebar.hidden { display: none; }
 .ai-sidebar .ai-panel { height: 100%; }
+/* El contenedor ES el panel (`.ai-panel`): cabecera, contexto y caja de escritura no se encogen. */
+.ai-sidebar.ai-panel { padding: 10px 12px 12px; }
 /* Los botones globales de la app (`styles.css`) son grandes: aquí se compactan, sin sombra. */
 .ai-sidebar button, .ai-connect-card button, .ai-confirm-card button { font-size: 13px; padding: 4px 10px; box-shadow: none; }
 .ai-sidebar .btn-icon, .ai-connect-card .btn-icon { padding: 2px 6px; }
+/* La ✕ de las fichas de contexto no es un botón «de verdad»: sin esto hereda el tamaño de arriba,
+   la ficha crece y la barra de contexto (alto máximo fijo) la corta. */
+.ai-sidebar .ai-chip__remove { min-height: 0; padding: 0 3px; font-size: inherit; line-height: 1; border: 0; background: none; }
+.ai-chip { line-height: 1.5; }
 
 /* ─── Modales de la IA (conectar, confirmar) sobre los `.modal-overlay` de la app ── */
 #ai-connect-modal, #ai-confirm-modal { z-index: 300; }
@@ -469,3 +475,46 @@ pre:hover .code-actions, pre:focus-within .code-actions { opacity: 1; }
   gap: 8px;
   margin-top: 4px;
 }
+
+/* ─── Guía de conexión de IAs dentro de la app (guide.js) ─────────────── */
+.ai-guide {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.ai-guide__card {
+  display: flex;
+  flex-direction: column;
+  width: min(880px, 100%);
+  max-height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px var(--shadow);
+}
+.ai-guide__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.ai-guide__title { margin: 0; font-size: 15px; }
+.ai-guide__content { overflow: auto; padding: 4px 20px 20px; }
+.ai-guide__body { font-size: 13px; line-height: 1.55; }
+.ai-guide__body .md-heading { scroll-margin-top: 8px; }
+.ai-guide__body h2.md-heading { font-size: 19px; margin-top: 0.6em; }
+.ai-guide__body h3.md-heading { font-size: 16px; margin-top: 1.2em; padding-top: 0.6em; border-top: 1px solid var(--border); }
+.ai-guide__body h4.md-heading { font-size: 14px; margin-top: 1em; }
+.ai-guide__body .md-table { font-size: 12px; margin: 0.5em 0; }
+.ai-guide__body .md-table th { background: var(--bg-secondary); text-align: left; }
+.ai-guide__body .md-codeblock pre { margin: 0; padding: 8px 10px; overflow-x: auto; font-family: var(--font-mono); font-size: 12px; }
+.ai-guide__body .md-link { color: var(--accent); }
+.ai-guide__body .md-codeblock__actions { display: flex; justify-content: flex-end; padding: 2px 6px; border-top: 1px solid var(--border); }

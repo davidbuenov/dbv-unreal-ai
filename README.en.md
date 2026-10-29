@@ -5,9 +5,9 @@
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
 
 [![Website](https://img.shields.io/badge/Website-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/en/)
-[![Releases v0.2.2](https://img.shields.io/badge/Releases-v0.2.2-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.2.3](https://img.shields.io/badge/Releases-v0.2.3-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
-[![status](https://img.shields.io/badge/status-stable_%7C_v0.2.2-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.2.2)
+[![status](https://img.shields.io/badge/status-stable_%7C_v0.2.3-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.2.3)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -145,6 +145,13 @@ These channels are not available yet; they will arrive in an upcoming version. I
 <a name="status"></a>
 
 ## 🚧 Status
+
+**v0.2.3** (2026-10-29). The AI connection and its guide are now the same as in every DBV app ([`dbv-tauri-starter`](https://github.com/davidbuenov/dbv-tauri-starter), where they were tested agent by agent):
+
+- **Every subscription agent works (REQ-49):** Google Antigravity through its official `agy_acp_server` and sign-in with your Google account, Codex with the current adapter (no more "Internal error"), GitHub Copilot telling its CLI apart from the VS Code launcher, and Claude Code;
+- **Full AI guide inside the app (REQ-48):** in `F1` → *AI Guide* and from "Connect an AI", offline and with a *Copy* button for every install command; it is the same as [`docs/IA.en.md`](./docs/IA.en.md).
+
+<p align="center"><img src="docs/assets/demoseleccionIA.gif" alt="Connecting an AI in DBV Unreal AI: detection, subscription agents and choice of model and reasoning" width="820"></p>
 
 **v0.2.1** (2026-10-28). Minor release focused on usability, transparent AI connectivity, built-in help, and store preparation:
 

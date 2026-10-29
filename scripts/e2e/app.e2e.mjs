@@ -7,7 +7,7 @@
 //
 // La ventana real con el backend de Rust simulado: conexión automática con el editor, vistas,
 // y una conversación en la que el modelo pide Python → la app lo valida → tarjeta de aprobación →
-// «Permitir» → se ejecuta y queda en el registro de acciones. @spec REQ-01, REQ-02, REQ-08, REQ-12, REQ-14, REQ-17, REQ-20, REQ-26, RNF-IA.1
+// «Permitir» → se ejecuta y queda en el registro de acciones; y la guía de IAs de F1. @spec REQ-01, REQ-02, REQ-08, REQ-12, REQ-14, REQ-17, REQ-20, REQ-26, REQ-45, REQ-48, RNF-IA.1
 //
 // Uso: npm run test:e2e   (sin Edge/Chromium se omite). Captura en `$E2E_SCREENSHOT_DIR` si se define.
 
@@ -52,6 +52,17 @@ function extra(connections, hasKey = false) {
     library_location: { current: 'C:/Users/u/AppData/Roaming/com.davidbuenov.dbv-unreal-ai/library', default: 'C:/Users/u/AppData/Roaming/com.davidbuenov.dbv-unreal-ai/library', isDefault: true },
     library_list: [entry],
     app_mcp_command: { command: 'C:/Program Files/DBV Unreal AI/dbv-unreal-ai.exe', args: ['--mcp', '--port', '8000'] },
+    // Memoria del proyecto (REQ-34, v0.2.0) aún sin activar, con la forma de `MemoryStatus` de Rust. Sin esto la
+    // vista Proyecto falla al pintarse y la conexión automática con el editor se queda a medias.
+    memory_status: {
+      active: false,
+      memory: { doc: 'memory', exists: false, text: '', hash: '' },
+      tasks: { doc: 'tasks', exists: false, text: '', hash: '' },
+      taskList: [],
+      summary: '',
+      missing: [{ file: 'dbv-unreal-ai/memory.md', text: '# Memoria del proyecto\n' }, { file: 'dbv-unreal-ai/task.md', text: '# Tareas\n' }],
+    },
+    memory_tool_specs: [],
   });
 }
 
@@ -122,6 +133,26 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     await h.sleep(400);
     ok('Ajustes da la configuración MCP para otros agentes', (await h.eval(`return document.querySelector('#view-settings pre')?.textContent ?? ''`)).includes('--mcp'));
     await shot(h, 'settings.png');
+
+    // F1 → «Guía de IAs»: la guía común de todas las apps DBV (REQ-48), con las pestañas visibles y sin desbordar.
+    await h.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F1', bubbles: true }))`);
+    await h.sleep(600);
+    await h.eval(`document.querySelector('[data-help-tab="ai"]').click()`);
+    await h.sleep(1500);
+    const guide = await h.eval(`const body = document.getElementById('help-content'); const tab = document.querySelector('[data-help-tab="ai"]'); return { title: body.querySelector('h2')?.textContent ?? '', copy: body.querySelectorAll('.ai-guide__copy').length, tabHeight: tab.getBoundingClientRect().height, overflowX: body.scrollWidth - body.clientWidth }`);
+    ok('F1 → «Guía de IAs» muestra la guía común de la app (REQ-48)', guide.title.includes('DBV Unreal AI') && guide.copy > 3, JSON.stringify(guide));
+    ok('las pestañas de la ayuda se ven y la guía no desborda a lo ancho', guide.tabHeight >= 20 && guide.overflowX <= 1, JSON.stringify(guide));
+    await shot(h, 'help-ai-guide.png');
+    await h.eval(`document.getElementById('help-close').click()`);
+
+    // «Acerca de» (REQ-45): logo, versión, enlaces oficiales y plataforma; se cierra con ✕.
+    await h.eval(`document.getElementById('btn-about').click()`);
+    await h.sleep(400);
+    const about = await h.eval(`const m = document.getElementById('about-modal'); return { open: !m.classList.contains('hidden'), logo: Boolean(m.querySelector('img')), version: document.getElementById('about-version').textContent, web: document.getElementById('about-link-web')?.href ?? '', github: document.getElementById('about-link-github')?.href ?? '', platform: document.getElementById('about-platform-val').textContent }`);
+    ok('«Acerca de» enseña logo, versión, enlaces y plataforma (REQ-45)', about.open && about.logo && about.version.includes('9.9.9-e2e') && about.web.includes('davidbuenov.com') && about.github.includes('github.com/davidbuenov/dbv-unreal-ai') && ['windows', 'macos', 'linux'].includes(about.platform), JSON.stringify(about));
+    await shot(h, 'about.png');
+    await h.eval(`document.getElementById('about-close').click()`);
+    ok('«Acerca de» se cierra con ✕', await h.eval(`return document.getElementById('about-modal').classList.contains('hidden')`));
     const errs = h.errors();
     ok('sin excepciones ni console.error', errs.length === 0, JSON.stringify(errs.slice(0, 3)));
   } finally {
@@ -147,7 +178,10 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     const card = await h.eval(`const c = document.querySelector('.unreal-approval'); return c ? { code: c.querySelector('pre').textContent, purpose: c.querySelector('.unreal-approval__purpose')?.textContent } : null`);
     ok('aparece la tarjeta de aprobación con el código entero', card?.code === 'import unreal\nresult = 42' && card.purpose === 'Calcular la respuesta', JSON.stringify(card));
     const before = await h.eval(`return window.__calls.filter((c) => c[0] === 'unreal_call_tool').map((c) => c[1].tool)`);
-    ok('antes de aprobar solo se ha VALIDADO, no ejecutado', JSON.stringify(before) === '["validate_python"]', JSON.stringify(before));
+    // Antes de aprobar: el Python se ha validado y no se ha ejecutado. Las demás llamadas son de solo lectura
+    // (v0.2.0: identidad del editor para las varias instancias, REQ-07, y contador de deshacer, REQ-40).
+    const readOnly = ['get_project_info', 'get_undo_count', 'validate_python'];
+    ok('antes de aprobar solo se ha VALIDADO, no ejecutado', before.includes('validate_python') && !before.includes('run_python') && before.every((tool) => readOnly.includes(tool)), JSON.stringify(before));
     const tools = await h.eval(`return (window.__chat[0].request.tools || []).map((t) => t.name)`);
     ok('el modelo recibe las herramientas de Unreal y de generación', ['unreal_list_toolsets', 'unreal_run_python', 'generate_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'library_send_to_unreal'].every((n) => tools.includes(n)), JSON.stringify(tools));
     const system = await h.eval(`return window.__chat[0].request.messages[0].content`);

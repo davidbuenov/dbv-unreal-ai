@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.2.2 en desarrollo** (2026-10-28). Selección dinámica de modelo y esfuerzo de razonamiento en agentes CLI (REQ-47).
-* **Última decisión técnica**: Inclusión de botón de ajustes ⚙️ en agentes conectados, consulta dinámica de modelos CLI con versión mínima Gemini 3.8 Flash para Antigravity CLI, y paso de flags `--model` y reasoning a ACP.
-* **Próximo paso**: Ejecución de `/build` v0.2.2 (Slices S38 y S39).
+* **Estado actual**: **v0.2.3** (2026-10-29). Conexión a IAs y guía comunes a todas las apps DBV (REQ-48, REQ-49), desde `dbv-tauri-starter` `template-v0.4.0`.
+* **Última decisión técnica**: los ficheros de conexión a IAs y la guía son canónicos (vienen de `dbv-tauri-starter` con `scripts/sync-ai.mjs`); lo propio de Unreal va en `aiApp.js`, `app.js`, la ayuda F1 y debajo de la marca de `docs/IA.md` (ADR del 2026-10-29 en `memory.md`).
+* **Próximo paso**: probar la v0.2.3 publicada (agentes en la app instalada) y subir el MSIX a Partner Center (`dbv-specs-ops/docs/MICROSOFT_STORE.md` si existe, o `descripcionStore_*.md`).
 
 ## Checklist de Tareas
 
@@ -91,6 +91,18 @@
 - [x] **`/code-simplify` v0.2.2** — Revisión de código y cumplimiento (0 warnings en Rust, 0 errores en `dbv-lint`).
 - [x] **`/ship` v0.2.2** — Bump de versión a 0.2.2, CHANGELOG y notas de release.
 
+## v0.2.3 — Conexión a IAs común a todas las apps DBV (REQ-48, REQ-49; plan en `implementation_plan.md` §8)
+- [x] **`/spec`** — REQ-48 (guía común dentro de la app) y REQ-49 (agentes que funcionan); correcciones en REQ-44, REQ-46 y REQ-47 (`agy --acp` y los flags `-c`/`--effort` no existían o no estaban documentados).
+- [x] **`/plan`** — §8 (S40–S44), riesgos R-22..R-24.
+- [x] **S40 · Framework 3.1.0 → 3.2.0** — plantillas de IA, `AI_DESKTOP_ARCHITECTURE`, `MASTER_PROMPT`, `UPGRADE_PROMPT`, `Framework Version`.
+- [x] **S41 · Guía común** — lo propio de Unreal debajo de la marca en `docs/IA*.md`; `sync-ai.mjs --apply` desde el starter (detección, ACP, asistente, `guide.js`, `markdown.js` y tests); pestaña *Guía de IAs* de `F1` con `renderGuide()`.
+- [x] **S42 · Integración** — traducciones (`ai.agentNoAcp`, `ai.agentSigningIn`, `ai.guideTitle`, `ai.copy`), `onAuthenticate` en `aiApp.js`, estilos `.ai-guide`, clase `ai-panel` en el contenedor y ✕ de las fichas.
+- [x] **S43 · Trazabilidad propia** — `tests/app/aiIntegration.test.js` (REQ-09, 11, 20, 43, 44, 46, 47, 48, 49, RF-IA-01, RF-IA-02).
+- [x] **`/test`** — Vitest 294/294, Rust 177/177, Python OK, `dbv-lint` sin errores (3 requisitos sin test, los mismos que en la v0.2.2), `sync-ai --check` desde el starter OK; la ayuda F1 comprobada en el banco con capturas.
+- [x] **Banco e2e reparado** — llevaba roto desde la v0.2.0 (mismos fallos en la v0.2.2): su backend simulado no tenía `memory_status`/`memory_tool_specs` (la vista Proyecto fallaba y la conexión automática se quedaba en «Sin editor») y un test exigía que antes de aprobar solo se llamara a `validate_python`, cuando la v0.2.0 añadió dos consultas de solo lectura (`get_project_info`, `get_undo_count`). Ahora pasa entero y comprueba también la guía de F1 (REQ-48) y el «Acerca de» (REQ-45, sin prueba hasta ahora); el simulador da una versión a `getVersion()` (antes salía «Versión null»). Trazabilidad: solo quedan sin test REQ-21 y REQ-23, que aún no están construidos (v0.2/v0.3 de la hoja de ruta). `E2E_PORT` para no chocar con un navegador en el 9333.
+- [x] **MSIX y Microsoft Store** — `npm run tauri:windows:build` → `src-tauri/target/msix/dbv-unreal-ai_0.2.3.0.msixbundle` (Identity 0.2.3.0, `runFullTrust`, assets sin relleno); `MICROSOFT_STORE.md` §4 y fichas `descripcionStore_*.md` (novedades v0.2.3, descripción, notas de certificación). Subirlo a Partner Center lo hace el usuario.
+- [x] **`/ship`** — versión 0.2.3 (package.json, package-lock.json —estaba en 0.2.1—, Cargo.toml, Cargo.lock, tauri.conf.json), CHANGELOG ES/EN, notas `releases/v0.2.3*.md`, README (insignias, estado y GIF) y web (estaba en v0.2.0).
+
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
 - [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).
@@ -98,7 +110,7 @@
 - [x] README (ES/EN): sección «Descárgalo e instálalo» por sistema operativo con los instaladores de la Release, avisos de SmartScreen y Gatekeeper, y canales «próximamente» (2026-10-25).
 - [ ] **Canales de distribución** (anunciados como «próximamente» en el README): tap de Homebrew `davidbuenov/homebrew-dbv-unreal-ai` que se actualice solo en cada Release (como el de dbv-md-reader); Microsoft Store (MSIX firmado por la Store, ver `dbv-specs-ops/docs/MARKETPLACE_PUBLISHING.md`); ficha en Uptodown para Windows y macOS. Al publicarlos, cambiar la sección «Próximamente» del README.
 - [ ] **Actualizaciones:** la app no se actualiza sola (`includeUpdaterJson: false`, sin plugin updater). Decidir si se añade el updater de Tauri para los instaladores de Releases o se delega en Store/Homebrew.
-- [x] **Antigravity CLI como quinto agente** (formalizado en v0.2.1 con REQ-44). Datos del 2026-10-25: el CLI es `agy` (instalador por script, no npm). El ACP oficial corre vía `agy_acp_server` o `agy --acp`. Enlace: `https://antigravity.google/product/antigravity-cli`.
+- [x] **Antigravity CLI como quinto agente** (formalizado en v0.2.1 con REQ-44). Datos del 2026-10-25: el CLI es `agy` (instalador por script, no npm). ~~El ACP oficial corre vía `agy_acp_server` o `agy --acp`~~ *(corregido el 2026-10-29: `agy --acp` no existe; solo `agy_acp_server`, del registro ACP — REQ-49)*. Enlace: `https://antigravity.google/product/antigravity-cli`.
 
 
 - [ ] **Idioma chino (`zh-CN`)** — aplazado por el usuario el 2026-10-26 (la comunidad de Tripo en China es grande; dbv-md-reader añadió coreano). Al retomarlo: un tercer idioma en `i18n.js` y en los dos `translations.js` (~900 textos), selector y detección de `zh-*`; `LANGUAGE` de `context.js` y `agentPreamble` (hoy `lang === 'es' ? … : 'Answer in English.'`: un tercer idioma caería en inglés); los errores del backend en Rust están en español; `README.zh-CN.md` e `IA.zh-CN.md`; revisión por una persona nativa; investigar el acceso desde China (proveedores como DeepSeek o Qwen, y si Tripo tiene allí otra plataforma).
@@ -122,7 +134,9 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-29, entrega v0.2.2 completada.
+> **Last update / Última actualización:** 2026-10-29, entrega v0.2.3: conexión a IAs y guía comunes con `dbv-tauri-starter` (REQ-48, REQ-49); Vitest 294, Rust 177. Lo de abajo es el snapshot de la v0.2.2, que sigue vigente salvo en la IA.
+>
+> **Snapshot v0.2.2:**
 > **Exact point / Punto exacto:** (1) Descubrimiento dinámico de modelos por CLI (Antigravity CLI con Argon/Flash, Claude Code stream-json handshake, Codex debug models); (2) Selector dinámico de reasoning effort; (3) Píldora resumen estilo Visual Studio (Gemini 4 Argon Medium, Claude Sonnet 5.5 Medium, GPT-6-Luna Medium); (4) Caché de sesión y refresco manual (🔄); (5) Propagación a sesiones ACP; (6) Enlaces de Microsoft Store en README y docs. 176 tests Rust y 273 tests Vitest pasando.
 > **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, toolset C++ 0.2.0): Nivel activo `/Game/DBV/Maps/PruebasGaussianSplat`.
 > **Pending / Pendiente:** (1) S28: cielo y automatización de iluminación; (2) S29: MCPs de terceros (REQ-21); (3) Subida de paquete MSIX a Partner Center de Microsoft Store.

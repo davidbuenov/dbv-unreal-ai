@@ -25,7 +25,7 @@ Key Features:
 • Safe, one-click turn and transaction undo directly within Unreal Engine
 • Persistent, disk-versioned Project Memory and Task Planning system
 • Automatic detection of multiple Unreal Engine instances and parallel projects
-• Interactive Help Center (F1) with Unreal Engine 5.8 guides, shortcuts, and AI catalog
+• Interactive Help Center (F1) with Unreal Engine 5.8 guides, shortcuts, and the full guide to connect each AI, available offline
 • Warm, polished interface with dark mode and high-contrast support
 • Completely private: your projects, levels, and code never leave your machine
 • Open-source under the MIT license
@@ -34,12 +34,12 @@ Key Features:
 
 ## What's new in this version
 
-v0.2.1:
-• Clear tripartite AI classification: Local AIs (100% offline), Subscription AIs (CLI agents), and Cloud AIs with API key, with real-time reactive status badges.
-• Official integration of Google Antigravity CLI (agy) for Google One and Gemini Advanced subscriptions, coexisting seamlessly with Gemini CLI for direct API access.
-• New built-in Help Center accessible via the header (?) button and global F1 shortcut, featuring Unreal Engine 5.8 setup guides, AI comparison tables, and shortcuts.
-• Redesigned "About" dialog modeled after DBV Typst Editor, with platform runtime telemetry and official project links.
-• Full MSIX packaging configuration and assets ready for Microsoft Store distribution.
+v0.2.3:
+• Every subscription agent works: Google Antigravity (through its official agy_acp_server and sign-in with your Google account), Codex, GitHub Copilot and Claude Code.
+• Guided sign-in: if the agent asks for it, the app requests it with your account and warns you that a browser may open.
+• Full guide to connect each AI inside the app (F1 → AI Guide and from "Connect an AI"), offline and with a Copy button for every install command.
+• If an agent is installed but something is missing (the Antigravity server or the Copilot CLI), the app says so and takes you to the instructions.
+• Clearer assistant panel: context chips are no longer cut off.
 
 ---
 
@@ -92,3 +92,4 @@ Artificial Intelligence features are 100% optional and disabled by default:
 - The app is completely functional without AI configured (project preparation, viewport inspection, 3D library and asset management).
 - If the user chooses to connect an AI, they can choose between 100% local models (Ollama or LM Studio with no network access), CLI agents using existing user subscriptions, or cloud models using their own private API key securely stored in the OS credential manager.
 - No user data or project files leave the computer without explicit user action and consent.
+- Subscription agents (Claude Code, Codex, Gemini CLI, Google Antigravity, GitHub Copilot CLI) are separate programs the user installs and signs in to on their own; the app only launches them, with the project folder as working directory, when the user connects one. If an agent asks to sign in, it may open the system browser for the user to log in to that service.

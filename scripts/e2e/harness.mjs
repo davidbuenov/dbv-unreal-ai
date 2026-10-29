@@ -32,7 +32,7 @@ export const findEdge = () => EDGE_CANDIDATES.find((candidate) => existsSync(can
 const EDGE = findEdge();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function launch({ appDir, docPath, docContent, extraInvoke = '{}', customInvoke = '(() => undefined)', width = 1400, height = 900, port = 9333 }) {
+export async function launch({ appDir, docPath, docContent, extraInvoke = '{}', customInvoke = '(() => undefined)', width = 1400, height = 900, port = Number(process.env.E2E_PORT) || 9333 }) {
   // Se sirve src/ por HTTP, como lo sirve la app real (tauri://localhost): desde file:// Chromium bloquea import() de módulos.
   const MIME = { '.glb': 'model/gltf-binary', '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.md': 'text/markdown', '.svg': 'image/svg+xml', '.png': 'image/png' };
   const server = http.createServer(async (req, res) => {
@@ -120,6 +120,7 @@ export async function launch({ appDir, docPath, docContent, extraInvoke = '{}', 
         convertFileSrc: (p) => p,
       };
       T.os = { platform: () => 'windows' };
+      T.app = { getVersion: () => Promise.resolve('9.9.9-e2e') };
       T.event = { listen: (name, cb) => { (listeners[name] = listeners[name] || []).push(cb); return Promise.resolve(() => {}); } };
       T.window = { getCurrentWindow: () => deep() };
       window.__TAURI__ = T;

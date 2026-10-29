@@ -1,15 +1,16 @@
 ---
-# Frontmatter de la fase vigente: v0.2.2 (§7). El de la v0.1 y v0.2 se conserva en el historial de git.
+# Frontmatter de la fase vigente: v0.2.3 (§8). Los de fases anteriores se conservan en el historial de git.
 dependencies:
-  - Código de la v0.2.1 (Tauri v2, subsistema de IA de 3 niveles, ACP, Antigravity CLI, Ayuda F1, Acerca de enriquecido)
-  - Comandos CLI de agentes en PATH (`claude`, `agy` / `antigravity`, `copilot`, `gemini`, `codex`)
-  - Catálogo de modelos Gemini modernos (mínimo Gemini 3.8 Flash)
+  - dbv-tauri-starter template-v0.4.0 (implementación de referencia de la conexión a IAs y su scripts/sync-ai.mjs)
+  - dbv-specs-ops 3.2.0 (plantilla común de la guía de IA)
+  - Código de la v0.2.2 (asistente con categorías, ⚙️ modelo y razonamiento)
 risks:
-  - "R-20: Consulta a CLI de modelos lenta o bloqueante → timeout estricto (1.5s) y fallback al catálogo canónico actualizado (Gemini 3.8 Flash mínimo)"
-  - "R-21: Incompatibilidad de flags de reasoning entre diferentes CLI → mapeo seguro de reasoning_effort (off, low, medium, high) según el agente"
+  - "R-22: sync-ai --apply sobrescribe ficheros canónicos con cambios propios de Unreal → comparar antes con --check y revisar el diff de cada fichero; lo propio de la app no vive en ficheros canónicos"
+  - "R-23: la guía regenerada pierde lo propio de Unreal (MCP, Tripo) → moverlo debajo de la marca dbv-ia:fin-guia-comun antes de aplicar"
+  - "R-24: los ficheros canónicos ya no citan REQ-xx → la trazabilidad de REQ-09/11/20/47 pasa a un test propio de la app"
 rollback_strategy: >
-  Reversión mediante `git revert`. Los campos nuevos en `Connection` (`reasoning_effort`) son opcionales (`Option<String>`),
-  por lo que las conexiones existentes mantienen plena compatibilidad hacia atrás.
+  Reversión mediante `git revert` del commit de la v0.2.3. Las conexiones guardadas no cambian de formato
+  (los campos model y reasoningEffort ya existían en la v0.2.2).
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -155,3 +156,27 @@ rollback_strategy: >
 - Guardado reactivo con `aiSaveConnection` y actualización en caliente de la conexión activa.
 - Textos bilingües (ES/EN) en `translations.js`.
 
+
+## 8. Plan v0.2.3 — Conexión a IAs común a todas las apps DBV (REQ-48, REQ-49)
+
+Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso se verifica con `node scripts/sync-ai.mjs --check ../dbv-unreal-ai` desde el starter.
+
+### S40 · Framework 3.1.0 → 3.2.0
+- Plantillas `IA*.template.md`, `AI_DESKTOP_ARCHITECTURE.md`, `MASTER_PROMPT.md`, `UPGRADE_PROMPT.md` y `Framework Version` (manifiesto v3.2.0).
+
+### S41 · Guía común (REQ-48)
+- Mover lo propio de Unreal (MCP propio que recibe el agente, tarjeta de Tripo, permisos, imágenes, uso desde otros agentes) debajo de la marca `<!-- dbv-ia:fin-guia-comun` en `docs/IA.md` y `docs/IA.en.md`.
+- `sync-ai.mjs --apply`: ficheros canónicos (detección, conexiones, ACP, asistente, `acpSession.js`, `backend.js`, `guide.js`, `markdown.js` y sus tests), `docs/IA*.md` y `src/ai/guideContent.js`.
+- Pestaña *Guía de IAs* del Centro de Ayuda (`F1`): pinta la guía común con `renderGuide()` en vez de su texto propio.
+
+### S42 · Puntos de integración que avisa `[REVISAR]`
+- Traducciones nuevas (ES/EN): `ai.agentNoAcp`, `ai.agentSigningIn`, `ai.guideTitle`, `ai.copy` y las que pida el script.
+- `aiApp.js`: `onAuthenticate` en `createAcpSession` (aviso de inicio de sesión).
+- `ai.css`: estilos `.ai-guide` y ✕ de las fichas de contexto.
+
+### S43 · Trazabilidad propia (R-24)
+- Test propio de la app que cita REQ-09, REQ-11, REQ-20, REQ-47, REQ-48 y REQ-49 sobre lo que Unreal añade (servidores MCP que recibe el agente, guía con la sección de Unreal).
+
+### S44 · Verificación y entrega
+- Vitest, `cargo test`, `dbv-lint.py --changed` y prueba en la app real (Conectar una IA, guía, agentes).
+- Versión 0.2.3 (package.json, package-lock.json, Cargo.toml, Cargo.lock, tauri.conf.json), CHANGELOG, notas de versión, README, web, `task.md`, `memory.md`; commit, push y tag `v0.2.3`.

@@ -4,9 +4,6 @@
 // Licensed under the MIT License. See LICENSE for details.
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
-//
-// @spec REQ-09, RF-IA-01 — requisitos del catálogo de IA (SPECIFICATIONS.md §3.5) que cubre este fichero.
-//
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerTranslations } from '../../src/ai/i18nBridge.js';
@@ -301,7 +298,7 @@ describe('estado de conexión de agentes CLI', () => {
     // No debe tener botón Conectar
     const connectBtn = [...claudeItem.querySelectorAll('button')].find((b) => b.textContent.includes('Conectar'));
     expect(connectBtn).toBeUndefined();
-    // Debe tener el botón de ajustes ⚙️ (REQ-47)
+    // Debe tener el botón de ajustes ⚙️
     expect(claudeItem.querySelector('.ai-agent-gear')).toBeTruthy();
     // Debe tener el badge de activa
     const badge = claudeItem.querySelector('.ai-badge');
@@ -309,13 +306,13 @@ describe('estado de conexión de agentes CLI', () => {
     expect(badge.textContent).toBe('✓ Activa');
   });
 
-  it('el botón de ajustes ⚙️ despliega los modelos dinámicos y el nivel de razonamiento (REQ-47)', async () => {
+  it('el botón de ajustes ⚙️ despliega los modelos dinámicos y el nivel de razonamiento', async () => {
     const backend = {
       aiDetect: () => Promise.resolve({
         ok: true,
         value: {
           servers: [],
-          tools: [{ name: 'antigravity', path: 'C:/agy.exe' }, { name: 'node', path: 'C:/node.exe' }],
+          tools: [{ name: 'agy_acp_server', path: 'C:/agy_acp_server.exe' }, { name: 'node', path: 'C:/node.exe' }],
         },
       }),
       aiProviders: () => Promise.resolve({ ok: true, value: [] }),
@@ -353,7 +350,7 @@ describe('estado de conexión de agentes CLI', () => {
     expect(modelOpts).toContain('gemini-3.8-flash');
   });
 
-  it('muestra el resumen estilo Visual Studio ("Gemini 4 Argon Medium"), cachea en sesión y permite refrescar manualmente (REQ-47)', async () => {
+  it('muestra el resumen estilo Visual Studio ("Gemini 4 Argon Medium"), cachea en sesión y permite refrescar manualmente', async () => {
     const richModels = [
       { id: 'gemini-4-argon', label: 'Gemini 4 Argon', efforts: ['low', 'medium', 'high'], defaultEffort: 'medium' },
       { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', efforts: ['low', 'medium', 'high'], defaultEffort: 'medium' },
@@ -365,7 +362,7 @@ describe('estado de conexión de agentes CLI', () => {
         value: {
           servers: [],
           tools: [
-            { name: 'antigravity', path: 'C:/agy.exe' },
+            { name: 'agy_acp_server', path: 'C:/agy_acp_server.exe' },
             { name: 'codex', path: 'C:/codex.exe' },
             { name: 'node', path: 'C:/node.exe' },
           ],
@@ -431,6 +428,64 @@ describe('estado de conexión de agentes CLI', () => {
     refreshBtn.click();
     await vi.waitFor(() => expect(backend.aiListAgentModels).toHaveBeenCalledWith('antigravity', true));
     await vi.waitFor(() => expect(notify).toHaveBeenCalled());
+  });
+
+  it('con la CLI agy pero sin agy_acp_server, Antigravity no se puede conectar y abre la guía en su sección', async () => {
+    const backend = {
+      aiDetect: () => Promise.resolve({
+        ok: true,
+        value: { servers: [], tools: [{ name: 'agy', path: 'C:/agy.exe' }, { name: 'node', path: 'C:/node.exe' }] },
+      }),
+      aiProviders: () => Promise.resolve({ ok: true, value: [] }),
+      aiConnections: () => Promise.resolve({ ok: true, value: { connections: [], active: null, showAi: true } }),
+      aiSetPreferences: vi.fn(),
+      openExternalUrl: vi.fn(),
+    };
+    const host = document.getElementById('host');
+    const wizard = createConnectWizard({ host, backend, onChanged: vi.fn(), onAgent: vi.fn(), notify: vi.fn() });
+    await wizard.open();
+    await vi.waitFor(() => expect(host.querySelector('.ai-cat-card--agent')).not.toBeNull());
+
+    const agyItem = [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes('Antigravity'));
+    expect(agyItem.classList.contains('is-ok')).toBe(false);
+    expect(agyItem.textContent).toContain('agy_acp_server');
+    expect([...agyItem.querySelectorAll('button')].map((b) => b.textContent)).not.toContain('Conectar');
+    Element.prototype.scrollIntoView = vi.fn();
+    agyItem.querySelector('button').click();
+    await vi.waitFor(() => expect(document.querySelector('.ai-guide')).not.toBeNull());
+    await vi.waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(Element.prototype.scrollIntoView.mock.contexts[0].dataset.anchor).toBe('google-antigravity-instalar-su-servidor-acp');
+    expect(backend.openExternalUrl).not.toHaveBeenCalled();
+    document.querySelector('.ai-guide').remove();
+  });
+
+  it('el enlace de ayuda abre la guía dentro de la app; Copilot sin CLI enlaza a su sección', async () => {
+    const backend = {
+      aiDetect: () => Promise.resolve({
+        ok: true,
+        value: { servers: [], tools: [{ name: 'copilot', path: null }, { name: 'node', path: 'C:/node.exe' }] },
+      }),
+      aiProviders: () => Promise.resolve({ ok: true, value: [] }),
+      aiConnections: () => Promise.resolve({ ok: true, value: { connections: [], active: null, showAi: true } }),
+      aiSetPreferences: vi.fn(),
+      openExternalUrl: vi.fn(),
+    };
+    const host = document.getElementById('host');
+    const wizard = createConnectWizard({ host, backend, onChanged: vi.fn(), onAgent: vi.fn(), notify: vi.fn() });
+    await wizard.open();
+    await vi.waitFor(() => expect(host.querySelector('.ai-help-link')).not.toBeNull());
+
+    host.querySelector('.ai-help-link').click();
+    await vi.waitFor(() => expect(document.querySelector('.ai-guide')).not.toBeNull());
+    document.querySelector('.ai-guide').remove();
+
+    Element.prototype.scrollIntoView = vi.fn();
+    const copilotItem = [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes('Copilot'));
+    copilotItem.querySelector('button').click();
+    await vi.waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(Element.prototype.scrollIntoView.mock.contexts[0].dataset.anchor).toBe('github-copilot-el-comando-copilot-de-vs-code-no-es-la-cli');
+    expect(backend.openExternalUrl).not.toHaveBeenCalled();
+    document.querySelector('.ai-guide').remove();
   });
 });
 

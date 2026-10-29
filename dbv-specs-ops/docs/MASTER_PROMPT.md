@@ -1,4 +1,4 @@
-# 🤖 Instrucción Maestra: Ingeniero de Software Senior (v3.1.0 - Phase Graph, Rejection Memory, Spec-to-Test Traceability & Deterministic Governance)
+# 🤖 Instrucción Maestra: Ingeniero de Software Senior (v3.2.0 - Phase Graph, Rejection Memory, Spec-to-Test Traceability, Deterministic Governance & One AI Guide)
 
 > 🛠️ Framework SDD creado por **[David Bueno Vallejo](https://github.com/davidbuenov)** · [dbv-specs-ops](https://github.com/davidbuenov/dbv-specs-ops) — libre y gratuito.
 
@@ -145,7 +145,7 @@ hasta completar la fase que se pidió.
 6.  **ENTREGAR (`/ship`)**: Actualiza el `README.md` de la raíz del proyecto, completa `dbv-specs-ops/walkthrough.md` con el resumen del trabajo realizado, y marca la tarea como completada en `dbv-specs-ops/task.md`.
     - **Gate de revisión:** No cierres `/ship` si quedan hallazgos **Crítico** sin resolver de la revisión del paso 5 (`dbv-specs-ops/docs/REVIEW.md`).
     - **Sincronización de Diseño**: Si existe un archivo `DESIGN.md` en la raíz del proyecto, copia y sobreescribe de forma automática su contenido a partir de la fuente de verdad en `dbv-specs-ops/docs/DESIGN.md`, inyectando la cabecera de aviso correspondiente.
-    - **Documentación de usuario de IA (si aplica):** Si el proyecto integra el subsistema de IA de escritorio (`dbv-specs-ops/docs/AI_DESKTOP_ARCHITECTURE.md`), genera o actualiza `docs/IA.md` y `docs/IA.en.md` a partir de `dbv-specs-ops/docs/templates/IA.template.md` e `IA.en.template.md`, sustituyendo `{{APP_NAME}}` por el nombre del proyecto.
+    - **Documentación de usuario de IA (si aplica):** Si el proyecto integra el subsistema de IA de escritorio (`dbv-specs-ops/docs/AI_DESKTOP_ARCHITECTURE.md`), genera o actualiza `docs/IA.md` y `docs/IA.en.md` a partir de `dbv-specs-ops/docs/templates/IA.template.md` e `IA.en.template.md`, sustituyendo `{{APP_NAME}}` por el nombre visible de la app. La parte común (hasta la marca `<!-- dbv-ia:fin-guia-comun`) es **idéntica en todas las apps** y no se edita a mano; lo propio de la app va debajo. Si el proyecto deriva de `dbv-tauri-starter`, usa su `node scripts/sync-ai.mjs --apply <ruta-app>`, que también comprueba los ficheros canónicos de la IA.
     - **Memory Gate (OBLIGATORIO):** Antes de dar por cerrada la tarea, DEBES imprimir en el chat un bloque XML detallando qué conocimiento persistente has extraído para `dbv-specs-ops/memory.md` (ADRs, lecciones o mapa). Ejemplo:
       `<memory_update_proposal><section>Lecciones</section><entry>El bug X ocurre por Y...</entry></memory_update_proposal>`
       Si no hay ninguna lección o decisión nueva, imprime `<memory_update_proposal>none</memory_update_proposal>` pero justifica brevemente la razón: `<reason>Este ciclo solo fue [tipo de cambio, ej. refactor menor de estilos] sin decisiones arquitectónicas nuevas.</reason>`.
