@@ -2,15 +2,28 @@
 
 # DBV Unreal AI
 
-**[🇪🇸 Español](./README.md) · 🇬🇧 English · [🌐 Website](https://davidbuenov.github.io/dbv-unreal-ai/en/)**
+**[🇪🇸 Español](./README.md) · 🇬🇧 English**
+
+[![Website](https://img.shields.io/badge/Website-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/en/)
+[![Releases v0.2.2](https://img.shields.io/badge/Releases-v0.2.2-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
+[![status](https://img.shields.io/badge/status-stable_%7C_v0.2.2-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.2.2)
+[![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
+[![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
+[![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
+[![Linux](https://img.shields.io/badge/Linux-AppImage_%7C_.deb-E95420?style=flat&logo=linux&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
+[![Rust](https://img.shields.io/badge/Rust-1.80+-b7410e?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![Tauri v2](https://img.shields.io/badge/Tauri-v2-FFC131?style=flat&logo=tauri&logoColor=black)](https://v2.tauri.app)
+[![Unreal Engine](https://img.shields.io/badge/Unreal_Engine-5.8+-0E1128?style=flat&logo=unrealengine&logoColor=white)](https://www.unrealengine.com)
+[![World Labs](https://img.shields.io/badge/World_Labs-Marble_3DGS-1A1A1A?style=flat&logoColor=white)](https://www.worldlabs.ai)
+[![Tripo 3D](https://img.shields.io/badge/Tripo_3D-v3.1_AI-6366F1?style=flat&logoColor=white)](https://www.tripo3d.ai)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![Three.js](https://img.shields.io/badge/Three.js-3D_Viewer-000000?style=flat&logo=threedotjs&logoColor=white)](https://threejs.org)
+[![framework](https://img.shields.io/badge/framework-dbv--specs--ops-24292e?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-specs-ops)
 
 > Native AI copilot for Unreal Engine 5.8: connect any AI (local or cloud) to your open project, prepare it when needed and generate assets with Tripo and World Labs straight into the editor.
-
-<p align="center">
-  <a href="https://www.unrealengine.com" target="_blank"><img src="https://img.shields.io/badge/Unreal_Engine-5.8-0E1128?style=for-the-badge&logo=unrealengine&logoColor=white" alt="Unreal Engine 5.8"></a>
-  <a href="https://www.worldlabs.ai" target="_blank"><img src="https://img.shields.io/badge/World_Labs-Marble_3DGS-1A1A1A?style=for-the-badge&logoColor=white" alt="World Labs Marble"></a>
-  <a href="https://www.tripo3d.ai" target="_blank"><img src="https://img.shields.io/badge/Tripo_3D-AI_Generation-6366F1?style=for-the-badge&logoColor=white" alt="Tripo 3D"></a>
-</p>
+>
+> 🌐 **Official website:** https://davidbuenov.github.io/dbv-unreal-ai/en/
 
 ## 📑 Table of Contents
 
