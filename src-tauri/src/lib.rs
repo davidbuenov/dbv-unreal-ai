@@ -39,6 +39,28 @@ pub mod project_memory;
 pub mod mcp_server;
 #[cfg(desktop)]
 pub mod paths;
+// Personajes de Convai registrados en Ajustes (REQ-58).
+#[cfg(desktop)]
+pub mod convai_characters;
+// Zonas del nivel para los personajes (Convai), una sola definición para las dos superficies (REQ-57).
+#[cfg(desktop)]
+pub mod zones;
+// Log local rotativo de la ventana y del `--mcp`, sin claves (RNF-08).
+#[cfg(desktop)]
+pub mod logging;
+// Cuánto devuelven las herramientas a la IA, compartido entre la ventana y el `--mcp` (REQ-51).
+#[cfg(desktop)]
+pub mod tool_usage;
+
+/// Lo que devolvieron las herramientas al proyecto desde `since` (ms): la ventana lo pide al acabar un turno para
+/// enseñar el contador, también con las llamadas que hizo el `--mcp` de un agente. @spec REQ-51
+#[cfg(desktop)]
+#[tauri::command]
+fn tool_usage_since(app: tauri::AppHandle, project: String, since: u64) -> Result<tool_usage::UsageSummary, String> {
+    use tauri::Manager;
+    let dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    Ok(tool_usage::since(&dir, &project, since))
+}
 
 /// Resuelve la ruta al ejecutable para el comando MCP.
 ///
@@ -99,16 +121,38 @@ pub fn diagnostics(
     })
 }
 
+/// Rutas reales de la app y si existen, y el final del log (RNF-08, REQ-53): lo que faltó para ver que la biblioteca
+/// de la Store estaba en otra carpeta.
+#[cfg(desktop)]
+pub fn paths_report(data_dir: &std::path::Path, library_dir: &std::path::Path) -> serde_json::Value {
+    serde_json::json!({
+        "packaged": logging::is_packaged(),
+        "dataDir": data_dir,
+        "dataDirExists": data_dir.is_dir(),
+        "libraryDir": library_dir,
+        "libraryDirExists": library_dir.is_dir(),
+        "log": logging::tail(data_dir, 50),
+    })
+}
+
 /// @spec RNF-08
 #[cfg(desktop)]
 #[tauri::command]
-async fn app_diagnostics() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+async fn app_diagnostics(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    use tauri::Manager;
+    let data = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let config = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
         let editors: Vec<unreal::commands::EditorStatus> = unreal::discovery::running_editors()
             .into_iter()
             .map(unreal::commands::editor_status)
             .collect();
-        diagnostics(&unreal::discovery::find_engines(), &editors)
+        let mut report = diagnostics(&unreal::discovery::find_engines(), &editors);
+        let library = generation::commands::GenerationSettings::load(&config).library_root(&data);
+        if let (Some(map), serde_json::Value::Object(paths)) = (report.as_object_mut(), paths_report(&data, &library)) {
+            map.extend(paths);
+        }
+        report
     })
     .await
     .map_err(|error| error.to_string())
@@ -136,6 +180,11 @@ pub fn run() {
     {
         // La sesión de generación empieza con la ventana: el gasto cuenta desde aquí (RNF-04).
         builder = builder.setup(|app| {
+            use tauri::Manager;
+            if let Ok(data) = app.path().app_data_dir() {
+                logging::init(&data, "window");
+                logging::info(&format!("start v{} packaged={} data={}", env!("CARGO_PKG_VERSION"), logging::is_packaged(), data.display()));
+            }
             generation::commands::begin_session(app.handle());
             Ok(())
         });
@@ -287,6 +336,26 @@ pub fn run() {
             project_memory::commands::memory_activate,
             #[cfg(desktop)]
             project_memory::commands::memory_apply,
+            #[cfg(desktop)]
+            project_memory::commands::memory_check_entries,
+            #[cfg(desktop)]
+            tool_usage_since,
+            #[cfg(desktop)]
+            convai_characters::convai_characters_list,
+            #[cfg(desktop)]
+            convai_characters::convai_characters_save,
+            #[cfg(desktop)]
+            convai_characters::convai_characters_spec,
+            #[cfg(desktop)]
+            convai_characters::convai_characters_text,
+            #[cfg(desktop)]
+            zones::zones_tool_specs,
+            #[cfg(desktop)]
+            zones::zones_preview,
+            #[cfg(desktop)]
+            zones::zones_apply,
+            #[cfg(desktop)]
+            zones::zones_list,
             #[cfg(desktop)]
             project_memory::commands::memory_tool_specs,
             #[cfg(desktop)]

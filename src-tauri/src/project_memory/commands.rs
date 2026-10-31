@@ -73,6 +73,22 @@ pub fn memory_apply(project: String, doc: Doc, base_hash: String, edit: Edit) ->
     apply(&project_dir(&project)?, doc, &base_hash, &edit)
 }
 
+/// Una entrada propuesta que la tarjeta quiere comprobar antes de enseñarla.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ProposedEntry {
+    pub section: String,
+    pub entry: String,
+}
+
+/// Por cada entrada propuesta, por qué no se guardaría (secreto, ya está) o `null`. La tarjeta desmarca o bloquea
+/// esas filas antes de que la persona decida. Solo lee. @spec REQ-50
+#[tauri::command]
+pub fn memory_check_entries(project: String, entries: Vec<ProposedEntry>) -> Result<Vec<Option<String>>, UnrealError> {
+    let current = read(&project_dir(&project)?, Doc::Memory)?;
+    let problems = entries.iter().map(|e| super::tools::entry_problem(&current.text, &e.section, &e.entry)).collect();
+    Ok(problems)
+}
+
 /// Definiciones de las herramientas de memoria, las mismas que publica el MCP propio (D10). @spec REQ-38
 #[tauri::command]
 pub fn memory_tool_specs() -> Vec<serde_json::Value> {
@@ -88,15 +104,7 @@ pub async fn memory_task_update(app: tauri::AppHandle, project: String, endpoint
     tauri::async_runtime::spawn_blocking(move || {
         let run = |code: &str| -> Result<serde_json::Value, String> {
             let endpoint = endpoint.ok_or("no Unreal editor is connected")?;
-            let state = app.state::<crate::unreal::commands::UnrealState>();
-            crate::unreal::commands::with_session(&state, &endpoint.url(), |session| {
-                let toolsets = session.list_toolsets()?;
-                let dbv = toolsets.iter().find(|t| t.name.contains("DBVUnrealAI")).map(|t| t.name.clone()).ok_or_else(|| UnrealError::NotFound("the DBV Unreal AI toolset is not installed: prepare the project".into()))?;
-                session.call_toolset_tool(&dbv, "run_python", serde_json::json!({ "code": code }), crate::unreal::mcp_client::DEFAULT_TIMEOUT)
-            })
-            .map_err(|e| e.to_string())?
-            .value
-            .ok_or_else(|| "unexpected answer from the editor".to_string())
+            crate::unreal::commands::run_fixed_python(&app.state::<crate::unreal::commands::UnrealState>(), &endpoint.url(), code).map_err(|e| e.to_string())
         };
         super::checks::update_task(&dir, &title, done, by_ai, run).map_err(UnrealError::Format)
     })

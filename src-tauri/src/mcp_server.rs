@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-20, REQ-11
+// @spec REQ-20, REQ-11, REQ-51
 //
 // `dbv-unreal-ai --mcp [--port <n>] [--project <ruta.uproject>]` arranca, en lugar de la ventana,
 // un servidor MCP por stdio (patrón de dbv-typst-editor RF-113): lo lanza el agente (Claude Code,
@@ -35,8 +35,15 @@ use crate::generation::{key_account, tools, within_budget, Polling};
 use crate::project_memory::tools as memory_tools;
 use crate::library::{now_secs, Library};
 use crate::unreal::discovery;
-use crate::unreal::mcp_client::{endpoint_url, McpSession, ToolResult, DEFAULT_TIMEOUT};
+use crate::unreal::compact;
+use crate::unreal::mcp_client::{endpoint_url, McpSession, ToolResult, ToolsetSummary, DEFAULT_TIMEOUT};
 use crate::unreal::UnrealError;
+
+/// Cómo usar este servidor sin gastar contexto (REQ-51): lo recibe el cliente en `initialize`.
+pub const INSTRUCTIONS: &str = "DBV Unreal AI bridges the Unreal Editor of one project. Every result you get stays in your context, so keep them small: \
+use unreal_scene_summary with name_filter/class_filter/limit instead of listing every actor; unreal_describe_toolset gives one line per tool, and with tool=\"<name>\" the full schema of that one tool; \
+prefer ONE unreal_run_python that does several things and sets `result` to a compact value over many small calls; capture the viewport only when you need to look (detail=\"high\" only to read small labels). \
+Use only this server for Unreal even if another one (unreal-mcp) is configured: this one checks Python against the engine and goes through the user's approvals.";
 
 /// Versión del protocolo MCP que anunciamos si el cliente no pide otra.
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
@@ -66,6 +73,9 @@ pub struct ServerConfig {
 pub struct McpServer {
     config: ServerConfig,
     session: Option<McpSession>,
+    /// `list_toolsets` del editor, pedido una vez por proceso (REQ-51): se vuelve a pedir si la sesión caduca o si
+    /// se nombra un toolset que no está.
+    toolsets: Option<Vec<ToolsetSummary>>,
     board: JobBoard,
     cancels: Cancels,
     /// Arranque de este proceso: inicio de sesión si la ventana no está abierta.
@@ -95,6 +105,7 @@ pub fn config_from_args(args: &[String]) -> ServerConfig {
     let secrets = Secrets::default();
     ServerConfig {
         unreal_url: endpoint_url(port, &path),
+        // La misma carpeta que la ventana; `run` la crea y la migra (aquí no: los tests llaman a esta función).
         library: Library::new(GenerationSettings::load(&config_dir).library_root(&data)),
         config_dir,
         data_dir: data,
@@ -114,24 +125,35 @@ const fn schema_object() -> &'static str {
 pub fn tool_specs() -> Vec<Value> {
     let tool = |name: &str, description: &str, properties: Value, required: Value| json!({ "name": name, "description": description, "inputSchema": { "type": schema_object(), "properties": properties, "required": required } });
     let mut specs = vec![
-        tool("unreal_list_toolsets", "List the toolsets (groups of tools) of the connected Unreal Editor.", json!({}), json!([])),
-        tool("unreal_describe_toolset", "Describe one Unreal Editor toolset: its tools and input schemas.", json!({ "toolset": { "type": "string" } }), json!(["toolset"])),
+        tool("unreal_list_toolsets", "List the toolsets (groups of tools) of the connected Unreal Editor, one line each.", json!({}), json!([])),
+        tool(
+            "unreal_describe_toolset",
+            "Describe one Unreal Editor toolset in a compact form: one line per tool with its parameters (* = required) and first sentence. Pass tool=\"<name>\" to get the full description and input schema of that one tool. Do not describe toolsets you do not need: some are huge.",
+            json!({ "toolset": { "type": "string" }, "tool": { "type": "string", "description": "Only this tool, with its full input schema." } }),
+            json!(["toolset"]),
+        ),
         tool(
             "unreal_call_tool",
-            "Call a tool of an Unreal Editor toolset with its arguments.",
+            "Call a tool of an Unreal Editor toolset with its arguments. Pass EVERY parameter of the tool: optional ones as null (the editor rejects a missing one with \"needs a default value\").",
             json!({ "toolset": { "type": "string" }, "tool": { "type": "string" }, "arguments": { "type": "object" } }),
             json!(["toolset", "tool"]),
         ),
         tool(
             "unreal_run_python",
-            "Run Python in the Unreal Editor (one undoable transaction). The code is first checked against the running engine API; unknown names are returned instead of running it.",
+            "Run Python in the Unreal Editor (one undoable transaction). The code is first checked against the running engine API; unknown names are returned instead of running it. Prefer ONE call that does several things and assigns a compact value to `result` (counts, names, a short dict) over many calls or printing large data.",
             json!({ "code": { "type": "string" } }),
             json!(["code"]),
         ),
         tool(
             "unreal_capture_viewport",
-            "Look at the level viewport of the Unreal Editor: returns an image (and the camera) to check what you placed or changed. With annotate=true it draws a ground grid (2 m cells, coordinates in meters) and labels the nearest actors, useful to place things. Read-only.",
-            json!({ "annotate": { "type": "boolean" } }),
+            "Look at the level viewport of the Unreal Editor: returns an image (and the camera) to check what you placed or changed. With annotate=true it draws a ground grid (2 m cells, coordinates in meters) and labels the nearest actors, useful to place things. The image is 1024 px wide by default; detail=\"high\" (1568 px) only to read small labels. Each image stays in your context: capture when you need to look. Read-only.",
+            json!({ "annotate": { "type": "boolean" }, "detail": { "type": "string", "enum": ["normal", "high"] } }),
+            json!([]),
+        ),
+        tool(
+            "unreal_scene_summary",
+            "Actors of the open level: name, class, location and mesh, compact. Filter with name_filter / class_filter and keep limit small (default 100). Use it instead of GetActors to look at the scene. Read-only.",
+            json!({ "name_filter": { "type": "string" }, "class_filter": { "type": "string" }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }),
             json!([]),
         ),
         tool("unreal_describe_python_api", "Exact reference of an `unreal` Python API name in this engine version.", json!({ "name": { "type": "string" } }), json!(["name"])),
@@ -169,6 +191,10 @@ pub fn tool_specs() -> Vec<Value> {
     // Las de Tripo y las de la memoria vienen de una única definición, compartida con el asistente integrado (D10).
     specs.extend(tools::specs(true));
     specs.extend(memory_tools::specs());
+    // Zonas del nivel (REQ-57): la misma definición que el asistente integrado.
+    specs.extend(crate::zones::specs());
+    // Personajes de Convai registrados en Ajustes (REQ-58).
+    specs.push(crate::convai_characters::spec());
     specs
 }
 
@@ -195,7 +221,7 @@ fn is_dbv(name: &str) -> bool {
 impl McpServer {
     pub fn new(config: ServerConfig) -> Self {
         let board = JobBoard::new(&config.data_dir);
-        Self { config, session: None, board, cancels: Cancels::default(), started_at: now_secs() }
+        Self { config, session: None, toolsets: None, board, cancels: Cancels::default(), started_at: now_secs() }
     }
 
     fn session(&mut self) -> Result<McpSession, UnrealError> {
@@ -212,15 +238,38 @@ impl McpServer {
         let first = work(&self.session()?);
         match first {
             Err(UnrealError::Expired(_)) => {
+                // Un editor reiniciado puede traer otros toolsets.
                 self.session = None;
+                self.toolsets = None;
                 work(&self.session()?)
             }
             other => other,
         }
     }
 
+    /// Toolsets del editor, de la caché salvo que `fresh` pida volver a preguntar. @spec REQ-51
+    fn toolset_list(&mut self, fresh: bool) -> Result<Vec<ToolsetSummary>, UnrealError> {
+        let list = match self.toolsets.clone().filter(|_| !fresh) {
+            Some(cached) => cached,
+            None => self.editor(McpSession::list_toolsets)?,
+        };
+        self.toolsets = Some(list.clone());
+        Ok(list)
+    }
+
     fn toolset_names(&mut self) -> Result<Vec<String>, UnrealError> {
-        Ok(self.editor(McpSession::list_toolsets)?.into_iter().map(|t| t.name).collect())
+        Ok(self.toolset_list(false)?.into_iter().map(|t| t.name).collect())
+    }
+
+    /// Nombre completo de un toolset; si no está en la caché, se vuelve a preguntar al editor una vez.
+    fn resolve(&mut self, wanted: &str) -> Result<String, String> {
+        let err = |e: UnrealError| e.to_string();
+        let cached = self.toolset_names().map_err(err)?;
+        let found = match resolve_toolset(wanted, &cached) {
+            Some(name) => Some(name),
+            None => resolve_toolset(wanted, &self.toolset_list(true).map_err(err)?.into_iter().map(|t| t.name).collect::<Vec<_>>()),
+        };
+        found.ok_or_else(|| format!("unknown toolset: {wanted}"))
     }
 
     fn dbv_toolset(&mut self) -> Result<Option<String>, UnrealError> {
@@ -232,15 +281,25 @@ impl McpServer {
         let text = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
         let err = |e: UnrealError| e.to_string();
         let result = match name {
-            "unreal_list_toolsets" => self.editor(McpSession::list_toolsets).map_err(err)?.iter().map(|t| format!("- {}: {}", t.name, t.description.lines().next().unwrap_or(""))).collect::<Vec<_>>().join("\n"),
+            "unreal_list_toolsets" => self.toolset_list(false).map_err(err)?.iter().map(|t| format!("- {}: {}", t.name, t.description.lines().next().unwrap_or(""))).collect::<Vec<_>>().join("\n"),
             "unreal_describe_toolset" => {
-                let names = self.toolset_names().map_err(err)?;
-                let full = resolve_toolset(&text(args, "toolset"), &names).ok_or_else(|| format!("unknown toolset: {}", text(args, "toolset")))?;
-                serde_json::to_string(&self.editor(|s| s.describe_toolset(&full)).map_err(err)?).map_err(|e| e.to_string())?
+                let full = self.resolve(&text(args, "toolset"))?;
+                let info = self.editor(|s| s.describe_toolset(&full)).map_err(err)?;
+                let tool = text(args, "tool");
+                if tool.is_empty() {
+                    compact::compact_toolset(&info)
+                } else {
+                    compact::tool_detail(&info, &tool)?
+                }
+            }
+            "unreal_scene_summary" => {
+                let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+                let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(100).clamp(1, 500);
+                let scene_args = json!({ "name_filter": text(args, "name_filter"), "class_filter": text(args, "class_filter"), "limit": limit });
+                format(&self.editor(|s| s.call_toolset_tool(&dbv, "get_scene_summary", scene_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?)
             }
             "unreal_call_tool" => {
-                let names = self.toolset_names().map_err(err)?;
-                let full = resolve_toolset(&text(args, "toolset"), &names).ok_or_else(|| format!("unknown toolset: {}", text(args, "toolset")))?;
+                let full = self.resolve(&text(args, "toolset"))?;
                 let tool = text(args, "tool");
                 let arguments = args.get("arguments").cloned().unwrap_or_else(|| json!({}));
                 let result = self.editor(|s| s.call_toolset_tool(&full, &tool, arguments.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
@@ -307,6 +366,13 @@ impl McpServer {
             "project_memory_propose" => memory_tools::propose_and_save(&self.project_dir()?, args)?,
             "project_tasks_list" => memory_tools::tasks_text(&self.project_dir()?)?,
             "project_tasks_propose" => memory_tools::propose_plan_and_save(&self.project_dir()?, args)?,
+            // En el MCP la aprobación la pone el cliente (permiso por herramienta, D6); el código es fijo de la app.
+            "level_zones_propose" => {
+                let zones = crate::zones::validate(args)?;
+                crate::zones::report_text(&self.run_fixed(&crate::zones::apply_code(&zones))?)
+            }
+            "level_zones_list" => crate::zones::report_text(&self.run_fixed(&crate::zones::list_code())?),
+            "convai_characters" => crate::convai_characters::text(&crate::convai_characters::load(&self.config.config_dir)),
             "project_task_update" => {
                 let dir = self.project_dir()?;
                 let done = args.get("done").and_then(Value::as_bool).unwrap_or(true);
@@ -323,6 +389,31 @@ impl McpServer {
         let err = |e: UnrealError| e.to_string();
         let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
         let ran = self.editor(|s| s.call_toolset_tool(&dbv, "run_python", json!({ "code": code }), DEFAULT_TIMEOUT)).map_err(err)?;
+        ran.value.ok_or_else(|| format!("unexpected answer from the editor: {}", ran.text))
+    }
+
+    /// Anota cuánto devolvió una llamada, para el contador de la ventana (REQ-51). Solo tamaños, nunca contenido.
+    fn record_usage(&self, tool: &str, result: &Value) {
+        let content = result.get("content").and_then(Value::as_array).cloned().unwrap_or_default();
+        let texts: Vec<&str> = content.iter().filter_map(|c| c.get("text").and_then(Value::as_str)).collect();
+        let entry = crate::tool_usage::UsageRecord {
+            at: crate::tool_usage::now_ms(),
+            pid: std::process::id(),
+            project: crate::tool_usage::project_key(&self.config.project_dir.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()),
+            tool: tool.to_string(),
+            text: texts.iter().map(|t| t.chars().count()).sum(),
+            images: content.iter().filter(|c| c.get("type").and_then(Value::as_str) == Some("image")).count(),
+            clipped: texts.iter().any(|t| t.contains("… (truncated: ")),
+        };
+        crate::tool_usage::record(&self.config.data_dir, &entry);
+    }
+
+    /// Ejecuta en el editor código FIJO de la app (zonas, REQ-57): no lo escribió la IA, así que no pasa por
+    /// `validate_python`. Devuelve el informe de `run_python`.
+    fn run_fixed(&mut self, code: &str) -> Result<Value, String> {
+        let err = |e: UnrealError| e.to_string();
+        let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+        let ran = self.editor(|s| s.call_toolset_tool(&dbv, "run_python", json!({ "code": code }), std::time::Duration::from_secs(120))).map_err(err)?;
         ran.value.ok_or_else(|| format!("unexpected answer from the editor: {}", ran.text))
     }
 
@@ -348,36 +439,102 @@ impl McpServer {
         result
     }
 
+    /// «Enviar a Unreal» desde un agente, con la misma elección de ficheros que la ventana (D25). @spec REQ-19, REQ-54
     fn send_to_unreal(&mut self, id: &str, place: bool) -> Result<String, String> {
         let entry = self.config.library.get(id).ok_or_else(|| format!("no library asset with id {id}"))?;
-        let file = entry.files.iter().find(|f| f.ends_with(".glb") || f.ends_with(".fbx") || f.ends_with(".obj")).ok_or("the asset has no model file")?;
-        let path = self.config.library.file_path(id, file).map_err(|e| e.to_string())?;
         let err = |e: UnrealError| e.to_string();
         let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
         let name: String = entry.name.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-        let import_args = json!({ "source_file": path.to_string_lossy(), "folder_path": "/Game/DBV/Generated", "asset_name": name.trim_matches('_') });
-        let imported = self.editor(|s| s.call_toolset_tool(&dbv, "import_model", import_args.clone(), std::time::Duration::from_secs(300))).map_err(err)?;
+        let name = name.trim_matches('_').to_string();
+        let result = match crate::library::send_plan(&entry) {
+            crate::library::SendPlan::Splat { splat, collider } => self.send_splat(&entry, &dbv, &name, &splat, collider.as_deref(), place),
+            crate::library::SendPlan::Model { model } => self.send_model(&entry, &dbv, &name, &model, place),
+            crate::library::SendPlan::Nothing => Err("the asset has no model (.glb, .gltf, .fbx, .obj) or Gaussian Splat (.spz, .ply) file".to_string()),
+        };
+        result
+    }
+
+    /// Espera para cargar un Gaussian Splat: un .ply de 3DGS pasa con facilidad de 2 GB. @spec REQ-54
+    const SPLAT_TIMEOUT_SECS: u64 = 600;
+
+    /// Un Gaussian Splat con el componente del toolset DBV y, si la hay, su malla de colisión. @spec REQ-54
+    fn send_splat(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, splat: &str, collider: Option<&str>, place: bool) -> Result<String, String> {
+        let splat_path = self.config.library.file_path(&entry.id, splat).map_err(|e| e.to_string())?;
+        let label = format!("{name}_Splat");
+        let splat_args = json!({ "source_file": splat_path.to_string_lossy(), "actor_label": label });
+        // Un .ply de varios GB tarda en leerse; si aun así se agota la espera, el editor sigue cargándolo.
+        let loaded = self.editor(|s| s.call_toolset_tool(dbv, "load_gaussian_splat", splat_args.clone(), std::time::Duration::from_secs(Self::SPLAT_TIMEOUT_SECS))).map_err(|e| match e {
+            UnrealError::Timeout(_) => "the editor is still loading the Gaussian Splat (large file): check with unreal_scene_summary in a minute before sending it again".to_string(),
+            other => other.to_string(),
+        })?;
+        let report = loaded.value.clone().unwrap_or(Value::Null);
+        let result = if loaded.is_error || report.get("success") != Some(&json!(true)) {
+            let missing = loaded.text.contains("load_gaussian_splat") && loaded.text.to_lowercase().contains("not found");
+            Err(if missing { "the DBV toolset of this project cannot load Gaussian Splats yet: ask the user to prepare the project again in the app".to_string() } else { format!("the splat was not loaded: {}", format(&loaded)) })
+        } else {
+            let message = format!("Gaussian Splat loaded as actor {}", report.get("actor").and_then(Value::as_str).unwrap_or(&label));
+            let with_collider = match collider {
+                Some(collider) => self.send_collider(entry, dbv, name, collider, place).map(|note| format!("{message}{note}"))?,
+                None => message,
+            };
+            self.record_sent(&entry.id, dbv, &label);
+            Ok(with_collider)
+        };
+        result
+    }
+
+    /// La malla de colisión de un mundo, importada y colocada en el sitio del splat. Devuelve la nota para el mensaje.
+    fn send_collider(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, collider: &str, place: bool) -> Result<String, String> {
+        let err = |e: UnrealError| e.to_string();
+        let mesh = self.config.library.file_path(&entry.id, collider).map_err(|e| e.to_string())?;
+        let import_args = json!({ "source_file": mesh.to_string_lossy(), "folder_path": "/Game/DBV/Generated", "asset_name": format!("{name}_Collider") });
+        let imported = self.editor(|s| s.call_toolset_tool(dbv, "import_model", import_args.clone(), std::time::Duration::from_secs(300))).map_err(err)?;
+        let primary = imported.value.as_ref().and_then(|v| v.get("primary")).and_then(Value::as_str).map(str::to_string);
+        let note = match (primary, place) {
+            (Some(primary), true) => {
+                let place_args = json!({ "asset_path": primary, "distance": 0.0, "folder": "DBV/Generated" });
+                let placed = self.editor(|s| s.call_toolset_tool(dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
+                format!(", with its collider mesh {primary} placed: {}", format(&placed))
+            }
+            (Some(primary), false) => format!(", with its collider mesh imported as {primary}"),
+            (None, _) => format!("; the collider mesh was not imported: {}", format(&imported)),
+        };
+        Ok(note)
+    }
+
+    /// Anota en la biblioteca a qué proyecto se envió.
+    fn record_sent(&mut self, id: &str, dbv: &str, asset: &str) {
+        let project = self.editor(|s| s.call_toolset_tool(dbv, "get_project_info", json!({}), DEFAULT_TIMEOUT)).ok().and_then(|r| r.value).and_then(|v| v.get("project_dir").and_then(Value::as_str).map(str::to_string)).unwrap_or_default();
+        let _ = self.config.library.record_sent(id, &project, asset);
+    }
+
+    /// Un modelo (Static o Skeletal Mesh) importado y colocado delante de la cámara. @spec REQ-19
+    fn send_model(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, file: &str, place: bool) -> Result<String, String> {
+        let id = entry.id.as_str();
+        let path = self.config.library.file_path(id, file).map_err(|e| e.to_string())?;
+        let err = |e: UnrealError| e.to_string();
+        let import_args = json!({ "source_file": path.to_string_lossy(), "folder_path": "/Game/DBV/Generated", "asset_name": name });
+        let imported = self.editor(|s| s.call_toolset_tool(dbv, "import_model", import_args.clone(), std::time::Duration::from_secs(300))).map_err(err)?;
         let primary = imported.value.as_ref().and_then(|v| v.get("primary")).and_then(Value::as_str).map(str::to_string).ok_or_else(|| format!("import failed: {}", format(&imported)))?;
         let report = imported.value.clone().unwrap_or(Value::Null);
         let animations: Vec<String> = report.get("animations").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
         let mut message = format!("Imported as {primary}");
         if place {
             let place_args = json!({ "asset_path": primary, "distance": 300.0, "folder": "DBV/Generated" });
-            let placed = self.editor(|s| s.call_toolset_tool(&dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
+            let placed = self.editor(|s| s.call_toolset_tool(dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
             message.push_str(&format!(" and placed: {}", format(&placed)));
             // Un personaje de Tripo con animaciones se pone a reproducir la primera en el viewport (toolset 0.2.0).
             let actor = placed.value.as_ref().and_then(|v| v.get("actor")).and_then(Value::as_str).map(str::to_string);
             if let (Some(actor), Some(first), true) = (actor, animations.first(), report.get("kind").and_then(Value::as_str) == Some("skeletal")) {
                 let play_args = json!({ "actor_label": actor, "animation_path": first, "looping": true });
-                let played = self.editor(|s| s.call_toolset_tool(&dbv, "play_animation", play_args.clone(), DEFAULT_TIMEOUT));
+                let played = self.editor(|s| s.call_toolset_tool(dbv, "play_animation", play_args.clone(), DEFAULT_TIMEOUT));
                 message.push_str(&match played {
                     Ok(result) if !result.is_error => format!(". Skeletal mesh with {} animation(s); playing {first}", animations.len()),
                     _ => format!(". Skeletal mesh with {} animation(s); the project's DBV toolset is outdated, so it is not playing: ask the user to prepare the project again in the app", animations.len()),
                 });
             }
         }
-        let project = self.editor(|s| s.call_toolset_tool(&dbv, "get_project_info", json!({}), DEFAULT_TIMEOUT)).ok().and_then(|r| r.value).and_then(|v| v.get("project_dir").and_then(Value::as_str).map(str::to_string)).unwrap_or_default();
-        let _ = self.config.library.record_sent(id, &project, &primary);
+        self.record_sent(id, dbv, &primary);
         Ok(message)
     }
 
@@ -499,7 +656,8 @@ impl McpServer {
             "initialize" => Ok(json!({
                 "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL_VERSION),
                 "capabilities": { "tools": {} },
-                "serverInfo": { "name": "dbv-unreal-ai", "title": "DBV Unreal AI", "version": env!("CARGO_PKG_VERSION") }
+                "serverInfo": { "name": "dbv-unreal-ai", "title": "DBV Unreal AI", "version": env!("CARGO_PKG_VERSION") },
+                "instructions": INSTRUCTIONS
             })),
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": tool_specs() })),
@@ -508,16 +666,20 @@ impl McpServer {
                 let arguments = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
                 // La captura es la única que devuelve una imagen (contenido `image` de MCP, REQ-13).
                 let result = if name == "unreal_capture_viewport" {
-                    match self.editor(|s| crate::unreal::capture::capture(s, arguments.get("annotate").and_then(Value::as_bool).unwrap_or(false))) {
+                    let annotate = arguments.get("annotate").and_then(Value::as_bool).unwrap_or(false);
+                    let high = arguments.get("detail").and_then(Value::as_str) == Some("high");
+                    match self.editor(|s| crate::unreal::capture::capture(s, annotate, high)) {
                         Ok(capture) => json!({ "content": [{ "type": "image", "data": capture.base64, "mimeType": capture.mime }, { "type": "text", "text": crate::unreal::capture::describe(&capture) }], "isError": false }),
                         Err(error) => text_result(error.to_string(), true),
                     }
                 } else {
+                    // Ningún resultado pasa del tope, sea cual sea la herramienta (REQ-51).
                     match self.call(&name, &arguments) {
-                        Ok(text) => text_result(text, false),
-                        Err(text) => text_result(text, true),
+                        Ok(text) => text_result(compact::clip(&text), false),
+                        Err(text) => text_result(compact::clip(&text), true),
                     }
                 };
+                self.record_usage(&name, &result);
                 Ok(result)
             }
             other => Err((-32601, format!("method not found: {other}"))),
@@ -532,7 +694,15 @@ impl McpServer {
 
 /// Bucle de stdio. Devuelve el código de salida del proceso.
 pub fn run(args: &[String]) -> i32 {
+    if let Some(data) = crate::paths::data_dir() {
+        crate::logging::init(&data, "mcp");
+        // Biblioteca creada y migrada antes de abrirla, como hace la ventana al arrancar (REQ-53).
+        if let Some(config) = crate::paths::config_dir() {
+            let _ = crate::generation::commands::ensure_library(&config, &data);
+        }
+    }
     let mut server = McpServer::new(config_from_args(args));
+    crate::logging::info(&format!("start v{} packaged={} library={} project={}", env!("CARGO_PKG_VERSION"), crate::logging::is_packaged(), server.config.library.root.display(), server.config.project_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_default()));
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
@@ -783,5 +953,232 @@ mod tests {
     fn lee_los_argumentos_de_la_linea_de_comandos() {
         let args: Vec<String> = ["app", "--mcp", "--port", "8123"].iter().map(|s| s.to_string()).collect();
         assert_eq!(config_from_args(&args).unreal_url, "http://127.0.0.1:8123/mcp");
+    }
+
+    const RECORDED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/unreal-mcp/ue-5.8.4");
+
+    /// Una respuesta grabada del editor real (JSON-RPC entero).
+    fn recorded(file: &str) -> Value {
+        serde_json::from_str(&std::fs::read_to_string(format!("{RECORDED}/{file}")).unwrap()).unwrap()
+    }
+
+    /// Texto de una respuesta `tools/call` grabada.
+    fn recorded_text(file: &str) -> String {
+        recorded(file)["result"]["content"][0]["text"].as_str().unwrap().to_string()
+    }
+
+    /// PNG del tamaño de una captura real del editor (1944×617).
+    fn capture_png() -> String {
+        let image = image::RgbImage::from_fn(1944, 617, |x, y| image::Rgb([(x % 251) as u8, (y % 241) as u8, ((x + y) % 239) as u8]));
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(image).write_to(&mut out, image::ImageFormat::Png).unwrap();
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, out.into_inner())
+    }
+
+    /// Editor de Unreal simulado que responde POR CONTENIDO con las respuestas grabadas del editor real: lista y
+    /// descripción de toolsets, resumen de escena, captura y `validate_python` / `run_python` del toolset DBV.
+    /// Llamadas que recibió el editor simulado: herramienta y argumentos.
+    type SeenCalls = std::sync::Arc<std::sync::Mutex<Vec<(String, Value)>>>;
+
+    fn fake_editor() -> (String, SeenCalls) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+        let png = capture_png();
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = calls.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut socket) = stream else { break };
+                let mut received = Vec::new();
+                let mut buffer = [0u8; 8192];
+                loop {
+                    let read = socket.read(&mut buffer).unwrap_or(0);
+                    received.extend_from_slice(&buffer[..read]);
+                    let text = String::from_utf8_lossy(&received).to_string();
+                    let complete = text.find("\r\n\r\n").is_some_and(|end| {
+                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
+                        received.len() >= end + 4 + length
+                    });
+                    if complete || read == 0 {
+                        break;
+                    }
+                }
+                let request = String::from_utf8_lossy(&received).to_string();
+                let body: Value = request.split_once("\r\n\r\n").and_then(|(_, b)| serde_json::from_str(b).ok()).unwrap_or(Value::Null);
+                let id = body.get("id").cloned().unwrap_or(Value::Null);
+                let params = &body["params"];
+                let reply = |text: String| json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": text }] } });
+                let grabbed = |file: &str| {
+                    let mut value = recorded(file);
+                    value["id"] = id.clone();
+                    value
+                };
+                let (status, headers, payload) = match body["method"].as_str().unwrap_or("") {
+                    "initialize" => ("200 OK", "Mcp-Session-Id: s1\r\n", json!({ "jsonrpc": "2.0", "id": id, "result": { "protocolVersion": "2025-06-18", "capabilities": { "tools": {} } } }).to_string()),
+                    "notifications/initialized" => ("202 Accepted", "", String::new()),
+                    _ => {
+                        let args = &params["arguments"];
+                        seen.lock().unwrap().push((args["tool_name"].as_str().unwrap_or(params["name"].as_str().unwrap_or("")).to_string(), args["arguments"].clone()));
+                        let response = match (params["name"].as_str().unwrap_or(""), args["tool_name"].as_str().unwrap_or("")) {
+                            ("list_toolsets", _) => grabbed("list_toolsets.response.json"),
+                            ("describe_toolset", _) => grabbed(&format!("describe_toolset.{}.response.json", args["toolset_name"].as_str().unwrap_or(""))),
+                            (_, "get_scene_summary") => grabbed("call_tool.get_scene_summary.response.json"),
+                            (_, "validate_python") => reply(json!({ "returnValue": json!({ "ok": true, "findings": [], "syntax_error": null }).to_string() }).to_string()),
+                            (_, "run_python") => reply(json!({ "returnValue": json!({ "success": true, "stdout": "", "stderr": "", "warnings": [], "error": null, "result": { "placed": 12, "folder": "DBV/Torches" } }).to_string() }).to_string()),
+                            (_, "load_gaussian_splat") => reply(json!({ "returnValue": json!({ "success": true, "actor": args["arguments"]["actor_label"] }).to_string() }).to_string()),
+                            (_, "import_model") => reply(json!({ "returnValue": json!({ "success": true, "primary": "/Game/DBV/Generated/Isla_Collider", "kind": "static", "animations": [] }).to_string() }).to_string()),
+                            (_, "place_asset") => reply(json!({ "returnValue": json!({ "success": true, "actor": "Isla_Collider" }).to_string() }).to_string()),
+                            (_, "get_project_info") => reply(json!({ "returnValue": json!({ "project_dir": "D:/P/Demo/" }).to_string() }).to_string()),
+                            (_, "CaptureViewport") => reply(json!({ "image": { "mimeType": "image/png", "data": png }, "cameraLocation": { "x": 0.0, "y": -500.0, "z": 300.0 }, "cameraFOV": 90 }).to_string()),
+                            _ => reply("{}".into()),
+                        };
+                        ("200 OK", "", response.to_string())
+                    }
+                };
+                let _ = write!(socket, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{payload}", payload.len());
+            }
+        });
+        (url, calls)
+    }
+
+    /// Caracteres que vuelven al modelo en un resultado MCP: texto más el base64 de las imágenes.
+    fn returned(result: &Value) -> usize {
+        result["content"].as_array().unwrap().iter().map(|c| c["text"].as_str().or(c["data"].as_str()).map_or(0, |t| t.chars().count())).sum()
+    }
+
+    /// El guion fijo de REQ-51 contra el editor simulado con respuestas reales: la v0.3.0 devuelve como mucho la mitad
+    /// que la v0.2.4 (calculada con su mismo formato: JSON entero de cada toolset, sin tope y captura a 1568 px),
+    /// cada llamada sigue funcionando y todas quedan anotadas para el contador. @spec REQ-51
+    #[test]
+    fn el_guion_fijo_devuelve_al_menos_la_mitad_menos_que_la_v0_2_4() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        s.config.unreal_url = fake_editor().0;
+        s.config.project_dir = Some(dir.path().join("Demo"));
+        let describes = ["EditorToolset.EditorAppToolset", "ConvaiToolset.ConvaiSetupToolset", "NiagaraToolsets.NiagaraToolset_System"];
+        let mut script: Vec<(&str, Value)> = vec![("unreal_list_toolsets", json!({}))];
+        script.extend(describes.iter().map(|t| ("unreal_describe_toolset", json!({ "toolset": t.rsplit('.').next().unwrap() }))));
+        script.push(("unreal_scene_summary", json!({})));
+        script.push(("unreal_capture_viewport", json!({})));
+        script.extend((0..5).map(|i| ("unreal_run_python", json!({ "code": format!("import unreal\nresult = {i}") }))));
+
+        let mut now = 0;
+        let mut now_text = 0;
+        let mut list_text = 0;
+        let mut python_text = 0;
+        let mut capture_text = 0;
+        for (name, args) in &script {
+            let response = rpc(&mut s, "tools/call", json!({ "name": name, "arguments": args }));
+            let result = &response["result"];
+            assert_eq!(result["isError"], false, "{name}: {result}");
+            let size = returned(result);
+            now += size;
+            now_text += result["content"].as_array().unwrap().iter().filter_map(|c| c["text"].as_str()).map(|t| t.chars().count()).sum::<usize>();
+            match *name {
+                "unreal_list_toolsets" => list_text = size,
+                "unreal_run_python" => python_text += size,
+                "unreal_capture_viewport" => capture_text = result["content"][1]["text"].as_str().unwrap().chars().count(),
+                _ => {}
+            }
+        }
+
+        // La v0.2.4: mismo listado y mismo Python; cada toolset en JSON entero; la escena por `unreal_call_tool` con el
+        // valor entero; la captura a 1568 px y calidad 85.
+        let described: usize = describes.iter().map(|t| serde_json::to_string(&crate::unreal::mcp_client::parse_toolset_info(&recorded_text(&format!("describe_toolset.{t}.response.json"))).unwrap()).unwrap().chars().count()).sum();
+        let scene = crate::unreal::mcp_client::unwrap_value(serde_json::from_str(&recorded_text("call_tool.get_scene_summary.response.json")).unwrap()).to_string().chars().count();
+        let png = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, capture_png()).unwrap();
+        let (jpeg, _, _) = crate::unreal::capture::shrink(&png, true).unwrap();
+        let old_capture = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, jpeg).len() + capture_text;
+        let baseline = list_text + described + scene + old_capture + python_text;
+
+        // La cifra de la prueba de consumo, visible con `cargo test el_guion_fijo -- --nocapture`.
+        let baseline_text = list_text + described + scene + capture_text + python_text;
+        println!("REQ-51 · guion fijo: v0.2.4 = {baseline} caracteres, v0.3.0 = {now} ({} % menos); solo texto: {baseline_text} → {now_text} ({} % menos)", 100 - now * 100 / baseline, 100 - now_text * 100 / baseline_text);
+        assert!(now * 2 <= baseline, "v0.3.0 = {now} caracteres, v0.2.4 = {baseline}: no baja la mitad");
+        // Sin contar la imagen (se paga por píxeles, no por caracteres): el texto del guion entero, ~10.000 tokens.
+        assert!(now_text < 40_000, "texto del guion: {now_text} caracteres");
+        let usage = crate::tool_usage::since(dir.path(), &dir.path().join("Demo").to_string_lossy(), 0);
+        assert_eq!(usage.calls, script.len());
+        assert_eq!(usage.images, 1);
+        assert_eq!(usage.clipped, 0, "el formato compacto evita el recorte");
+    }
+
+    /// `initialize` le dice al cliente cómo gastar poco contexto. @spec REQ-51
+    #[test]
+    fn al_inicializar_explica_como_gastar_poco_contexto() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let init = rpc(&mut s, "initialize", json!({}));
+        let instructions = init["result"]["instructions"].as_str().unwrap();
+        assert!(instructions.contains("unreal_scene_summary") && instructions.contains("ONE unreal_run_python") && instructions.contains("unreal-mcp"));
+    }
+
+    /// Un `.ply` suelto y un mundo con colisión se envían desde un agente como desde la ventana (antes: «the asset has
+    /// no model file»). @spec REQ-54
+    #[test]
+    fn envia_gaussian_splats_desde_el_mcp() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let (url, calls) = fake_editor();
+        s.config.unreal_url = url;
+        let add = |s: &mut McpServer, name: &str, files: &[&str]| {
+            let (id, folder) = s.config.library.new_entry_dir(name).unwrap();
+            for f in files {
+                std::fs::write(folder.join(f), b"data").unwrap();
+            }
+            s.config.library.add(LibraryEntry { id: id.clone(), name: name.into(), provider: "import".into(), kind: "world".into(), prompt: String::new(), parameters: Value::Null, task_id: String::new(), created_at: 1, credits: None, files: files.iter().map(|f| f.to_string()).collect(), thumbnail: None, sent_to: vec![], parent: None, output: Value::Null }).unwrap();
+            id
+        };
+        let ply = add(&mut s, "Isla", &["scene.ply"]);
+        let sent = rpc(&mut s, "tools/call", json!({ "name": "library_send_to_unreal", "arguments": { "id": ply } }));
+        assert_eq!(sent["result"]["isError"], false, "{}", sent["result"]);
+        assert!(sent["result"]["content"][0]["text"].as_str().unwrap().contains("Isla_Splat"));
+        let tools: Vec<String> = calls.lock().unwrap().iter().map(|(t, _)| t.clone()).collect();
+        assert!(tools.contains(&"load_gaussian_splat".to_string()) && !tools.contains(&"import_model".to_string()), "{tools:?}");
+        let (_, splat_args) = calls.lock().unwrap().iter().find(|(t, _)| t == "load_gaussian_splat").cloned().unwrap();
+        assert!(splat_args["source_file"].as_str().unwrap().ends_with("scene.ply"));
+
+        calls.lock().unwrap().clear();
+        let world = add(&mut s, "Mundo", &["world.spz", "collider.glb"]);
+        let sent = rpc(&mut s, "tools/call", json!({ "name": "library_send_to_unreal", "arguments": { "id": world } }));
+        assert!(sent["result"]["content"][0]["text"].as_str().unwrap().contains("collider mesh"), "{}", sent["result"]);
+        let tools: Vec<String> = calls.lock().unwrap().iter().map(|(t, _)| t.clone()).collect();
+        let position = |name: &str| tools.iter().position(|t| t == name).unwrap();
+        assert!(position("load_gaussian_splat") < position("import_model") && position("import_model") < position("place_asset"), "{tools:?}");
+        assert_eq!(s.config.library.get(&world).unwrap().sent_to.len(), 1);
+    }
+
+    /// Las zonas llegan al editor como código fijo con los datos en hexadecimal, sin pasar por `validate_python`, y una
+    /// propuesta inválida no llega al editor. @spec REQ-57
+    #[test]
+    fn crea_zonas_con_codigo_fijo_de_la_app() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let (url, calls) = fake_editor();
+        s.config.unreal_url = url;
+        let names: Vec<String> = tool_specs().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect();
+        assert!(names.contains(&"level_zones_propose".to_string()) && names.contains(&"level_zones_list".to_string()));
+        let bad = rpc(&mut s, "tools/call", json!({ "name": "level_zones_propose", "arguments": { "zones": [{ "name": "", "x": 0, "y": 0 }] } }));
+        assert_eq!(bad["result"]["isError"], true);
+        assert!(calls.lock().unwrap().iter().all(|(t, _)| t != "run_python"), "una propuesta inválida no llega al editor");
+        let ok = rpc(&mut s, "tools/call", json!({ "name": "level_zones_propose", "arguments": { "zones": [{ "name": "Cocina", "description": "El horno", "x": 3, "y": 1 }] } }));
+        assert_eq!(ok["result"]["isError"], false, "{}", ok["result"]);
+        let ran: Vec<(String, Value)> = calls.lock().unwrap().iter().filter(|(t, _)| t == "run_python" || t == "validate_python").cloned().collect();
+        assert_eq!(ran.len(), 1, "solo run_python, sin validate_python: {ran:?}");
+        let code = ran[0].1["code"].as_str().unwrap();
+        assert!(code.contains("bytes.fromhex(\"") && !code.contains("El horno"));
+    }
+
+    /// El agente ve los personajes registrados en Ajustes, la misma lista que el asistente integrado. @spec REQ-58
+    #[test]
+    fn el_agente_ve_los_personajes_de_convai() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let empty = rpc(&mut s, "tools/call", json!({ "name": "convai_characters", "arguments": {} }));
+        assert!(empty["result"]["content"][0]["text"].as_str().unwrap().contains("No Convai characters"));
+        crate::convai_characters::save(dir.path(), &[crate::convai_characters::ConvaiCharacter { name: "Victoria".into(), character_id: "c1fca5ca-03b4-11ef-ae52-42010a7be00e".into(), notes: String::new() }]).unwrap();
+        let listed = rpc(&mut s, "tools/call", json!({ "name": "convai_characters", "arguments": {} }));
+        assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("- Victoria: c1fca5ca-03b4-11ef-ae52-42010a7be00e"));
     }
 }

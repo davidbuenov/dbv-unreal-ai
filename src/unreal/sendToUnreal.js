@@ -49,6 +49,9 @@ const parse = (result) => {
  * @param {{project: string, place?: boolean, folder?: string}} options
  * @returns {Promise<{ok: true, assetPath: string, actor: string|null, kind: string, animations: string[], playing: string|null, note?: string}|{ok: false, error: string}>}
  */
+/** Espera para cargar un Gaussian Splat: un .ply de 3DGS pasa con facilidad de 2 GB (igual que el MCP propio). @spec REQ-54 */
+const SPLAT_TIMEOUT_SECONDS = 600;
+
 export async function sendToUnreal(deps, entry, { project, place = true, folder = GENERATED_FOLDER }) {
   const { backend } = deps;
   const listed = await backend.listToolsets();
@@ -68,7 +71,7 @@ export async function sendToUnreal(deps, entry, { project, place = true, folder 
       outcome = { ok: false, error: splatPath.error.message };
     } else {
       const splatActorLabel = `${assetName(entry.name)}_Splat`;
-      const loadedSplat = await backend.callTool(dbv, 'load_gaussian_splat', { source_file: splatPath.value, actor_label: splatActorLabel }, 120);
+      const loadedSplat = await backend.callTool(dbv, 'load_gaussian_splat', { source_file: splatPath.value, actor_label: splatActorLabel }, SPLAT_TIMEOUT_SECONDS);
       const splatReport = loadedSplat.ok ? parse(loadedSplat.value) : null;
       if (!loadedSplat.ok || !splatReport?.success) {
         outcome = { ok: false, error: loadedSplat.ok ? (splatReport?.error ?? loadedSplat.value.text) : loadedSplat.error.message };

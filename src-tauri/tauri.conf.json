@@ -22,7 +22,8 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "$APPDATA/library/**"
+          "$APPDATA/library/**",
+          "$DOCUMENT/DBV Unreal AI/Library/**"
         ]
       }
     }

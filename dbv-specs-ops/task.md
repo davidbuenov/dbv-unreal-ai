@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.2.3** (2026-10-29). Conexión a IAs y guía comunes a todas las apps DBV (REQ-48, REQ-49), desde `dbv-tauri-starter` `template-v0.4.0`.
+* **Estado actual**: **v0.2.4** publicada (2026-10-29); **v0.3.0** en `/build` (2026-10-31, REQ-50..REQ-57, RNF-08).
 * **Última decisión técnica**: los ficheros de conexión a IAs y la guía son canónicos (vienen de `dbv-tauri-starter` con `scripts/sync-ai.mjs`); lo propio de Unreal va en `aiApp.js`, `app.js`, la ayuda F1 y debajo de la marca de `docs/IA.md` (ADR del 2026-10-29 en `memory.md`).
-* **Próximo paso**: probar la v0.2.3 publicada (agentes en la app instalada) y subir el MSIX a Partner Center (`dbv-specs-ops/docs/MICROSOFT_STORE.md` si existe, o `descripcionStore_*.md`).
+* **Próximo paso**: slices S45–S57 de la v0.3.0 (`implementation_plan.md` §9).
 
 ## Checklist de Tareas
 
@@ -109,7 +109,31 @@
 - [x] **Declaración del alias de ejecución:** Añadido `"appExecutionAliases": [{ "alias": "dbv-unreal-ai" }]` en `src-tauri/gen/windows/bundle.config.json` (generado por `@choochmeque/tauri-windows-bundle`).
 - [x] **Resolución en backend Rust (`src-tauri/src/lib.rs`):** Función `resolve_mcp_executable` que detecta si el ejecutable reside en `\WindowsApps\` y resuelve hacia `%LOCALAPPDATA%\Microsoft\WindowsApps\dbv-unreal-ai.exe` verificando su existencia mediante `symlink_metadata` (reparse point `AppExecLink`). Fallback transparente a `current_exe` en desarrollo o versiones no Store.
 - [x] **Tests unitarios:** Añadidos tests en `src-tauri/src/lib.rs` (`resolve_mcp_executable_preserva_rutas_normales_y_fallback_seguro` y `app_mcp_command_genera_argumentos_correctos`). 179 tests Rust y 294 tests Vitest pasando al 100%.
-- [ ] **Empaquetado MSIX y entrega:** Bump a v0.2.4, compilar `.msixbundle` y publicar release.
+- [x] **Empaquetado MSIX y entrega:** v0.2.4 publicada (commit `7db0d0e`; 0.2.4.0 instalada desde la Store el 2026-10-31).
+
+## v0.3.0 — memoria con varias entradas, contexto acotado, biblioteca visible y Convai (REQ-50..REQ-57, RNF-08; plan en `implementation_plan.md` §9)
+- [x] **`/spec`** (2026-10-31) — §3.12 (REQ-50..REQ-57), RNF-08 concretado, REQ-35 sin el límite de una propuesta por turno, R-20, R-21, R-25..R-27, P-11, P-12; `DESIGN.md` v0.3.0. Verificado en vivo: Convai dentro del MCP de Epic; `describe_toolset` de Niagara = 306 KB.
+- [x] **`/plan`** (2026-10-31) — Architect Review, D22–D30 (sin el usuario, ADR-V030-001), REJECTED-06 y 07; spike de solo lectura de P-11 (`ConvaiObjectComponent` en Python) y P-12 resuelta.
+- [x] **S45 · Memoria con varias entradas** (REQ-50) — `entries` (hasta 8), tarjeta con casillas, `memory_check_entries`, sin límite por turno.
+- [x] **S46 · Tope y `describe_toolset` compacto** (REQ-51) — `unreal/compact.rs` y `unrealTools.js` contra la misma referencia (`tests/fixtures/compact/`); Niagara de 306 KB a 5,5 KB; caché de toolsets; `instructions`.
+- [x] **S47 · `unreal_scene_summary` en el MCP y capturas ligeras** (REQ-51) — 1024 px / calidad 75, `detail: "high"`.
+- [x] **S48 · Medición visible del uso de herramientas** (REQ-51) — `tool_usage.rs`, `tool_usage_since`, contador al pie (asistente y agente).
+- [x] **S49 · Prueba de consumo ≥ 50 %** (REQ-51) — guion fijo con respuestas grabadas del editor real: 79 % menos texto (67 % con la imagen).
+- [x] **S50 · Aviso de accesos duplicados al editor** (REQ-52) — `unreal/duplicates.rs` en `unreal_readiness`; franja en la vista Proyecto; preámbulo e `instructions`.
+- [x] **S51 · Biblioteca en Documentos, creada al arrancar y migrada** (REQ-53) — `ensure_library`; excepción OneDrive (D31).
+- [x] **S52 · Splats desde el MCP propio** (REQ-54) — `library::send_plan` + test de paridad con `sendToUnreal.js` (`tests/fixtures/send-plan/`).
+- [x] **S53 · Log rotativo y diagnóstico** (RNF-08) — `logging.rs` (claves tapadas), «Copiar diagnóstico» con rutas y log.
+- [x] **S54 · Convai: detección** (REQ-55) — `unreal/convai.rs` en `unreal_readiness` (no hizo falta un comando `convai_status` aparte); sección en la vista Proyecto.
+- [x] **S55 · Convai en la conversación** (REQ-56) — `convaiPrompt`, avisos de Blueprints guardados, sugerencia.
+- [x] **S56 · Zonas del nivel** (REQ-57) — spike P-11 resuelto en vivo (crear, actualizar sin duplicar, deshacer); `zones.rs` en las dos superficies, tarjeta de zonas.
+- [x] **S58 · Personajes de Convai en Ajustes** (REQ-58) — `convai_characters.rs` (`<config>/convai-characters.json`, D32), herramienta `convai_characters` en el MCP y en el asistente, tarjeta en Ajustes.
+- [x] **S59 · Tutorial de Convai en F1** (REQ-59) — pestaña Convai (ES/EN) con requisitos, pasos y problemas conocidos; enlaces desde Ajustes y desde la vista Proyecto.
+- [x] **S60 · Ajustes con pestañas** (REQ-60) — pedido por el usuario.
+- [x] **S57 · Textos y documentación** — traducciones ES/EN, `docs/IA*.md` (debajo de la marca), CHANGELOG ES/EN.
+- [ ] **Prueba de Convai con el usuario** — *(2026-10-31: configurado por el MCP de la app en `/Game/DBV/Maps/ConvaiTest`: `BP_VictoriaNew` con chatbot, Character ID, FaceSync y movimiento (Pawn); `BP_ThirdPersonCharacter` con el componente de jugador; NavMesh ajustado al suelo; zonas «Inicio», «Rincón de Victoria» y «Mirador norte». Falta que el usuario hable con ella en Play y le pida ir a una zona.)* Antes: ensamblar un MetaHuman (VictoriaNew no se puede construir aún desde script: `can_build_meta_human` = False; necesita abrirlo en el editor de MetaHuman y el auto-rigging en la nube), un Character ID del Playground y el Blueprint del jugador; luego «Haz que este MetaHuman hable con Convai» y zonas en `/Game/DBV/Maps/ConvaiTest`.
+- [x] **`/test`** v0.3.0 (2026-10-31) — Rust 206, Vitest 324 (37 ficheros), Python OK, clippy sin avisos, `dbv-lint` sin errores (75 requisitos, 73 con test: faltan REQ-21 y REQ-23, fuera de esta versión), banco e2e correcto. Prueba de consumo: 79 % menos texto. **Evals con modelo real sin ejecutar** (no había Ollama ni otro modelo disponible sin el usuario): preparados `convai-skills-first` (REQ-56) y `convai-registered-id` (REQ-58) en `scripts/eval/unreal-eval.mjs`. Verificado en vivo: zonas, Convai (Victoria habla, sigue, «Move to <zona>» y «Take me to <zona>» con `Escort` redefinido), MCP compacto.
+- [x] **`/code-simplify`** v0.3.0 (2026-10-31) — 0 Críticos; 2 Importantes resueltos y en el CHANGELOG (pie del turno perdido al reabrir una conversación, desde la v0.2.0; consola de `git` visible en Windows); refactor: `unreal::commands::run_fixed_python` en lugar de dos copias (zonas y comprobaciones de tareas). Seguridad: la clave de Convai solo se mira vacía y no llega al log (test), el log tapa claves (test), las zonas viajan como dato en hexadecimal, `dirs` 6 ya estaba en `Cargo.lock` (dependencia real de Tauri). Vitest 325, Rust 206, clippy limpio, `dbv-lint` sin errores, e2e correcto.
+- [ ] **`/ship`** v0.3.0 — con el usuario (tipo de versión, commit y tag).
 
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
@@ -142,15 +166,9 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-29, entrega v0.2.4: solución al «Acceso denegado» de MCP en Microsoft Store mediante `AppExecutionAlias` y resolución con `symlink_metadata` (REQ-20). Vitest 294, Rust 179.
+> **Last update / Última actualización:** 2026-10-31, `/build` de la v0.3.0 terminado (S45–S57). Rust 203, Vitest 321, Python OK, clippy sin avisos, `dbv-lint` sin errores (solo REQ-21 y REQ-23 sin test, fuera de esta versión), banco e2e correcto. Sin commit: los cambios están en el árbol de trabajo, pendientes de que el usuario los revise.
 >
-> **Resuelto (2026-10-29):** La ejecución directa de procesos empaquetados en `WindowsApps` por parte de agentes externos (como `agy_acp_server`) queda solventada declarando `appExecutionAliases` en `bundle.config.json` y resolviendo la ruta en `app_mcp_command` a `%LOCALAPPDATA%\Microsoft\WindowsApps\dbv-unreal-ai.exe`.
->
-> **Snapshot v0.2.4:**
-> **Exact point / Punto exacto:** Arreglo implementado y probado en Rust (179 tests) y Vitest (294 tests). Listo para compilar el paquete `.msixbundle` y publicar v0.2.4.
-> **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, toolset C++ 0.2.0): Nivel activo `/Game/DBV/Maps/PruebasGaussianSplat`.
-> **Pending / Pendiente:** (1) S28: cielo y automatización de iluminación; (2) S29: MCPs de terceros (REQ-21); (3) Subida de paquete MSIX a Partner Center de Microsoft Store.
-> **Next step / Próximo paso:** Cierre de release v0.2.2 con commit y tag en git.
-
-
-
+> **Exact point / Punto exacto:** falta `/test` formal (eval con modelo real de REQ-56 y REQ-51), `/code-simplify` y `/ship` (bump a 0.3.0, notas de versión ES/EN, MSIX). Decisiones para revisar con el usuario: D22–D31 (ADR-V030-001), sobre todo D31 (biblioteca fuera de OneDrive).
+> **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, ConvAI 4.0.0-beta.27, plugins MetaHuman activados): nivel abierto `/Game/DBV/Maps/ConvaiTest` (vacío, 8 actores); los spikes de zonas se deshicieron y el nivel quedó como estaba.
+> **Pending / Pendiente:** (1) prueba de Convai con un MetaHuman ensamblado y un Character ID; (2) `.mcp.json` y `CLAUDE.md` de Convai en el proyecto de pruebas: la app avisa, el usuario decide si los quita; (3) copia de la biblioteca de la prueba en el scratchpad de la sesión (`onedrive-copia/`), que se puede borrar; (4) S28 y S29 siguen fuera.
+> **Next step / Próximo paso:** que el usuario revise y pruebe la build de desarrollo (`npm run tauri dev`) y después `/test` → `/code-simplify` → `/ship` v0.3.0.

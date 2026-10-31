@@ -1,16 +1,19 @@
 ---
-# Frontmatter de la fase vigente: v0.2.3 (§8). Los de fases anteriores se conservan en el historial de git.
+# Frontmatter de la fase vigente: v0.3.0 (§9). Los de fases anteriores se conservan en el historial de git.
 dependencies:
-  - dbv-tauri-starter template-v0.4.0 (implementación de referencia de la conexión a IAs y su scripts/sync-ai.mjs)
-  - dbv-specs-ops 3.2.0 (plantilla común de la guía de IA)
-  - Código de la v0.2.2 (asistente con categorías, ⚙️ modelo y razonamiento)
+  - Código de la v0.2.4 (MCP propio, memoria del proyecto, toolset C++ DBV 0.3.0 con load_gaussian_splat)
+  - Plugin ConvAI 4.0.0-beta.27 de Fab (solo para REQ-55..REQ-57; la app funciona sin él)
+  - Crate dirs 6 (ya en Cargo.lock como dependencia de Tauri) para la carpeta Documentos con su ruta real (OneDrive incluido)
 risks:
-  - "R-22: sync-ai --apply sobrescribe ficheros canónicos con cambios propios de Unreal → comparar antes con --check y revisar el diff de cada fichero; lo propio de la app no vive en ficheros canónicos"
-  - "R-23: la guía regenerada pierde lo propio de Unreal (MCP, Tripo) → moverlo debajo de la marca dbv-ia:fin-guia-comun antes de aplicar"
-  - "R-24: los ficheros canónicos ya no citan REQ-xx → la trazabilidad de REQ-09/11/20/47 pasa a un test propio de la app"
+  - "R-20: el recorte esconde lo que la IA necesitaba → el recorte lo dice y explica cómo pedir menos; esquema completo por herramienta con tool"
+  - "R-21: la migración de la biblioteca duplica o pierde → solo copia, nunca borra, reutiliza merge_from (dedup por id), una vez y anotada"
+  - "R-25: la API beta de Convai cambia → detección por final de nombre, adaptador único de zonas, fixtures grabadas del editor real"
+  - "R-26: la clave de Convai en DefaultEngine.ini → solo se comprueba si está vacía; test de que no llega a ningún resultado ni al log"
+  - "R-27: los cambios de Convai guardan Blueprints y no se deshacen → aviso en la tarjeta de aprobación y en Deshacer este turno"
 rollback_strategy: >
-  Reversión mediante `git revert` del commit de la v0.2.3. Las conexiones guardadas no cambian de formato
-  (los campos model y reasoningEffort ya existían en la v0.2.2).
+  Un commit por slice; se revierte con `git revert` el slice que falle. La biblioteca antigua nunca se borra
+  (la migración solo copia), así que volver a la v0.2.4 la encuentra intacta; los ajustes nuevos
+  (library_migrated) son opcionales con valor por defecto y la v0.2.4 los ignora. El formato de memory.md no cambia.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -180,3 +183,57 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
 ### S44 · Verificación y entrega
 - Vitest, `cargo test`, `dbv-lint.py --changed` y prueba en la app real (Conectar una IA, guía, agentes).
 - Versión 0.2.3 (package.json, package-lock.json, Cargo.toml, Cargo.lock, tauri.conf.json), CHANGELOG, notas de versión, README, web, `task.md`, `memory.md`; commit, push y tag `v0.2.3`.
+
+## 9. Plan v0.3.0 — memoria con varias entradas, contexto acotado, biblioteca visible y Convai (REQ-50..REQ-57, RNF-08)
+
+> **Modo:** Orquestador (más de 20 ficheros entre Rust y JS). **Aprobación:** el usuario aprobó el 2026-10-31 todas
+> las mejoras del análisis y autorizó encadenar `/spec` → `/plan` → `/build` en su ausencia. Las decisiones D22–D30
+> se tomaron sin él y quedan para revisar (ADR del 2026-10-31 en `memory.md`).
+
+### Architect Review (resumen; el debate completo se imprimió en la conversación)
+
+- **REQ-51:** si la prueba de consumo se mide contra respuestas inventadas, el 50 % no significa nada. Se graban del editor real (`DBVUnrealAITest1`, 2026-10-31): `list_toolsets`, `describe_toolset` de `EditorAppToolset` (23 KB), `NiagaraToolset_System` (306 KB) y de los dos toolsets de Convai. La línea base de la v0.2.4 se calcula con su mismo formateo (JSON entero), conservado como función de test.
+- **REQ-53:** `%USERPROFILE%\Documents` no es la carpeta Documentos si OneDrive la redirige. Se usa `dirs::document_dir()`, que pregunta a Windows por la carpeta conocida. Sin carpeta Documentos (servicio, Linux mínimo), se mantiene `<datos>/library`.
+- **REQ-53, concurrencia:** la ventana y un `--mcp` pueden arrancar a la vez y migrar los dos. `merge_from` ya toma el cerrojo de la biblioteca de destino y deduplica por `id`, y la marca `library_migrated` se escribe después. Una doble migración no duplica nada.
+- **REQ-57:** con Python, un `ConvaiObjectComponent` añadido a una *instancia* de actor puede no guardarse con el nivel ni deshacerse. Spike de escritura al principio de S56 (`SubobjectDataSubsystem`); si falla, la zona se crea como `Note` con nombre y la IA lo explica (Convai no la verá), y se registra en REJECTED.
+- **REQ-55, seguridad:** leer `DefaultEngine.ini` deja la clave en memoria. La función devuelve solo booleanos, no guarda el valor y un test con una clave falsa comprueba que no aparece en la salida ni en el log.
+
+### Decisiones (sin el usuario, para revisar)
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| D22 | El formato compacto de `describe_toolset` y el tope se implementan en Rust (MCP propio) y en JS (asistente), con **un fichero de referencia común** (`tests/fixtures/compact/`) que deben producir los dos. | Una definición verificable sin añadir un comando IPC nuevo ni tocar el banco e2e. |
+| D23 | El uso de herramientas se anota en `<datos>/tool-usage.jsonl` (una línea por llamada: hora, pid, proyecto, herramienta, bytes, recortado), que rota a los 512 KB. La ventana suma las líneas de su proyecto entre el inicio y el fin del turno (`tool_usage_since`). | Es el mismo patrón que los trabajos (estado compartido = ficheros, lección del 2026-10-24). |
+| D24 | La biblioteca por defecto es `dirs::document_dir()/DBV Unreal AI/Library`, con el nombre fijo en inglés; en el código no hay más opción porque la ruta debe ser la misma para la ventana y el `--mcp`. | REQ-53; la memoria del proyecto también va en inglés. |
+| D25 | Qué ficheros se envían (modelo, splat, colisión) lo decide `library::send_plan` en Rust, que usa el MCP. La ventana conserva `sendToUnreal.js`, y un test de paridad con las mismas entradas exige la misma elección. Se ajusta el texto de REQ-54. | Mover el envío de la ventana a Rust es un refactor arriesgado sin el editor delante. |
+| D26 | El log de RNF-08 es un módulo propio (`logging.rs`, sin crates nuevos) que limpia todo lo que tenga forma de clave antes de escribir. | Superficie mínima. |
+| D27 | Convai: lo que se ve en ficheros (plugin, motor, sesión, git) lo detecta Rust (`unreal/convai.rs`, comando `convai_status`); lo que necesita el editor (toolsets, guías) lo comprueba la vista con `listToolsets` y `ListSkills`. | El diagnóstico funciona con el editor cerrado. |
+| D28 | Una zona es un actor `Note` (su `text` guarda la descripción) con etiqueta `DBV_Zone_<Nombre>`, tag `dbv_zone`, carpeta `DBV/Zones` y, si existe la clase, un `ConvaiObjectComponent` con `object_entry.name`, `description` y `acceptance_radius`. El código Python lo fija la app y los datos viajan en hexadecimal, como las comprobaciones de tareas (REQ-37). | Sin recompilar el toolset C++. `Note` lleva texto propio, así que las zonas se listan también sin Convai. |
+| D29 | Aceptar la tarjeta de zonas es la aprobación (como el plan, REQ-36). Se ejecuta con el `run_python` del toolset, dentro de su transacción, y por eso «Deshacer este turno» lo revierte. | Coherente con REQ-12 y REQ-40. |
+| D31 | *(Añadida en `/build`.)* Si Documentos está dentro de OneDrive, la biblioteca va a `<carpeta de usuario>/DBV Unreal AI/Library` (`paths::library_folder`). La creación y la migración se hacen en el arranque (`begin_session`, `mcp_server::run`), nunca en `config_from_args`, que llaman los tests. | Una prueba copió 1,9 GB a la carpeta de OneDrive del equipo de desarrollo. |
+| D32 | *(Añadida a petición del usuario, 2026-10-31.)* Los personajes de Convai (nombre, Character ID, nota) se guardan en `<config>/convai-characters.json`, no en el llavero ni en el proyecto: el ID no es secreto, vale para cualquier proyecto y el `--mcp` lo lee igual que los ajustes de generación. | Como Tripo y World Labs en la interfaz, pero sin clave (REJECTED-07). |
+| D30 | Las herramientas de `ConvaiToolset.*` siguen la lista blanca de D5 (todas son de modificación); su tarjeta de aprobación y el pie del turno añaden el aviso de R-27. | Fallo seguro. |
+
+### Slices (un commit por slice; los pasos en `task.md`)
+
+1. **S45 · Memoria con varias entradas (REQ-50)** — `project_memory/tools.rs` (esquema `entries`, informe por entrada, compatibilidad con `section`/`entry`); `memory.js` (`propose` en lista, tarjeta con filas, sin `alreadyProposed`); `app.js`; textos del prompt, del botón «Recordar» y de las traducciones; tests en Rust y Vitest.
+2. **S46 · Tope y `describe_toolset` compacto (REQ-51.1–.3, .6)** — `unreal/compact.rs` (`RESULT_LIMIT`, `clip`, `compact_toolset`); caché de toolsets en `McpServer`; `unrealTools.js` con el mismo formato; ficheros de referencia y fixtures grabadas; descripciones y preámbulo.
+3. **S47 · `unreal_scene_summary` en el MCP y capturas ligeras (REQ-51.4–.5)** — `mcp_server.rs`; `capture.rs` (`detail`); comando `unreal_capture_viewport` con `detail`; `unrealTools.js`.
+4. **S48 · Medición visible (REQ-51.7)** — `tool_usage.rs` (anotar, rotar, sumar); comando `tool_usage_since`; contador al pie del turno (agente y asistente); simulador e2e.
+5. **S49 · Prueba de consumo (REQ-51.8)** — test de Rust: guion fijo contra un editor HTTP simulado con las fixtures; línea base v0.2.4 contra v0.3.0, ≥ 50 % menos.
+6. **S50 · Aviso de accesos duplicados (REQ-52)** — `unreal/duplicates.rs` (`.mcp.json`, `.cursor/mcp.json`, `.gemini/settings.json`, `.codex/config.toml`, bloque `Convai primer`); en el estado del proyecto; franja en la vista Proyecto; línea en el preámbulo del agente.
+7. **S51 · Biblioteca en Documentos (REQ-53)** — `paths.rs` (`default_library_dir`); `GenerationSettings.library_migrated`; `library::ensure_ready` (crear + migrar) en el arranque de la ventana y del `--mcp`; «Abrir carpeta» crea si falta; nota de migración en Ajustes.
+8. **S52 · Splats desde el MCP (REQ-54)** — `library::send_plan`; `mcp_server::send_to_unreal` con `load_gaussian_splat` y colisión; test de paridad con `sendToUnreal.js`.
+9. **S53 · Log rotativo y diagnóstico (RNF-08)** — `logging.rs`; líneas en el arranque, importar, enviar y conectar; «Copiar diagnóstico» con rutas y las últimas 50 líneas.
+10. **S54 · Convai: detección (REQ-55)** — `unreal/convai.rs` y `convai_status`; sección en la vista Proyecto con las comprobaciones en vivo.
+11. **S55 · Convai en la conversación (REQ-56)** — bloque en `unrealPrompt` y en el preámbulo del agente; aviso en la tarjeta de aprobación y en Deshacer; sugerencia «Haz que este MetaHuman hable con Convai».
+12. **S56 · Zonas del nivel (REQ-57)** — spike de escritura; `zones/` (especificaciones, código Python fijo, MCP y asistente); tarjeta de zonas; tests.
+14. **S58 · Personajes de Convai en Ajustes (REQ-58)** — `convai_characters.rs` (cargar, validar, guardar de forma atómica, especificación de `convai_characters`), comandos `convai_characters_list`/`convai_characters_save`, herramienta en el MCP y en el asistente (paridad), tarjeta Convai en Ajustes, reglas de Convai con la lista de personajes.
+15. **S59 · Tutorial de Convai en F1 (REQ-59)** — pestaña Convai (ES/EN) en `helpModal.js`, enlaces desde Ajustes y desde la vista Proyecto, `docs/IA*.md`.
+13. **S57 · Textos y documentación** — traducciones ES/EN, ayuda F1 (Unreal), `docs/IA*.md` debajo de la marca (Convai, consumo), CHANGELOG ES/EN.
+
+### Verificación
+
+- `cargo test`, `npx vitest run`, tests de Python, `dbv-lint`, banco e2e (lección del 2026-10-29: en el `/test` de cada versión).
+- En vivo contra `DBVUnrealAITest1`: describir Niagara por el MCP (< 12.000 caracteres), sección Convai en ✓, crear y deshacer tres zonas, enviar un `.ply` por el MCP.
+- Lo que solo puede comprobar el usuario: un personaje Convai que habla en Play y va a una zona; la MSIX en un equipo limpio.

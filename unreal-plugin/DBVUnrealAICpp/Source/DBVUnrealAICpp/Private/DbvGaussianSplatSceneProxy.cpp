@@ -55,7 +55,8 @@ void FDbvGaussianSplatSceneProxy::GetDynamicMeshElements(
 		const FVector CamUp = View->GetViewUp();
 
 		// Index array for depth sorting (argsort)
-		const int32 NumToDraw = FMath::Min(Splats.Num(), 65536 * 4); // Safe batch cap for immediate dynamic mesh
+		// The asset already keeps at most MaxDrawnSplats (the most visible ones of the whole scene).
+		const int32 NumToDraw = FMath::Min(Splats.Num(), UDbvGaussianSplatAsset::MaxDrawnSplats);
 		TArray<int32> SortedIndices;
 		SortedIndices.SetNumUninitialized(NumToDraw);
 		for (int32 i = 0; i < NumToDraw; ++i)

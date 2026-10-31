@@ -11,6 +11,33 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+### Added
+
+- **Varias entradas de memoria por propuesta (REQ-50):** la IA ya no dice que «solo puede anotar un recordatorio por turno». `project_memory_propose` acepta hasta 8 entradas, que salen en una sola tarjeta con una casilla, un texto editable y el motivo de cada una. Las repetidas salen desmarcadas y las que parecen un secreto, bloqueadas. El botón «Recordar» pide todo lo que merezca recordarse. Por el MCP propio se guardan las entradas válidas y se informa de cada una.
+- **Contador de herramientas al pie de cada respuesta (REQ-51):** «Herramientas: N llamadas · X KB (~Y tokens, aprox.)», también con agentes. Para estos lo anota el `--mcp` en `tool-usage.jsonl`, sin contenido. Avisa por encima de 200 KB en un turno.
+- **`unreal_scene_summary` en el MCP propio (REQ-51):** la escena compacta con filtros y un límite de 100 actores por defecto.
+- **Convai (REQ-55, REQ-56):** la vista Proyecto tiene una sección Convai que comprueba el plugin (también instalado en el motor desde Fab), la versión del motor, los toolsets y las 17 guías en el editor y la sesión iniciada, y avisa si la clave está en git. La app no pide clave: el plugin se autentica solo. La conversación recibe las reglas de Convai (leer sus guías, pedir el Character ID, componentes Blueprint, hablar en Play). La tarjeta de aprobación de una acción de Convai y «Deshacer este turno» avisan de que se guardan Blueprints. Nueva sugerencia: «Haz que este MetaHuman hable con Convai».
+- **Zonas del nivel (REQ-57):** `level_zones_propose` y `level_zones_list`, en el asistente y en el MCP propio. La IA propone sitios con nombre y descripción, los revisas en una tarjeta y se crean como `TargetPoint` en `DBV/Zones`, con un `ConvaiObjectComponent` si está Convai, para que el personaje los conozca y pueda ir allí. El código lo fija la app y las zonas viajan como dato. Se deshacen con el editor (verificado en vivo).
+- **Aviso de accesos duplicados al editor (REQ-52):** si el proyecto tiene un `.mcp.json` (u otra configuración de agente) que apunta al MCP del editor, o las instrucciones de Convai en `CLAUDE.md`/`AGENTS.md`, la vista Proyecto lo avisa. La app no toca esos ficheros. El preámbulo del agente y las `instructions` del MCP le dicen que use solo `dbv-unreal-ai`.
+- **Log local rotativo (RNF-08):** `<datos>/logs/dbv-unreal-ai.log` (1 MB × 3) de la ventana y del `--mcp`: arranque, conexiones, importaciones con su ruta final, envíos. Las claves se tapan antes de escribir. «Copiar diagnóstico» añade si la app está empaquetada, las carpetas reales y las últimas 50 líneas.
+
+- **Personajes de Convai en Ajustes (REQ-58):** una tarjeta Convai, como las de Tripo y World Labs pero sin clave, donde se registran varios personajes con su nombre, su Character ID del Playground y una nota. La IA los consulta con `convai_characters` (también por el MCP propio) y usa el ID por el nombre del personaje: «haz que BP_VictoriaNew sea Victoria».
+- **Tutorial de Convai en la ayuda F1 (REQ-59):** qué hace falta (UE 5.8, el plugin con la sesión iniciada, un personaje del Playground y un MetaHuman ensamblado), los pasos y los problemas conocidos, con su solución, vistos en la prueba con un MetaHuman real.
+- **Ajustes con pestañas (REQ-60):** Inteligencia artificial, Tripo, World Labs, Convai, Biblioteca, Agentes (MCP) y Diagnóstico, en vez de una sola página larga.
+
+### Changed
+
+- **Mucho menos contexto para los agentes (REQ-51):** el MCP propio recorta cada resultado a 12.000 caracteres, como el asistente integrado, diciendo cómo pedir menos. `unreal_describe_toolset` devuelve una línea por herramienta (Niagara pasaba de 306 KB a 5,5 KB) y con `tool` el esquema de una sola. La lista de toolsets se guarda en memoria y las capturas salen a 1024 px por defecto (`detail: "high"` para 1568). Con un guion fijo contra respuestas grabadas del editor real, la v0.3.0 devuelve un 79 % menos de texto que la v0.2.4.
+- **Biblioteca en `Documentos/DBV Unreal AI/Library` (REQ-53):** o en `<carpeta de usuario>/DBV Unreal AI/Library` si OneDrive sincroniza Documentos, para no subir a la nube gigas de modelos. Se crea al arrancar, aunque esté vacía. Si no elegiste otra carpeta, lo que había en la ubicación anterior se copia una vez, sin borrar nada, y Ajustes lo indica. «Abrir carpeta» crea la carpeta si falta.
+
+### Fixed
+
+- **Memoria del proyecto perdida cuando Unreal se reinicia solo** (por ejemplo, al activar plugins): el editor arranca entonces con la ruta del `.uproject` relativa a su carpeta `Engine/Binaries/Win64`, y la app la tomaba relativa a la suya, así que el MCP de los agentes podía no encontrar el proyecto (sobre todo con la app de la Store o el proyecto en otra unidad). Ahora se resuelve contra el ejecutable del editor (encontrado al probar la v0.3.0).
+- **Al reabrir una conversación se perdía el pie de cada respuesta** («Deshacer este turno» y ahora el contador de herramientas): `addAssistant` leía la opción equivocada. Venía de la v0.2.0; lo encontró la revisión de `/code-simplify`.
+- **La vista Proyecto abría y cerraba una ventana de consola en Windows** al comprobar si la clave de Convai está en git: el proceso `git` se lanzaba sin `CREATE_NO_WINDOW`, al contrario que el resto de la app (hallazgo de `/code-simplify`).
+- **La biblioteca de la versión de Microsoft Store no se veía (REQ-53):** una app empaquetada escribe lo que crea en `%APPDATA%` en una copia privada que no ven el Explorador, Unreal ni los agentes. «Abrir carpeta» decía que no existía, y un `.ply` importado desde una web no aparecía en la carpeta creada a mano.
+- **Enviar un Gaussian Splat desde un agente (REQ-54):** `library_send_to_unreal` del MCP propio solo admitía `.glb`, `.fbx` y `.obj` («the asset has no model file»). Ahora carga el `.spz`/`.ply` con el componente DBV y coloca su malla de colisión, con la misma elección de ficheros que la ventana (test de paridad).
+
 ## [0.2.4] - 2026-10-29
 
 ### Fixed

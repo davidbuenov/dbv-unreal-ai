@@ -192,13 +192,22 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   }
 
   function renderUndoFooter(targetBubble, undoInfo) {
-    if (!undoInfo || undoInfo.count <= 0) return;
+    if (!undoInfo || (undoInfo.count <= 0 && !undoInfo.usage)) return;
     let footer = targetBubble.querySelector('.ai-msg__footer');
     if (!footer) {
       footer = el('div', 'ai-msg__footer');
       targetBubble.append(footer);
     }
     footer.replaceChildren();
+    // Contador de lo que devolvieron las herramientas (REQ-51), con o sin «Deshacer este turno».
+    if (undoInfo.usage && callbacks.formatUsage) {
+      const shown = callbacks.formatUsage(undoInfo.usage);
+      const usage = el('span', shown.warning ? 'ai-msg__usage ai-msg__usage--warning' : 'ai-msg__usage', shown.text);
+      usage.title = shown.title;
+      footer.append(usage);
+    }
+    if (undoInfo.count <= 0) return;
+    if (undoInfo.convaiSaved) footer.append(el('span', 'ai-msg__undo-warning', `${t('unreal.undoConvaiNote')} `));
     const undoBtn = button(undoInfo.undone ? t('unreal.undoDone') : t('unreal.undoTurn'), async () => {
       if (undoInfo.undone || undoBtn.disabled) return;
       undoBtn.disabled = true;
@@ -299,7 +308,7 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
      * (`append`/`finish`), el indicador de actividad y el bloque
      * plegable de razonamiento, que solo se muestra y nunca se guarda.
      */
-    addAssistant(initial = '', { toolsOffered = false } = {}) {
+    addAssistant(initial = '', { toolsOffered = false, undoInfo = null } = {}) {
       let bubble = el('div', 'ai-msg ai-msg--assistant md');
       const activityRow = el('div', 'ai-activity-row');
       const activityLine = el('div', 'ai-activity hidden');
@@ -431,9 +440,8 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
           renderUndoFooter(bubble, undoInfo);
         },
       };
-      if (initial && toolsOffered?.undoInfo) {
-        renderUndoFooter(bubble, toolsOffered.undoInfo);
-      }
+      // Una conversación reabierta conserva el pie de cada turno (Deshacer y el contador de herramientas).
+      if (initial && undoInfo) renderUndoFooter(bubble, undoInfo);
       return api;
     },
 

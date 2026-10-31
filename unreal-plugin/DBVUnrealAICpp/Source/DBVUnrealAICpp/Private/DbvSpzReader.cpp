@@ -147,8 +147,9 @@ bool FDbvSpzReader::LoadFromMemory(
 	OutHeader.FractionalBits = static_cast<int32>(FractionalBits);
 	OutHeader.BoundingBox.Init();
 
+	// `SetNum`, no `SetNumUninitialized`: cada punto lleva un TArray (`HigherOrderSH`) que debe nacer vacío.
 	OutPoints.Empty(OutHeader.NumPoints);
-	OutPoints.SetNumUninitialized(OutHeader.NumPoints);
+	OutPoints.SetNum(OutHeader.NumPoints);
 
 	const float PosScale = 1.0f / static_cast<float>(1 << FractionalBits);
 

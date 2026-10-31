@@ -217,6 +217,15 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
     - Selector de nivel de razonamiento / pensamiento (*reasoning effort*): Desactivado, Bajo, Medio, Alto.
     - Botón de confirmación y guardado reactivo sin cerrar el modal.
 
+### Decisiones de diseño v0.3.0 (2026-10-31)
+
+- **Tarjeta de memoria con varias entradas (REQ-50):** la misma tarjeta de REQ-35, con borde `accent`, pero con una fila por entrada: casilla (marcada por defecto), sección en `caption`, texto en un campo editable de una línea y motivo debajo en `caption` `text-muted`. Una entrada repetida sale desmarcada con «ya está» en `text-muted`. Una con forma de secreto, deshabilitada y con su motivo en `error`. Pie con «Guardar las marcadas (n)» (primario, deshabilitado con 0) y «Descartar todo» (texto). El foco inicial va a «Descartar todo».
+- **Contador de herramientas del turno (REQ-51):** una línea en `caption` `text-muted` al pie de la respuesta, junto a «Deshacer este turno»: «Herramientas: 7 llamadas · 48 KB (~12 k tokens, aprox.)». Pasa a `warning` por encima de 200 KB en un turno y su `title` explica cómo reducirlo. Sin modal ni color nuevo.
+- **Aviso de acceso duplicado (REQ-52):** franja `warning` en la vista Proyecto, encima del diagnóstico, con el fichero encontrado en `--font-mono`, una frase con la consecuencia y «Cómo evitarlo» (abre la ayuda). En la conversación, la misma frase una sola vez al abrir la sesión del agente.
+- **Sección Convai en la vista Proyecto (REQ-55):** bloque con el mismo formato que la lista de preparación (REQ-04): ✓/✗ por comprobación (plugin, UE ≥ 5.8, toolsets, guías, sesión iniciada, clave versionada en git) con su explicación. Si no está instalado, se muestra plegado como «opcional» con un enlace a la documentación. La clave nunca se muestra, ni siquiera enmascarada: solo «sesión iniciada en el plugin».
+- **Propuesta de zonas (REQ-57):** igual que la propuesta de plan (REQ-36): una fila editable por zona (nombre, descripción, posición en metros en `--font-mono`) que se puede quitar, y «Crear zonas (n)» como primario. Las zonas que ya existían llevan la etiqueta «actualizar».
+- **Ruta de la biblioteca (REQ-53):** en Ajustes, la ruta real en `--font-mono` con «Abrir carpeta». Si se migró desde la ubicación antigua, una nota en `caption`: «Se copiaron n assets de la ubicación anterior, que se conserva».
+
 ---
 
 ## ✨ Movimiento e Interacción

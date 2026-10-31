@@ -27,7 +27,7 @@ export const unrealReadiness = (path) => call('unreal_readiness', { path });
 export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_plan', { path, variant, port: port ?? null });
 export const unrealPrepareApply = (path, variant, port) => call('unreal_prepare_apply', { path, variant, port: port ?? null });
 export const unrealPrepareRevert = (path, backup) => call('unreal_prepare_revert', { path, backup });
-export const unrealCaptureViewport = (endpoint, annotate) => call('unreal_capture_viewport', { endpoint, annotate: Boolean(annotate) });
+export const unrealCaptureViewport = (endpoint, annotate, detail = 'normal') => call('unreal_capture_viewport', { endpoint, annotate: Boolean(annotate), detail });
 export const unrealGetUndoCount = async (endpoint) => {
   let count = null;
   const res = await unrealCallTool(endpoint, '', 'get_undo_count', {});
@@ -87,6 +87,16 @@ export const generationAllowReference = (path) => call('generation_allow_referen
 export const memoryStatus = (project) => call('memory_status', { project });
 export const memoryActivate = (project) => call('memory_activate', { project });
 export const memoryApply = (project, doc, baseHash, edit) => call('memory_apply', { project, doc, baseHash, edit });
+export const convaiCharactersList = () => call('convai_characters_list');
+export const convaiCharactersSave = (characters) => call('convai_characters_save', { characters });
+export const convaiCharactersText = () => call('convai_characters_text');
+export const convaiCharactersSpec = () => call('convai_characters_spec');
+export const zonesToolSpecs = () => call('zones_tool_specs');
+export const zonesPreview = (args) => call('zones_preview', { args });
+export const zonesApply = (endpoint, zones) => call('zones_apply', { endpoint, zones });
+export const zonesList = (endpoint) => call('zones_list', { endpoint });
+export const toolUsageSince = (project, since) => call('tool_usage_since', { project, since: Math.floor(Number(since) || 0) });
+export const memoryCheckEntries = (project, entries) => call('memory_check_entries', { project, entries });
 export const memoryToolSpecs = () => call('memory_tool_specs');
 export const memoryPlanPreview = (args) => call('memory_plan_preview', { args });
 export const memoryTaskUpdate = (project, endpoint, title, done, byAi) => call('memory_task_update', { project, endpoint: endpoint ?? null, title, done, byAi });

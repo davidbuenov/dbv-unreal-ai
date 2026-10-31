@@ -48,6 +48,7 @@ bool UDbvGaussianSplatComponent::LoadFile(const FString& InFilePath)
 	{
 		ErrorMsg = FString::Printf(TEXT("Unsupported file format: %s (must be .spz or .ply)"), *InFilePath);
 	}
+	LastLoadError = bSuccess ? FString() : ErrorMsg;
 
 	if (bSuccess)
 	{

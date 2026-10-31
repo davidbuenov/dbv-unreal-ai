@@ -30,6 +30,21 @@ pub fn data_dir() -> Option<PathBuf> {
     base.map(|b| b.join(IDENTIFIER))
 }
 
+/// Biblioteca por defecto: `<Documentos>/DBV Unreal AI/Library` (REQ-53). Una app de la Store escribe lo que crea en
+/// `%APPDATA%` en una copia privada que no ven el Explorador, Unreal ni los agentes (lección del 2026-10-31);
+/// Documentos no se virtualiza. El nombre es fijo para que la ventana y el `--mcp` lleguen a la misma ruta.
+pub fn documents_library() -> Option<PathBuf> {
+    library_folder(dirs::document_dir(), dirs::home_dir())
+}
+
+/// Dónde va la biblioteca: en Documentos, salvo que OneDrive la sincronice (D31): entonces en la carpeta del usuario,
+/// que tampoco se virtualiza, para no subir a la nube gigas de modelos y splats (visto el 2026-10-31: 1,9 GB).
+pub fn library_folder(documents: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
+    let synced = documents.as_ref().is_some_and(|d| d.components().any(|c| c.as_os_str().to_string_lossy().to_lowercase().starts_with("onedrive")));
+    let base = if synced { home.or(documents) } else { documents.or(home) };
+    base.map(|b| b.join("DBV Unreal AI").join("Library"))
+}
+
 /// Carpeta de configuración (conexiones, ajustes de generación).
 pub fn config_dir() -> Option<PathBuf> {
     let base = if cfg!(target_os = "windows") {
@@ -45,6 +60,16 @@ pub fn config_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Documentos salvo que la sincronice OneDrive; entonces la carpeta del usuario. @spec REQ-53
+    #[test]
+    fn la_biblioteca_no_va_a_una_carpeta_de_onedrive() {
+        let home = PathBuf::from("C:/Users/u");
+        assert_eq!(library_folder(Some(PathBuf::from("C:/Users/u/Documents")), Some(home.clone())), Some(PathBuf::from("C:/Users/u/Documents/DBV Unreal AI/Library")));
+        assert_eq!(library_folder(Some(PathBuf::from("C:/Users/u/OneDrive/Documentos2")), Some(home.clone())), Some(home.join("DBV Unreal AI").join("Library")));
+        assert_eq!(library_folder(Some(PathBuf::from("C:/Users/u/OneDrive - Empresa/Documents")), Some(home.clone())), Some(home.join("DBV Unreal AI").join("Library")));
+        assert_eq!(library_folder(None, None), None);
+    }
 
     #[test]
     fn las_carpetas_acaban_en_el_identificador() {

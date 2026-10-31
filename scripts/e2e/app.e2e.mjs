@@ -49,7 +49,8 @@ function extra(connections, hasKey = false) {
     generation_jobs: [],
     // El visor 3D carga este GLB de prueba (lo sirve el banco desde tests/fixtures).
     library_file_path: '/__fixtures/models/cubo.glb',
-    library_location: { current: 'C:/Users/u/AppData/Roaming/com.davidbuenov.dbv-unreal-ai/library', default: 'C:/Users/u/AppData/Roaming/com.davidbuenov.dbv-unreal-ai/library', isDefault: true },
+    // REQ-53: la biblioteca por defecto vive en Documentos (la virtualización de la Store escondía la de AppData).
+    library_location: { current: 'C:/Users/u/Documents/DBV Unreal AI/Library', default: 'C:/Users/u/Documents/DBV Unreal AI/Library', isDefault: true, migrated: 0 },
     library_list: [entry],
     app_mcp_command: { command: 'C:/Program Files/DBV Unreal AI/dbv-unreal-ai.exe', args: ['--mcp', '--port', '8000'] },
     // Memoria del proyecto (REQ-34, v0.2.0) aún sin activar, con la forma de `MemoryStatus` de Rust. Sin esto la
@@ -63,6 +64,16 @@ function extra(connections, hasKey = false) {
       missing: [{ file: 'dbv-unreal-ai/memory.md', text: '# Memoria del proyecto\n' }, { file: 'dbv-unreal-ai/task.md', text: '# Tareas\n' }],
     },
     memory_tool_specs: [],
+    // REQ-50: comprobación previa de la tarjeta de memoria (sin problemas).
+    memory_check_entries: [],
+    // REQ-57: herramientas de zonas (se cargan con la IA, como las de memoria).
+    zones_tool_specs: [],
+    // REQ-58: personajes de Convai (Ajustes y herramienta del asistente).
+    convai_characters_spec: { name: 'convai_characters', description: 'x', inputSchema: { type: 'object', properties: {}, required: [] } },
+    convai_characters_list: [],
+    convai_characters_text: 'No Convai characters are registered yet.',
+    // REQ-51: contador del pie del turno (sin llamadas del --mcp).
+    tool_usage_since: { calls: 0, text: 0, images: 0, clipped: 0 },
   });
 }
 

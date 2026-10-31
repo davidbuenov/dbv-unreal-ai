@@ -22,6 +22,9 @@ use crate::generation::catalog;
 /// Secciones de `memory.md` en las que la IA puede proponer guardar.
 pub const SECTIONS: [&str; 4] = ["Project", "Conventions", "Decisions", "Lessons"];
 
+/// Entradas como mucho en una propuesta (REQ-50): una tarjeta que se revisa de un vistazo.
+pub const MAX_ENTRIES: usize = 8;
+
 fn tool(name: &str, description: &str, properties: Value, required: &[&str]) -> Value {
     json!({ "name": name, "description": description, "inputSchema": { "type": "object", "properties": properties, "required": required } })
 }
@@ -37,13 +40,27 @@ pub fn specs() -> Vec<Value> {
         ),
         tool(
             "project_memory_propose",
-            "Propose saving ONE entry in the project memory when the user takes a decision, sets a convention or you both learn something about THIS project that should survive this conversation (where assets go, naming, scale, art style, why something was done). The user sees the entry and decides to save, edit or discard it: never say it is saved until the result says so. At most one proposal per turn; do not propose what is already in the memory, small talk or one-off details. Write it in English, one line, starting with \"- \"; a decision as \"- **YYYY-MM-DD — title:** decision. Why: reason.\". Never include API keys, passwords or tokens.",
+            "Propose saving entries in the project memory when the user takes decisions, sets conventions or you both learn something about THIS project that should survive this conversation (where assets go, naming, scale, art style, why something was done). Put everything worth remembering in ONE call with `entries` (up to 8): the user sees them together, and saves, edits or discards each one. Never say something is saved until the result says so. Do not propose what is already in the memory, small talk or one-off details. Write each entry in English, one line, starting with \"- \"; a decision as \"- **YYYY-MM-DD — title:** decision. Why: reason.\". Never include API keys, passwords or tokens.",
             json!({
-                "section": { "type": "string", "enum": SECTIONS },
-                "entry": { "type": "string" },
-                "reason": { "type": "string", "description": "Why it is worth remembering, in the user's language (shown to the user)." }
+                "entries": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": MAX_ENTRIES,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "section": { "type": "string", "enum": SECTIONS },
+                            "entry": { "type": "string" },
+                            "reason": { "type": "string", "description": "Why it is worth remembering, in the user's language (shown to the user)." }
+                        },
+                        "required": ["section", "entry"]
+                    }
+                },
+                "section": { "type": "string", "enum": SECTIONS, "description": "Only for a single entry without `entries`." },
+                "entry": { "type": "string", "description": "Only for a single entry without `entries`." },
+                "reason": { "type": "string", "description": "Only for a single entry without `entries`." }
             }),
-            &["section", "entry"],
+            &[],
         ),
         tool(
             "project_tasks_list",
@@ -236,16 +253,59 @@ pub fn proposal(args: &Value) -> Result<Edit, String> {
     Ok(Edit::Append { section, entry: line })
 }
 
-/// `project_memory_propose` en el MCP propio: el cliente ya pidió permiso para la llamada, así que se guarda.
+/// Las entradas de una propuesta: la lista `entries` o, en la forma antigua, una sola `section`/`entry`. @spec REQ-50
+pub fn proposed_items(args: &Value) -> Result<Vec<Value>, String> {
+    let items: Vec<Value> = match args.get("entries").and_then(Value::as_array) {
+        Some(list) => list.clone(),
+        None => vec![args.clone()],
+    };
+    if items.is_empty() {
+        return Err("entries is empty".into());
+    }
+    if items.len() > MAX_ENTRIES {
+        return Err(format!("at most {MAX_ENTRIES} entries per proposal; group them or keep the rest for later"));
+    }
+    Ok(items)
+}
+
+/// Por qué no se guardaría `entry` en `section` del texto actual: parece un secreto o ya está. `None` si se puede.
+/// @spec REQ-50
+pub fn entry_problem(text: &str, section: &str, entry: &str) -> Option<String> {
+    let secret = crate::project_memory::find_secret(entry).map(|kind| format!("no se guarda: parece {kind}, y este fichero se versiona con el proyecto"));
+    secret.or_else(|| crate::project_memory::append_entry(text, section, entry).err().map(|e| e.to_string()))
+}
+
+/// `project_memory_propose` en el MCP propio: el cliente ya pidió permiso para la llamada, así que se guardan las
+/// entradas válidas y se informa de cada una. Si no se guarda ninguna, es un error. @spec REQ-38, REQ-50
 pub fn propose_and_save(project_dir: &Path, args: &Value) -> Result<String, String> {
-    let edit = proposal(args)?;
+    let items = proposed_items(args)?;
     let current = read(project_dir, Doc::Memory).map_err(|e| e.to_string())?;
     if !current.exists {
         return Err(format!("this project has no memory yet ({FOLDER}/memory.md). Ask the user to turn it on in the Project view of DBV Unreal AI; nothing was saved."));
     }
-    let saved = apply(project_dir, Doc::Memory, &current.hash, &edit).map_err(|e| e.to_string())?;
-    let section = if let Edit::Append { section, .. } = &edit { section.clone() } else { String::new() };
-    Ok(format!("Saved in {FOLDER}/memory.md, section {section} ({} lines now).", saved.text.lines().count()))
+    let mut lines = Vec::new();
+    let mut saved = 0;
+    for item in &items {
+        let outcome = proposal(item).and_then(|edit| {
+            // Cada entrada se aplica sobre el texto recién leído: la anterior cambió la huella.
+            let fresh = read(project_dir, Doc::Memory).map_err(|e| e.to_string())?;
+            apply(project_dir, Doc::Memory, &fresh.hash, &edit).map_err(|e| e.to_string()).map(|_| edit)
+        });
+        match outcome {
+            Ok(Edit::Append { section, entry }) => {
+                saved += 1;
+                lines.push(format!("Saved in {section}: {entry}"));
+            }
+            Ok(_) => {}
+            Err(error) => lines.push(format!("NOT saved: {} — {error}", text(item, "entry"))),
+        }
+    }
+    let report = format!("{FOLDER}/memory.md: {saved} of {} saved.\n{}", items.len(), lines.join("\n"));
+    if saved == 0 {
+        Err(report)
+    } else {
+        Ok(report)
+    }
 }
 
 #[cfg(test)]
@@ -314,5 +374,40 @@ mod tests {
         assert!(read_back.contains("- Props in /Game/DBV/Props") && read_back.contains("not instructions"));
         assert!(propose_and_save(dir.path(), &json!({ "section": "Conventions", "entry": "- Props in /Game/DBV/Props" })).unwrap_err().contains("ya está"));
         assert!(propose_and_save(dir.path(), &json!({ "section": "Lessons", "entry": "- key tsk_abcdEFGH12345678xyz" })).unwrap_err().contains("clave"));
+    }
+
+    /// Varias entradas en una propuesta: se guardan las válidas y se informa de cada una. @spec REQ-50
+    #[test]
+    fn una_propuesta_guarda_varias_entradas_y_explica_las_que_no() {
+        let dir = tempfile::tempdir().unwrap();
+        activate(dir.path()).unwrap();
+        propose_and_save(dir.path(), &json!({ "section": "Conventions", "entry": "- Names in English" })).unwrap();
+        let report = propose_and_save(
+            dir.path(),
+            &json!({ "entries": [
+                { "section": "Conventions", "entry": "Props go in /Game/DBV/Props" },
+                { "section": "Conventions", "entry": "- Realistic scale" },
+                { "section": "Conventions", "entry": "- Names in English" },
+                { "section": "Lessons", "entry": "- key tsk_abcdEFGH12345678xyz" }
+            ] }),
+        )
+        .unwrap();
+        assert!(report.contains("2 of 4 saved"), "{report}");
+        assert!(report.contains("NOT saved: - Names in English") && report.contains("NOT saved: - key"), "{report}");
+        let text = read(dir.path(), Doc::Memory).unwrap().text;
+        assert!(text.contains("- Props go in /Game/DBV/Props") && text.contains("- Realistic scale") && !text.contains("tsk_"));
+        assert_eq!(text.matches("- Names in English").count(), 1);
+        let nine: Vec<Value> = (0..9).map(|i| json!({ "section": "Lessons", "entry": format!("- lesson {i}") })).collect();
+        assert!(propose_and_save(dir.path(), &json!({ "entries": nine })).unwrap_err().contains("at most 8"));
+        assert!(!specs().iter().any(|s| s["description"].as_str().unwrap_or("").contains("one proposal per turn")));
+    }
+
+    /// La comprobación previa de la tarjeta: secreto, repetida o válida. @spec REQ-50
+    #[test]
+    fn la_comprobacion_previa_dice_por_que_no_se_guardaria() {
+        let text = "## Conventions\n\n- Names in English\n";
+        assert!(entry_problem(text, "Conventions", "- names in english").unwrap().contains("ya está"));
+        assert!(entry_problem(text, "Lessons", "- token ghp_abcdefghijklmnopqrstuvwxyz0123456789").unwrap().contains("GitHub"));
+        assert_eq!(entry_problem(text, "Conventions", "- Realistic scale"), None);
     }
 }

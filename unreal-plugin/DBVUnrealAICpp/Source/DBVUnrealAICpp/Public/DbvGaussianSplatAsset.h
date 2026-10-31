@@ -32,9 +32,16 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Gaussian Splat")
 	FBox BoundingBox = FBox(EForceInit::ForceInit);
 
-	/** Number of Gaussian splats */
+	/** Most splats the native renderer draws (billboards sorted on the CPU every frame). */
+	static constexpr int32 MaxDrawnSplats = 262144;
+
+	/** Number of Gaussian splats kept for drawing (at most MaxDrawnSplats) */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
 	int32 GetNumSplats() const { return Points.Num(); }
+
+	/** Number of Gaussian splats in the source file */
+	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
+	int32 GetTotalSplats() const { return Header.NumPoints; }
 
 	/** Loads an .spz file into this asset */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
@@ -48,6 +55,9 @@ public:
 	const TArray<FDbvGaussianPoint>& GetPoints() const { return Points; }
 
 private:
+	/** Above MaxDrawnSplats, keeps the most visible splats of the whole scene (not the first ones of the file). */
+	void KeepMostVisible();
+
 	/** Internal storage of splat points */
 	TArray<FDbvGaussianPoint> Points;
 };

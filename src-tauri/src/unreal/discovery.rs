@@ -12,7 +12,9 @@
 //     UE_5.8 solo aparecía como `QuixelBridge_5.8`. Por eso no se filtra por
 //     `AppName`: vale cualquier `InstallLocation` con `Engine/Build/Build.version`,
 //     más una búsqueda en las carpetas típicas de Epic.
-//   · La línea de comandos del editor es `UnrealEditor.exe "<ruta>.uproject"`.
+//   · La línea de comandos del editor es `UnrealEditor.exe "<ruta>.uproject"`. Cuando el editor se reinicia solo
+//     (al activar plugins), la ruta llega RELATIVA a su carpeta `Engine/Binaries/Win64`
+//     (`"../../../../../../Programacion/Unreal/P/P.uproject"`, visto el 2026-10-31): se resuelve contra ella.
 //   · El servidor MCP escucha solo en `127.0.0.1` (RNF-06).
 
 use std::collections::HashSet;
@@ -263,6 +265,27 @@ pub fn project_from_args<S: AsRef<str>>(args: &[S]) -> Option<String> {
     args.iter().skip(1).map(|a| a.as_ref().trim_matches('"')).find(|a| a.to_lowercase().ends_with(".uproject")).map(str::to_string)
 }
 
+/// Ruta absoluta del `.uproject` de un editor: una relativa se resuelve contra la carpeta de su ejecutable, no
+/// contra la de la app (que no tiene por qué estar en la misma unidad). Los `..` se quitan sin tocar el disco.
+pub fn absolute_project(project: &str, executable: &Path) -> String {
+    let path = Path::new(project);
+    let joined = match executable.parent() {
+        Some(dir) if path.is_relative() => dir.join(path),
+        _ => path.to_path_buf(),
+    };
+    let mut clean = PathBuf::new();
+    for part in joined.components() {
+        match part {
+            std::path::Component::ParentDir => {
+                clean.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => clean.push(other),
+        }
+    }
+    clean.to_string_lossy().into_owned()
+}
+
 /// Editores de Unreal abiertos ahora mismo.
 pub fn running_editors() -> Vec<RunningEditor> {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
@@ -274,11 +297,9 @@ pub fn running_editors() -> Vec<RunningEditor> {
         .filter(|process| process.name().to_string_lossy().to_lowercase().starts_with("unrealeditor"))
         .map(|process| {
             let args: Vec<String> = process.cmd().iter().map(|a| a.to_string_lossy().into_owned()).collect();
-            RunningEditor {
-                pid: process.pid().as_u32(),
-                executable: process.exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
-                project: project_from_args(&args),
-            }
+            let executable = process.exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+            let project = project_from_args(&args).map(|p| absolute_project(&p, Path::new(&executable)));
+            RunningEditor { pid: process.pid().as_u32(), executable, project }
         })
         .collect();
     editors.sort_by_key(|editor| editor.pid);
@@ -356,6 +377,17 @@ mod tests {
         let args = ["d:/Program Files/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe", "\"D:\\Programacion\\Unreal\\DBVMCPFirst\\DBVMCPFirst.uproject\"", "-log"];
         assert_eq!(project_from_args(&args).as_deref(), Some(r"D:\Programacion\Unreal\DBVMCPFirst\DBVMCPFirst.uproject"));
         assert_eq!(project_from_args(&["UnrealEditor.exe"]), None);
+    }
+
+    /// Tras reiniciarse solo, el editor da la ruta relativa a `Engine/Binaries/Win64`: vale su carpeta, no la de la
+    /// app. Una ruta absoluta no cambia. @spec REQ-01, REQ-38
+    #[test]
+    #[cfg(windows)]
+    fn una_ruta_relativa_del_editor_se_resuelve_contra_su_ejecutable() {
+        let exe = Path::new(r"d:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe");
+        let relative = "../../../../../../Programacion/Unreal/DBVUnrealAITest1/DBVUnrealAITest1.uproject";
+        assert_eq!(absolute_project(relative, exe), r"d:\Programacion\Unreal\DBVUnrealAITest1\DBVUnrealAITest1.uproject");
+        assert_eq!(absolute_project(r"C:\P\Demo\Demo.uproject", exe), r"C:\P\Demo\Demo.uproject");
     }
 
     #[test]

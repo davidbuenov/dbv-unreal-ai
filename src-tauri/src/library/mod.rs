@@ -627,6 +627,9 @@ impl Library {
             output: Value::Null,
         };
         self.add(entry.clone())?;
+        // Dónde quedó de verdad (RNF-08): lo que no se supo con el `.ply` de la Store (REQ-53).
+        let bytes: u64 = entry.files.iter().filter_map(|f| std::fs::metadata(dir.join(f)).ok()).map(|m| m.len()).sum();
+        crate::logging::info(&format!("library import {} -> {} ({} files, {bytes} bytes, kind {})", source.display(), dir.display(), entry.files.len(), entry.kind));
         Ok(entry)
     }
 
@@ -835,6 +838,7 @@ impl Library {
         let outcome = (|| -> Result<LibraryEntry, UnrealError> {
             download_to(&agent, trimmed_url, &target_path, 512 * 1024 * 1024)?;
 
+            crate::logging::info(&format!("library download {} -> {}", trimmed_url.split('?').next().unwrap_or(""), target_path.display()));
             let mut imported = self.import_file(&target_path, name)?;
             imported.parameters = serde_json::json!({
                 "source_url": trimmed_url,
@@ -891,6 +895,7 @@ impl Library {
 
     /// Anota que `id` se envió a un proyecto.
     pub fn record_sent(&self, id: &str, project: &str, asset_path: &str) -> Result<LibraryEntry, UnrealError> {
+        crate::logging::info(&format!("sent to unreal {id} -> {asset_path} ({project})"));
         self.update(|entries| {
             let entry = entries.iter_mut().find(|e| e.id == id).ok_or_else(|| UnrealError::NotFound(format!("no existe el asset {id}")))?;
             entry.sent_to.push(SentRecord { project: project.to_string(), asset_path: asset_path.to_string(), at: now_secs() });
@@ -917,6 +922,28 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), UnrealError> {
 /// ¿Es una carpeta de biblioteca (tiene `library.json`)?
 pub fn is_library(path: &Path) -> bool {
     path.join(INDEX).is_file()
+}
+
+/// Qué se lleva a Unreal de una entrada (REQ-54). Es la misma elección que `sendToUnreal.js` de la ventana (D25): un
+/// splat (`.spz`/`.ply`) con su malla de colisión si la hay, o un modelo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendPlan {
+    Splat { splat: String, collider: Option<String> },
+    Model { model: String },
+    Nothing,
+}
+
+/// Elige qué enviar de una entrada. @spec REQ-54
+pub fn send_plan(entry: &LibraryEntry) -> SendPlan {
+    let with_ext = |exts: &[&str]| entry.files.iter().find(|f| f.rsplit_once('.').is_some_and(|(_, e)| exts.iter().any(|x| e.eq_ignore_ascii_case(x)))).cloned();
+    let splat = with_ext(&["spz", "ply"]);
+    let model = with_ext(&["glb", "gltf", "fbx", "obj"]);
+    let is_world = entry.kind == "world" || splat.is_some();
+    match (is_world, splat, model) {
+        (true, Some(splat), collider) => SendPlan::Splat { splat, collider },
+        (_, _, Some(model)) => SendPlan::Model { model },
+        _ => SendPlan::Nothing,
+    }
 }
 
 /// Carpeta de la biblioteca dentro de la carpeta de datos de la app.
@@ -1189,7 +1216,23 @@ mod tests {
         assert!(!folder1.exists());
         assert!(folder2.exists());
     }
+
+    /// La misma elección que la ventana, con los casos comunes de `tests/fixtures/send-plan/` (D25). @spec REQ-54
+    #[test]
+    fn elige_que_enviar_igual_que_la_ventana() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/send-plan/cases.json");
+        let cases: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for case in cases["cases"].as_array().unwrap() {
+            let mut item = entry("x", 1);
+            item.kind = case["kind"].as_str().unwrap().into();
+            item.files = case["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
+            let expected = &case["expected"];
+            let want = match expected["plan"].as_str().unwrap() {
+                "splat" => SendPlan::Splat { splat: expected["file"].as_str().unwrap().into(), collider: expected["collider"].as_str().map(str::to_string) },
+                "model" => SendPlan::Model { model: expected["file"].as_str().unwrap().into() },
+                _ => SendPlan::Nothing,
+            };
+            assert_eq!(send_plan(&item), want, "{}", case["name"]);
+        }
+    }
 }
-
-
-

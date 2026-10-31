@@ -31,6 +31,8 @@ beforeEach(() => {
         if (command === 'generation_balance') return { balance: 2370, frozen: 30 };
         if (command === 'library_location') return { current: 'C:/Users/u/AppData/Roaming/app/library', default: 'C:/Users/u/AppData/Roaming/app/library', isDefault: true };
         if (command === 'library_set_location') return { current: args.path, default: 'C:/x', isDefault: false };
+        if (command === 'convai_characters_list') return [{ name: 'Victoria', characterId: 'c1fca5ca-03b4-11ef-ae52-42010a7be00e', notes: '' }];
+        if (command === 'convai_characters_save') return args.characters;
         return null;
       }),
     },
@@ -95,5 +97,41 @@ describe('Ajustes', () => {
     await vi.waitFor(() => expect(invoked.some(([c]) => c === 'library_set_location')).toBe(true));
     expect(invoked.find(([c]) => c === 'library_set_location')[1]).toEqual({ path: 'D:/Compartida/Assets', copyExisting: true });
     await vi.waitFor(() => expect(toast).toHaveBeenCalledWith('La biblioteca está en la carpeta nueva'));
+  });
+
+  it('cada apartado va en su pestaña y la elegida se conserva al refrescar @spec REQ-60', async () => {
+    const host = document.createElement('div');
+    const view = createSettingsView(host, { toast: vi.fn(), openConnect: vi.fn(), state: { connection: null } });
+    await view.render();
+    const tabs = [...host.querySelectorAll('[data-settings-tab]')].map((b) => b.textContent);
+    expect(tabs).toEqual(['Inteligencia artificial', 'Tripo', 'World Labs', 'Convai', 'Biblioteca', 'Agentes (MCP)', 'Diagnóstico']);
+    const visible = () => [...host.querySelectorAll('[data-settings-panel]')].filter((p) => !p.classList.contains('hidden')).map((p) => p.dataset.settingsPanel);
+    expect(visible()).toEqual(['ai']);
+    buttonWithText(host, 'Convai').click();
+    expect(visible()).toEqual(['convai']);
+    await view.render();
+    expect(visible()).toEqual(['convai']);
+  });
+
+  it('Convai: sin clave, con los personajes registrados, añadir y guardar; el tutorial abre la ayuda @spec REQ-58, REQ-59', async () => {
+    const host = document.createElement('div');
+    const toast = vi.fn();
+    await createSettingsView(host, { toast, openConnect: vi.fn(), state: { connection: null } }).render();
+    const card = host.querySelector('[data-settings-panel="convai"]');
+    expect(card.querySelector('input[type="password"]')).toBeNull();
+    expect(card.textContent).toContain('No necesita clave');
+    expect([...card.querySelectorAll('input[aria-label="Character ID"]')].map((i) => i.value)).toEqual(['c1fca5ca-03b4-11ef-ae52-42010a7be00e']);
+    buttonWithText(card, 'Añadir personaje').click();
+    const rows = card.querySelectorAll('.convai-character');
+    rows[1].querySelector('input[aria-label="Nombre"]').value = 'Guía';
+    rows[1].querySelector('input[aria-label="Character ID"]').value = 'abcdef12-0000';
+    buttonWithText(card, 'Guardar').click();
+    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'convai_characters_save')).toBe(true));
+    expect(invoked.find(([c]) => c === 'convai_characters_save')[1].characters.map((c) => c.name)).toEqual(['Victoria', 'Guía']);
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledWith('Personajes guardados: 2', 'info'));
+    const opened = vi.fn();
+    document.addEventListener('dbv-open-help', (e) => opened(e.detail.tab), { once: true });
+    buttonWithText(card, 'Tutorial: qué necesitas y cómo se usa').click();
+    expect(opened).toHaveBeenCalledWith('convai');
   });
 });

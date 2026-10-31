@@ -1,0 +1,5 @@
+toolset: ConvaiToolset.ConvaiActionToolset
+Convai action toolset: declares actions on a chatbot and synthesizes the Blueprint event handlers that respond to them.
+2 tools. For the full input schema of one tool, call unreal_describe_toolset again with tool="<name>".
+- CreateConvaiActionHandler(blueprintPath*: string, actionName*: string) — Synthesizes a Convai action handler in a Blueprint's event graph.
+- AddConvaiAction(characterBlueprintPath*: string, actionName*: string, description*: string, parameters*: array<object>) — Appends a parameterized action to a chatbot's Environment action list.

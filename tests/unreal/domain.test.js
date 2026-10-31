@@ -47,7 +47,8 @@ describe('el prompt de un agente (REQ-11)', () => {
   it('un agente no recibe la instrucción de `purpose` (su interfaz de permisos es la del agente) @spec REQ-11', () => {
     expect(unrealPrompt({ agent: true })).not.toContain('`purpose`');
     expect(unrealPrompt({ agent: false })).toContain('`purpose`');
-    expect(unrealPrompt({ agent: true })).not.toContain('unreal_scene_summary');
+    // Desde la v0.3.0 el MCP propio también ofrece `unreal_scene_summary` (REQ-51).
+    expect(unrealPrompt({ agent: true })).toContain('unreal_scene_summary');
   });
 
   it('sin dominio sigue siendo el asistente de documentos de la base @spec REQ-11', () => {

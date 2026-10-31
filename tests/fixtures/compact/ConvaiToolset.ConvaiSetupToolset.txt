@@ -1,0 +1,8 @@
+toolset: ConvaiToolset.ConvaiSetupToolset
+Convai setup toolset: high-level, idempotent editor operations that wire a MetaHuman / Pawn Blueprint and the current level up for Convai conversation and navig…
+5 tools. For the full input schema of one tool, call unreal_describe_toolset again with tool="<name>".
+- SetupConvaiPlayer(playerBlueprintPath*: string) — Adds the Convai player component to the player's PAWN Blueprint (the controllable character the player possesses) so the player can speak to Convai characters.
+- SetupConvaiPawnMovement(characterBlueprintPath*: string) — Sets up Convai-tuned movement on a character/pawn Blueprint so it can navigate.
+- SetupConvaiCharacter(characterBlueprintPath*: string, characterId*: string) — Turns a character Blueprint into a talking Convai character.
+- SetBlueprintPropertyAndPropagate(blueprintPath*: string, componentName*: string, propertyName*: string, valueAsString*: string) — Sets ONE property on a Blueprint AND propagates the new value to every already-placed level instance that still holds the old value (per-instance overrides are …
+- AddNavMeshVolumeForCurrentLevel(location: object, extent: object) — Spawns a NavMeshBoundsVolume into the current editor level so that Convai characters can path-find.

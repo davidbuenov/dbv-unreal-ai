@@ -11,11 +11,16 @@
 //   · `mcp_client`: cliente del servidor MCP del editor (el ÚNICO sitio que conoce
 //     su protocolo, para que un cambio en la 5.9 se arregle aquí — RNF-02).
 //   · `prepare`: diagnóstico y preparación de un proyecto (REQ-04, REQ-05).
+//   · `compact`: tope y formato compacto de lo que se devuelve a la IA (REQ-51).
+//   · `duplicates` y `convai`: accesos directos al editor y Convai en el proyecto (REQ-52, REQ-55).
 //   · `commands`: frontera con el frontend.
 
 pub mod capture;
 pub mod commands;
+pub mod compact;
+pub mod convai;
 pub mod discovery;
+pub mod duplicates;
 pub mod ini;
 pub mod mcp_client;
 pub mod prepare;

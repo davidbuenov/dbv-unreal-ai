@@ -1,0 +1,49 @@
+toolset: NiagaraToolsets.NiagaraToolset_System
+Niagara Toolset for Niagara System operations.
+46 tools. For the full input schema of one tool, call unreal_describe_toolset again with tool="<name>".
+- SetSystemData(system*: object, systemData*: object) — Sets property values on a Niagara System.
+- SetStackInputData(stackInputRef*: object, inputData*: object) — Sets the value of a stack module input and returns the resulting stored value.
+- SetRendererData(renderer*: object, rendererData*: object) — Sets property values on a Niagara Renderer.
+- SetModuleEnabled(moduleRef*: object, bEnabled*: boolean) — Sets whether a module is enabled.
+- SetEmitterData(emitter*: object, emitterData*: object) — Sets property values on a Niagara Emitter.
+- RemoveUserVariables(system*: object, variablesToRemove*: array<object>) — Removes user variables from a system.
+- RemoveSetParameterEntry(moduleRef*: object, parameterName*: string) — Removes a parameter from an existing SetParameters module by name.
+- RemoveRenderer(rendererToRemove*: object) — Removes a renderer from an emitter.
+- RemoveModule(moduleToRemove*: object) — Removes a module from a script stack.
+- RemoveEmitter(emitterToRemove*: object) — Removes an emitter from a system.
+- GetUserVariables(system*: object) — Returns all user variables defined on the system.
+- GetSystemSummary(system*: object) — Returns lightweight system metadata: name, user variables, and one summary entry per emitter.
+- GetSystemSchema() — Returns property schema for Niagara System.
+- GetSystemDependencies(system*: object) — Returns the four Used* sets (renderers, data interfaces, modules, dynamic inputs) gathered across all emitters and system scripts.
+- GetSystemData(system*: object) — Returns system property values.
+- GetSystemCompileState(system*: object) — Returns the current compile state of a Niagara System: aggregate status, per-script compile events, and summary flags.
+- GetStackIssues(system*: object) — Returns all stack issues (errors, warnings, info) from the Niagara module stack, including dismissed ones.
+- GetStackInputTopology(stackInputRef*: object) — Returns stack input topology: name, type, visibility, editability.
+- GetStackInputSchema(inputReference*: object) — Returns schema for a single module input in the stack.
+- GetStackInputData(stackInputRef*: object) — Returns the value of a stack module input.
+- GetScriptStackTopology(scriptRef*: object) — Returns script stack topology: all modules and their inputs in execution order.
+- GetScriptStackInputValues(scriptRef*: object) — Returns all resolved input values for every module in the given script stack.
+- GetRendererSchema(rendererClass*: object) — Returns property schema for a specific Renderer class.
+- GetRendererData(rendererRef*: object) — Returns renderer property values.
+- GetModuleTopology(moduleRef*: object) — Returns module topology: metadata and all inputs (name/type/visibility only, no values).
+- GetModuleSchemaFromAsset(moduleAsset*: object) — Returns schema for a module asset.
+- GetModuleSchema(moduleReference*: object) — Returns schema for a module and all its inputs.
+- GetModuleInputValues(moduleRef*: object) — Returns resolved input values for a single module.
+- GetEmitterTopology(emitterRef*: object) — Returns full emitter topology: four script stacks with all modules and inputs, renderer references.
+- GetEmitterSummary(emitterRef*: object) — Returns lightweight emitter metadata: name, enabled state, sim target, renderer classes.
+- GetEmitterSchema() — Returns property schema for Niagara Emitter.
+- GetEmitterInputValues(emitterRef*: object) — Returns all resolved input values for every module across all four emitter script stacks.
+- GetEmitterData(emitterRef*: object) — Returns emitter property values as a single JSON-string blob in PropertyValues.
+- GetDynamicInputSchemaFromAsset(dynamicInputAsset*: object) — Returns schema for a dynamic input asset.
+- GetDynamicInputSchema(dynamicInputReference*: object) — Returns schema for a dynamic input module in the stack.
+- GetDynamicInputChain(stackInputRef*: object) — Returns the full recursive chain for a dynamic input: topology metadata and resolved values at every level.
+- GetDataInterfaceSchema(dataInterfaceClass*: object) — Returns property schema for a specific Data Interface class.
+- GetAvailableDynamicInputs(type*: object) — Returns all available Dynamic Input Module assets compatible with the given type.
+- CreateNiagaraSystem(assetName*: string, assetPath*: string, templateSystem*: object) — Creates a new Niagara System asset.
+- ApplyStackIssueFix(system*: object, issueId*: string, fixId*: string) — Applies a Fix-style stack issue fix identified by IssueId and FixId.
+- AddUserVariables(system*: object, variablesToAdd*: array<object>) — Adds or updates user variables on a system.
+- AddSetParametersModule(moduleLocationRef*: object, parameters*: array<object>) — Adds a SetParameters module to a script stack.
+- AddSetParameterEntry(moduleRef*: object, entry*: object) — Adds a single parameter to an existing SetParameters module.
+- AddRenderer(newRendererLocation*: object, rendererClass*: object) — Adds a renderer to an emitter.
+- AddModule(moduleLocationRef*: object, moduleAsset*: object) — Adds a module to a script stack.
+- AddEmitter(system*: object, templateEmitter*: object, emitterName*: string) — Adds an emitter to a Niagara System.

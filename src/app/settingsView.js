@@ -5,14 +5,19 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08, REQ-30, REQ-18
+// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08, REQ-30, REQ-18, REQ-58, REQ-60
 //
 // Las claves de Tripo y World Labs solo viajan de ida: el campo nunca se rellena con la guardada, solo se dice
-// si hay una (RNF-IA.4).
+// si hay una (RNF-IA.4). Cada apartado va en su pestaña (REQ-60): todos se pintan y solo se ve el activo, así cambiar
+// de pestaña no vuelve a preguntar al backend y la pestaña elegida se conserva al refrescar.
 
 import { t } from '../ai/i18nBridge.js';
 import * as api from './backend.js';
 import { button, el } from './dom.js';
+import { convaiSettingsCard } from './convaiSettings.js';
+
+/** Pestañas de Ajustes, en orden (REQ-60). */
+export const SETTINGS_TABS = ['ai', 'tripo', 'worldlabs', 'convai', 'library', 'mcp', 'diagnostics'];
 
 /** Configuración MCP para pegar en un cliente (Claude Code `.mcp.json`, Cursor…). */
 export function mcpClientConfig(command) {
@@ -24,6 +29,29 @@ export function mcpClientConfig(command) {
  * @param {object} deps `{toast, openConnect, state}`.
  */
 export function createSettingsView(host, deps) {
+  let activeTab = 'ai';
+
+  /** Barra de pestañas y paneles: solo se ve el activo. */
+  function tabbed(panels) {
+    const buttons = SETTINGS_TABS.filter((id) => panels[id]).map((id) => {
+      const tab = button(t(`settings.tab.${id}`), () => select(id), 'help-tab-btn');
+      tab.dataset.settingsTab = id;
+      tab.setAttribute('role', 'tab');
+      return tab;
+    });
+    const sections = SETTINGS_TABS.filter((id) => panels[id]).map((id) => {
+      const panel = el('div', { className: 'stack settings-panel', attrs: { role: 'tabpanel', 'data-settings-panel': id } }, ...[panels[id]].flat().filter(Boolean));
+      return panel;
+    });
+    function select(id) {
+      activeTab = id;
+      for (const b of buttons) b.classList.toggle('active', b.dataset.settingsTab === id);
+      for (const p of sections) p.classList.toggle('hidden', p.dataset.settingsPanel !== id);
+    }
+    select(panels[activeTab] ? activeTab : 'ai');
+    return [el('div', { className: 'help-tabs settings-tabs', attrs: { role: 'tablist' } }, ...buttons), ...sections];
+  }
+
   /**
    * Campo de la clave de un servicio de generación y sus botones (la clave solo viaja de ida).
    * @param {'tripo'|'worldlabs'} service
@@ -75,6 +103,8 @@ export function createSettingsView(host, deps) {
           el('h3', { text: t('settings.library') }),
           el('p', { className: 'hint', text: t('settings.libraryHint') }),
           el('p', { className: 'mono', text: location.value.current }),
+          // REQ-53: la biblioteca pasó a Documentos; lo que había en la ubicación antigua se copió y se conserva.
+          location.value.migrated ? el('p', { className: 'hint', text: t('settings.libraryMigrated', { n: String(location.value.migrated) }) }) : null,
           el('label', { className: 'row' }, copyExisting, t('settings.libraryCopy')),
           el(
             'div',
@@ -88,10 +118,10 @@ export function createSettingsView(host, deps) {
           ),
         )
       : null;
-    host.replaceChildren(
-      el('div', { className: 'view-header' }, el('h2', { text: t('settings.title') })),
-      el('div', { className: 'card stack' }, el('h3', { text: t('settings.ai') }), el('div', { className: 'row' }, button(t('settings.aiConnect'), deps.openConnect, 'btn-primary'))),
-      el(
+    const convai = await convaiSettingsCard({ toast: deps.toast });
+    const panels = {
+      ai: el('div', { className: 'card stack' }, el('h3', { text: t('settings.ai') }), el('div', { className: 'row' }, button(t('settings.aiConnect'), deps.openConnect, 'btn-primary'))),
+      tripo: el(
         'div',
         { className: 'card stack' },
         el('h3', { text: 'Tripo' }),
@@ -104,10 +134,11 @@ export function createSettingsView(host, deps) {
         })),
       ),
       // @spec REQ-18, RNF-IA.4 — la clave de World Labs, en el mismo llavero que la de Tripo.
-      el('div', { className: 'card stack' }, el('h3', { text: 'World Labs' }), el('p', { className: 'hint', text: t('settings.worldlabsHint') }), ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs)),
-      libraryCard,
-      el('div', { className: 'card stack' }, el('h3', { text: t('settings.mcp') }), el('p', { className: 'hint', text: t('settings.mcpHint') }), command.ok ? el('pre', { className: 'diff', text: mcpClientConfig(command.value) }) : null),
-      el(
+      worldlabs: el('div', { className: 'card stack' }, el('h3', { text: 'World Labs' }), el('p', { className: 'hint', text: t('settings.worldlabsHint') }), ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs)),
+      convai,
+      library: libraryCard,
+      mcp: el('div', { className: 'card stack' }, el('h3', { text: t('settings.mcp') }), el('p', { className: 'hint', text: t('settings.mcpHint') }), command.ok ? el('pre', { className: 'diff', text: mcpClientConfig(command.value) }) : null),
+      diagnostics: el(
         'div',
         { className: 'card stack' },
         el('p', { className: 'hint', text: t('settings.diagnosticsHint') }),
@@ -118,7 +149,8 @@ export function createSettingsView(host, deps) {
           return deps.toast(t('settings.diagnosticsCopied'));
         })),
       ),
-    );
+    };
+    host.replaceChildren(el('div', { className: 'view-header' }, el('h2', { text: t('settings.title') })), ...tabbed(panels));
   }
   return { render };
 }

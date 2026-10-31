@@ -158,6 +158,8 @@
 .ai-msg__undo-btn { font-size: 11px; padding: 2px 8px; border-radius: var(--radius); }
 .ai-msg__undo-warning { font-size: 11px; color: var(--status-warning, #d97706); }
 .ai-msg__undo-status { font-size: 11px; }
+.ai-msg__usage { font-size: 11px; color: var(--text-muted); margin-right: 8px; }
+.ai-msg__usage--warning { color: var(--status-warning, #d97706); }
 .ai-step { font-size: 11px; color: var(--text-muted); font-style: italic; }
 
 .ai-form__advice { display: grid; gap: 6px; margin: 4px 0; }

@@ -14,6 +14,7 @@ import { t } from '../ai/i18nBridge.js';
 import { lineOps } from '../ai/diff.js';
 import * as api from './backend.js';
 import { baseName, button, dirName, el } from './dom.js';
+import { convaiCard, convaiLive, directAccessBanner, hasConvaiToolsets } from './convaiCard.js';
 
 const BACKUP_KEY = 'dbv-unreal-ai:lastBackup:';
 
@@ -78,7 +79,8 @@ export function createProjectView(host, deps) {
         deps.toast(t('unreal.identityMismatch', { port: String(mcp.port), found: identity.project_name, expected: project.name }), 'error');
         return;
       }
-      deps.state.setConnection({ status: 'online', toolsets: result.value.length }, true);
+      // Con Convai en el editor, la conversación recibe sus reglas (REQ-56).
+      deps.state.setConnection({ status: 'online', toolsets: result.value.length, convai: hasConvaiToolsets(result.value) }, true);
       deps.toast(t('project.connected', { n: String(result.value.length) }));
       await api.unrealRememberProject(project.path);
     } else {
@@ -174,9 +176,17 @@ export function createProjectView(host, deps) {
       sections.push(el('div', { className: 'subheading', text: t('project.recents') }));
       for (const path of recentList) sections.push(projectCard(path, button(t('project.openInUnreal'), () => openInUnreal(path))));
     }
-    if (selected && readiness) sections.push(readinessCard(open.find((e) => e.editor.project.toLowerCase() === selected.toLowerCase())));
+    if (selected && readiness) {
+      // Encima del diagnóstico: el agente vería el editor dos veces (REQ-52).
+      sections.push(directAccessBanner(readiness.directAccess));
+      sections.push(readinessCard(open.find((e) => e.editor.project.toLowerCase() === selected.toLowerCase())));
+      // Convai (REQ-55): toolsets y guías solo se comprueban con ESTE proyecto conectado.
+      const connection = deps.state.connection;
+      const connected = connection?.status === 'online' && String(connection.projectPath ?? '').toLowerCase() === selected.toLowerCase();
+      sections.push(convaiCard(readiness.convai, readiness.convai?.cited || readiness.convai?.version ? await convaiLive(api, connected ? connection.endpoint : null) : null));
+    }
     if (selected) sections.push(await memoryCard(selected));
-    host.replaceChildren(...sections);
+    host.replaceChildren(...sections.filter(Boolean));
   }
 
   /**

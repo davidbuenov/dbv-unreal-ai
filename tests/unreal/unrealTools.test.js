@@ -121,11 +121,14 @@ describe('herramientas de Unreal (REQ-10)', () => {
     expect(backend.calls).toEqual([]);
   });
 
-  it('describe el toolset marcando qué herramientas piden permiso @spec REQ-10', async () => {
+  it('describe el toolset en formato compacto y dice qué herramientas piden permiso @spec REQ-10, REQ-51', async () => {
     const tools = createUnrealTools({ backend: fakeBackend(), askApproval: vi.fn() });
     const out = await tool(tools, 'unreal_describe_toolset').run({ toolset: 'SceneTools' });
-    expect(out).toMatch(/## find_actors \(read-only\)/);
-    expect(out).toMatch(/## add_to_scene_from_asset \(modifies: needs user approval\)/);
+    expect(out).toMatch(/^- find_actors\(/m);
+    expect(out).toContain('Read-only (run without asking): find_actors.');
+    expect(out).not.toContain('add_to_scene_from_asset, ');
+    const detail = await tool(tools, 'unreal_describe_toolset').run({ toolset: 'SceneTools', tool: 'add_to_scene_from_asset' });
+    expect(detail).toMatch(/## add_to_scene_from_asset\n[\s\S]*input: /);
   });
 });
 
@@ -243,7 +246,7 @@ describe('la IA ve el viewport (REQ-13)', () => {
     const askApproval = vi.fn();
     const showImage = vi.fn();
     const result = await tool(createUnrealTools({ backend, askApproval, vision: true, showImage }), 'unreal_capture_viewport').run({ annotate: true });
-    expect(backend.captureViewport).toHaveBeenCalledWith(true);
+    expect(backend.captureViewport).toHaveBeenCalledWith(true, 'normal');
     expect(result).toEqual({ text: capture.text, images: [{ mime: 'image/jpeg', base64: 'AAAA' }] });
     expect(showImage).toHaveBeenCalledWith(capture);
     expect(askApproval).not.toHaveBeenCalled();

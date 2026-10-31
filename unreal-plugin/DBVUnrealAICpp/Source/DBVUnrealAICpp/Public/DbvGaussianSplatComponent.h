@@ -48,6 +48,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gaussian Splat|Transform")
 	bool bAutoApplyOpenCVTransform = true;
 
+	/** Why the last LoadFile failed (empty when it worked), for the tool that reports to the AI */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Gaussian Splat")
+	FString LastLoadError;
+
 	/** Loads an .spz or .ply file directly from disk */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
 	bool LoadFile(const FString& InFilePath);

@@ -36,6 +36,8 @@ export function createApprovalCard(request) {
   card.append(el('div', 'unreal-approval__title', title));
   card.append(el('div', 'unreal-approval__target mono', `${request.toolset} · ${request.tool}`));
   if (request.purpose) card.append(el('p', 'unreal-approval__purpose', request.purpose));
+  // Convai compila y GUARDA Blueprints: puede que el editor no lo deshaga (REQ-56, R-27).
+  if (/Convai/i.test(String(request.toolset ?? ''))) card.append(el('p', 'unreal-approval__warning', t('unreal.approval.convaiSaves')));
 
   if (request.kind === 'python') {
     const lines = String(request.code ?? '').split('\n');

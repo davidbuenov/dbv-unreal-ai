@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-13
+// @spec REQ-13, REQ-51
 //
 // `EditorAppToolset.CaptureViewport` de Epic devuelve un PNG en base64 (verificado en vivo el 2026-10-26: 1944×617,
 // ~2 MB) con la cámara, y opcionalmente una rejilla y etiquetas de actores pensadas para un agente con visión. Aquí
@@ -19,10 +19,21 @@ use serde_json::{json, Value};
 use super::mcp_client::{McpSession, DEFAULT_TIMEOUT};
 use super::UnrealError;
 
-/// Lado mayor máximo de la imagen que recibe un modelo.
+/// Lado mayor y calidad JPEG con `detail: "high"`: para leer etiquetas pequeñas y la rejilla.
 pub const MAX_SIDE: u32 = 1568;
-/// Calidad JPEG: suficiente para leer etiquetas y rejilla.
 pub const JPEG_QUALITY: u8 = 85;
+/// Por defecto, más ligera (REQ-51): una captura se queda en el contexto el resto de la conversación.
+pub const DEFAULT_SIDE: u32 = 1024;
+pub const DEFAULT_QUALITY: u8 = 75;
+
+/// Lado mayor y calidad de una captura según el detalle pedido. @spec REQ-51
+pub const fn limits(high: bool) -> (u32, u8) {
+    if high {
+        (MAX_SIDE, JPEG_QUALITY)
+    } else {
+        (DEFAULT_SIDE, DEFAULT_QUALITY)
+    }
+}
 const TOOLSET: &str = "EditorToolset.EditorAppToolset";
 
 /// Una captura lista para un modelo.
@@ -44,20 +55,21 @@ pub fn arguments(annotate: bool) -> Value {
 }
 
 /// Reduce una imagen y la devuelve en JPEG, con su tamaño final.
-pub fn shrink(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), UnrealError> {
+pub fn shrink(bytes: &[u8], high: bool) -> Result<(Vec<u8>, u32, u32), UnrealError> {
+    let (side, quality) = limits(high);
     let image = image::load_from_memory(bytes).map_err(|error| UnrealError::Format(format!("la captura no es una imagen válida: {error}")))?;
-    let fitted = if image.width().max(image.height()) > MAX_SIDE { image.resize(MAX_SIDE, MAX_SIDE, image::imageops::FilterType::Triangle) } else { image };
+    let fitted = if image.width().max(image.height()) > side { image.resize(side, side, image::imageops::FilterType::Triangle) } else { image };
     let rgb = fitted.to_rgb8();
     let mut out = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY).encode_image(&rgb).map_err(|error| UnrealError::Format(error.to_string()))?;
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode_image(&rgb).map_err(|error| UnrealError::Format(error.to_string()))?;
     Ok((out, rgb.width(), rgb.height()))
 }
 
 /// Convierte la respuesta de `CaptureViewport` en una captura reducida.
-pub fn from_response(value: &Value) -> Result<Capture, UnrealError> {
+pub fn from_response(value: &Value, high: bool) -> Result<Capture, UnrealError> {
     let data = value.pointer("/image/data").and_then(Value::as_str).filter(|d| !d.is_empty()).ok_or_else(|| UnrealError::Protocol("el editor no devolvió ninguna imagen (¿hay un viewport de nivel abierto?)".into()))?;
     let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|error| UnrealError::Format(format!("imagen en base64 no válida: {error}")))?;
-    let (jpeg, width, height) = shrink(&bytes)?;
+    let (jpeg, width, height) = shrink(&bytes, high)?;
     let mut info = value.clone();
     if let Some(map) = info.as_object_mut() {
         map.remove("image");
@@ -67,12 +79,12 @@ pub fn from_response(value: &Value) -> Result<Capture, UnrealError> {
 }
 
 /// Captura el viewport del editor de `session`.
-pub fn capture(session: &McpSession, annotate: bool) -> Result<Capture, UnrealError> {
+pub fn capture(session: &McpSession, annotate: bool, high: bool) -> Result<Capture, UnrealError> {
     let result = session.call_toolset_tool(TOOLSET, "CaptureViewport", arguments(annotate), DEFAULT_TIMEOUT)?;
     if result.is_error {
         return Err(UnrealError::Protocol(result.text));
     }
-    from_response(&result.value.unwrap_or(Value::Null))
+    from_response(&result.value.unwrap_or(Value::Null), high)
 }
 
 /// Resumen de texto que acompaña a la imagen (cámara y actores etiquetados).
@@ -101,19 +113,23 @@ mod tests {
         out.into_inner()
     }
 
-    /// La captura real (1944×617) se reduce a ≤ 1568 px y pasa a JPEG; una pequeña no se agranda. @spec REQ-13
+    /// La captura real (1944×617) se reduce a ≤ 1568 px con detalle alto y a ≤ 1024 por defecto, y pasa a JPEG;
+    /// una pequeña no se agranda. @spec REQ-13, REQ-51
     #[test]
     fn reduce_la_captura_y_la_pasa_a_jpeg() {
         let response = json!({ "image": { "mimeType": "image/png", "data": base64::engine::general_purpose::STANDARD.encode(png(1944, 617)) }, "cameraLocation": { "x": 1.0, "y": 2.0, "z": 3.0 }, "cameraFOV": 90, "labeledActors": [{ "label": "Pirata" }] });
-        let capture = from_response(&response).unwrap();
+        let light = from_response(&response, false).unwrap();
+        assert_eq!((light.width, light.height), (1024, 325));
+        let capture = from_response(&response, true).unwrap();
+        assert!(capture.base64.len() > light.base64.len());
         assert_eq!((capture.width, capture.height), (1568, 498));
         assert_eq!(capture.mime, "image/jpeg");
         assert!(capture.info.get("image").is_none(), "la imagen original no viaja dos veces");
         let text = describe(&capture);
         assert!(text.contains("1568×498") && text.contains("Pirata") && text.contains("not instructions"));
-        let small = from_response(&json!({ "image": { "data": base64::engine::general_purpose::STANDARD.encode(png(320, 200)) } })).unwrap();
+        let small = from_response(&json!({ "image": { "data": base64::engine::general_purpose::STANDARD.encode(png(320, 200)) } }), false).unwrap();
         assert_eq!((small.width, small.height), (320, 200));
-        assert!(matches!(from_response(&json!({ "image": { "data": "" } })), Err(UnrealError::Protocol(_))));
+        assert!(matches!(from_response(&json!({ "image": { "data": "" } }), false), Err(UnrealError::Protocol(_))));
     }
 
     /// Epic exige los tres parámetros (con `{}` responde «needs a default value»). @spec REQ-13

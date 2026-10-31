@@ -1,0 +1,24 @@
+toolset: EditorToolset.EditorAppToolset
+Tools for querying and modifying Unreal Editor state: console variables, asset imaging, actor and asset selection, viewport camera, content browser navigation, …
+21 tools. For the full input schema of one tool, call unreal_describe_toolset again with tool="<name>".
+- WorldPosToScreenCoords(position*: object) — Converts a world-space position into normalized screen space based on the editor viewport camera.
+- StopPIE() — Stops the currently running play session (PIE or Simulate).
+- StartPIE(options*: object) — Starts a Play-In-Editor or Simulate-In-Editor session using the current level.
+- SetContentBrowserPath(path*: string) — Navigates the active content browser to the specified folder path.
+- SetCameraTransform(transform*: object) — Sets the position and rotation of the level viewport camera.
+- SelectAssets(assetPaths*: array<string>) — Selects the specified assets in the content browser.
+- SelectActors(actors*: array<object>) — Selects the specified actors in the current scene.
+- SearchCVars(name*: string) — Finds all console variables that contain a given name.
+- ScreenCoordsToWorld(coords*: object, traceDistance: number) — Finds the world position of the nearest solid object at a given set of normalized view space coords.
+- OpenEditorForAsset(assetPath*: string) — Opens an asset editor for the specified asset.
+- IsPIERunning() — Returns whether a Play In Editor session is currently running.
+- GetVisibleActors() — Returns all actors in the current level whose bounds intersect the viewport frustum.
+- GetSelectedAssets() — Gets the list of assets selected in the content browser.
+- GetSelectedActors() — Gets the currently selected actors in the level editor.
+- GetOpenAssets() — Gets the list of assets currently open in asset editors.
+- GetContentBrowserPath() — Gets the current path of the active content browser.
+- GetCameraTransform() — Returns the position and rotation of the level viewport camera.
+- FocusOnActors(actors*: array<object>) — Repositions the level editor camera to focus on the specified actors.
+- CaptureViewport(captureTransform: object, annotations: object, bShowUI: boolean) — Captures the level viewport with optional annotations.
+- CaptureEditorImage() — Captures an image of the entire editor application as the user sees it.
+- CaptureAssetImage(assetPath*: string) — Renders a thumbnail for the specified asset (e.g.

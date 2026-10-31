@@ -142,6 +142,17 @@ fn session_for(state: &UnrealState, url: &str, fresh: bool) -> Result<McpSession
     Ok(session)
 }
 
+/// Ejecuta código Python FIJO de la app (comprobaciones de tareas, zonas) con el `run_python` del toolset DBV y
+/// devuelve su informe. No pasa por `validate_python`: no lo escribió la IA. @spec REQ-37, REQ-57
+pub fn run_fixed_python(state: &UnrealState, url: &str, code: &str) -> Result<serde_json::Value, UnrealError> {
+    let ran = with_session(state, url, |session| {
+        let toolsets = session.list_toolsets()?;
+        let dbv = toolsets.iter().find(|t| t.name.contains("DBVUnrealAI")).map(|t| t.name.clone()).ok_or_else(|| UnrealError::NotFound("the DBV Unreal AI toolset is not installed: prepare the project".into()))?;
+        session.call_toolset_tool(&dbv, "run_python", serde_json::json!({ "code": code }), std::time::Duration::from_secs(120))
+    })?;
+    ran.value.ok_or_else(|| UnrealError::Protocol(format!("unexpected answer from the editor: {}", ran.text)))
+}
+
 /// Ejecuta `work` con la sesión de `url`; si la sesión caducó, la reabre y repite una vez.
 pub fn with_session<T>(state: &UnrealState, url: &str, work: impl Fn(&McpSession) -> Result<T, UnrealError>) -> Result<T, UnrealError> {
     let first = work(&session_for(state, url, false)?);
@@ -173,7 +184,9 @@ pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Vec<To
     blocking(move || {
         let state = app.state::<UnrealState>();
         let session = session_for(&state, &url, true)?;
-        session.list_toolsets()
+        let listed = session.list_toolsets();
+        crate::logging::info(&format!("connect {url}: {}", listed.as_ref().map(|t| format!("{} toolsets", t.len())).unwrap_or_else(|e| e.to_string())));
+        listed
     })
     .await
 }
@@ -210,9 +223,10 @@ pub async fn unreal_call_tool(app: AppHandle, endpoint: Endpoint, toolset: Strin
 
 /// Captura del viewport reducida a JPEG para un modelo con visión. @spec REQ-13
 #[tauri::command]
-pub async fn unreal_capture_viewport(app: AppHandle, endpoint: Endpoint, annotate: bool) -> Result<super::capture::Capture, UnrealError> {
+pub async fn unreal_capture_viewport(app: AppHandle, endpoint: Endpoint, annotate: bool, detail: Option<String>) -> Result<super::capture::Capture, UnrealError> {
+    let high = detail.as_deref() == Some("high");
     let url = endpoint.url();
-    blocking(move || with_session(&app.state::<UnrealState>(), &url, |session| super::capture::capture(session, annotate))).await
+    blocking(move || with_session(&app.state::<UnrealState>(), &url, |session| super::capture::capture(session, annotate, high))).await
 }
 
 // ─── Preparación ─────────────────────────────────────────────────────

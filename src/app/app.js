@@ -20,6 +20,8 @@ import { createChatJobs } from '../generation/chatJobs.js';
 import { createGenerationTools } from '../generation/generationTools.js';
 import { mountInlineViewer, viewableFile } from '../generation/preview.js';
 import { createMemoryTools, createPlanCard, createProjectMemory, createSaveCard, memoryPrompt, rememberRequest } from '../memory/memory.js';
+import { createUsageCounter, formatUsage, withUsage } from '../unreal/toolUsage.js';
+import { createZoneTools, createZonesCard } from '../unreal/zones.js';
 import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
 import { button, dirName, el } from './dom.js';
@@ -167,6 +169,10 @@ export function start() {
   // Herramientas de Tripo y de memoria de Rust (las mismas que ve un agente): se piden una vez al cargar la IA.
   let generationSpecs = [];
   let memorySpecs = [];
+  // Zonas del nivel (REQ-57), definidas en Rust como las del MCP propio.
+  let zoneSpecs = [];
+  // Personajes de Convai registrados en Ajustes (REQ-58): misma definición que en el MCP propio.
+  let convaiCharactersSpec = null;
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
   views.library = createLibraryView($('#view-library'), {
     state,
@@ -249,8 +255,8 @@ export function start() {
       listToolsets: () => api.unrealListToolsets(endpoint()),
       describeToolset: (toolset) => api.unrealDescribeToolset(endpoint(), toolset),
       callTool: (toolset, tool, args, timeout) => api.unrealCallTool(endpoint(), toolset, tool, args, timeout),
-      captureViewport: async (annotate) => {
-        const captured = await api.unrealCaptureViewport(endpoint(), annotate);
+      captureViewport: async (annotate, detail) => {
+        const captured = await api.unrealCaptureViewport(endpoint(), annotate, detail);
         return captured.ok ? { ok: true, value: { ...captured.value, text: describeCapture(captured.value) } } : captured;
       },
     };
@@ -290,7 +296,7 @@ export function start() {
       followUp: (reply) => (state.connection?.status === 'online' ? pythonNudge(reply) : null),
       promptDomain: (_language, { agent = false } = {}) => {
         const connection = state.connection;
-        const base = unrealPrompt({ projectName: connection?.projectName ?? '', engineVersion: connection?.engineVersion ?? '', agent });
+        const base = unrealPrompt({ projectName: connection?.projectName ?? '', engineVersion: connection?.engineVersion ?? '', agent, convai: connection?.status === 'online' && Boolean(connection?.convai) });
         const memory = connection?.projectPath ? `\n\n${memoryPrompt({ active: projectMemory.isActive(), agent, summary: projectMemory.status?.summary ?? '' })}` : '';
         return connection?.status === 'online' ? `${base}${memory}` : `${base}${memory}\n\nNo Unreal project is connected right now: if the user asks to act on Unreal, tell them to connect one in the Project view.`;
       },
@@ -306,7 +312,8 @@ export function start() {
             startUndo = null;
           }
         }
-        const result = { startUndo, importedAssets: [] };
+        // Lo que devuelven las herramientas en el turno, para el contador del pie (REQ-51).
+        const result = { startUndo, importedAssets: [], usage: createUsageCounter() };
         return result;
       },
       afterTurn: async (turnContext) => {
@@ -326,7 +333,19 @@ export function start() {
             undoInfo = null;
           }
         }
+        const usage = turnContext?.usage?.summary();
+        if (usage?.calls) undoInfo = { ...(undoInfo ?? { count: 0 }), usage };
+        if (undoInfo && turnContext?.convaiSaved) undoInfo.convaiSaved = true;
         return undoInfo;
+      },
+      // Un agente llama a las herramientas desde su `--mcp`: el uso lo dejó ese proceso en `tool-usage.jsonl` (REQ-51).
+      formatUsage,
+      // Con Convai en el editor, una sugerencia más al empezar (REQ-56, receta inicial de REQ-23).
+      extraSuggestions: () => (state.connection?.status === 'online' && state.connection?.convai ? [t('unreal.suggestConvai')] : []),
+      afterAgentTurn: async ({ startedAt }) => {
+        const project = state.connection?.projectPath;
+        const read = project ? await api.toolUsageSince(project, startedAt) : null;
+        return read?.ok && read.value.calls ? { count: 0, usage: read.value } : null;
       },
       onUndoTurn: async (undoInfo, { setDone, setWarning }) => {
         if (state.connection?.status !== 'online') {
@@ -353,6 +372,8 @@ export function start() {
       extraTools: ({ panel, conversationId, vision = false, turnContext = null }) => {
         if (!memories.has(conversationId)) memories.set(conversationId, createPermissionMemory());
         const askApproval = (request) => {
+          // Las acciones de Convai guardan Blueprints: «Deshacer este turno» lo avisará (REQ-56, R-27).
+          if (turnContext && /Convai/i.test(String(request.toolset ?? ''))) turnContext.convaiSaved = true;
           const card = createApprovalCard(request);
           panel.addNode(card.node);
           return card.choice;
@@ -397,9 +418,9 @@ export function start() {
           confirmCost: (request) => confirmCost(confirm, request),
         });
 
-        // Como mucho una propuesta de memoria por turno: cada turno pide sus herramientas de nuevo.
-        let proposed = false;
-        const memory = state.connection?.projectPath
+        // Varias entradas por propuesta y sin límite por turno (REQ-50): la tarjeta las enseña juntas.
+        const memoryProject = state.connection?.projectPath;
+        const memory = memoryProject
           ? createMemoryTools({
               specs: memorySpecs,
               memory: projectMemory,
@@ -408,10 +429,7 @@ export function start() {
                 panel.addNode(card.node);
                 return card.choice;
               },
-              alreadyProposed: () => proposed,
-              markProposed: () => {
-                proposed = true;
-              },
+              checkEntries: (entries) => api.memoryCheckEntries(memoryProject, entries),
               preview: api.memoryPlanPreview,
               askPlan: (preview) => {
                 const card = createPlanCard(preview);
@@ -422,7 +440,29 @@ export function start() {
               updateTask: (title, done) => api.memoryTaskUpdate(state.connection.projectPath, state.connection?.status === 'online' ? state.connection.endpoint : null, title, done, true),
             })
           : [];
-        return [...unreal, ...generation, ...memory];
+        // Zonas: la persona las revisa en una tarjeta y aceptar es la aprobación (REQ-57, D29).
+        const zones =
+          state.connection?.status === 'online'
+            ? createZoneTools({
+                specs: zoneSpecs,
+                preview: api.zonesPreview,
+                apply: (list) => api.zonesApply(state.connection.endpoint, list),
+                list: () => api.zonesList(state.connection.endpoint),
+                askZones: (list, existing) => {
+                  const card = createZonesCard(list, existing);
+                  panel.addNode(card.node);
+                  return card.choice;
+                },
+              })
+            : [];
+        const convai =
+          state.connection?.status === 'online' && state.connection?.convai && convaiCharactersSpec
+            ? [{ name: convaiCharactersSpec.name, description: convaiCharactersSpec.description, parameters: { ...convaiCharactersSpec.inputSchema, additionalProperties: false }, label: () => 'Convai', run: async () => {
+                const listed = await api.convaiCharactersText();
+                return listed.ok ? listed.value : `error: ${listed.error.message ?? listed.error}`;
+              } }]
+            : [];
+        return withUsage([...unreal, ...generation, ...memory, ...zones, ...convai], turnContext?.usage);
       },
       // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): el diálogo del sistema y Rust los leen.
       pickAttachments: async () => {
@@ -448,10 +488,12 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh()])
-        .then(([entry, markdown, specs, memory]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec()])
+        .then(([entry, markdown, specs, memory, , zones, characters]) => {
+          convaiCharactersSpec = characters?.ok ? characters.value : null;
           generationSpecs = specs.ok ? specs.value : [];
           memorySpecs = memory.ok ? memory.value : [];
+          zoneSpecs = zones?.ok ? zones.value : [];
           return entry.createAi(buildHost(markdown.renderMarkdown));
         })
         .then((app) => {

@@ -88,6 +88,10 @@ pub struct Readiness {
     /// Versión que trae esta app.
     pub toolset_bundled: String,
     pub ready: bool,
+    /// Ficheros del proyecto que dan a un agente acceso directo al editor, saltándose la app (REQ-52).
+    pub direct_access: Vec<super::duplicates::DirectAccess>,
+    /// Convai en el proyecto, visto en los ficheros (REQ-55).
+    pub convai: super::convai::ConvaiStatus,
 }
 
 /// Un fichero que la preparación crea o modifica.
@@ -188,7 +192,10 @@ pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealErro
     checks.push(Check { id: "toolset".into(), ok: toolset_enabled && installed.as_deref() == Some(bundled.as_str()), detail: installed.clone().unwrap_or_default() });
     let ready = checks.iter().all(|c| c.ok);
     let proposed_port = propose_free_port(&mcp);
-    let result = Readiness { project, engine, mcp, proposed_port, checks, toolset_installed: installed, toolset_bundled: bundled, ready };
+    let direct_access = super::duplicates::scan(dir, mcp.port);
+    let engine_ok = version.is_some_and(|v| v >= MIN_ENGINE);
+    let convai = super::convai::status(dir, &project, engine.as_ref(), engine_ok);
+    let result = Readiness { project, engine, mcp, proposed_port, checks, toolset_installed: installed, toolset_bundled: bundled, ready, direct_access, convai };
     Ok(result)
 }
 

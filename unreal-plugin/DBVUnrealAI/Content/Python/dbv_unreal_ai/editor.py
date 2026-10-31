@@ -239,7 +239,9 @@ def get_scene_summary(name_filter: str = "", class_filter: str = "", limit: int 
 def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat") -> str:
     """Carga un Gaussian Splat (.spz o .ply) en un ADbvGaussianSplatActor nativo.
 
-    Aplica la orientación validada para World Labs (Roll 90.0, Escala 100x).
+    Aplica la orientación validada para World Labs (Roll 90.0, Escala 100x). Un fichero muy grande se carga entero
+    pero el visor nativo dibuja solo sus splats más visibles: el informe lo dice (``splats``, ``drawn``, ``note``).
+    Si la carga falla, no deja un actor vacío y explica el motivo. @spec REQ-54
     """
     result: dict[str, Any] = {"success": False}
     source_path = Path(source_file)
@@ -248,6 +250,7 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
     else:
         actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         target_actor = None
+        spawned = False
         for actor in actor_subsystem.get_all_level_actors():
             if actor.get_actor_label() == actor_label:
                 target_actor = actor
@@ -263,6 +266,7 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
                 spawn_rot = unreal.Rotator(pitch=0.0, yaw=0.0, roll=90.0)
                 target_actor = actor_subsystem.spawn_actor_from_class(splat_class, spawn_loc, spawn_rot)
                 if target_actor:
+                    spawned = True
                     target_actor.set_actor_label(actor_label)
                     target_actor.set_actor_scale3d(unreal.Vector(100.0, 100.0, 100.0))
                     target_actor.set_folder_path(unreal.Name("DBV/Splats"))
@@ -270,22 +274,35 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
                 result["error"] = "Clase DbvGaussianSplatActor no encontrada en el motor (compilar módulo DBVUnrealAICpp)"
 
         if target_actor is not None:
-            lower_file = str(source_path).lower()
-            loaded = False
-            if lower_file.endswith(".spz") and hasattr(target_actor, "load_spz"):
-                loaded = bool(target_actor.load_spz(str(source_path)))
-            elif lower_file.endswith(".ply") and hasattr(target_actor, "load_ply"):
-                loaded = bool(target_actor.load_ply(str(source_path)))
-            elif hasattr(target_actor, "splat_component") and target_actor.splat_component:
-                loaded = bool(target_actor.splat_component.load_file(str(source_path)))
-
+            component = getattr(target_actor, "splat_component", None)
+            loaded = bool(component.load_file(str(source_path))) if component else False
             result["success"] = loaded
             result["actor"] = target_actor.get_actor_label()
             result["source_file"] = str(source_path)
-            if not loaded:
-                result["error"] = f"Fallo al invocar el método de carga en {target_actor.get_actor_label()}"
+            if loaded:
+                result.update(_splat_counts(component))
+            else:
+                reason = str(component.get_editor_property("last_load_error")) if component else "the actor has no splat component"
+                # Un actor vacío en el nivel solo confunde (en la prueba del 2026-10-31 la IA lo borró a mano).
+                if spawned:
+                    actor_subsystem.destroy_actor(target_actor)
+                result["error"] = f"the Gaussian Splat could not be loaded: {reason}. Tell the user; do not try to load it with your own code."
 
     return _json(result)
+
+
+def _splat_counts(component: Any) -> dict[str, Any]:
+    """Splats del fichero y los que dibuja el visor nativo, con una nota si no son todos. @spec REQ-54"""
+    asset = component.get_editor_property("splat_asset")
+    drawn = int(asset.get_num_splats()) if asset else 0
+    total = int(asset.get_total_splats()) if asset and hasattr(asset, "get_total_splats") else drawn
+    counts: dict[str, Any] = {"splats": total, "drawn": drawn}
+    if drawn < total:
+        counts["note"] = (
+            f"the built-in viewer draws the {drawn} most visible splats of {total}: the whole scene is there, "
+            "less dense. Tell the user."
+        )
+    return counts
 
 
 def get_undo_count() -> str:

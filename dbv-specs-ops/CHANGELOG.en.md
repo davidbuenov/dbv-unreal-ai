@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Several memory entries per proposal (REQ-50):** the AI no longer says it "can only note one reminder per turn". `project_memory_propose` takes up to 8 entries, shown in a single card with a checkbox, editable text and reason for each. Repeated ones come unchecked and the ones that look like a secret are blocked. The "Remember" button asks for everything worth remembering. Through the app's MCP server the valid entries are saved and each one is reported.
+- **Tool counter at the foot of each answer (REQ-51):** "Tools: N calls · X KB (~Y tokens, approx.)", also with agents. For these the `--mcp` records it in `tool-usage.jsonl`, with no content. It warns above 200 KB in a turn.
+- **`unreal_scene_summary` in the app's MCP server (REQ-51):** the compact scene with filters and a default limit of 100 actors.
+- **Convai (REQ-55, REQ-56):** the Project view has a Convai section that checks the plugin (also installed in the engine from Fab), the engine version, the toolsets and the 17 guides in the editor and the sign-in, and warns if the key is in git. The app asks for no key: the plugin signs in by itself. The conversation gets the Convai rules (read its guides, ask for the Character ID, Blueprint components, talk in Play). The approval card of a Convai action and "Undo this turn" warn that Blueprints are saved. New suggestion: "Make this MetaHuman talk with Convai".
+- **Level zones (REQ-57):** `level_zones_propose` and `level_zones_list`, in the assistant and in the app's MCP server. The AI proposes named places with a description, you review them in a card and they are created as `TargetPoint`s in `DBV/Zones`, with a `ConvaiObjectComponent` when Convai is installed, so the character knows them and can walk there. The app fixes the code and the zones travel as data. They are undone with the editor (verified live).
+- **Duplicate editor access warning (REQ-52):** if the project has a `.mcp.json` (or another agent configuration) pointing at the editor MCP server, or the Convai instructions in `CLAUDE.md`/`AGENTS.md`, the Project view warns about it. The app does not touch those files. The agent preamble and the MCP `instructions` tell it to use only `dbv-unreal-ai`.
+- **Local rotating log (RNF-08):** `<data>/logs/dbv-unreal-ai.log` (1 MB × 3) from the window and the `--mcp`: start-up, connections, imports with their final path, sends. Keys are masked before writing. "Copy diagnostics" adds whether the app is packaged, the real folders and the last 50 lines.
+
+- **Convai characters in Settings (REQ-58):** a Convai card, like the Tripo and World Labs ones but with no key, where you register several characters with their name, their Character ID from the Playground and a note. The AI looks them up with `convai_characters` (also through the app's MCP server) and uses the ID by the character's name: "make BP_VictoriaNew be Victoria".
+- **Convai tutorial in the F1 help (REQ-59):** what you need (UE 5.8, the plugin signed in, a Playground character and an assembled MetaHuman), the steps and the known issues, with their fixes, seen in the test with a real MetaHuman.
+- **Settings with tabs (REQ-60):** Artificial intelligence, Tripo, World Labs, Convai, Library, Agents (MCP) and Diagnostics, instead of one long page.
+
+### Changed
+
+- **Much less context for agents (REQ-51):** the app's MCP server cuts each result to 12,000 characters, like the built-in assistant, saying how to ask for less. `unreal_describe_toolset` returns one line per tool (Niagara went from 306 KB to 5.5 KB) and with `tool` the schema of a single one. The toolset list is kept in memory and captures are 1024 px by default (`detail: "high"` for 1568). With a fixed script against recorded responses of the real editor, v0.3.0 returns 79% less text than v0.2.4.
+- **Library in `Documents/DBV Unreal AI/Library` (REQ-53):** or in `<user folder>/DBV Unreal AI/Library` if OneDrive syncs Documents, so gigabytes of models are not uploaded to the cloud. It is created at start-up, even if empty. If you did not choose another folder, what was in the previous location is copied once, without deleting anything, and Settings says so. "Open folder" creates the folder if it is missing.
+
+### Fixed
+
+- **Project memory lost when Unreal restarts itself** (for example after enabling plugins): the editor then starts with the `.uproject` path relative to its `Engine/Binaries/Win64` folder, and the app read it relative to its own, so the agents' MCP could miss the project (above all with the Store app or the project on another drive). It is now resolved against the editor executable (found while testing v0.3.0).
+- **Reopening a conversation lost the footer of each answer** ("Undo this turn" and now the tool counter): `addAssistant` read the wrong option. It came from v0.2.0; the `/code-simplify` review found it.
+- **The Project view opened and closed a console window on Windows** when checking whether the Convai key is in git: the `git` process was started without `CREATE_NO_WINDOW`, unlike the rest of the app (`/code-simplify` finding).
+- **The Microsoft Store version's library could not be seen (REQ-53):** a packaged app writes what it creates in `%APPDATA%` to a private copy that File Explorer, Unreal and the agents do not see. "Open folder" said it did not exist, and a `.ply` imported from a website did not appear in the folder created by hand.
+- **Sending a Gaussian Splat from an agent (REQ-54):** the app's MCP `library_send_to_unreal` only accepted `.glb`, `.fbx` and `.obj` ("the asset has no model file"). It now loads the `.spz`/`.ply` with the DBV component and places its collider mesh, with the same file choice as the window (parity test).
+
 ## [0.2.4] - 2026-10-29
 
 ### Fixed

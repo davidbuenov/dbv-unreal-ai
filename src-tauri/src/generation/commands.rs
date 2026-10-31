@@ -40,15 +40,49 @@ pub struct GenerationState {
 pub struct GenerationSettings {
     /// Tope de créditos por sesión (0 = sin tope).
     pub budget_credits: f64,
-    /// Carpeta de la biblioteca elegida por el usuario; sin ella, la de datos de la app (REQ-30).
+    /// Carpeta de la biblioteca elegida por el usuario; sin ella, `Documentos/DBV Unreal AI/Library` (REQ-30, REQ-53).
     #[serde(default)]
     pub library_dir: Option<String>,
+    /// Ya se trajo (o no había nada que traer) la biblioteca de su ubicación antigua, `<datos>/library` (REQ-53).
+    #[serde(default)]
+    pub library_migrated: bool,
+    /// Cuántos assets se trajeron, para la nota de Ajustes.
+    #[serde(default)]
+    pub library_migrated_count: usize,
 }
 
 impl Default for GenerationSettings {
     fn default() -> Self {
-        Self { budget_credits: 300.0, library_dir: None }
+        Self { budget_credits: 300.0, library_dir: None, library_migrated: false, library_migrated_count: 0 }
     }
+}
+
+/// Biblioteca por defecto: en Documentos; sin carpeta Documentos (un servicio, un Linux mínimo), la de datos.
+pub fn default_library_root(data_dir: &std::path::Path) -> PathBuf {
+    crate::paths::documents_library().unwrap_or_else(|| library_root(data_dir))
+}
+
+/// Deja la biblioteca lista al arrancar (ventana y `--mcp`): crea su carpeta aunque esté vacía y, una sola vez y si
+/// no se eligió otra en Ajustes, une a ella la de la ubicación antigua SIN borrar nada (R-21). Devuelve la carpeta.
+/// @spec REQ-53
+pub fn ensure_library(config_dir: &std::path::Path, data_dir: &std::path::Path) -> Result<PathBuf, UnrealError> {
+    ensure_library_in(config_dir, data_dir, &default_library_root(data_dir))
+}
+
+/// `ensure_library` con la carpeta por defecto como dato (los tests no tocan la carpeta Documentos de verdad).
+fn ensure_library_in(config_dir: &std::path::Path, data_dir: &std::path::Path, default_root: &std::path::Path) -> Result<PathBuf, UnrealError> {
+    let mut settings = GenerationSettings::load(config_dir);
+    let root = settings.library_dir.as_deref().filter(|d| !d.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| default_root.to_path_buf());
+    std::fs::create_dir_all(&root).map_err(|error| io_error(&root, &error))?;
+    let legacy = library_root(data_dir);
+    if settings.library_dir.is_none() && !settings.library_migrated {
+        // `merge_from` toma el cerrojo de la biblioteca y no repite ids: dos procesos a la vez no duplican nada.
+        let added = if legacy != root && crate::library::is_library(&legacy) { Library::new(root.clone()).merge_from(&legacy)? } else { 0 };
+        settings.library_migrated = true;
+        settings.library_migrated_count = added;
+        settings.save(config_dir)?;
+    }
+    Ok(root)
 }
 
 impl GenerationSettings {
@@ -59,7 +93,7 @@ impl GenerationSettings {
 
     /// Carpeta de la biblioteca: la elegida o la de siempre.
     pub fn library_root(&self, data_dir: &std::path::Path) -> PathBuf {
-        self.library_dir.as_deref().filter(|d| !d.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| library_root(data_dir))
+        self.library_dir.as_deref().filter(|d| !d.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| default_library_root(data_dir))
     }
 
     fn save(&self, config_dir: &std::path::Path) -> Result<(), UnrealError> {
@@ -102,6 +136,9 @@ pub fn begin_session(app: &AppHandle) {
         let started = board.start_session();
         board.prune();
         app.state::<GenerationState>().session_start.store(started, Ordering::Relaxed);
+    }
+    if let (Ok(config), Ok(data)) = (config_dir(app), data_dir(app)) {
+        let _ = ensure_library(&config, &data);
     }
     if let Ok(library) = library(app) {
         allow_assets(app, &library.root);
@@ -322,13 +359,18 @@ pub struct LibraryLocation {
     pub current: String,
     pub default: String,
     pub is_default: bool,
+    /// Assets traídos de la ubicación antigua al pasar a Documentos (REQ-53).
+    pub migrated: usize,
 }
 
+/// Dónde está la biblioteca. La carpeta se crea si falta, así «Abrir carpeta» nunca abre algo que no existe (REQ-53).
 #[tauri::command]
 pub fn library_location(app: AppHandle) -> Result<LibraryLocation, UnrealError> {
-    let default = library_root(&data_dir(&app)?);
+    let default = default_library_root(&data_dir(&app)?);
     let current = library(&app)?.root;
-    Ok(LibraryLocation { is_default: current == default, current: current.to_string_lossy().into_owned(), default: default.to_string_lossy().into_owned() })
+    std::fs::create_dir_all(&current).map_err(|error| io_error(&current, &error))?;
+    let migrated = load_settings(&app).library_migrated_count;
+    Ok(LibraryLocation { is_default: current == default, current: current.to_string_lossy().into_owned(), default: default.to_string_lossy().into_owned(), migrated })
 }
 
 /// Cambia la carpeta de la biblioteca (`None` = la de siempre); con `copyExisting` copia lo que ya había. @spec REQ-30
@@ -471,4 +513,59 @@ pub fn generation_allow_reference(app: AppHandle, path: String) -> Result<(), Un
 #[tauri::command]
 pub fn library_save_thumbnail(app: AppHandle, id: String, png: Vec<u8>) -> Result<crate::library::LibraryEntry, UnrealError> {
     library(&app)?.save_thumbnail(&id, &png)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library::LibraryEntry;
+
+    fn entry(id: &str) -> LibraryEntry {
+        LibraryEntry { id: id.into(), name: id.into(), provider: "import".into(), kind: "world".into(), prompt: String::new(), parameters: serde_json::Value::Null, task_id: String::new(), created_at: 1, credits: None, files: vec!["scene.ply".into()], thumbnail: None, sent_to: vec![], parent: None, output: serde_json::Value::Null }
+    }
+
+    /// Primer arranque sin nada: la carpeta existe aunque esté vacía y queda anotado. @spec REQ-53
+    #[test]
+    fn crea_la_biblioteca_al_arrancar_aunque_este_vacia() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, data, docs) = (dir.path().join("config"), dir.path().join("data"), dir.path().join("Documents/DBV Unreal AI/Library"));
+        assert_eq!(ensure_library_in(&config, &data, &docs).unwrap(), docs);
+        assert!(docs.is_dir());
+        let settings = GenerationSettings::load(&config);
+        assert!(settings.library_migrated && settings.library_migrated_count == 0);
+    }
+
+    /// La biblioteca antigua se une a la nueva una vez, sin borrarla y sin duplicar al repetir. @spec REQ-53
+    #[test]
+    fn migra_la_biblioteca_antigua_una_vez_y_sin_borrarla() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, data, docs) = (dir.path().join("config"), dir.path().join("data"), dir.path().join("Documents/Library"));
+        let legacy = Library::new(library_root(&data));
+        let (id, folder) = legacy.new_entry_dir("Isla").unwrap();
+        std::fs::write(folder.join("scene.ply"), b"ply
+").unwrap();
+        legacy.add(entry(&id)).unwrap();
+        ensure_library_in(&config, &data, &docs).unwrap();
+        let moved = Library::new(docs.clone());
+        assert_eq!(moved.list().len(), 1);
+        assert!(docs.join(&id).join("scene.ply").is_file(), "los ficheros viajan con la entrada");
+        assert_eq!(legacy.list().len(), 1, "la ubicación antigua se conserva");
+        assert_eq!(GenerationSettings::load(&config).library_migrated_count, 1);
+        // Una segunda vez (o un `--mcp` a la vez) no duplica ni vuelve a copiar.
+        legacy.add(entry("otra-2")).unwrap();
+        ensure_library_in(&config, &data, &docs).unwrap();
+        assert_eq!(moved.list().len(), 1);
+    }
+
+    /// Una carpeta elegida en Ajustes se respeta: ni se cambia ni se migra a ella. @spec REQ-53
+    #[test]
+    fn respeta_la_carpeta_elegida_a_mano() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, data, docs, mine) = (dir.path().join("config"), dir.path().join("data"), dir.path().join("Documents/Library"), dir.path().join("Mia"));
+        let legacy = Library::new(library_root(&data));
+        legacy.add(entry("vieja-1")).unwrap();
+        GenerationSettings { library_dir: Some(mine.to_string_lossy().into()), ..GenerationSettings::default() }.save(&config).unwrap();
+        assert_eq!(ensure_library_in(&config, &data, &docs).unwrap(), mine);
+        assert!(Library::new(mine).list().is_empty() && !docs.exists());
+    }
 }

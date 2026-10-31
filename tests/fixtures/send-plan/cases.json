@@ -1,0 +1,11 @@
+{
+  "_comment": "Qué se envía a Unreal de cada entrada (REQ-54, D25). Lo comprueban library::send_plan (Rust, MCP propio) y sendToUnreal.js (ventana).",
+  "cases": [
+    { "name": "ply suelto importado desde una web", "kind": "world", "files": ["scene.ply", "thumbnail.png"], "expected": { "plan": "splat", "file": "scene.ply", "collider": null } },
+    { "name": "mundo de World Labs con colisión", "kind": "world", "files": ["thumbnail.webp", "collider.glb", "world.spz"], "expected": { "plan": "splat", "file": "world.spz", "collider": "collider.glb" } },
+    { "name": "spz en mayúsculas", "kind": "model", "files": ["ISLA.SPZ"], "expected": { "plan": "splat", "file": "ISLA.SPZ", "collider": null } },
+    { "name": "modelo de Tripo", "kind": "model", "files": ["model.glb", "thumbnail.png"], "expected": { "plan": "model", "file": "model.glb", "collider": null } },
+    { "name": "mundo sin splat, solo la malla", "kind": "world", "files": ["collider.glb"], "expected": { "plan": "model", "file": "collider.glb", "collider": null } },
+    { "name": "imagen", "kind": "image", "files": ["ref.png"], "expected": { "plan": "nothing", "file": null, "collider": null } }
+  ]
+}

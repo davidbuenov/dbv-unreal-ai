@@ -1,12 +1,224 @@
 // Copyright (c) 2026 David Bueno Vallejo & David Bueno Carmona. All rights reserved.
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 // Developed using dbv-specs-ops methodology.
+//
+// @spec REQ-54
+//
+// El fichero se lee por bloques con tamaños de 64 bits: un .ply de 3DGS con armónicos esféricos pasa con facilidad
+// de 2 GB (la iglesia de la prueba del 2026-10-31: 2,35 GB, 9.975.598 splats), y `LoadFileToArray` con un
+// `TArray<uint8>` no admite más de 2 GB. Se aceptan propiedades de cualquier tipo escalar de PLY, no solo `float`.
 
 #include "DbvPlyReader.h"
-#include "Misc/FileHelper.h"
 #include "HAL/PlatformFileManager.h"
+#include "Templates/UniquePtr.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDbvPlyReader, Log, All);
+
+namespace
+{
+	/** Tipos escalares de PLY. */
+	enum class EPlyType : uint8 { Unknown, Int8, UInt8, Int16, UInt16, Int32, UInt32, Float32, Float64 };
+
+	EPlyType ParseType(const FString& Name)
+	{
+		static const TMap<FString, EPlyType> Types = {
+			{TEXT("char"), EPlyType::Int8}, {TEXT("int8"), EPlyType::Int8},
+			{TEXT("uchar"), EPlyType::UInt8}, {TEXT("uint8"), EPlyType::UInt8},
+			{TEXT("short"), EPlyType::Int16}, {TEXT("int16"), EPlyType::Int16},
+			{TEXT("ushort"), EPlyType::UInt16}, {TEXT("uint16"), EPlyType::UInt16},
+			{TEXT("int"), EPlyType::Int32}, {TEXT("int32"), EPlyType::Int32},
+			{TEXT("uint"), EPlyType::UInt32}, {TEXT("uint32"), EPlyType::UInt32},
+			{TEXT("float"), EPlyType::Float32}, {TEXT("float32"), EPlyType::Float32},
+			{TEXT("double"), EPlyType::Float64}, {TEXT("float64"), EPlyType::Float64},
+		};
+		const EPlyType* Found = Types.Find(Name.ToLower());
+		return Found ? *Found : EPlyType::Unknown;
+	}
+
+	int32 TypeSize(EPlyType Type)
+	{
+		switch (Type)
+		{
+		case EPlyType::Int8:
+		case EPlyType::UInt8: return 1;
+		case EPlyType::Int16:
+		case EPlyType::UInt16: return 2;
+		case EPlyType::Int32:
+		case EPlyType::UInt32:
+		case EPlyType::Float32: return 4;
+		case EPlyType::Float64: return 8;
+		default: return 0;
+		}
+	}
+
+	/** Una propiedad del vértice que el lector usa: dónde está dentro del vértice y de qué tipo es. */
+	struct FPlyField
+	{
+		int32 Offset = -1;
+		EPlyType Type = EPlyType::Unknown;
+
+		bool IsSet() const { return Offset >= 0; }
+
+		float Read(const uint8* Vertex, float Default) const
+		{
+			if (!IsSet())
+			{
+				return Default;
+			}
+			const uint8* P = Vertex + Offset;
+			switch (Type)
+			{
+			case EPlyType::Int8: return static_cast<float>(*reinterpret_cast<const int8*>(P));
+			case EPlyType::UInt8: return static_cast<float>(*P);
+			case EPlyType::Int16: { int16 V; FMemory::Memcpy(&V, P, 2); return static_cast<float>(V); }
+			case EPlyType::UInt16: { uint16 V; FMemory::Memcpy(&V, P, 2); return static_cast<float>(V); }
+			case EPlyType::Int32: { int32 V; FMemory::Memcpy(&V, P, 4); return static_cast<float>(V); }
+			case EPlyType::UInt32: { uint32 V; FMemory::Memcpy(&V, P, 4); return static_cast<float>(V); }
+			case EPlyType::Float32: { float V; FMemory::Memcpy(&V, P, 4); return V; }
+			case EPlyType::Float64: { double V; FMemory::Memcpy(&V, P, 8); return static_cast<float>(V); }
+			default: return Default;
+			}
+		}
+	};
+
+	/** Lo que dice la cabecera: cuántos vértices, dónde empiezan, cuánto ocupa cada uno y dónde está cada campo. */
+	struct FPlyLayout
+	{
+		int64 VertexCount = 0;
+		int64 DataOffset = 0;
+		int32 Stride = 0;
+		FPlyField X, Y, Z, DC0, DC1, DC2, Opacity, Scale0, Scale1, Scale2, Rot0, Rot1, Rot2, Rot3;
+	};
+
+	/** Interpreta la cabecera de `Data` (los primeros bytes del fichero). */
+	bool ParseHeader(const uint8* Data, int64 Size, FPlyLayout& Out, FString& OutError)
+	{
+		bool bValid = Size >= 64 && FMemory::Memcmp(Data, "ply", 3) == 0;
+		int64 EndHeader = -1;
+		for (int64 i = 0; bValid && EndHeader < 0 && i + 10 <= Size; ++i)
+		{
+			if (FMemory::Memcmp(Data + i, "end_header", 10) == 0)
+			{
+				EndHeader = i + 10;
+				// Un solo salto de línea (\n o \r\n): más bytes ya son datos binarios.
+				EndHeader += (EndHeader < Size && Data[EndHeader] == '\r') ? 1 : 0;
+				EndHeader += (EndHeader < Size && Data[EndHeader] == '\n') ? 1 : 0;
+			}
+		}
+		if (!bValid || EndHeader < 0)
+		{
+			OutError = TEXT("Not a PLY file, or its header is missing end_header");
+			return false;
+		}
+
+		const FString HeaderText(static_cast<int32>(EndHeader), reinterpret_cast<const ANSICHAR*>(Data));
+		TArray<FString> Lines;
+		HeaderText.ParseIntoArrayLines(Lines);
+
+		TMap<FString, FPlyField> Fields;
+		bool bInVertex = false;
+		bool bVertexSeen = false;
+		FString Format;
+		for (const FString& RawLine : Lines)
+		{
+			TArray<FString> Words;
+			RawLine.TrimStartAndEnd().ParseIntoArrayWS(Words);
+			if (Words.Num() >= 2 && Words[0] == TEXT("format"))
+			{
+				Format = Words[1];
+			}
+			else if (Words.Num() >= 3 && Words[0] == TEXT("element"))
+			{
+				// Solo se leen los vértices, y tienen que ser el primer elemento (así lo escriben los entrenadores de 3DGS).
+				bInVertex = Words[1] == TEXT("vertex") && !bVertexSeen;
+				bVertexSeen = bVertexSeen || bInVertex;
+				if (bInVertex)
+				{
+					Out.VertexCount = FCString::Atoi64(*Words[2]);
+				}
+				else if (!bVertexSeen)
+				{
+					OutError = FString::Printf(TEXT("The PLY element '%s' comes before the vertices: not supported"), *Words[1]);
+					return false;
+				}
+			}
+			else if (bInVertex && Words.Num() >= 3 && Words[0] == TEXT("property"))
+			{
+				const EPlyType Type = ParseType(Words[1]);
+				if (Words[1] == TEXT("list") || Type == EPlyType::Unknown)
+				{
+					OutError = FString::Printf(TEXT("Unsupported PLY vertex property: %s"), *RawLine.TrimStartAndEnd());
+					return false;
+				}
+				FPlyField Field;
+				Field.Offset = Out.Stride;
+				Field.Type = Type;
+				Fields.Add(Words[2], Field);
+				Out.Stride += TypeSize(Type);
+			}
+		}
+
+		if (Format != TEXT("binary_little_endian"))
+		{
+			OutError = FString::Printf(TEXT("PLY format '%s' is not supported (only binary_little_endian)"), *Format);
+			return false;
+		}
+		if (Out.VertexCount <= 0 || Out.VertexCount > MAX_int32 || Out.Stride <= 0)
+		{
+			OutError = TEXT("The PLY header does not give a valid vertex count and properties");
+			return false;
+		}
+
+		auto Get = [&Fields](const TCHAR* Name) { const FPlyField* F = Fields.Find(Name); return F ? *F : FPlyField(); };
+		Out.X = Get(TEXT("x")); Out.Y = Get(TEXT("y")); Out.Z = Get(TEXT("z"));
+		Out.DC0 = Get(TEXT("f_dc_0")); Out.DC1 = Get(TEXT("f_dc_1")); Out.DC2 = Get(TEXT("f_dc_2"));
+		Out.Opacity = Get(TEXT("opacity"));
+		Out.Scale0 = Get(TEXT("scale_0")); Out.Scale1 = Get(TEXT("scale_1")); Out.Scale2 = Get(TEXT("scale_2"));
+		Out.Rot0 = Get(TEXT("rot_0")); Out.Rot1 = Get(TEXT("rot_1")); Out.Rot2 = Get(TEXT("rot_2")); Out.Rot3 = Get(TEXT("rot_3"));
+		Out.DataOffset = EndHeader;
+		return true;
+	}
+
+	/** Convierte `Count` vértices seguidos de `Data` en splats, a partir de `OutPoints[First]`. */
+	void ConvertVertices(const uint8* Data, int64 Count, int64 First, const FPlyLayout& Layout, TArray<FDbvGaussianPoint>& OutPoints, FBox& Bounds)
+	{
+		constexpr float SH_C0 = 0.28209479177387814f;
+		for (int64 i = 0; i < Count; ++i)
+		{
+			const uint8* Vertex = Data + i * Layout.Stride;
+			FDbvGaussianPoint& Pt = OutPoints[static_cast<int32>(First + i)];
+
+			Pt.Position = FVector3f(Layout.X.Read(Vertex, 0.0f), Layout.Y.Read(Vertex, 0.0f), Layout.Z.Read(Vertex, 0.0f));
+			Bounds += FVector(Pt.Position);
+
+			// Escala guardada como logaritmo.
+			Pt.Scale.X = Layout.Scale0.IsSet() ? FMath::Exp(Layout.Scale0.Read(Vertex, 0.0f)) : 1.0f;
+			Pt.Scale.Y = Layout.Scale1.IsSet() ? FMath::Exp(Layout.Scale1.Read(Vertex, 0.0f)) : 1.0f;
+			Pt.Scale.Z = Layout.Scale2.IsSet() ? FMath::Exp(Layout.Scale2.Read(Vertex, 0.0f)) : 1.0f;
+
+			Pt.Rotation = FVector4f(Layout.Rot0.Read(Vertex, 1.0f), Layout.Rot1.Read(Vertex, 0.0f), Layout.Rot2.Read(Vertex, 0.0f), Layout.Rot3.Read(Vertex, 0.0f));
+
+			// Opacidad guardada antes de la sigmoide.
+			Pt.Opacity = 1.0f / (1.0f + FMath::Exp(-Layout.Opacity.Read(Vertex, 0.0f)));
+
+			// Color difuso desde el armónico de grado 0.
+			Pt.Color.R = FMath::Clamp(0.5f + SH_C0 * Layout.DC0.Read(Vertex, 0.0f), 0.0f, 1.0f);
+			Pt.Color.G = FMath::Clamp(0.5f + SH_C0 * Layout.DC1.Read(Vertex, 0.0f), 0.0f, 1.0f);
+			Pt.Color.B = FMath::Clamp(0.5f + SH_C0 * Layout.DC2.Read(Vertex, 0.0f), 0.0f, 1.0f);
+			Pt.Color.A = Pt.Opacity;
+		}
+	}
+
+	void BeginPoints(const FPlyLayout& Layout, FDbvSplatHeader& OutHeader, TArray<FDbvGaussianPoint>& OutPoints)
+	{
+		OutHeader.NumPoints = static_cast<int32>(Layout.VertexCount);
+		OutHeader.FractionalBits = 0;
+		OutHeader.BoundingBox.Init();
+		// `SetNum`, no `SetNumUninitialized`: cada punto lleva un TArray (`HigherOrderSH`) que debe nacer vacío.
+		OutPoints.Empty(OutHeader.NumPoints);
+		OutPoints.SetNum(OutHeader.NumPoints);
+	}
+}
 
 bool FDbvPlyReader::LoadFromFile(
 	const FString& FilePath,
@@ -14,20 +226,53 @@ bool FDbvPlyReader::LoadFromFile(
 	TArray<FDbvGaussianPoint>& OutPoints,
 	FString& OutErrorMessage)
 {
-	if (!FPlatformFileManager::Get().GetPlatformFile().FileExists(*FilePath))
+	TUniquePtr<IFileHandle> File(FPlatformFileManager::Get().GetPlatformFile().OpenRead(*FilePath));
+	if (!File)
 	{
-		OutErrorMessage = FString::Printf(TEXT("File does not exist: %s"), *FilePath);
+		OutErrorMessage = FString::Printf(TEXT("File does not exist or cannot be opened: %s"), *FilePath);
 		return false;
 	}
 
-	TArray<uint8> FileData;
-	if (!FFileHelper::LoadFileToArray(FileData, *FilePath))
+	const int64 FileSize = File->Size();
+	TArray64<uint8> Head;
+	Head.SetNumUninitialized(FMath::Min<int64>(FileSize, 65536));
+	FPlyLayout Layout;
+	if (!File->Read(Head.GetData(), Head.Num()) || !ParseHeader(Head.GetData(), Head.Num(), Layout, OutErrorMessage))
 	{
-		OutErrorMessage = FString::Printf(TEXT("Failed to read file: %s"), *FilePath);
+		OutErrorMessage = OutErrorMessage.IsEmpty() ? FString::Printf(TEXT("Failed to read file: %s"), *FilePath) : OutErrorMessage;
 		return false;
 	}
 
-	return LoadFromMemory(FileData, OutHeader, OutPoints, OutErrorMessage);
+	const int64 Expected = Layout.DataOffset + Layout.VertexCount * Layout.Stride;
+	if (FileSize < Expected)
+	{
+		OutErrorMessage = FString::Printf(TEXT("PLY file truncated: expected %lld bytes, got %lld"), Expected, FileSize);
+		return false;
+	}
+
+	BeginPoints(Layout, OutHeader, OutPoints);
+	constexpr int64 VerticesPerChunk = 65536;
+	TArray64<uint8> Chunk;
+	Chunk.SetNumUninitialized(VerticesPerChunk * Layout.Stride);
+	bool bRead = File->Seek(Layout.DataOffset);
+	for (int64 First = 0; bRead && First < Layout.VertexCount; First += VerticesPerChunk)
+	{
+		const int64 Count = FMath::Min(VerticesPerChunk, Layout.VertexCount - First);
+		bRead = File->Read(Chunk.GetData(), Count * Layout.Stride);
+		if (bRead)
+		{
+			ConvertVertices(Chunk.GetData(), Count, First, Layout, OutPoints, OutHeader.BoundingBox);
+		}
+	}
+	if (!bRead)
+	{
+		OutPoints.Empty();
+		OutErrorMessage = FString::Printf(TEXT("Failed to read the PLY vertex data: %s"), *FilePath);
+		return false;
+	}
+
+	UE_LOG(LogDbvPlyReader, Log, TEXT("Parsed PLY file: %d splats (%lld bytes), bounds %s"), OutHeader.NumPoints, FileSize, *OutHeader.BoundingBox.ToString());
+	return true;
 }
 
 bool FDbvPlyReader::LoadFromMemory(
@@ -36,141 +281,18 @@ bool FDbvPlyReader::LoadFromMemory(
 	TArray<FDbvGaussianPoint>& OutPoints,
 	FString& OutErrorMessage)
 {
-	if (FileData.Num() < 64)
+	FPlyLayout Layout;
+	if (!ParseHeader(FileData.GetData(), FileData.Num(), Layout, OutErrorMessage))
 	{
-		OutErrorMessage = TEXT("File data is too small to be a valid PLY file");
 		return false;
 	}
-
-	// Find "end_header\n"
-	const FString HeaderSearch = TEXT("end_header");
-	int32 EndHeaderIdx = -1;
-	const int32 MaxSearch = FMath::Min(FileData.Num(), 8192);
-
-	for (int32 i = 0; i < MaxSearch - 10; ++i)
+	const int64 Expected = Layout.DataOffset + Layout.VertexCount * Layout.Stride;
+	if (FileData.Num() < Expected)
 	{
-		if (FMemory::Memcmp(FileData.GetData() + i, "end_header", 10) == 0)
-		{
-			EndHeaderIdx = i + 10;
-			// Skip newline characters (\r\n or \n)
-			while (EndHeaderIdx < FileData.Num() && 
-			      (FileData[EndHeaderIdx] == '\r' || FileData[EndHeaderIdx] == '\n'))
-			{
-				EndHeaderIdx++;
-			}
-			break;
-		}
-	}
-
-	if (EndHeaderIdx < 0)
-	{
-		OutErrorMessage = TEXT("Could not find end_header in PLY file");
+		OutErrorMessage = FString::Printf(TEXT("PLY file truncated: expected %lld bytes, got %d"), Expected, FileData.Num());
 		return false;
 	}
-
-	// Parse header string
-	const FString HeaderStr(EndHeaderIdx, reinterpret_cast<const char*>(FileData.GetData()));
-	TArray<FString> Lines;
-	HeaderStr.ParseIntoArrayLines(Lines);
-
-	int32 VertexCount = 0;
-	TArray<FString> PropertyNames;
-
-	for (const FString& Line : Lines)
-	{
-		if (Line.StartsWith(TEXT("element vertex ")))
-		{
-			FString CountStr = Line.RightChop(15).TrimStartAndEnd();
-			VertexCount = FCString::Atoi(*CountStr);
-		}
-		else if (Line.StartsWith(TEXT("property float ")))
-		{
-			FString PropName = Line.RightChop(15).TrimStartAndEnd();
-			PropertyNames.Add(PropName);
-		}
-	}
-
-	if (VertexCount <= 0)
-	{
-		OutErrorMessage = TEXT("PLY header did not specify a valid vertex count");
-		return false;
-	}
-
-	const int32 BytesPerVertex = PropertyNames.Num() * sizeof(float);
-	const int32 ExpectedDataSize = EndHeaderIdx + VertexCount * BytesPerVertex;
-
-	if (FileData.Num() < ExpectedDataSize)
-	{
-		OutErrorMessage = FString::Printf(TEXT("PLY file truncated: expected %d bytes, got %d"),
-			ExpectedDataSize, FileData.Num());
-		return false;
-	}
-
-	// Map property indices
-	const int32 IdxX = PropertyNames.IndexOfByKey(TEXT("x"));
-	const int32 IdxY = PropertyNames.IndexOfByKey(TEXT("y"));
-	const int32 IdxZ = PropertyNames.IndexOfByKey(TEXT("z"));
-	const int32 IdxDC0 = PropertyNames.IndexOfByKey(TEXT("f_dc_0"));
-	const int32 IdxDC1 = PropertyNames.IndexOfByKey(TEXT("f_dc_1"));
-	const int32 IdxDC2 = PropertyNames.IndexOfByKey(TEXT("f_dc_2"));
-	const int32 IdxOpacity = PropertyNames.IndexOfByKey(TEXT("opacity"));
-	const int32 IdxScale0 = PropertyNames.IndexOfByKey(TEXT("scale_0"));
-	const int32 IdxScale1 = PropertyNames.IndexOfByKey(TEXT("scale_1"));
-	const int32 IdxScale2 = PropertyNames.IndexOfByKey(TEXT("scale_2"));
-	const int32 IdxRot0 = PropertyNames.IndexOfByKey(TEXT("rot_0"));
-	const int32 IdxRot1 = PropertyNames.IndexOfByKey(TEXT("rot_1"));
-	const int32 IdxRot2 = PropertyNames.IndexOfByKey(TEXT("rot_2"));
-	const int32 IdxRot3 = PropertyNames.IndexOfByKey(TEXT("rot_3"));
-
-	OutHeader.NumPoints = VertexCount;
-	OutHeader.FractionalBits = 0;
-	OutHeader.BoundingBox.Init();
-
-	OutPoints.Empty(VertexCount);
-	OutPoints.SetNumUninitialized(VertexCount);
-
-	const float* FloatData = reinterpret_cast<const float*>(FileData.GetData() + EndHeaderIdx);
-	constexpr float SH_C0 = 0.28209479177387814f;
-
-	for (int32 i = 0; i < VertexCount; ++i)
-	{
-		const float* Vert = FloatData + i * PropertyNames.Num();
-		FDbvGaussianPoint& Pt = OutPoints[i];
-
-		// Position
-		Pt.Position.X = (IdxX >= 0) ? Vert[IdxX] : 0.0f;
-		Pt.Position.Y = (IdxY >= 0) ? Vert[IdxY] : 0.0f;
-		Pt.Position.Z = (IdxZ >= 0) ? Vert[IdxZ] : 0.0f;
-		OutHeader.BoundingBox += FVector(Pt.Position);
-
-		// Scale (exp of log-scale)
-		Pt.Scale.X = (IdxScale0 >= 0) ? FMath::Exp(Vert[IdxScale0]) : 1.0f;
-		Pt.Scale.Y = (IdxScale1 >= 0) ? FMath::Exp(Vert[IdxScale1]) : 1.0f;
-		Pt.Scale.Z = (IdxScale2 >= 0) ? FMath::Exp(Vert[IdxScale2]) : 1.0f;
-
-		// Rotation (Quaternion)
-		Pt.Rotation.X = (IdxRot0 >= 0) ? Vert[IdxRot0] : 1.0f;
-		Pt.Rotation.Y = (IdxRot1 >= 0) ? Vert[IdxRot1] : 0.0f;
-		Pt.Rotation.Z = (IdxRot2 >= 0) ? Vert[IdxRot2] : 0.0f;
-		Pt.Rotation.W = (IdxRot3 >= 0) ? Vert[IdxRot3] : 0.0f;
-
-		// Opacity (sigmoid)
-		const float RawOpacity = (IdxOpacity >= 0) ? Vert[IdxOpacity] : 0.0f;
-		Pt.Opacity = 1.0f / (1.0f + FMath::Exp(-RawOpacity));
-
-		// Base diffuse color from SH0
-		const float DC0 = (IdxDC0 >= 0) ? Vert[IdxDC0] : 0.0f;
-		const float DC1 = (IdxDC1 >= 0) ? Vert[IdxDC1] : 0.0f;
-		const float DC2 = (IdxDC2 >= 0) ? Vert[IdxDC2] : 0.0f;
-
-		Pt.Color.R = FMath::Clamp(0.5f + SH_C0 * DC0, 0.0f, 1.0f);
-		Pt.Color.G = FMath::Clamp(0.5f + SH_C0 * DC1, 0.0f, 1.0f);
-		Pt.Color.B = FMath::Clamp(0.5f + SH_C0 * DC2, 0.0f, 1.0f);
-		Pt.Color.A = Pt.Opacity;
-	}
-
-	UE_LOG(LogDbvPlyReader, Log, TEXT("Successfully parsed PLY file: %d splats, bounds %s"),
-		VertexCount, *OutHeader.BoundingBox.ToString());
-
+	BeginPoints(Layout, OutHeader, OutPoints);
+	ConvertVertices(FileData.GetData() + Layout.DataOffset, Layout.VertexCount, 0, Layout, OutPoints, OutHeader.BoundingBox);
 	return true;
 }

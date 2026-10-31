@@ -160,6 +160,7 @@ export function createAiApp(deps) {
       onSend: (text) => ask(text),
       onStop: () => stop(),
       onUndoTurn: (undoInfo, handles) => host.onUndoTurn?.(undoInfo, handles),
+      formatUsage: (usage) => host.formatUsage?.(usage) ?? { text: '', warning: false, title: '' },
       onSelectConnection: async (id) => {
         const saved = await backend.aiSetPreferences({ active: id });
         if (saved.ok) file = saved.value;
@@ -278,7 +279,7 @@ export function createAiApp(deps) {
       else panel.addNote(entry.content, entry.tone ?? 'info');
     }
 
-    if (!current.entries.length) panel.showSuggestions([t('ai.suggestLevel'), t('ai.suggestPlace'), t('ai.suggestGenerate')]);
+    if (!current.entries.length) panel.showSuggestions([t('ai.suggestLevel'), t('ai.suggestPlace'), t('ai.suggestGenerate'), ...(host.extraSuggestions?.() ?? [])]);
     renderContextPreview();
   }
 
@@ -812,6 +813,7 @@ export function createAiApp(deps) {
   }
 
   async function askAgent(connection, text, options, current) {
+    const startedAt = Date.now();
     busy = true;
     cancelled = false;
     panel.setBusy(true);
@@ -867,7 +869,10 @@ export function createAiApp(deps) {
       panel.addNote(`${message}\n${t('ai.agentHint')}`, 'error');
       current.entries.push({ role: 'note', content: message, tone: 'error' });
     } finally {
-      if (finalText) current.entries.push({ role: 'assistant', content: finalText });
+      // Pie del turno: lo que devolvieron las herramientas del `--mcp` (REQ-51).
+      const footer = finalText ? await host.afterAgentTurn?.({ startedAt }) : null;
+      if (finalText) current.entries.push({ role: 'assistant', content: finalText, ...(footer ? { undoInfo: footer } : {}) });
+      if (footer) panel.setLastAssistantUndo(footer);
       agentTurn = null;
       busy = false;
       cancel = null;
