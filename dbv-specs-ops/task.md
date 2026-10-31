@@ -149,7 +149,9 @@
   - Compila, `ProjectCS` compila al arrancar el anfitrión con D3D12 sin ventana, y los tests de Automation y Python (39) pasan. **Falta la verificación en el editor del usuario** (reinicio: cambiaron cabeceras) → S66/S67.
   - [ ] S66 · Varias nubes, PIE, capturas, retirar CPU, versiones, informe (REQ-61, REQ-63)
     - [x] En el editor del usuario (2026-10-31, tras reiniciar): la iglesia recargada con el lector nuevo (9.975.598 splats, **SH grado 3**, todos dibujados, 2,5 s) se ve con más brillo y naturalidad; **el desierto `.spz` de World Labs se ve por primera vez con el actor propio**, bien orientado (1.920.000 splats, 0,2 s); dos nubes en el mismo nivel; capturas de la app correctas. CPU retirado, versiones 0.3.0/0.3.1 e informe hechos.
-    - [ ] Pendiente: PIE con los armónicos y medida de rendimiento (`stat unit`) por el usuario.
+    - [x] Rendimiento en Play con iglesia + desierto (usuario): GPU 15,2 ms, Frame 16,1 ms (~62 fps), Prims 184 K (antes 20,1 M: el dibujo indirecto de los visibles funciona). El desierto, ya sin el giro RUB→RDF, se ve del derecho con sus cactus. Desierto movido al nivel `isla` a petición del usuario.
+    - [ ] Parpadeo de la iglesia en Play: hipótesis, empates por la clave lineal de 16 bits (1 cm por escalón con puntos sueltos a 500 m). Cambiada a una clave logarítmica de 20 bits (5 pasadas), aplicada con Live Coding y `recompileshaders changed`. Falta que el usuario lo confirme.
+    - [ ] Calidad del desierto: el usuario no lo recuerda «tan mal»; pendiente de comparar con XGrids desde la misma cámara si hace falta.
     - Incidente: el editor del usuario se cerró solo a las 21:48, 35 s después de que una ejecución de tests del anfitrión le enviara `FindWorkersMessage`. El anfitrión tiene ahora el transporte UDP desactivado (`%TEMP%\dbvh\DbvHost\Config\DefaultEngine.ini`).
   - [ ] S67 · Verificación con el usuario: iglesia, Victoria, desierto, `stat GPU` (REQ-61, REQ-62)
   - [ ] S68 · Mundos de World Labs completos (REQ-18)

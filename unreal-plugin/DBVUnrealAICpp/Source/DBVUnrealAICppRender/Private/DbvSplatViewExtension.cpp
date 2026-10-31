@@ -73,14 +73,14 @@ namespace
 		const FMatrix& Projection = View.ViewMatrices.GetViewToClipNoAA();
 		const FBoxSphereBounds& Bounds = Proxy.GetBounds();
 		const double CenterDepth = View.ViewMatrices.GetWorldToView().TransformPosition(Bounds.Origin).Z;
-		const double MinDepth = FMath::Max(1.0, CenterDepth - Bounds.SphereRadius);
-		const double MaxDepth = FMath::Max(MinDepth + 1.0, CenterDepth + Bounds.SphereRadius);
+		const double MinDepth = FMath::Max(10.0, CenterDepth - Bounds.SphereRadius);
+		const double MaxDepth = FMath::Max(MinDepth * 1.01, CenterDepth + Bounds.SphereRadius);
 
 		FDbvSplatViewParams Params;
 		Params.LocalToView = FMatrix44f(LocalToView);
 		Params.ProjectionTerms = FVector4f(Projection.M[0][0], Projection.M[1][1], Projection.M[2][0], Projection.M[2][1]);
 		Params.OutputRect = FVector4f(OutputRect.Min.X, OutputRect.Min.Y, OutputRect.Width(), OutputRect.Height());
-		Params.DepthRange = FVector2f(MinDepth, 1.0 / (MaxDepth - MinDepth));
+		Params.DepthRange = FVector2f(MinDepth, 1.0 / FMath::Loge(MaxDepth / MinDepth));
 		Params.CameraLocal = FVector3f(Proxy.GetLocalToWorld().InverseTransformPosition(View.ViewMatrices.GetViewOrigin()));
 		return Params;
 	}

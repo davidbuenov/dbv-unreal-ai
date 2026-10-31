@@ -28,8 +28,8 @@ namespace
 	/** Bytes de FDbvProjected en el shader. */
 	constexpr uint32 ProjectedStride = 24;
 
-	/** Bits útiles de la clave de profundidad. */
-	constexpr uint32 SortKeyMask = 0xFFFF;
+	/** Bits útiles de la clave de profundidad: 20 (logarítmica; ver DbvSplat.usf). */
+	constexpr uint32 SortKeyMask = 0xFFFFF;
 
 	template <typename T>
 	FBufferRHIRef UploadStructured(FRHICommandListBase& RHICmdList, const TCHAR* Name, const TArray<T>& Values)

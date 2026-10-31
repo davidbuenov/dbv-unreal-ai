@@ -38,13 +38,16 @@ RWBuffer<uint> OutDrawArgs;                 // (vértices por instancia, instanc
 float4x4 LocalToView;
 float4 ProjectionTerms;   // P[0][0], P[1][1], P[2][0], P[2][1]
 float4 OutputRect;        // min x, min y, ancho, alto (píxeles de la textura de salida)
-float2 DepthRange;        // profundidad mínima de la nube y 1 / (máxima - mínima)
+float2 DepthRange;        // profundidad mínima de la nube y 1 / ln(máxima / mínima): clave logarítmica
 float3 CameraLocal;       // posición de la cámara en el espacio local de la nube (para los SH)
 uint NumSplats;
 uint SHDegree;
 uint SHStride;
 
-static const uint DBV_CULLED_KEY = 0xFFFF;
+// Clave de 20 bits (5 pasadas de la radix). Con 16 bits lineales, en una nube con puntos sueltos a 500 m cada escalón
+// medía 1 cm: los splats empatados cambiaban de orden con el menor movimiento de la cámara y la escena parpadeaba en
+// Play (2026-10-31). La escala logarítmica da precisión relativa constante: centésimas de milímetro cerca.
+static const uint DBV_CULLED_KEY = 0xFFFFF;
 
 groupshared uint GroupVisible;
 
@@ -155,8 +158,8 @@ void ProjectCS(uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex)
 					Projected.Color = Rgb.r | (Rgb.g << 8) | (Rgb.b << 16) | (Alpha << 24);
 					Projected.Depth = ViewPos.z;
 					// De atrás adelante con orden ascendente: lo lejano lleva la clave más pequeña.
-					const float Depth01 = saturate((ViewPos.z - DepthRange.x) * DepthRange.y);
-					Key = (uint)((1.0f - Depth01) * 65534.0f);
+					const float Depth01 = saturate(log(max(ViewPos.z, DepthRange.x) / DepthRange.x) * DepthRange.y);
+					Key = (uint)((1.0f - Depth01) * 1048574.0f);
 					uint Ignored;
 					InterlockedAdd(GroupVisible, 1, Ignored);
 				}
