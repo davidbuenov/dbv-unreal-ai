@@ -298,11 +298,14 @@ def _splat_counts(component: Any) -> dict[str, Any]:
     total = int(asset.get_total_splats()) if asset and hasattr(asset, "get_total_splats") else drawn
     sh_degree = int(asset.get_sh_degree()) if asset and hasattr(asset, "get_sh_degree") else 0
     counts: dict[str, Any] = {"splats": total, "drawn": drawn, "sh_degree": sh_degree}
+    file_sh = int(asset.get_file_sh_degree()) if asset and hasattr(asset, "get_file_sh_degree") else sh_degree
+    notes = []
     if drawn < total:
-        counts["note"] = (
-            f"the built-in viewer draws the {drawn} most visible splats of {total}: the whole scene is there, "
-            "less dense. Tell the user."
-        )
+        notes.append(f"the video memory budget keeps the {drawn} most visible splats of {total}: the whole scene is there, less dense")
+    if sh_degree < file_sh:
+        notes.append(f"the view-dependent colour (spherical harmonics) was reduced from degree {file_sh} to {sh_degree} to fit the video memory")
+    if notes:
+        counts["note"] = "; ".join(notes) + ". Tell the user (dbv.Splat.VRAMBudgetMB raises the budget)."
     return counts
 
 

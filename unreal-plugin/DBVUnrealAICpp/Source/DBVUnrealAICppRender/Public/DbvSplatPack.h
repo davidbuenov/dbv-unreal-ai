@@ -52,4 +52,13 @@ namespace DbvSplatPack
 
 	/** Multiplica el tamaño de todos los splats (la covarianza por `Factor`²). */
 	DBVUNREALAICPPRENDER_API void ScaleSize(FDbvSplatGpuData& Data, float Factor);
+
+	/** Bytes de VRAM por splat: datos subidos más los búferes de trabajo de proyección y orden. @spec REQ-61 */
+	DBVUNREALAICPPRENDER_API int64 GpuBytesPerSplat(int32 SHStride);
+
+	/** Presupuesto de VRAM para una nube: `dbv.Splat.VRAMBudgetMB` o, si es 0, el 40 % de la memoria dedicada (D36). */
+	DBVUNREALAICPPRENDER_API int64 VramBudgetBytes();
+
+	/** Ajusta `Data` a `BudgetBytes`: primero quita los SH y, si aún no cabe, se queda con los más visibles (D36). */
+	DBVUNREALAICPPRENDER_API void FitBudget(FDbvSplatGpuData& Data, int64 BudgetBytes);
 }

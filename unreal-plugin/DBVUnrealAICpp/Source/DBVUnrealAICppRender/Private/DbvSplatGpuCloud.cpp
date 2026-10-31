@@ -87,7 +87,19 @@ void FDbvSplatGpuCloud::InitRHI(FRHICommandListBase& RHICmdList)
 	{
 		// Armónicos esféricos en half (REQ-62); los usa la proyección para el color según el ángulo.
 		SHBuffer = UploadStructured(RHICmdList, TEXT("DbvSplatSH"), Data.SH);
-		SHSRV = RHICmdList.CreateShaderResourceView(SHBuffer, FRHIViewDesc::CreateBufferSRV().SetTypeFromBuffer(SHBuffer));
+	}
+	else
+	{
+		// Sin SH, el shader necesita igualmente un búfer enlazado.
+		SHBuffer = UploadStructured(RHICmdList, TEXT("DbvSplatSHEmpty"), TArray<uint32>{ 0u });
+	}
+	SHSRV = RHICmdList.CreateShaderResourceView(SHBuffer, FRHIViewDesc::CreateBufferSRV().SetTypeFromBuffer(SHBuffer));
+	{
+		const FRHIBufferCreateDesc ArgsDesc = FRHIBufferCreateDesc::CreateVertex(TEXT("DbvSplatDrawArgs"), 4 * sizeof(uint32))
+			.AddUsage(EBufferUsageFlags::DrawIndirect | EBufferUsageFlags::UnorderedAccess | EBufferUsageFlags::ShaderResource)
+			.SetInitialState(ERHIAccess::IndirectArgs);
+		DrawArgsBuffer = RHICmdList.CreateBuffer(ArgsDesc);
+		DrawArgsUAV = UintUAV(RHICmdList, DrawArgsBuffer);
 	}
 	// Ya están en la GPU: la copia de la CPU sobra.
 	Data = FDbvSplatGpuData();
@@ -116,7 +128,7 @@ void FDbvSplatGpuCloud::InitRHI(FRHICommandListBase& RHICmdList)
 void FDbvSplatGpuCloud::ReleaseRHI()
 {
 	PosSRV.SafeRelease(); CovSRV.SafeRelease(); SHSRV.SafeRelease(); SHBuffer.SafeRelease(); ProjectedSRV.SafeRelease(); IndicesSRV.SafeRelease();
-	ProjectedUAV.SafeRelease(); IndicesUAV.SafeRelease();
+	ProjectedUAV.SafeRelease(); IndicesUAV.SafeRelease(); DrawArgsUAV.SafeRelease(); DrawArgsBuffer.SafeRelease();
 	PosBuffer.SafeRelease(); CovBuffer.SafeRelease(); ProjectedBuffer.SafeRelease(); IndicesBuffer.SafeRelease();
 	for (int32 i = 0; i < 2; ++i)
 	{
@@ -136,6 +148,11 @@ void FDbvSplatGpuCloud::ProjectAndSort(FRHICommandListImmediate& RHICmdList, con
 	FDbvSplatProjectCS::FParameters Parameters;
 	Parameters.SplatPosOpacity = PosSRV;
 	Parameters.SplatCov = CovSRV;
+	Parameters.SplatSH = SHSRV;
+	Parameters.OutDrawArgs = DrawArgsUAV;
+	Parameters.CameraLocal = View.CameraLocal;
+	Parameters.SHDegree = SHDegree;
+	Parameters.SHStride = FMath::Max(SHStride, 1);
 	Parameters.OutProjected = ProjectedUAV;
 	Parameters.OutKeys = KeyUAVs[0];
 	Parameters.OutValues = IndicesUAV;
@@ -149,7 +166,10 @@ void FDbvSplatGpuCloud::ProjectAndSort(FRHICommandListImmediate& RHICmdList, con
 		FRHITransitionInfo(ProjectedUAV, ERHIAccess::Unknown, ERHIAccess::UAVCompute),
 		FRHITransitionInfo(KeyUAVs[0], ERHIAccess::Unknown, ERHIAccess::UAVCompute),
 		FRHITransitionInfo(IndicesUAV, ERHIAccess::Unknown, ERHIAccess::UAVCompute),
+		FRHITransitionInfo(DrawArgsUAV, ERHIAccess::Unknown, ERHIAccess::UAVCompute),
 	});
+	// El shader cuenta los visibles sobre (0, 0, 0, 0) y escribe 6 vértices por instancia.
+	RHICmdList.ClearUAVUint(DrawArgsUAV, FUintVector4(0, 0, 0, 0));
 	FComputeShaderUtils::Dispatch(RHICmdList, ComputeShader, Parameters, FComputeShaderUtils::GetGroupCountWrapped(NumSplats, 256));
 	RHICmdList.Transition({
 		FRHITransitionInfo(KeyUAVs[0], ERHIAccess::UAVCompute, ERHIAccess::SRVCompute),
@@ -171,5 +191,6 @@ void FDbvSplatGpuCloud::ProjectAndSort(FRHICommandListImmediate& RHICmdList, con
 	RHICmdList.Transition({
 		FRHITransitionInfo(IndicesUAV, ERHIAccess::Unknown, ERHIAccess::SRVMask),
 		FRHITransitionInfo(ProjectedUAV, ERHIAccess::Unknown, ERHIAccess::SRVMask),
+		FRHITransitionInfo(DrawArgsUAV, ERHIAccess::Unknown, ERHIAccess::IndirectArgs),
 	});
 }

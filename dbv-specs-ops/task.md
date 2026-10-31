@@ -143,9 +143,10 @@
     - [ ] Pendiente para otras porciones: dibujar solo los visibles (S64), suelo automático de un splat importado (densidad de puntos → Z = 0; propuesta, sin REQ aún), `LiveCodingToolset` no está activado en el proyecto (REQ-22 lo tendrá que activar «Preparar»).
   - [x] S61 cerrado.
   - [x] S62 · Nube empaquetada y lectores con SH + tests de Automation (REQ-62, REQ-63) — `DbvSplatPack` (formato de la GPU, SH en half por coeficiente y canal, selección de los más visibles, escala); los lectores escriben directamente ahí (desaparece `FDbvGaussianPoint`); PLY con `f_rest_*` (grado 1–3); **SPZ reescrito según el formato de Niantic** (magic NGSP, orden de bloques, color DC, rotaciones v2/v3, SH, RUB→RDF); la nube sube también los SH; informe con `sh_degree`; toolset Python 0.3.1. Tests: 4 de Automation (`%TEMP%\dbvh\test.ps1`, sin RHI) y 4 de Python. Falta verlo en el editor (cabeceras cambiadas: necesita reinicio; se junta con S63–S65).
-  - [ ] S63 · Recursos en GPU y presupuesto de VRAM (REQ-61, REQ-62)
-  - [ ] S64 · Proyección, ordenación y dibujo (color base) (REQ-61)
-  - [ ] S65 · Armónicos esféricos de grado 1 a 3 (REQ-62)
+  - [x] S63 · Recursos en GPU y presupuesto de VRAM (REQ-61, REQ-62) — `dbv.Splat.VRAMBudgetMB` (0 = 40 % de la VRAM dedicada); `FitBudget`: primero quita los SH, luego los más visibles; búfer de SH subido; informe con `sh_degree` y nota si se reducen los SH o los splats.
+  - [x] S64 · Proyección, ordenación y dibujo (REQ-61) — solo los visibles: la proyección cuenta por grupo (memoria compartida) y suma al argumento del dibujo indirecto; los descartados quedan al final tras ordenar.
+  - [x] S65 · Armónicos esféricos de grado 1 a 3 (REQ-62) — evaluados en la proyección con la dirección de vista en el espacio local (constantes y signos del 3DGS original).
+  - Compila, `ProjectCS` compila al arrancar el anfitrión con D3D12 sin ventana, y los tests de Automation y Python (39) pasan. **Falta la verificación en el editor del usuario** (reinicio: cambiaron cabeceras) → S66/S67.
   - [ ] S66 · Varias nubes, PIE, capturas, retirar CPU, versiones, informe (REQ-61, REQ-63)
   - [ ] S67 · Verificación con el usuario: iglesia, Victoria, desierto, `stat GPU` (REQ-61, REQ-62)
   - [ ] S68 · Mundos de World Labs completos (REQ-18)

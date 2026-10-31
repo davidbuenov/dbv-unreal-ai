@@ -409,6 +409,13 @@ class LoadSplatTests(unittest.TestCase):
         report = self.load(SplatComponent(loads=True, total=20, drawn=5))
         self.assertIn("5 most visible splats of 20", report["note"])
 
+    def test_si_se_reducen_los_sh_la_nota_lo_dice(self) -> None:
+        """@spec REQ-62, REQ-63"""
+        component = SplatComponent(loads=True, sh_degree=0)
+        component.asset.get_file_sh_degree = lambda: 3
+        report = self.load(component)
+        self.assertIn("reduced from degree 3 to 0", report["note"])
+
     def test_si_falla_da_el_motivo_y_no_deja_un_actor_vacio(self) -> None:
         """@spec REQ-63 — en la prueba del 2026-10-31 quedaba un actor vacío y la IA improvisó 38 minutos."""
         report = self.load(SplatComponent(loads=False, reason="PLY format 'ascii' is not supported (only binary_little_endian)"))

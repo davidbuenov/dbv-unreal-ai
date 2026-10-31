@@ -8,8 +8,16 @@
 // @spec REQ-61, REQ-62
 
 #include "DbvSplatPack.h"
+#include "HAL/IConsoleManager.h"
+#include "RHI.h"
 
 #include <algorithm>
+
+static TAutoConsoleVariable<int32> CVarDbvSplatVRAMBudgetMB(
+	TEXT("dbv.Splat.VRAMBudgetMB"),
+	0,
+	TEXT("VRAM budget per Gaussian Splatting cloud in MB (0 = 40% of the dedicated video memory). Applied when a splat is loaded."),
+	ECVF_Default);
 
 namespace DbvSplatPack
 {
@@ -119,6 +127,34 @@ namespace DbvSplatPack
 		}
 		Data = MoveTemp(Kept);
 		return MaxSplats;
+	}
+
+	int64 GpuBytesPerSplat(int32 SHStride)
+	{
+		// Subido: posición y opacidad (16), covarianza y color (32) y SH (4 por uint). Por vista: proyectado (24),
+		// dos claves y dos valores de la ordenación (16) e índices ordenados (4).
+		return 16 + 32 + int64(SHStride) * 4 + 24 + 16 + 4;
+	}
+
+	int64 VramBudgetBytes()
+	{
+		const int64 Configured = int64(CVarDbvSplatVRAMBudgetMB.GetValueOnAnyThread()) * 1024 * 1024;
+		FTextureMemoryStats Stats;
+		RHIGetTextureMemoryStats(Stats);
+		const int64 Dedicated = Stats.DedicatedVideoMemory > 0 ? Stats.DedicatedVideoMemory : int64(4) * 1024 * 1024 * 1024;
+		return Configured > 0 ? Configured : Dedicated * 2 / 5;
+	}
+
+	void FitBudget(FDbvSplatGpuData& Data, int64 BudgetBytes)
+	{
+		if (Data.Num() * GpuBytesPerSplat(Data.SHStride) > BudgetBytes && Data.SHStride > 0)
+		{
+			Data.SH.Empty();
+			Data.SHDegree = 0;
+			Data.SHStride = 0;
+		}
+		const int64 MaxSplats = BudgetBytes / GpuBytesPerSplat(Data.SHStride);
+		KeepMostVisible(Data, int32(FMath::Clamp<int64>(MaxSplats, 1, MAX_int32)));
 	}
 
 	void ScaleSize(FDbvSplatGpuData& Data, float Factor)

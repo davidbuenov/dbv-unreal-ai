@@ -38,6 +38,8 @@ bool UDbvGaussianSplatAsset::LoadPlyFile(const FString& FilePath, FString& OutEr
 void UDbvGaussianSplatAsset::FinishLoad()
 {
 	BoundingBox = Header.BoundingBox;
-	NumKept = DbvSplatPack::KeepMostVisible(Data, MaxDrawnSplats);
+	// D36: si no cabe en el presupuesto de VRAM, primero se quitan los SH y luego se eligen los más visibles.
+	DbvSplatPack::FitBudget(Data, DbvSplatPack::VramBudgetBytes());
+	NumKept = Data.Num();
 	SHDegreeKept = Data.SHDegree;
 }

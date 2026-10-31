@@ -14,7 +14,8 @@
 
 /**
  * A loaded Gaussian Splatting cloud, already packed for the GPU (D37). The component moves the data to the GPU
- * and keeps only the counts here; the points are never serialized (the component reloads them from the file).
+ * and keeps only the counts here. Above the VRAM budget (D36) it drops the harmonics first and then keeps the most
+ * visible splats; the points are never serialized (the component reloads them from the file).
  */
 UCLASS(BlueprintType)
 class DBVUNREALAICPP_API UDbvGaussianSplatAsset : public UObject
@@ -36,9 +37,6 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Gaussian Splat")
 	FBox BoundingBox = FBox(EForceInit::ForceInit);
 
-	/** Most splats kept for the GPU renderer (REQ-61). S63 replaces it with the VRAM budget (D36). */
-	static constexpr int32 MaxDrawnSplats = 16 * 1024 * 1024;
-
 	/** Number of Gaussian splats kept for drawing */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
 	int32 GetNumSplats() const { return NumKept; }
@@ -46,6 +44,10 @@ public:
 	/** Number of Gaussian splats in the source file */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
 	int32 GetTotalSplats() const { return Header.NumPoints; }
+
+	/** Degree of the spherical harmonics in the source file */
+	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
+	int32 GetFileSHDegree() const { return Header.SHDegree; }
 
 	/** Degree of the spherical harmonics drawn (0 = base colour only) */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")

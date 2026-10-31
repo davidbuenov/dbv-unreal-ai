@@ -46,6 +46,8 @@ struct FDbvSplatViewParams
 	FVector4f ProjectionTerms;
 	FVector4f OutputRect;
 	FVector2f DepthRange;
+	/** Cámara en el espacio local de la nube, para el color según el ángulo (REQ-62). */
+	FVector3f CameraLocal;
 };
 
 /** Una nube de splats en la GPU, con sus búferes de trabajo por vista (se reutilizan de una vista a otra). */
@@ -67,6 +69,8 @@ public:
 
 	FRHIShaderResourceView* GetProjectedSRV() const { return ProjectedSRV; }
 	FRHIShaderResourceView* GetSortedIndicesSRV() const { return IndicesSRV; }
+	/** Argumentos del dibujo indirecto: solo los splats visibles (REQ-61). */
+	FRHIBuffer* GetDrawArgsBuffer() const { return DrawArgsBuffer; }
 
 private:
 	FDbvSplatGpuData Data;
@@ -78,6 +82,8 @@ private:
 	FBufferRHIRef PosBuffer, CovBuffer, SHBuffer, ProjectedBuffer, IndicesBuffer;
 	FShaderResourceViewRHIRef PosSRV, CovSRV, SHSRV, ProjectedSRV, IndicesSRV;
 	FUnorderedAccessViewRHIRef ProjectedUAV, IndicesUAV;
+	FBufferRHIRef DrawArgsBuffer;
+	FUnorderedAccessViewRHIRef DrawArgsUAV;
 	FBufferRHIRef KeyBuffers[2], ValueBuffers[2];
 	FShaderResourceViewRHIRef KeySRVs[2], ValueSRVs[2];
 	FUnorderedAccessViewRHIRef KeyUAVs[2], ValueUAVs[2];

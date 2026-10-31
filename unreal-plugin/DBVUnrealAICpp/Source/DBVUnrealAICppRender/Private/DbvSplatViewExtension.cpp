@@ -81,6 +81,7 @@ namespace
 		Params.ProjectionTerms = FVector4f(Projection.M[0][0], Projection.M[1][1], Projection.M[2][0], Projection.M[2][1]);
 		Params.OutputRect = FVector4f(OutputRect.Min.X, OutputRect.Min.Y, OutputRect.Width(), OutputRect.Height());
 		Params.DepthRange = FVector2f(MinDepth, 1.0 / (MaxDepth - MinDepth));
+		Params.CameraLocal = FVector3f(Proxy.GetLocalToWorld().InverseTransformPosition(View.ViewMatrices.GetViewOrigin()));
 		return Params;
 	}
 
@@ -103,11 +104,12 @@ namespace
 		Parameters->RenderTargets[0] = FRenderTargetBinding(Output.Texture, ERenderTargetLoadAction::ELoad);
 
 		const int32 NumSplats = Entry.Cloud->GetNumSplats();
+		FRHIBuffer* DrawArgs = Entry.Cloud->GetDrawArgsBuffer();
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("DbvSplatDraw (%d)", NumSplats),
 			Parameters,
 			ERDGPassFlags::Raster,
-			[Parameters, VertexShader, PixelShader, Extent, NumSplats](FRHICommandList& RHICmdList)
+			[Parameters, VertexShader, PixelShader, Extent, DrawArgs](FRHICommandList& RHICmdList)
 			{
 				RHICmdList.SetViewport(0.0f, 0.0f, 0.0f, Extent.X, Extent.Y, 1.0f);
 				FGraphicsPipelineStateInitializer Pso;
@@ -123,7 +125,8 @@ namespace
 				SetGraphicsPipelineState(RHICmdList, Pso, 0);
 				SetShaderParameters(RHICmdList, VertexShader, VertexShader.GetVertexShader(), Parameters->VS);
 				SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), Parameters->PS);
-				RHICmdList.DrawPrimitive(0, 2, NumSplats);
+				// Solo los visibles: la proyección los cuenta en la GPU y quedan los primeros tras ordenar.
+				RHICmdList.DrawPrimitiveIndirect(DrawArgs, 0);
 			});
 	}
 }
