@@ -121,10 +121,49 @@ pub async fn unreal_open_project(path: String) -> Result<u32, UnrealError> {
         if !engine.editor_exists {
             return Err(UnrealError::NotFound(format!("la instalación {} no tiene el editor: {}", engine.version, engine.editor)));
         }
-        let child = std::process::Command::new(&engine.editor).arg(&project.path).spawn().map_err(|error| io_error(Path::new(&engine.editor), &error))?;
-        Ok(child.id())
+        spawn_outside_job(&engine.editor, &project.path)
     })
     .await
+}
+
+/// Línea de órdenes del editor para WMI (las rutas de Windows no pueden llevar comillas).
+pub fn editor_command_line(editor: &str, project: &str) -> String {
+    format!("\"{editor}\" \"{project}\"")
+}
+
+/// Lanza el editor fuera del Job Object de quien abrió la app: con `cargo run` (y `tauri dev`) la app vive en un job
+/// que mata a todos sus hijos al reiniciarse, y el editor del usuario se cerraba sin aviso. Primero pide salir del job;
+/// si el job no lo permite, lo crea WMI, que no está en él. Fuera de un job, el primer intento basta. @spec REQ-03
+#[cfg(windows)]
+fn spawn_outside_job(editor: &str, project: &str) -> Result<u32, UnrealError> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const WMI_CREATE: &str = "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $env:DBV_EDITOR_COMMAND }; if ($r.ReturnValue -ne 0) { exit [int]$r.ReturnValue }; $r.ProcessId";
+    let launched = match std::process::Command::new(editor).arg(project).creation_flags(CREATE_BREAKAWAY_FROM_JOB).spawn() {
+        Ok(child) => Ok(child.id()),
+        Err(_) => std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", WMI_CREATE])
+            .env("DBV_EDITOR_COMMAND", editor_command_line(editor, project))
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|error| io_error(Path::new(editor), &error))
+            .and_then(|out| {
+                String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|_| out.status.success())
+                    .ok_or_else(|| UnrealError::Io(format!("no se pudo abrir el editor {editor} (WMI devolvió {:?})", out.status.code())))
+            }),
+    };
+    launched
+}
+
+#[cfg(not(windows))]
+fn spawn_outside_job(editor: &str, project: &str) -> Result<u32, UnrealError> {
+    let child = std::process::Command::new(editor).arg(project).spawn().map_err(|error| io_error(Path::new(editor), &error))?;
+    Ok(child.id())
 }
 
 // ─── MCP ─────────────────────────────────────────────────────────────
@@ -286,6 +325,13 @@ pub async fn unreal_prepare_revert(app: AppHandle, path: String, backup: String)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// @spec REQ-03
+    #[test]
+    fn la_orden_del_editor_para_wmi_entrecomilla_rutas_con_espacios() {
+        let line = editor_command_line(r"D:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe", r"D:\Mis Proyectos\Juego.uproject");
+        assert_eq!(line, "\"D:\\Program Files\\Epic Games\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor.exe\" \"D:\\Mis Proyectos\\Juego.uproject\"");
+    }
 
     /// @spec REQ-03
     #[test]

@@ -35,6 +35,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Fixed
 
+- **El editor de Unreal abierto desde la app se cerraba solo, sin informe de fallo:** se lanzaba dentro del Job Object de la app y, en desarrollo (`tauri dev` sobre `cargo run`), Windows lo mataba cada vez que la app se reiniciaba. Ahora se lanza fuera del job (con `CREATE_BREAKAWAY_FROM_JOB` o, si el job no lo permite, por WMI), así que sobrevive al cierre de la app.
 - **Los `.spz` (World Labs, Scaniverse) no se leían bien con el actor propio:** el lector esperaba otra marca (`SPSP`) y otro orden de bloques, no decodificaba el color, las rotaciones de la versión 3 ni los armónicos, y no cambiaba de ejes (SPZ usa RUB y los `.ply` RDF). Reescrito según el formato de Niantic, con tests. Lo que se vio bien del desierto en la v0.2 era XGrids.
 - **Memoria del proyecto perdida cuando Unreal se reinicia solo** (por ejemplo, al activar plugins): el editor arranca entonces con la ruta del `.uproject` relativa a su carpeta `Engine/Binaries/Win64`, y la app la tomaba relativa a la suya, así que el MCP de los agentes podía no encontrar el proyecto (sobre todo con la app de la Store o el proyecto en otra unidad). Ahora se resuelve contra el ejecutable del editor (encontrado al probar la v0.3.0).
 - **Al reabrir una conversación se perdía el pie de cada respuesta** («Deshacer este turno» y ahora el contador de herramientas): `addAssistant` leía la opción equivocada. Venía de la v0.2.0; lo encontró la revisión de `/code-simplify`.

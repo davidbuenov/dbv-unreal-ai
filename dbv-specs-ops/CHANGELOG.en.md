@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The Unreal editor opened from the app closed by itself, with no crash report:** it was launched inside the app's Job Object, and while developing (`tauri dev` over `cargo run`) Windows killed it every time the app restarted. The app now launches it outside the job (with `CREATE_BREAKAWAY_FROM_JOB` or, if the job does not allow it, through WMI), so it survives the app closing.
 - **`.spz` files (World Labs, Scaniverse) were not read correctly by the own actor:** the reader expected another magic (`SPSP`) and another block order, did not decode the colour, version 3 rotations or the harmonics, and did not change axes (SPZ uses RUB and `.ply` RDF). Rewritten after Niantic's format, with tests. What looked right in the v0.2 desert was XGrids.
 - **Project memory lost when Unreal restarts itself** (for example after enabling plugins): the editor then starts with the `.uproject` path relative to its `Engine/Binaries/Win64` folder, and the app read it relative to its own, so the agents' MCP could miss the project (above all with the Store app or the project on another drive). It is now resolved against the editor executable (found while testing v0.3.0).
 - **Reopening a conversation lost the footer of each answer** ("Undo this turn" and now the tool counter): `addAssistant` read the wrong option. It came from v0.2.0; the `/code-simplify` review found it.
