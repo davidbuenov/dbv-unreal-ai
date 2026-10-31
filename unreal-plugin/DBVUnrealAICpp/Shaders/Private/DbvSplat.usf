@@ -1,0 +1,165 @@
+// =============================================================================
+// DBV Unreal AI — Gaussian Splatting por GPU: proyección, orden y dibujo
+// Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
+// Licensed under the MIT License. See LICENSE for details.
+// Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+// =============================================================================
+//
+// @spec REQ-61
+//
+// Tres pasos por vista y nube (D35): ProjectCS proyecta cada splat a una elipse en píxeles de la imagen de salida
+// (tras el tonemap, D33) y escribe su clave de profundidad; el motor ordena las claves (SortGPUBuffers); SplatVS y
+// SplatPS dibujan un quad por splat, de atrás adelante, con caída gaussiana y alfa premultiplicado.
+//
+// Convenciones de Unreal: vectores fila (v * M) y espacio de vista con X a la derecha, Y arriba y Z hacia delante.
+
+#include "/Engine/Private/Common.ush"
+
+/** Un splat ya proyectado para una vista (24 bytes). */
+struct FDbvProjected
+{
+	float2 Center;      // píxel del centro en la textura de salida
+	uint ConicXY;       // cónica inversa (a, b) en half
+	uint ConicZRadius;  // cónica (c) y radio en píxeles, en half
+	uint Color;         // RGBA8 (A = opacidad)
+	float Depth;        // profundidad de vista del centro (cm)
+};
+
+// ─── Proyección ──────────────────────────────────────────────────────
+
+StructuredBuffer<float4> SplatPosOpacity;   // xyz local, w opacidad
+StructuredBuffer<float4> SplatCov;          // dos por splat: (c00, c01, c02, c11) y (c12, c22, color RGB8, 0)
+RWStructuredBuffer<FDbvProjected> OutProjected;
+RWBuffer<uint> OutKeys;
+RWBuffer<uint> OutValues;
+
+float4x4 LocalToView;
+float4 ProjectionTerms;   // P[0][0], P[1][1], P[2][0], P[2][1]
+float4 OutputRect;        // min x, min y, ancho, alto (píxeles de la textura de salida)
+float2 DepthRange;        // profundidad mínima de la nube y 1 / (máxima - mínima)
+uint NumSplats;
+
+static const uint DBV_CULLED_KEY = 0xFFFF;
+
+[numthreads(256, 1, 1)]
+void ProjectCS(uint3 GroupId : SV_GroupID, uint GroupIndex : SV_GroupIndex)
+{
+	// Grupos «envueltos» (FComputeShaderUtils::GetGroupCountWrapped, paso 128).
+	const uint Index = (GroupId.x + GroupId.y * 128 + GroupId.z * 16384) * 256 + GroupIndex;
+	if (Index >= NumSplats)
+	{
+		return;
+	}
+
+	FDbvProjected Projected = (FDbvProjected)0;
+	uint Key = DBV_CULLED_KEY;
+
+	const float4 PosOpacity = SplatPosOpacity[Index];
+	const float4 ViewPos = mul(float4(PosOpacity.xyz, 1.0f), LocalToView);
+	if (ViewPos.z > 1.0f && PosOpacity.w >= 1.0f / 255.0f)
+	{
+		const float4 CovA = SplatCov[Index * 2];
+		const float4 CovB = SplatCov[Index * 2 + 1];
+		const float3x3 Sigma = float3x3(
+			CovA.x, CovA.y, CovA.z,
+			CovA.y, CovA.w, CovB.x,
+			CovA.z, CovB.x, CovB.y);
+		const float3x3 M = (float3x3)LocalToView;
+		const float3x3 SigmaView = mul(transpose(M), mul(Sigma, M));
+
+		const float InvZ = 1.0f / ViewPos.z;
+		const float Fx = 0.5f * OutputRect.z * ProjectionTerms.x;
+		const float Fy = 0.5f * OutputRect.w * ProjectionTerms.y;
+		const float2 Ndc = float2(ProjectionTerms.x * ViewPos.x * InvZ + ProjectionTerms.z, ProjectionTerms.y * ViewPos.y * InvZ + ProjectionTerms.w);
+		const float2 Center = OutputRect.xy + float2((Ndc.x * 0.5f + 0.5f) * OutputRect.z, (0.5f - Ndc.y * 0.5f) * OutputRect.w);
+
+		// Jacobiana de (píxel x, píxel y) respecto a la posición de vista; la Y de pantalla crece hacia abajo.
+		const float3 J0 = float3(Fx * InvZ, 0.0f, -Fx * ViewPos.x * InvZ * InvZ);
+		const float3 J1 = float3(0.0f, -Fy * InvZ, Fy * ViewPos.y * InvZ * InvZ);
+		const float A = dot(J0, mul(SigmaView, J0)) + 0.3f;
+		const float B = dot(J0, mul(SigmaView, J1));
+		const float C = dot(J1, mul(SigmaView, J1)) + 0.3f;
+		const float Det = A * C - B * B;
+		if (Det > 0.0f)
+		{
+			const float Mid = 0.5f * (A + C);
+			const float Lambda = Mid + sqrt(max(0.1f, Mid * Mid - Det));
+			const float Radius = ceil(3.0f * sqrt(Lambda));
+			const bool bOnScreen = all(Center + Radius >= OutputRect.xy) && all(Center - Radius <= OutputRect.xy + OutputRect.zw);
+			if (bOnScreen && Radius < 2048.0f)
+			{
+				const float InvDet = 1.0f / Det;
+				Projected.Center = Center;
+				Projected.ConicXY = f32tof16(C * InvDet) | (f32tof16(-B * InvDet) << 16);
+				Projected.ConicZRadius = f32tof16(A * InvDet) | (f32tof16(Radius) << 16);
+				const uint Alpha = (uint)round(saturate(PosOpacity.w) * 255.0f);
+				Projected.Color = (asuint(CovB.z) & 0x00FFFFFF) | (Alpha << 24);
+				Projected.Depth = ViewPos.z;
+				// De atrás adelante con orden ascendente: lo lejano lleva la clave más pequeña.
+				const float Depth01 = saturate((ViewPos.z - DepthRange.x) * DepthRange.y);
+				Key = (uint)((1.0f - Depth01) * 65534.0f);
+			}
+		}
+	}
+
+	OutProjected[Index] = Projected;
+	OutKeys[Index] = Key;
+	OutValues[Index] = Index;
+}
+
+// ─── Dibujo ──────────────────────────────────────────────────────────
+
+StructuredBuffer<FDbvProjected> Projected;
+Buffer<uint> SortedIndices;
+float4 TargetSizeAndInv;  // tamaño de la textura de salida y su inverso
+
+static const float2 DBV_CORNERS[6] = { float2(-1, -1), float2(1, -1), float2(1, 1), float2(-1, -1), float2(1, 1), float2(-1, 1) };
+
+void SplatVS(
+	uint VertexId : SV_VertexID,
+	uint InstanceId : SV_InstanceID,
+	out float4 OutPosition : SV_POSITION,
+	out nointerpolation float4 OutConicDepth : TEXCOORD0,
+	out nointerpolation float4 OutColor : TEXCOORD1,
+	out nointerpolation float2 OutCenter : TEXCOORD2)
+{
+	const FDbvProjected Splat = Projected[SortedIndices[InstanceId]];
+	const float Radius = f16tof32(Splat.ConicZRadius >> 16);
+	const float2 Pixel = Splat.Center + DBV_CORNERS[VertexId % 6] * Radius;
+	// Un splat descartado tiene radio 0: el quad degenera y no produce píxeles.
+	OutPosition = float4(Pixel.x * TargetSizeAndInv.z * 2.0f - 1.0f, 1.0f - Pixel.y * TargetSizeAndInv.w * 2.0f, 0.5f, 1.0f);
+	OutConicDepth = float4(f16tof32(Splat.ConicXY), f16tof32(Splat.ConicXY >> 16), f16tof32(Splat.ConicZRadius), Splat.Depth);
+	OutColor = float4((Splat.Color & 0xFF) / 255.0f, ((Splat.Color >> 8) & 0xFF) / 255.0f, ((Splat.Color >> 16) & 0xFF) / 255.0f, (Splat.Color >> 24) / 255.0f);
+	OutCenter = Splat.Center;
+}
+
+Texture2D SceneDepthTexture;
+SamplerState PointSampler;
+
+void SplatPS(
+	float4 SvPosition : SV_POSITION,
+	nointerpolation float4 ConicDepth : TEXCOORD0,
+	nointerpolation float4 Color : TEXCOORD1,
+	nointerpolation float2 Center : TEXCOORD2,
+	out float4 OutColor : SV_Target0)
+{
+	const float2 D = Center - SvPosition.xy;
+	const float Power = -0.5f * (ConicDepth.x * D.x * D.x + ConicDepth.z * D.y * D.y) - ConicDepth.y * D.x * D.y;
+	const float Alpha = min(0.99f, Color.a * exp(Power));
+	if (Power > 0.0f || Alpha < 1.0f / 255.0f)
+	{
+		discard;
+	}
+
+	// Prueba de profundidad contra la escena: la imagen tras el tonemap puede tener otra resolución que la
+	// profundidad (resolución de render), así que se pasa por UV de la vista.
+	const float2 OutputUV = (SvPosition.xy - OutputRect.xy) / OutputRect.zw;
+	const float2 DepthPixel = View.ViewRectMin.xy + OutputUV * View.ViewSizeAndInvSize.xy;
+	const float DeviceZ = SceneDepthTexture.SampleLevel(PointSampler, DepthPixel * View.BufferSizeAndInvSize.zw, 0).r;
+	if (ConicDepth.w > ConvertFromDeviceZ(DeviceZ) + 1.0f)
+	{
+		discard;
+	}
+
+	OutColor = float4(Color.rgb * Alpha, Alpha);
+}

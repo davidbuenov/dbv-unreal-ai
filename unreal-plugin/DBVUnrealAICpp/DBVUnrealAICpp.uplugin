@@ -1,9 +1,9 @@
 {
 	"FileVersion": 3,
-	"Version": 2,
-	"VersionName": "0.2.0",
+	"Version": 3,
+	"VersionName": "0.3.0",
 	"FriendlyName": "DBV Unreal AI Toolset (C++)",
-	"Description": "Native 3D Gaussian Splatting renderer and C++ toolset for DBV Unreal AI. 100% open-source (MIT).",
+	"Description": "Native GPU 3D Gaussian Splatting renderer and C++ toolset for DBV Unreal AI. 100% open-source (MIT).",
 	"Category": "Rendering",
 	"CreatedBy": "David Bueno Vallejo, David Bueno Carmona",
 	"CreatedByURL": "https://github.com/davidbuenov/dbv-unreal-ai",
@@ -11,6 +11,11 @@
 	"IsBetaVersion": true,
 	"Installed": false,
 	"Modules": [
+		{
+			"Name": "DBVUnrealAICppRender",
+			"Type": "Runtime",
+			"LoadingPhase": "PostConfigInit"
+		},
 		{
 			"Name": "DBVUnrealAICpp",
 			"Type": "Runtime",

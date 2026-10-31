@@ -53,6 +53,7 @@ bool UDbvGaussianSplatComponent::LoadFile(const FString& InFilePath)
 	if (bSuccess)
 	{
 		ApplyOpenCVTransformIfNeeded();
+		BuildGpuCloud();
 		UpdateBounds();
 		MarkRenderStateDirty();
 	}
@@ -83,12 +84,66 @@ void UDbvGaussianSplatComponent::ApplyOpenCVTransformIfNeeded()
 
 FPrimitiveSceneProxy* UDbvGaussianSplatComponent::CreateSceneProxy()
 {
-	if (!SplatAsset || SplatAsset->GetNumSplats() == 0)
+	if (!GpuCloud.IsValid() || GpuCloud->GetNumSplats() == 0)
 	{
 		return nullptr;
 	}
 
-	return new FDbvGaussianSplatSceneProxy(this);
+	return new FDbvGaussianSplatSceneProxy(this, GpuCloud);
+}
+
+void UDbvGaussianSplatComponent::BuildGpuCloud()
+{
+	ReleaseGpuCloud();
+	if (!SplatAsset || SplatAsset->GetNumSplats() == 0)
+	{
+		return;
+	}
+
+	// D34: posición y opacidad, covarianza 3D en espacio local y color base RGB8. @spec REQ-61
+	const TArray<FDbvGaussianPoint>& Points = SplatAsset->GetPoints();
+	FDbvSplatGpuData Data;
+	Data.PosOpacity.SetNumUninitialized(Points.Num());
+	Data.Cov.SetNumUninitialized(Points.Num() * 2);
+	for (int32 i = 0; i < Points.Num(); ++i)
+	{
+		const FDbvGaussianPoint& Pt = Points[i];
+		float Cov[6];
+		FDbvGaussianPoint Scaled = Pt;
+		Scaled.Scale *= SplatScaleMultiplier;
+		// Los .ply de 3DGS guardan el cuaternión sin normalizar.
+		const FVector4f& Q = Pt.Rotation;
+		const float Length = FMath::Sqrt(Q.X * Q.X + Q.Y * Q.Y + Q.Z * Q.Z + Q.W * Q.W);
+		Scaled.Rotation = Length > UE_SMALL_NUMBER ? Q / Length : FVector4f(1.0f, 0.0f, 0.0f, 0.0f);
+		Scaled.ComputeCovariance3D(Cov);
+		const FColor Rgb = FLinearColor(Pt.Color.R, Pt.Color.G, Pt.Color.B).QuantizeRound();
+		const uint32 PackedRgb = uint32(Rgb.R) | (uint32(Rgb.G) << 8) | (uint32(Rgb.B) << 16);
+		Data.PosOpacity[i] = FVector4f(Pt.Position, Pt.Opacity);
+		Data.Cov[i * 2] = FVector4f(Cov[0], Cov[1], Cov[2], Cov[3]);
+		Data.Cov[i * 2 + 1] = FVector4f(Cov[4], Cov[5], FMath::AsFloat(PackedRgb), 0.0f);
+		Data.Bounds += FVector(Pt.Position);
+	}
+
+	GpuCloud = MakeShared<FDbvSplatGpuCloud, ESPMode::ThreadSafe>(MoveTemp(Data));
+	BeginInitResource(GpuCloud.Get());
+}
+
+void UDbvGaussianSplatComponent::ReleaseGpuCloud()
+{
+	if (GpuCloud.IsValid())
+	{
+		ENQUEUE_RENDER_COMMAND(DbvReleaseSplatCloud)([Cloud = MoveTemp(GpuCloud)](FRHICommandListImmediate&) mutable
+		{
+			Cloud->ReleaseResource();
+			Cloud.Reset();
+		});
+	}
+}
+
+void UDbvGaussianSplatComponent::BeginDestroy()
+{
+	ReleaseGpuCloud();
+	Super::BeginDestroy();
 }
 
 FBoxSphereBounds UDbvGaussianSplatComponent::CalcBounds(const FTransform& LocalToWorld) const

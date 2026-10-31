@@ -8,6 +8,7 @@
 #include "Components/MeshComponent.h"
 #include "DbvGaussianSplatTypes.h"
 #include "DbvGaussianSplatAsset.h"
+#include "DbvSplatRender.h"
 #include "DbvGaussianSplatComponent.generated.h"
 
 class FDbvGaussianSplatSceneProxy;
@@ -66,8 +67,18 @@ public:
 	//~ End UMeshComponent Interface
 
 	virtual void OnRegister() override;
+	virtual void BeginDestroy() override;
 
 private:
 	/** Applies the verified World Labs transform (Roll 90, Scale 100) if requested */
 	void ApplyOpenCVTransformIfNeeded();
+
+	/** Packs the loaded splats for the GPU and uploads them once (REQ-61, D34). */
+	void BuildGpuCloud();
+
+	/** Releases the uploaded cloud on the render thread. */
+	void ReleaseGpuCloud();
+
+	/** The splats on the GPU, shared with the scene proxy. */
+	FDbvSplatGpuCloudRef GpuCloud;
 };

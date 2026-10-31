@@ -32,8 +32,8 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Gaussian Splat")
 	FBox BoundingBox = FBox(EForceInit::ForceInit);
 
-	/** Most splats the native renderer draws (billboards sorted on the CPU every frame). */
-	static constexpr int32 MaxDrawnSplats = 262144;
+	/** Most splats kept for the GPU renderer (REQ-61). S63 replaces it with the VRAM budget (D36). */
+	static constexpr int32 MaxDrawnSplats = 16 * 1024 * 1024;
 
 	/** Number of Gaussian splats kept for drawing (at most MaxDrawnSplats) */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")

@@ -18,7 +18,8 @@ public class DBVUnrealAICpp : ModuleRules
 			"Engine", 
 			"RenderCore", 
 			"RHI", 
-			"ToolsetRegistry" 
+			"ToolsetRegistry",
+			"DBVUnrealAICppRender"
 		});
 		PrivateDependencyModuleNames.AddRange(new string[] { 
 			"PythonScriptPlugin",

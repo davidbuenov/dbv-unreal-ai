@@ -137,6 +137,9 @@
 - [x] **`/spec` de la ampliación** (2026-10-31, con el usuario) — §3.13: REQ-61 (render de splats por GPU propio), REQ-62 (armónicos esféricos), REQ-63 (splats grandes y fallos explicados; lector por bloques ya hecho, C++ sin compilar), REQ-64 (chino) y concreciones para la v0.3.0 de REQ-18, REQ-22, REQ-23 y REQ-25. P-09 y P-10 cerradas; P-13 abierta (fuente de las guías, no bloquea); riesgos R-28..R-31.
 - [x] **`/plan` de la ampliación** (2026-10-31) — `implementation_plan.md` §10: Architect Review, D33–D45, S61–S74. **Aprobado por el usuario el 2026-10-31**: commit y estado actualizado tras cada slice.
   - [ ] S61 · Spike del render por GPU con puerta (viewport, PIE y captura de la app) (REQ-61)
+    - [x] Módulo `DBVUnrealAICppRender` (PostConfigInit): `DbvSplat.usf` (ProjectCS, SplatVS, SplatPS), `FDbvSplatGpuCloud` (subida única; proyección y `SortGPUBuffers` en un pase inmediato), registro de proxies y `FDbvSplatViewExtension` (tras el tonemap, prueba de profundidad con el uniform de vista). El proxy ya no dibuja en la CPU; el componente empaqueta (cuaternión normalizado) y sube. `DBVUnrealAICpp` 0.3.0.
+    - [x] Compila con UBT en el anfitrión `%TEMP%\dbvh\DbvHost` (`build.ps1`; el scratchpad supera 260 caracteres) y los tres shaders compilan al arrancar el motor sin ventana.
+    - [ ] Puerta con el usuario: cerrar el editor → copiar los plugins al proyecto y compilar `DBVUnrealAITest1Editor` con UBT → abrir `version030` → cargar la iglesia → viewport, PIE y captura de la app.
   - [ ] S62 · Nube empaquetada y lectores con SH + tests de Automation (REQ-62, REQ-63)
   - [ ] S63 · Recursos en GPU y presupuesto de VRAM (REQ-61, REQ-62)
   - [ ] S64 · Proyección, ordenación y dibujo (color base) (REQ-61)
