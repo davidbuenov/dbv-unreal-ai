@@ -8,8 +8,10 @@
 // (0x5053474E), versión, número de puntos, grado de SH, bits fraccionarios, flags y un byte reservado. Después, por
 // bloques: posiciones (3 × 24 bits en punto fijo), alfas (1 byte), colores (3 bytes, el coeficiente DC), escalas
 // (3 bytes, logaritmo), rotaciones (3 bytes en v2; 4 bytes «smallest three» en v3) y SH (1 byte por coeficiente y
-// canal). SPZ guarda los ejes en RUB y los .ply de 3DGS en RDF: se gira 180° alrededor de X (y, z cambian de signo)
-// para que los dos usen la misma transformación del actor.
+// canal). El formato dice que los ejes van en RUB (los .ply de 3DGS, en RDF), pero World Labs, que es de donde llegan
+// casi todos los .spz de la app, los guarda ya en RDF (OpenCV): sus visores giran la malla 180°. Con el giro RUB → RDF
+// el desierto salía boca abajo (verificado con el usuario el 2026-10-31), así que por defecto no se gira.
+// bConvertRubToRdf queda para un .spz que sí siga la convención del formato (Scaniverse).
 //
 // El lector anterior esperaba «SPSP»/«SPZ\0» y otro orden de bloques: los .spz nunca se habían dibujado bien con el
 // actor propio (encontrado el 2026-10-31).
@@ -27,6 +29,9 @@ namespace
 	constexpr uint32 SpzMagic = 0x5053474E; // "NGSP"
 	constexpr int32 SpzHeaderSize = 16;
 	constexpr float SpzColorScale = 0.15f;
+
+	/** Girar 180° alrededor de X (RUB → RDF). Desactivado: World Labs guarda los .spz ya en RDF. */
+	constexpr bool bConvertRubToRdf = false;
 
 	/** Signo de cada coeficiente de SH (grados 1 a 3) al girar 180° alrededor de X: cambian los impares en y + z. */
 	constexpr float RubToRdfSHSign[15] = { -1, -1, 1, -1, 1, 1, -1, 1, -1, 1, -1, -1, 1, -1, 1 };
@@ -170,12 +175,12 @@ bool FDbvSpzReader::LoadFromMemory(const TArray<uint8>& Payload, FDbvSplatHeader
 		const uint8* R = Bytes + RotOffset + i * RotationBytes;
 		const FVector4f Q = Version == 3 ? UnpackRotationV3(R) : UnpackRotationV2(R);
 		const float Opacity = Bytes[AlphaOffset + i] / 255.0f;
-		// RUB → RDF: giro de 180° alrededor de X.
-		DbvSplatPack::Set(Out, i, FVector3f(Rub.X, -Rub.Y, -Rub.Z), Scale, FVector4f(Q.X, Q.Y, -Q.Z, -Q.W), Opacity, DbvSplatPack::RgbFromDC(DC));
+		const float Flip = bConvertRubToRdf ? -1.0f : 1.0f;
+		DbvSplatPack::Set(Out, i, FVector3f(Rub.X, Rub.Y * Flip, Rub.Z * Flip), Scale, FVector4f(Q.X, Q.Y, Q.Z * Flip, Q.W * Flip), Opacity, DbvSplatPack::RgbFromDC(DC));
 		for (int32 k = 0; k < PerChannel; ++k)
 		{
 			const uint8* H = Bytes + SHOffset + (int64(i) * PerChannel + k) * 3;
-			const float Sign = RubToRdfSHSign[k];
+			const float Sign = bConvertRubToRdf ? RubToRdfSHSign[k] : 1.0f;
 			DbvSplatPack::SetSH(Out, i, k, FVector3f((H[0] - 128.0f) / 128.0f, (H[1] - 128.0f) / 128.0f, (H[2] - 128.0f) / 128.0f) * Sign);
 		}
 	}

@@ -245,8 +245,13 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
     """
     result: dict[str, Any] = {"success": False}
     source_path = Path(source_file)
+    editor_subsystem = getattr(unreal, "UnrealEditorSubsystem", None)
+    playing = bool(editor_subsystem and unreal.get_editor_subsystem(editor_subsystem).get_game_world())
     if not source_path.exists():
         result["error"] = f"the Gaussian Splat file does not exist: {source_file}. Tell the user."
+    elif playing:
+        # Durante Play no se crean actores en el nivel del editor (visto en vivo el 2026-10-31: fallaba sin motivo).
+        result["error"] = "Play is running: the splat can only be added to the level outside Play. Ask the user to stop Play and try again."
     else:
         actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         target_actor = None
@@ -270,8 +275,10 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
                     target_actor.set_actor_label(actor_label)
                     target_actor.set_actor_scale3d(unreal.Vector(100.0, 100.0, 100.0))
                     target_actor.set_folder_path(unreal.Name("DBV/Splats"))
+                else:
+                    result["error"] = "the splat actor could not be created in the level. Tell the user."
             else:
-                result["error"] = "Clase DbvGaussianSplatActor no encontrada en el motor (compilar módulo DBVUnrealAICpp)"
+                result["error"] = "the DbvGaussianSplatActor class is not in this project: prepare the project again in the app (C++ toolset)."
 
         if target_actor is not None:
             component = getattr(target_actor, "splat_component", None)

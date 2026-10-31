@@ -148,7 +148,7 @@ bool FDbvPlyReaderRejectsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDbvSpzReaderTest, "DBV.Splats.SpzReader.V2AndAxes", DbvTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDbvSpzReaderTest, "DBV.Splats.SpzReader.V2WorldLabsAxes", DbvTestFlags)
 bool FDbvSpzReaderTest::RunTest(const FString& Parameters)
 {
 	// Un .spz v2 de 1 punto con SH de grado 1, comprimido con gzip como los de World Labs.
@@ -185,15 +185,15 @@ bool FDbvSpzReaderTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("reads"), FDbvSpzReader::LoadFromMemory(Gzip, Header, Data, Error));
 	TestEqual(TEXT("splats"), Data.Num(), 1);
 	TestEqual(TEXT("SH degree"), Data.SHDegree, 1);
-	// RUB → RDF: y y z cambian de signo.
+	// Sin giro de ejes: World Labs guarda los .spz ya en RDF, como los .ply (el desierto salía boca abajo con el giro).
 	TestEqual(TEXT("x"), Data.PosOpacity[0].X, 1.0f, 1e-4f);
-	TestEqual(TEXT("y flipped"), Data.PosOpacity[0].Y, -2.0f, 1e-4f);
-	TestEqual(TEXT("z flipped"), Data.PosOpacity[0].Z, -3.0f, 1e-4f);
+	TestEqual(TEXT("y as stored"), Data.PosOpacity[0].Y, 2.0f, 1e-4f);
+	TestEqual(TEXT("z as stored"), Data.PosOpacity[0].Z, 3.0f, 1e-4f);
 	TestEqual(TEXT("opacity"), Data.PosOpacity[0].W, 1.0f, 1e-4f);
 	TestEqual(TEXT("cov xx (scale 1)"), Data.Cov[0].X, 1.0f, 1e-2f);
-	// Grado 1: (y, z, x) → y y z cambian de signo al girar 180° alrededor de X.
-	TestEqual(TEXT("SH k0 flipped"), DbvSplatPack::GetSH(Data, 0, 0).X, -0.5f, 1e-3f);
-	TestEqual(TEXT("SH k1 flipped"), DbvSplatPack::GetSH(Data, 0, 1).X, -0.5f, 1e-3f);
+	// Sin giro, los SH tampoco cambian de signo.
+	TestEqual(TEXT("SH k0 as stored"), DbvSplatPack::GetSH(Data, 0, 0).X, 0.5f, 1e-3f);
+	TestEqual(TEXT("SH k1 as stored"), DbvSplatPack::GetSH(Data, 0, 1).X, 0.5f, 1e-3f);
 	TestEqual(TEXT("SH k2 kept"), DbvSplatPack::GetSH(Data, 0, 2).X, 0.5f, 1e-3f);
 
 	TArray<uint8> OldMagic = Raw;

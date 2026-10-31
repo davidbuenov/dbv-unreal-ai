@@ -424,6 +424,24 @@ class LoadSplatTests(unittest.TestCase):
         self.assertIn("do not try to load it with your own code", report["error"])
         self.assertEqual(len(self.destroyed), 1)
 
+    def test_durante_play_se_explica_en_vez_de_fallar_en_silencio(self) -> None:
+        """@spec REQ-63 — visto en vivo el 2026-10-31: devolvía success false sin motivo."""
+        unreal_mod = sys.modules["unreal"]
+        unreal_mod.UnrealEditorSubsystem = type("UnrealEditorSubsystem", (), {"get_game_world": lambda self: object()})
+        try:
+            report = self.load(SplatComponent(loads=True))
+        finally:
+            del unreal_mod.UnrealEditorSubsystem
+        self.assertFalse(report["success"])
+        self.assertIn("stop Play", report["error"])
+
+    def test_si_no_se_puede_crear_el_actor_se_explica(self) -> None:
+        """@spec REQ-63"""
+        EditorActorSubsystem.spawn_actor_from_class = lambda _self, cls, loc, rot: None
+        report = json.loads(editor.load_gaussian_splat(self.file.name, "X"))
+        self.assertFalse(report["success"])
+        self.assertIn("could not be created", report["error"])
+
     def test_un_fichero_que_no_existe_se_explica(self) -> None:
         """@spec REQ-63"""
         report = json.loads(editor.load_gaussian_splat("Z:/no/existe.ply", "X"))
