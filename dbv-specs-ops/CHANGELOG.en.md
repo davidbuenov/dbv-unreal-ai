@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Own GPU Gaussian Splatting (REQ-61):** the C++ plugin draws splats on the GPU. It uploads them once, projects and sorts them in each view (with the engine radix sort) and composites them after the tonemapper with a depth test: meshes occlude them, and colours come out as captured. They show in the editor, in Play and in the app's captures. The test church (9,975,598 splats, 2.35 GB) runs at about 57 fps on an RTX 4070 Ti. It replaces the CPU renderer, which drew at most 262,144 splats. C++ plugin 0.3.0 with a new module, `DBVUnrealAICppRender`.
 - **Several memory entries per proposal (REQ-50):** the AI no longer says it "can only note one reminder per turn". `project_memory_propose` takes up to 8 entries, shown in a single card with a checkbox, editable text and reason for each. Repeated ones come unchecked and the ones that look like a secret are blocked. The "Remember" button asks for everything worth remembering. Through the app's MCP server the valid entries are saved and each one is reported.
 - **Tool counter at the foot of each answer (REQ-51):** "Tools: N calls · X KB (~Y tokens, approx.)", also with agents. For these the `--mcp` records it in `tool-usage.jsonl`, with no content. It warns above 200 KB in a turn.
 - **`unreal_scene_summary` in the app's MCP server (REQ-51):** the compact scene with filters and a default limit of 100 actors.

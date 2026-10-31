@@ -21,6 +21,8 @@
 #include "CommonRenderResources.h"
 #include "PipelineStateCache.h"
 
+DECLARE_GPU_STAT_NAMED(DbvSplats, TEXT("DBV Splats"));
+
 namespace
 {
 	struct FDbvSplatEntry
@@ -172,6 +174,7 @@ FScreenPassTexture FDbvSplatViewExtension::PostTonemap(FRDGBuilder& GraphBuilder
 			Output = FScreenPassRenderTarget(SceneColor, ERenderTargetLoadAction::ELoad);
 		}
 
+		RDG_EVENT_SCOPE_STAT(GraphBuilder, DbvSplats, "DbvSplats");
 		FRDGTextureRef SceneDepth = Inputs.SceneTextures.SceneTextures->GetParameters()->SceneDepthTexture;
 		const ERHIFeatureLevel::Type FeatureLevel = View.GetFeatureLevel();
 		for (const FDbvSplatEntry& Entry : Visible)

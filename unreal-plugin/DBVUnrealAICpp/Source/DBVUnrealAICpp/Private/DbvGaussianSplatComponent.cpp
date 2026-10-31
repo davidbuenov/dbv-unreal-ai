@@ -5,6 +5,25 @@
 #include "DbvGaussianSplatComponent.h"
 #include "DbvGaussianSplatSceneProxy.h"
 #include "GameFramework/Actor.h"
+#include "Misc/Paths.h"
+
+namespace
+{
+	/**
+	 * Nubes ya subidas a la GPU, por fichero y escala. Un duplicado (Play, copiar y pegar) o el nivel reabierto
+	 * reutilizan la del original en vez de volver a leer el fichero (2,35 GB en la iglesia). @spec REQ-61
+	 */
+	TMap<FString, TWeakPtr<FDbvSplatGpuCloud, ESPMode::ThreadSafe>>& CloudCache()
+	{
+		static TMap<FString, TWeakPtr<FDbvSplatGpuCloud, ESPMode::ThreadSafe>> Cache;
+		return Cache;
+	}
+
+	FString CacheKey(const FString& Path, float ScaleMultiplier)
+	{
+		return FString::Printf(TEXT("%s|%g"), *FPaths::ConvertRelativePathToFull(Path), ScaleMultiplier);
+	}
+}
 
 UDbvGaussianSplatComponent::UDbvGaussianSplatComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -18,9 +37,26 @@ void UDbvGaussianSplatComponent::OnRegister()
 {
 	Super::OnRegister();
 
-	if (!SourceFilePath.IsEmpty() && !SplatAsset)
+	// Un duplicado para Play o un nivel reabierto trae la ruta y el asset, pero no la nube de la GPU (no se guarda).
+	if (!SourceFilePath.IsEmpty() && !GpuCloud.IsValid())
 	{
-		LoadFile(SourceFilePath);
+		GpuCloud = CloudCache().FindRef(CacheKey(SourceFilePath, SplatScaleMultiplier)).Pin();
+		if (GpuCloud.IsValid())
+		{
+			UpdateBounds();
+			MarkRenderStateDirty();
+		}
+		else
+		{
+			// Volver a cargar no debe deshacer lo que el usuario movió o giró.
+			AActor* Owner = GetOwner();
+			const FTransform Kept = Owner ? Owner->GetActorTransform() : FTransform::Identity;
+			LoadFile(SourceFilePath);
+			if (Owner)
+			{
+				Owner->SetActorTransform(Kept);
+			}
+		}
 	}
 }
 
@@ -124,20 +160,24 @@ void UDbvGaussianSplatComponent::BuildGpuCloud()
 		Data.Bounds += FVector(Pt.Position);
 	}
 
-	GpuCloud = MakeShared<FDbvSplatGpuCloud, ESPMode::ThreadSafe>(MoveTemp(Data));
+	// La nube se comparte (original, duplicados de Play, proxies): su recurso se libera en el hilo de render solo
+	// cuando desaparece la última referencia.
+	GpuCloud = FDbvSplatGpuCloudRef(new FDbvSplatGpuCloud(MoveTemp(Data)), [](FDbvSplatGpuCloud* Cloud)
+	{
+		ENQUEUE_RENDER_COMMAND(DbvReleaseSplatCloud)([Cloud](FRHICommandListImmediate&)
+		{
+			Cloud->ReleaseResource();
+			delete Cloud;
+		});
+	});
 	BeginInitResource(GpuCloud.Get());
+	CloudCache().Add(CacheKey(SourceFilePath, SplatScaleMultiplier), GpuCloud);
 }
 
 void UDbvGaussianSplatComponent::ReleaseGpuCloud()
 {
-	if (GpuCloud.IsValid())
-	{
-		ENQUEUE_RENDER_COMMAND(DbvReleaseSplatCloud)([Cloud = MoveTemp(GpuCloud)](FRHICommandListImmediate&) mutable
-		{
-			Cloud->ReleaseResource();
-			Cloud.Reset();
-		});
-	}
+	// Si era la última referencia, el borrador de BuildGpuCloud libera el recurso en el hilo de render.
+	GpuCloud.Reset();
 }
 
 void UDbvGaussianSplatComponent::BeginDestroy()
@@ -148,6 +188,10 @@ void UDbvGaussianSplatComponent::BeginDestroy()
 
 FBoxSphereBounds UDbvGaussianSplatComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
+	if (GpuCloud.IsValid() && GpuCloud->GetLocalBounds().IsValid)
+	{
+		return FBoxSphereBounds(GpuCloud->GetLocalBounds()).TransformBy(LocalToWorld);
+	}
 	if (SplatAsset && SplatAsset->BoundingBox.IsValid)
 	{
 		return FBoxSphereBounds(SplatAsset->BoundingBox).TransformBy(LocalToWorld);

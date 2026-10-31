@@ -13,6 +13,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
+- **Gaussian Splatting por GPU, propio (REQ-61):** el plugin C++ dibuja los splats en la GPU. Los sube una vez, los proyecta y ordena en cada vista (con la ordenación radix del motor) y los compone tras el tonemap con prueba de profundidad: las mallas los tapan, y los colores salen como en la captura. Se ven en el editor, en Play y en las capturas de la app. La iglesia de prueba (9.975.598 splats, 2,35 GB) va a unos 57 fps en una RTX 4070 Ti. Sustituye al render por CPU, que dibujaba como mucho 262.144 splats. Plugin C++ 0.3.0 con un módulo nuevo, `DBVUnrealAICppRender`.
 - **Varias entradas de memoria por propuesta (REQ-50):** la IA ya no dice que «solo puede anotar un recordatorio por turno». `project_memory_propose` acepta hasta 8 entradas, que salen en una sola tarjeta con una casilla, un texto editable y el motivo de cada una. Las repetidas salen desmarcadas y las que parecen un secreto, bloqueadas. El botón «Recordar» pide todo lo que merezca recordarse. Por el MCP propio se guardan las entradas válidas y se informa de cada una.
 - **Contador de herramientas al pie de cada respuesta (REQ-51):** «Herramientas: N llamadas · X KB (~Y tokens, aprox.)», también con agentes. Para estos lo anota el `--mcp` en `tool-usage.jsonl`, sin contenido. Avisa por encima de 200 KB en un turno.
 - **`unreal_scene_summary` en el MCP propio (REQ-51):** la escena compacta con filtros y un límite de 100 actores por defecto.

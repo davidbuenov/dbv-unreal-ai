@@ -139,7 +139,9 @@
   - [ ] S61 · Spike del render por GPU con puerta (viewport, PIE y captura de la app) (REQ-61)
     - [x] Módulo `DBVUnrealAICppRender` (PostConfigInit): `DbvSplat.usf` (ProjectCS, SplatVS, SplatPS), `FDbvSplatGpuCloud` (subida única; proyección y `SortGPUBuffers` en un pase inmediato), registro de proxies y `FDbvSplatViewExtension` (tras el tonemap, prueba de profundidad con el uniform de vista). El proxy ya no dibuja en la CPU; el componente empaqueta (cuaternión normalizado) y sube. `DBVUnrealAICpp` 0.3.0.
     - [x] Compila con UBT en el anfitrión `%TEMP%\dbvh\DbvHost` (`build.ps1`; el scratchpad supera 260 caracteres) y los tres shaders compilan al arrancar el motor sin ventana.
-    - [ ] Puerta con el usuario: cerrar el editor → copiar los plugins al proyecto y compilar `DBVUnrealAITest1Editor` con UBT → abrir `version030` → cargar la iglesia → viewport, PIE y captura de la app.
+    - [x] **Puerta superada (2026-10-31, con el usuario):** la iglesia (9.975.598 splats) se ve en el viewport, en Play y en la captura de la app; el maniquí la tapa y queda tapado; ~57 fps en Play (Frame 17,4 ms, GPU 16,6 ms, 20,1 M triángulos: se dibujan todos los quads). Arreglado en la prueba: el duplicado de Play no tenía nube (ahora `OnRegister` reutiliza la subida por fichero con una caché y, si no está, recarga conservando la transformación; la nube se libera con la última referencia). Aplicado con Live Coding (`LiveCoding.Compile`) sin reiniciar.
+    - [ ] Pendiente para otras porciones: dibujar solo los visibles (S64), suelo automático de un splat importado (densidad de puntos → Z = 0; propuesta, sin REQ aún), `LiveCodingToolset` no está activado en el proyecto (REQ-22 lo tendrá que activar «Preparar»).
+  - [x] S61 cerrado.
   - [ ] S62 · Nube empaquetada y lectores con SH + tests de Automation (REQ-62, REQ-63)
   - [ ] S63 · Recursos en GPU y presupuesto de VRAM (REQ-61, REQ-62)
   - [ ] S64 · Proyección, ordenación y dibujo (color base) (REQ-61)
