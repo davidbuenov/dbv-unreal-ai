@@ -20,8 +20,15 @@
 #include "SceneTexturesConfig.h"
 #include "CommonRenderResources.h"
 #include "PipelineStateCache.h"
+#include "HAL/IConsoleManager.h"
 
 DECLARE_GPU_STAT_NAMED(DbvSplats, TEXT("DBV Splats"));
+
+static TAutoConsoleVariable<int32> CVarDbvSplatIndirectDraw(
+	TEXT("dbv.Splat.IndirectDraw"),
+	1,
+	TEXT("1: draw only the visible splats counted on the GPU (indirect). 0: draw every splat (for diagnosis)."),
+	ECVF_RenderThreadSafe);
 
 namespace
 {
@@ -104,12 +111,12 @@ namespace
 		Parameters->RenderTargets[0] = FRenderTargetBinding(Output.Texture, ERenderTargetLoadAction::ELoad);
 
 		const int32 NumSplats = Entry.Cloud->GetNumSplats();
-		FRHIBuffer* DrawArgs = Entry.Cloud->GetDrawArgsBuffer();
+		FRHIBuffer* DrawArgs = CVarDbvSplatIndirectDraw.GetValueOnRenderThread() != 0 ? Entry.Cloud->GetDrawArgsBuffer() : nullptr;
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("DbvSplatDraw (%d)", NumSplats),
 			Parameters,
 			ERDGPassFlags::Raster,
-			[Parameters, VertexShader, PixelShader, Extent, DrawArgs](FRHICommandList& RHICmdList)
+			[Parameters, VertexShader, PixelShader, Extent, DrawArgs, NumSplats](FRHICommandList& RHICmdList)
 			{
 				RHICmdList.SetViewport(0.0f, 0.0f, 0.0f, Extent.X, Extent.Y, 1.0f);
 				FGraphicsPipelineStateInitializer Pso;
@@ -126,7 +133,14 @@ namespace
 				SetShaderParameters(RHICmdList, VertexShader, VertexShader.GetVertexShader(), Parameters->VS);
 				SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), Parameters->PS);
 				// Solo los visibles: la proyección los cuenta en la GPU y quedan los primeros tras ordenar.
-				RHICmdList.DrawPrimitiveIndirect(DrawArgs, 0);
+				if (DrawArgs)
+				{
+					RHICmdList.DrawPrimitiveIndirect(DrawArgs, 0);
+				}
+				else
+				{
+					RHICmdList.DrawPrimitive(0, 2, NumSplats);
+				}
 			});
 	}
 }

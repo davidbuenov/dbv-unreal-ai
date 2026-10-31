@@ -168,8 +168,11 @@ void FDbvSplatGpuCloud::ProjectAndSort(FRHICommandListImmediate& RHICmdList, con
 		FRHITransitionInfo(IndicesUAV, ERHIAccess::Unknown, ERHIAccess::UAVCompute),
 		FRHITransitionInfo(DrawArgsUAV, ERHIAccess::Unknown, ERHIAccess::UAVCompute),
 	});
-	// El shader cuenta los visibles sobre (0, 0, 0, 0) y escribe 6 vértices por instancia.
+	// El shader cuenta los visibles sobre (0, 0, 0, 0) y escribe 6 vértices por instancia. La barrera UAV → UAV es
+	// imprescindible: sin ella la GPU podía solapar el borrado con las sumas atómicas y algunos fotogramas dibujaban
+	// 0 splats (la escena entera parpadeaba en Play, 2026-10-31).
 	RHICmdList.ClearUAVUint(DrawArgsUAV, FUintVector4(0, 0, 0, 0));
+	RHICmdList.Transition(FRHITransitionInfo(DrawArgsUAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute));
 	FComputeShaderUtils::Dispatch(RHICmdList, ComputeShader, Parameters, FComputeShaderUtils::GetGroupCountWrapped(NumSplats, 256));
 	RHICmdList.Transition({
 		FRHITransitionInfo(KeyUAVs[0], ERHIAccess::UAVCompute, ERHIAccess::SRVCompute),
