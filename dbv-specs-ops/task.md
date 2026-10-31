@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.2.4** publicada (2026-10-29); **v0.3.0** en `/build` (2026-10-31, REQ-50..REQ-57, RNF-08).
-* **Última decisión técnica**: los ficheros de conexión a IAs y la guía son canónicos (vienen de `dbv-tauri-starter` con `scripts/sync-ai.mjs`); lo propio de Unreal va en `aiApp.js`, `app.js`, la ayuda F1 y debajo de la marca de `docs/IA.md` (ADR del 2026-10-29 en `memory.md`).
-* **Próximo paso**: slices S45–S57 de la v0.3.0 (`implementation_plan.md` §9).
+* **Estado actual**: **v0.2.4** publicada (2026-10-29); **v0.3.0** en `/build` (rama `v0.3.0`): REQ-50..REQ-60 hechos; ampliación REQ-61..REQ-64 con S61–S67 hechos y S68 casi cerrado.
+* **Última decisión técnica**: render de splats por GPU propio en el módulo `DBVUnrealAICppRender` (D33–D45); el editor se lanza fuera del Job Object de la app; **no usar Live Coding** (pedido por el usuario): cerrar el editor y compilar con UBT.
+* **Próximo paso**: terminar S68 (panorama y cielo) y seguir con S69–S74 (`implementation_plan.md` §10).
 
 ## Checklist de Tareas
 
@@ -200,9 +200,9 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-31, `/build` de la v0.3.0 terminado (S45–S57). Rust 203, Vitest 321, Python OK, clippy sin avisos, `dbv-lint` sin errores (solo REQ-21 y REQ-23 sin test, fuera de esta versión), banco e2e correcto. Sin commit: los cambios están en el árbol de trabajo, pendientes de que el usuario los revise.
+> **Last update / Última actualización:** 2026-10-31 (noche), `/build` de la ampliación v0.3.0, rama `v0.3.0`, último commit de S68. Rust 209, Python OK (incluye `LiftPlayerStartTests`), Vitest OK, `dbv-lint` sin errores.
 >
-> **Exact point / Punto exacto:** falta `/test` formal (eval con modelo real de REQ-56 y REQ-51), `/code-simplify` y `/ship` (bump a 0.3.0, notas de versión ES/EN, MSIX). Decisiones para revisar con el usuario: D22–D31 (ADR-V030-001), sobre todo D31 (biblioteca fuera de OneDrive).
-> **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`, UE 5.8.4, ConvAI 4.0.0-beta.27, plugins MetaHuman activados): nivel abierto `/Game/DBV/Maps/ConvaiTest` (vacío, 8 actores); los spikes de zonas se deshicieron y el nivel quedó como estaba.
-> **Pending / Pendiente:** (1) prueba de Convai con un MetaHuman ensamblado y un Character ID; (2) `.mcp.json` y `CLAUDE.md` de Convai en el proyecto de pruebas: la app avisa, el usuario decide si los quita; (3) copia de la biblioteca de la prueba en el scratchpad de la sesión (`onedrive-copia/`), que se puede borrar; (4) S28 y S29 siguen fuera.
-> **Next step / Próximo paso:** que el usuario revise y pruebe la build de desarrollo (`npm run tauri dev`) y después `/test` → `/code-simplify` → `/ship` v0.3.0.
+> **Exact point / Punto exacto:** S68 (REQ-18, mundos de World Labs) verificado en vivo con el usuario. El desierto se ve del derecho, Play no parpadea y el usuario corre y sube por las dunas: colisión `.glb` alineada con escala (m, m, −m), compleja como simple, y `PlayerStart` subido sobre el terreno. El editor abierto desde la app ya no muere al reiniciarse la app (`CREATE_BREAKAWAY_FROM_JOB` o WMI; comprobado con `IsProcessInJob = False`).
+> **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`): plugins instalados y compilados desde cero con UBT (`%TEMP%\dbvh\install-test1.ps1`) a las 23:06. Nivel `/Game/DBV/Maps/isla`: `DBV_Desierto_GPU` (×1,976, Z 217), `Arid_Desert_Sand_Dunes_Collider` y `PlayerStart` a 204 cm; el usuario borró `Floor`. La iglesia está en `version030`.
+> **Pending / Pendiente:** (1) S68: descargar el panorama (`imagery.pano_url`) al importar el manifiesto y al generar (guardar `pano_file`), y spike del cielo (HDRIBackdrop/TextureCube frente a una esfera con material); (2) S69–S74 (en S70, proponer al usuario compilar normal con el editor cerrado en vez de Live Coding); (3) `/test`, `/code-simplify` y `/ship` v0.3.0 con el usuario; (4) propuestas sin REQ: suelo automático de un splat importado, y comparar la calidad con XGrids.
+> **Next step / Próximo paso:** terminar S68 (panorama y cielo); al tocar C++ del plugin, pedir al usuario que cierre el editor y compilar con UBT.
