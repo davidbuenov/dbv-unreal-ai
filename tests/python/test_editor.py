@@ -449,6 +449,53 @@ class LoadSplatTests(unittest.TestCase):
         self.assertIn("does not exist", report["error"])
 
 
+class PlayerStartFake:
+    """PlayerStart con su posición."""
+
+    def __init__(self, label: str, x: float, y: float, z: float) -> None:
+        self.label = label
+        self.location = types.SimpleNamespace(x=x, y=y, z=z)
+
+    def get_actor_label(self) -> str:
+        """Etiqueta."""
+        return self.label
+
+    def get_actor_location(self):  # noqa: ANN201 — imita la API de Unreal
+        """Posición."""
+        return self.location
+
+    def set_actor_location(self, location, sweep, teleport) -> None:  # noqa: ANN001
+        """Mueve el actor (``unreal.Vector`` simulado devuelve la tupla)."""
+        self.location = types.SimpleNamespace(x=location[0], y=location[1], z=location[2])
+
+
+class LiftPlayerStartTests(unittest.TestCase):
+    """Al colocar un mundo, el punto de salida del jugador queda sobre su terreno (REQ-18)."""
+
+    def setUp(self) -> None:
+        unreal_mod = sys.modules["unreal"]
+        self.saved = getattr(unreal_mod, "Vector", None)
+        unreal_mod.Vector = lambda *args: args
+
+    def tearDown(self) -> None:
+        sys.modules["unreal"].Vector = self.saved
+
+    def test_un_punto_de_salida_bajo_la_duna_sube_sobre_ella(self) -> None:
+        """@spec REQ-18 — visto en vivo: a 92 cm con la duna a 104, el personaje caía bajo el mundo."""
+        start = PlayerStartFake("PlayerStart", 0.0, 0.0, 92.0)
+        lifted = editor._lift_player_starts([start], lambda x, y: 104.0)
+        self.assertEqual(lifted, ["PlayerStart"])
+        self.assertEqual(start.location.z, 104.0 + editor.PLAYER_START_CLEARANCE)
+
+    def test_uno_ya_alto_o_fuera_del_mundo_no_se_toca(self) -> None:
+        """@spec REQ-18"""
+        high = PlayerStartFake("Alto", 0.0, 0.0, 900.0)
+        outside = PlayerStartFake("Fuera", 90000.0, 0.0, -50.0)
+        lifted = editor._lift_player_starts([high, outside], lambda x, y: 104.0 if x < 50000 else None)
+        self.assertEqual(lifted, [])
+        self.assertEqual((high.location.z, outside.location.z), (900.0, -50.0))
+
+
 if __name__ == "__main__":
     unittest.main()
 

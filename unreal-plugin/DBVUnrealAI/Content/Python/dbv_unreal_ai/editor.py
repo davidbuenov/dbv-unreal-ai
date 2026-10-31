@@ -15,7 +15,7 @@ import json
 import os
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Callable
 
 import unreal
 
@@ -343,7 +343,46 @@ def place_world(splat_label: str, collider_asset: str, name: str, metric_scale: 
                 component.set_visibility(False, True)
             collider.set_folder_path(folder)
             result["collider"] = label
+            starts = [actor for actor in actors.values() if isinstance(actor, unreal.PlayerStart)]
+            lifted = _lift_player_starts(starts, _collider_ground(collider))
+            if lifted:
+                result["player_starts_lifted"] = lifted
     return _json(result)
+
+
+# Altura del centro de la cápsula del jugador sobre el suelo (la de un PlayerStart recién puesto es 92 cm).
+PLAYER_START_CLEARANCE = 100.0
+
+
+def _collider_ground(collider: Any) -> Callable[[float, float], float | None]:
+    """Altura del terreno del mundo en (x, y): solo cuenta un rayo que choque con su colisión. @spec REQ-18"""
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    label = collider.get_actor_label()
+
+    def ground_at(x: float, y: float) -> float | None:
+        hit = unreal.SystemLibrary.line_trace_single(
+            world, unreal.Vector(x, y, 100000.0), unreal.Vector(x, y, -100000.0), unreal.TraceTypeQuery.ECC_VISIBILITY,
+            False, [], unreal.DrawDebugTrace.NONE, True,
+        ).to_tuple()
+        return hit[5].z if hit[0] and hit[9] is not None and hit[9].get_actor_label() == label else None
+
+    return ground_at
+
+
+def _lift_player_starts(starts: list[Any], ground_at: Callable[[float, float], float | None]) -> list[str]:
+    """Sube sobre el terreno del mundo los PlayerStart que quedan por debajo o a ras. @spec REQ-18
+
+    Visto en vivo el 2026-10-31: el PlayerStart del nivel quedó a 92 cm con la duna a 104; en Play el personaje
+    aparecía bajo la colisión, caía al suelo del nivel y veía la isla por encima. Los que ya están más altos se dejan.
+    """
+    lifted = []
+    for start in starts:
+        location = start.get_actor_location()
+        ground = ground_at(location.x, location.y)
+        if ground is not None and location.z < ground + PLAYER_START_CLEARANCE:
+            start.set_actor_location(unreal.Vector(location.x, location.y, ground + PLAYER_START_CLEARANCE), False, False)
+            lifted.append(start.get_actor_label())
+    return lifted
 
 
 def _splat_counts(component: Any) -> dict[str, Any]:
