@@ -946,6 +946,30 @@ pub fn send_plan(entry: &LibraryEntry) -> SendPlan {
     }
 }
 
+/// Escala métrica y desplazamiento del suelo de un mundo de World Labs, si su entrada los trae. @spec REQ-18
+pub fn world_metadata(entry: &LibraryEntry) -> Option<(f64, f64)> {
+    let scale = entry.parameters.get("metric_scale_factor").and_then(Value::as_f64).filter(|s| *s > 0.0);
+    let ground = entry.parameters.get("ground_plane_offset").and_then(Value::as_f64);
+    let found = (entry.kind == "world").then_some(()).and(scale.zip(ground));
+    found
+}
+
+/// Código Python FIJO que coloca un mundo ya cargado (splat y, si la hay, su malla de colisión) con su escala métrica
+/// y el suelo en Z = 0 (`editor.place_world`). Una sola definición para la ventana y el `--mcp` (D25). Los textos van
+/// como literales JSON, que también son literales válidos de Python. `None` si la entrada no trae los metadatos.
+/// @spec REQ-18
+pub fn world_place_code(entry: &LibraryEntry, splat_label: &str, collider_asset: Option<&str>, name: &str) -> Option<String> {
+    let quote = |text: &str| serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
+    world_metadata(entry).map(|(scale, ground)| {
+        format!(
+            "import json\nfrom dbv_unreal_ai import editor\nresult = json.loads(editor.place_world({}, {}, {}, {scale}, {ground}))\n",
+            quote(splat_label),
+            quote(collider_asset.unwrap_or_default()),
+            quote(name)
+        )
+    })
+}
+
 /// Carpeta de la biblioteca dentro de la carpeta de datos de la app.
 pub fn library_root(data_dir: &Path) -> PathBuf {
     data_dir.join("library")
@@ -1234,5 +1258,26 @@ mod tests {
             };
             assert_eq!(send_plan(&item), want, "{}", case["name"]);
         }
+    }
+
+    /// Un mundo con escala y suelo da el código fijo de `place_world` con sus valores; los textos van escapados; sin
+    /// metadatos (un .ply importado, como la iglesia) no hay código y se coloca como antes. @spec REQ-18
+    #[test]
+    fn el_codigo_de_colocacion_de_un_mundo_lleva_su_escala_y_su_suelo() {
+        let mut world = entry("arid", 1);
+        world.kind = "world".into();
+        world.parameters = serde_json::json!({ "metric_scale_factor": 1.9764537811279297, "ground_plane_offset": 1.0987765789031982 });
+        assert_eq!(world_metadata(&world), Some((1.9764537811279297, 1.0987765789031982)));
+        let code = world_place_code(&world, "Arid_Splat", Some("/Game/DBV/Generated/C"), "Arid \"dunes\"").unwrap();
+        assert!(code.contains("editor.place_world(\"Arid_Splat\", \"/Game/DBV/Generated/C\", \"Arid \\\"dunes\\\"\", 1.9764537811279297, 1.0987765789031982)"), "{code}");
+        assert!(world_place_code(&world, "S", None, "N").unwrap().contains("(\"S\", \"\", \"N\""));
+
+        let mut church = entry("iglesia", 2);
+        church.kind = "world".into();
+        church.parameters = serde_json::json!({ "source": "D:/scene.ply" });
+        assert_eq!(world_place_code(&church, "S", None, "N"), None);
+        let mut model = entry("modelo", 3);
+        model.parameters = world.parameters.clone();
+        assert_eq!(world_metadata(&model), None, "solo las entradas «world»");
     }
 }

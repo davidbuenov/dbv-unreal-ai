@@ -75,6 +75,8 @@ export const libraryList = () => call('library_list');
 export const libraryRemove = (id) => call('library_remove', { id });
 export const libraryFilePath = (id, file) => call('library_file_path', { id, file });
 export const libraryRecordSent = (id, project, assetPath) => call('library_record_sent', { id, project, assetPath });
+/** Código fijo que coloca un mundo con su escala métrica y el suelo en Z = 0, o null sin metadatos (REQ-18). */
+export const libraryWorldPlaceCode = (id, splatLabel, colliderAsset, name) => call('library_world_place_code', { id, splatLabel, colliderAsset, name });
 export const libraryLocation = () => call('library_location');
 export const librarySetLocation = (path, copyExisting) => call('library_set_location', { path: path || null, copyExisting: Boolean(copyExisting) });
 export const libraryImport = (paths) => call('library_import', { paths });

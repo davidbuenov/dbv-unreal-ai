@@ -155,6 +155,9 @@
     - Incidente: el editor del usuario se cerró solo a las 21:48, 35 s después de que una ejecución de tests del anfitrión le enviara `FindWorkersMessage`. El anfitrión tiene ahora el transporte UDP desactivado (`%TEMP%\dbvh\DbvHost\Config\DefaultEngine.ini`).
   - [x] S67 · Verificación con el usuario (2026-10-31): iglesia de 10 M de splats con SH 3 en el editor y en Play sin parpadeo (GPU 12,7 ms, ~72 fps, Prims 184 K); el maniquí la tapa y queda tapado; desierto `.spz` del derecho en el nivel `isla`; capturas de la app. Queda como propuesta, sin REQ: suelo automático de un splat importado y comparar la calidad con XGrids si se notan diferencias.
   - [ ] S68 · Mundos de World Labs completos (REQ-18)
+    - [x] Verificado en vivo con el desierto (2026-10-31): splat a escala 100·m; **colisión con escala (m, m, −m)** (el `.glb` viene en RDF y al importarlo como glTF queda reflejado en Z; sin reflejo sus triángulos miran hacia abajo y los rayos la atraviesan); los dos subidos 100·m·g, con el suelo en Z ≈ 0 (rayos simples a 1–1,8 m sobre las dunas); colisión compleja como simple (si no, el personaje pisaría la caja). Antes, `place_asset` dejaba la colisión «delante de la cámara», sin alinear.
+    - [x] `editor.place_world` (toolset); `library::world_metadata` y `world_place_code` en Rust (una sola definición; textos como literales JSON); el MCP importa la colisión sin colocarla y ejecuta `place_world`; la ventana pide el código con `library_world_place_code` y lo ejecuta con `run_python`. Tests: Rust, Vitest (2) y Python.
+    - [ ] Pendiente: verificación de `place_world` en vivo tras reabrir el editor; descargar el panorama (`imagery.pano_url`) al importar o generar; el cielo (spike); un personaje en Play caminando sobre las dunas.
   - [ ] S69 · Código del proyecto: núcleo en Rust y herramienta (REQ-22)
   - [ ] S70 · Código del proyecto: diff en la ventana y Live Coding (REQ-22)
   - [ ] S71 · Recetas y AgentSkills (REQ-23)

@@ -298,6 +298,54 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
     return _json(result)
 
 
+def place_world(splat_label: str, collider_asset: str, name: str, metric_scale: float, ground_offset: float) -> str:
+    """Coloca un mundo de World Labs con su escala métrica y el suelo en Z = 0. @spec REQ-18
+
+    Verificado en vivo con el desierto (2026-10-31): el splat va a escala 100·m (metros → cm por el factor métrico) y
+    la malla de colisión (.glb, en la misma convención RDF) necesita escala (m, m, −m), porque al importarla como
+    glTF queda reflejada en Z. Los dos se suben 100·m·g para que el suelo quede en Z = 0. La colisión va oculta en el
+    juego y usa su colisión compleja como simple: el movimiento de un personaje solo mira la simple, y sin esto
+    caminaba sobre la caja de la malla.
+    """
+    result: dict[str, Any] = {"success": False}
+    actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    actors = {actor.get_actor_label(): actor for actor in actor_subsystem.get_all_level_actors()}
+    splat = actors.get(splat_label)
+    if splat is None:
+        result["error"] = f"no splat actor labelled {splat_label} in the level"
+    else:
+        scale = float(metric_scale) if metric_scale and metric_scale > 0 else 1.0
+        lift = 100.0 * scale * float(ground_offset or 0.0)
+        folder = unreal.Name(f"DBV/Worlds/{name}")
+        splat.set_actor_scale3d(unreal.Vector(100.0 * scale, 100.0 * scale, 100.0 * scale))
+        splat.set_actor_location(unreal.Vector(0.0, 0.0, lift), False, False)
+        splat.set_folder_path(folder)
+        result.update({"success": True, "splat": splat_label, "metric_scale": scale, "ground_lift_cm": round(lift, 1)})
+        if not metric_scale or not ground_offset:
+            result["note"] = "this world has no scale or ground metadata: it was placed as it comes. Tell the user."
+        mesh = unreal.load_asset(collider_asset) if collider_asset else None
+        if mesh is not None:
+            body = mesh.get_editor_property("body_setup")
+            if body is not None:
+                body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+                mesh.modify()
+                unreal.EditorAssetLibrary.save_loaded_asset(mesh, False)
+            label = f"{name}_Collider"
+            collider = actors.get(label) or actor_subsystem.spawn_actor_from_object(mesh, unreal.Vector(0.0, 0.0, lift))
+            collider.set_actor_label(label)
+            collider.set_actor_location(unreal.Vector(0.0, 0.0, lift), False, False)
+            collider.set_actor_rotation(unreal.Rotator(0.0, 0.0, 0.0), False)
+            collider.set_actor_scale3d(unreal.Vector(scale, scale, -scale))
+            collider.set_actor_hidden_in_game(True)
+            # Invisible también en el editor (encima del splat lo ensuciaba); la colisión no depende de la visibilidad.
+            component = collider.get_component_by_class(unreal.StaticMeshComponent)
+            if component is not None:
+                component.set_visibility(False, True)
+            collider.set_folder_path(folder)
+            result["collider"] = label
+    return _json(result)
+
+
 def _splat_counts(component: Any) -> dict[str, Any]:
     """Splats del fichero, los que se dibujan y el grado de SH, con una nota si no son todos. @spec REQ-63"""
     asset = component.get_editor_property("splat_asset")

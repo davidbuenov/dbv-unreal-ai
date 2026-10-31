@@ -82,6 +82,28 @@ describe('enviar a Unreal (REQ-19)', () => {
     expect(b.libraryRecordSent).toHaveBeenCalledWith('isla-pirata', 'D:/P/P.uproject', 'Isla_Pirata_Splat');
   });
 
+  it('un mundo con escala y suelo se coloca con el código fijo de Rust, no delante de la cámara @spec REQ-18', async () => {
+    const worldEntry = { id: 'arid', name: 'Arid Desert', kind: 'world', files: ['w.spz', 'c.glb'], sentTo: [] };
+    const b = backend();
+    b.libraryWorldPlaceCode = vi.fn(async () => ({ ok: true, value: 'result = editor.place_world(...)' }));
+    const run = b.callTool;
+    b.callTool = async (toolset, tool, args, timeout) =>
+      tool === 'run_python'
+        ? (b.calls.push({ toolset, tool, args, timeout }), { ok: true, value: { text: '', isError: false, value: { success: true, result: { success: true, collider: 'Arid_Desert_Collider', metric_scale: 1.98, ground_lift_cm: 217.2 } } } })
+        : run(toolset, tool, args, timeout);
+    const out = await sendToUnreal({ backend: b }, worldEntry, { project: 'p' });
+    expect(b.calls.map((c) => c.tool)).toEqual(['load_gaussian_splat', 'import_model', 'run_python']);
+    expect(b.libraryWorldPlaceCode).toHaveBeenCalledWith('arid', 'Arid_Desert_Splat', '/Game/DBV/Generated/Linterna_magica/StaticMeshes/Linterna_magica.Linterna_magica', 'Arid_Desert');
+    expect(out).toMatchObject({ ok: true, colliderActor: 'Arid_Desert_Collider', world: { ground_lift_cm: 217.2 } });
+  });
+
+  it('sin metadatos de mundo se coloca como antes @spec REQ-18', async () => {
+    const b = backend();
+    b.libraryWorldPlaceCode = vi.fn(async () => ({ ok: true, value: null }));
+    await sendToUnreal({ backend: b }, { id: 'iglesia', name: 'Iglesia', kind: 'world', files: ['scene.ply', 'c.glb'], sentTo: [] }, { project: 'p' });
+    expect(b.calls.map((c) => c.tool)).toEqual(['load_gaussian_splat', 'import_model', 'place_asset']);
+  });
+
   it('sin colocar, sin toolset o con una importación fallida lo explica y no anota nada @spec REQ-19', async () => {
     const quiet = backend();
     await sendToUnreal({ backend: quiet }, ENTRY, { project: 'p', place: false });

@@ -318,6 +318,7 @@ pub fn run() {
             generation::commands::library_file_path,
             #[cfg(desktop)]
             generation::commands::library_record_sent,
+            generation::commands::library_world_place_code,
             #[cfg(desktop)]
             generation::commands::library_location,
             #[cfg(desktop)]

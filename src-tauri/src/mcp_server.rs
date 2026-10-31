@@ -473,24 +473,31 @@ impl McpServer {
             Err(if missing { "the DBV toolset of this project cannot load Gaussian Splats yet: ask the user to prepare the project again in the app".to_string() } else { format!("the splat was not loaded: {}", format(&loaded)) })
         } else {
             let message = format!("Gaussian Splat loaded as actor {}", report.get("actor").and_then(Value::as_str).unwrap_or(&label));
-            let with_collider = match collider {
-                Some(collider) => self.send_collider(entry, dbv, name, collider, place).map(|note| format!("{message}{note}"))?,
-                None => message,
+            // Un mundo de World Labs con escala y suelo se coloca con `place_world` (REQ-18): su colisión se importa sin
+            // colocarla delante de la cámara, y luego se alinea con el splat.
+            let is_placed_world = place && crate::library::world_metadata(entry).is_some();
+            let (collider_note, collider_asset) = match collider {
+                Some(collider) => self.send_collider(entry, dbv, name, collider, place && !is_placed_world)?,
+                None => (String::new(), None),
+            };
+            let world_note = match crate::library::world_place_code(entry, &label, collider_asset.as_deref(), name).filter(|_| place) {
+                Some(code) => self.run_fixed(&code).map(|placed| format!("; world placed at its metric scale with the ground at Z = 0: {placed}"))?,
+                None => String::new(),
             };
             self.record_sent(&entry.id, dbv, &label);
-            Ok(with_collider)
+            Ok(format!("{message}{collider_note}{world_note}"))
         };
         result
     }
 
-    /// La malla de colisión de un mundo, importada y colocada en el sitio del splat. Devuelve la nota para el mensaje.
-    fn send_collider(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, collider: &str, place: bool) -> Result<String, String> {
+    /// La malla de colisión de un mundo, importada y, si se pide, colocada. Devuelve la nota para el mensaje y el asset.
+    fn send_collider(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, collider: &str, place: bool) -> Result<(String, Option<String>), String> {
         let err = |e: UnrealError| e.to_string();
         let mesh = self.config.library.file_path(&entry.id, collider).map_err(|e| e.to_string())?;
         let import_args = json!({ "source_file": mesh.to_string_lossy(), "folder_path": "/Game/DBV/Generated", "asset_name": format!("{name}_Collider") });
         let imported = self.editor(|s| s.call_toolset_tool(dbv, "import_model", import_args.clone(), std::time::Duration::from_secs(300))).map_err(err)?;
         let primary = imported.value.as_ref().and_then(|v| v.get("primary")).and_then(Value::as_str).map(str::to_string);
-        let note = match (primary, place) {
+        let note = match (primary.clone(), place) {
             (Some(primary), true) => {
                 let place_args = json!({ "asset_path": primary, "distance": 0.0, "folder": "DBV/Generated" });
                 let placed = self.editor(|s| s.call_toolset_tool(dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
@@ -499,7 +506,7 @@ impl McpServer {
             (Some(primary), false) => format!(", with its collider mesh imported as {primary}"),
             (None, _) => format!("; the collider mesh was not imported: {}", format(&imported)),
         };
-        Ok(note)
+        Ok((note, primary))
     }
 
     /// Anota en la biblioteca a qué proyecto se envió.

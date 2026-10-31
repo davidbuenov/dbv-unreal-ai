@@ -352,6 +352,14 @@ pub fn library_record_sent(app: AppHandle, id: String, project: String, asset_pa
     library(&app)?.record_sent(&id, &project, &asset_path)
 }
 
+/// Código Python fijo que coloca un mundo ya cargado (escala métrica y suelo en Z = 0), o `null` si la entrada no
+/// trae esos metadatos. La ventana lo ejecuta con el `run_python` del toolset DBV, como el `--mcp`. @spec REQ-18
+#[tauri::command]
+pub fn library_world_place_code(app: AppHandle, id: String, splat_label: String, collider_asset: Option<String>, name: String) -> Result<Option<String>, UnrealError> {
+    let entry = library(&app)?.get(&id).ok_or_else(|| UnrealError::NotFound(format!("no library asset with id {id}")))?;
+    Ok(crate::library::world_place_code(&entry, &splat_label, collider_asset.as_deref(), &name))
+}
+
 /// Dónde está la biblioteca y cuál es la de siempre. @spec REQ-30
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

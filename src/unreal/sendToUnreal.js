@@ -44,7 +44,7 @@ const parse = (result) => {
 
 /**
  * @param {object} deps
- * @param {object} deps.backend `listToolsets()`, `callTool(toolset, tool, args, timeoutSecs)`, `libraryFilePath(id, file)`, `libraryRecordSent(id, project, assetPath)`.
+ * @param {object} deps.backend `listToolsets()`, `callTool(toolset, tool, args, timeoutSecs)`, `libraryFilePath(id, file)`, `libraryRecordSent(id, project, assetPath)` y, opcional, `libraryWorldPlaceCode(id, splatLabel, colliderAsset, name)`.
  * @param {object} entry Entrada de la biblioteca.
  * @param {{project: string, place?: boolean, folder?: string}} options
  * @returns {Promise<{ok: true, assetPath: string, actor: string|null, kind: string, animations: string[], playing: string|null, note?: string}|{ok: false, error: string}>}
@@ -85,12 +85,20 @@ export async function sendToUnreal(deps, entry, { project, place = true, folder 
             const meshReport = importedMesh.ok ? parse(importedMesh.value) : null;
             if (importedMesh.ok && meshReport?.success && meshReport.primary) {
               colliderPath = meshReport.primary;
-              if (place) {
-                const placed = await backend.callTool(dbv, 'place_asset', { asset_path: meshReport.primary, distance: 0, folder: OUTLINER_FOLDER }, 60);
-                colliderActor = placed.ok ? parse(placed.value)?.actor ?? null : null;
-              }
             }
           }
+        }
+        // Un mundo de World Labs con escala y suelo lo coloca el código fijo de Rust (REQ-18, el mismo que usa el
+        // --mcp): splat a escala métrica, colisión alineada y oculta, suelo en Z = 0. Sin metadatos, como antes.
+        const placeCode = place && backend.libraryWorldPlaceCode ? await backend.libraryWorldPlaceCode(entry.id, splatActorLabel, colliderPath, assetName(entry.name)) : null;
+        let world = null;
+        if (placeCode?.ok && placeCode.value) {
+          const placedWorld = await backend.callTool(dbv, 'run_python', { code: placeCode.value }, 120);
+          world = placedWorld.ok ? parse(placedWorld.value)?.result ?? null : null;
+          colliderActor = world?.collider ?? null;
+        } else if (place && colliderPath) {
+          const placed = await backend.callTool(dbv, 'place_asset', { asset_path: colliderPath, distance: 0, folder: OUTLINER_FOLDER }, 60);
+          colliderActor = placed.ok ? parse(placed.value)?.actor ?? null : null;
         }
         await backend.libraryRecordSent(entry.id, project, splatActorLabel);
         outcome = {
@@ -102,6 +110,7 @@ export async function sendToUnreal(deps, entry, { project, place = true, folder 
           playing: null,
           ...(colliderActor ? { colliderActor } : {}),
           ...(colliderPath ? { colliderPath } : {}),
+          ...(world ? { world } : {}),
         };
       }
     }
