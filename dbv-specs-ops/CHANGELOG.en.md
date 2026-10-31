@@ -28,11 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Splat readers write the GPU format directly** (D37): the per-point struct holding a `TArray` (10 M allocations for the church) is gone, and degree 1–3 spherical harmonics are read from `.ply` and `.spz` (REQ-62). The `load_gaussian_splat` report adds `sh_degree`. Python toolset 0.3.1.
 - **Much less context for agents (REQ-51):** the app's MCP server cuts each result to 12,000 characters, like the built-in assistant, saying how to ask for less. `unreal_describe_toolset` returns one line per tool (Niagara went from 306 KB to 5.5 KB) and with `tool` the schema of a single one. The toolset list is kept in memory and captures are 1024 px by default (`detail: "high"` for 1568). With a fixed script against recorded responses of the real editor, v0.3.0 returns 79% less text than v0.2.4.
 - **Library in `Documents/DBV Unreal AI/Library` (REQ-53):** or in `<user folder>/DBV Unreal AI/Library` if OneDrive syncs Documents, so gigabytes of models are not uploaded to the cloud. It is created at start-up, even if empty. If you did not choose another folder, what was in the previous location is copied once, without deleting anything, and Settings says so. "Open folder" creates the folder if it is missing.
 
 ### Fixed
 
+- **`.spz` files (World Labs, Scaniverse) were not read correctly by the own actor:** the reader expected another magic (`SPSP`) and another block order, did not decode the colour, version 3 rotations or the harmonics, and did not change axes (SPZ uses RUB and `.ply` RDF). Rewritten after Niantic's format, with tests. What looked right in the v0.2 desert was XGrids.
 - **Project memory lost when Unreal restarts itself** (for example after enabling plugins): the editor then starts with the `.uproject` path relative to its `Engine/Binaries/Win64` folder, and the app read it relative to its own, so the agents' MCP could miss the project (above all with the Store app or the project on another drive). It is now resolved against the editor executable (found while testing v0.3.0).
 - **Reopening a conversation lost the footer of each answer** ("Undo this turn" and now the tool counter): `addAssistant` read the wrong option. It came from v0.2.0; the `/code-simplify` review found it.
 - **The Project view opened and closed a console window on Windows** when checking whether the Convai key is in git: the `git` process was started without `CREATE_NO_WINDOW`, unlike the rest of the app (`/code-simplify` finding).

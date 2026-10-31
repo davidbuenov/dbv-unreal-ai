@@ -28,11 +28,13 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Changed
 
+- **Los lectores de splats escriben directamente el formato de la GPU** (D37): desaparece la estructura por punto con un `TArray` dentro (10 M de reservas de memoria en la iglesia) y se leen los armónicos esféricos de grado 1 a 3 de `.ply` y `.spz` (REQ-62). El informe de `load_gaussian_splat` añade `sh_degree`. Toolset Python 0.3.1.
 - **Mucho menos contexto para los agentes (REQ-51):** el MCP propio recorta cada resultado a 12.000 caracteres, como el asistente integrado, diciendo cómo pedir menos. `unreal_describe_toolset` devuelve una línea por herramienta (Niagara pasaba de 306 KB a 5,5 KB) y con `tool` el esquema de una sola. La lista de toolsets se guarda en memoria y las capturas salen a 1024 px por defecto (`detail: "high"` para 1568). Con un guion fijo contra respuestas grabadas del editor real, la v0.3.0 devuelve un 79 % menos de texto que la v0.2.4.
 - **Biblioteca en `Documentos/DBV Unreal AI/Library` (REQ-53):** o en `<carpeta de usuario>/DBV Unreal AI/Library` si OneDrive sincroniza Documentos, para no subir a la nube gigas de modelos. Se crea al arrancar, aunque esté vacía. Si no elegiste otra carpeta, lo que había en la ubicación anterior se copia una vez, sin borrar nada, y Ajustes lo indica. «Abrir carpeta» crea la carpeta si falta.
 
 ### Fixed
 
+- **Los `.spz` (World Labs, Scaniverse) no se leían bien con el actor propio:** el lector esperaba otra marca (`SPSP`) y otro orden de bloques, no decodificaba el color, las rotaciones de la versión 3 ni los armónicos, y no cambiaba de ejes (SPZ usa RUB y los `.ply` RDF). Reescrito según el formato de Niantic, con tests. Lo que se vio bien del desierto en la v0.2 era XGrids.
 - **Memoria del proyecto perdida cuando Unreal se reinicia solo** (por ejemplo, al activar plugins): el editor arranca entonces con la ruta del `.uproject` relativa a su carpeta `Engine/Binaries/Win64`, y la app la tomaba relativa a la suya, así que el MCP de los agentes podía no encontrar el proyecto (sobre todo con la app de la Store o el proyecto en otra unidad). Ahora se resuelve contra el ejecutable del editor (encontrado al probar la v0.3.0).
 - **Al reabrir una conversación se perdía el pie de cada respuesta** («Deshacer este turno» y ahora el contador de herramientas): `addAssistant` leía la opción equivocada. Venía de la v0.2.0; lo encontró la revisión de `/code-simplify`.
 - **La vista Proyecto abría y cerraba una ventana de consola en Windows** al comprobar si la clave de Convai está en git: el proceso `git` se lanzaba sin `CREATE_NO_WINDOW`, al contrario que el resto de la app (hallazgo de `/code-simplify`).

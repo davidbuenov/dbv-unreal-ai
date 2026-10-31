@@ -27,6 +27,12 @@ struct FDbvSplatGpuData
 	TArray<FVector4f> PosOpacity;
 	/** Dos por splat: (c00, c01, c02, c11) y (c12, c22, color RGB8 como float, 0). */
 	TArray<FVector4f> Cov;
+	/** Armónicos esféricos de grado 1 a 3 en half, `SHStride` uint32 por splat (DbvSplatPack). @spec REQ-62 */
+	TArray<uint32> SH;
+	/** Grado de los SH (0 = solo color base). */
+	int32 SHDegree = 0;
+	/** uint32 por splat en `SH`. */
+	int32 SHStride = 0;
 	/** Caja de los centros, en espacio local. */
 	FBox Bounds = FBox(EForceInit::ForceInit);
 
@@ -54,6 +60,7 @@ public:
 
 	int32 GetNumSplats() const { return NumSplats; }
 	const FBox& GetLocalBounds() const { return LocalBounds; }
+	int32 GetSHDegree() const { return SHDegree; }
 
 	/** Proyecta para una vista y ordena de atrás adelante (hilo de render). */
 	void ProjectAndSort(FRHICommandListImmediate& RHICmdList, const FDbvSplatViewParams& View, ERHIFeatureLevel::Type InFeatureLevel) const;
@@ -65,9 +72,11 @@ private:
 	FDbvSplatGpuData Data;
 	int32 NumSplats = 0;
 	FBox LocalBounds;
+	int32 SHDegree = 0;
+	int32 SHStride = 0;
 
-	FBufferRHIRef PosBuffer, CovBuffer, ProjectedBuffer, IndicesBuffer;
-	FShaderResourceViewRHIRef PosSRV, CovSRV, ProjectedSRV, IndicesSRV;
+	FBufferRHIRef PosBuffer, CovBuffer, SHBuffer, ProjectedBuffer, IndicesBuffer;
+	FShaderResourceViewRHIRef PosSRV, CovSRV, SHSRV, ProjectedSRV, IndicesSRV;
 	FUnorderedAccessViewRHIRef ProjectedUAV, IndicesUAV;
 	FBufferRHIRef KeyBuffers[2], ValueBuffers[2];
 	FShaderResourceViewRHIRef KeySRVs[2], ValueSRVs[2];

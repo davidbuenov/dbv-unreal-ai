@@ -329,6 +329,101 @@ class UndoTurnTests(unittest.TestCase):
         self.assertIn("positive", report["error"])
 
 
+class SplatComponent:
+    """Componente de splats simulado: carga o falla con el motivo que se le dé."""
+
+    def __init__(self, loads: bool, reason: str = "", total: int = 10, drawn: int = 10, sh_degree: int = 3) -> None:
+        self.loads, self.reason = loads, reason
+        self.asset = types.SimpleNamespace(get_num_splats=lambda: drawn, get_total_splats=lambda: total, get_sh_degree=lambda: sh_degree)
+
+    def load_file(self, path: str) -> bool:
+        """Carga (o no) el fichero."""
+        return self.loads
+
+    def get_editor_property(self, name):  # noqa: ANN001, ANN201 — imita la API de Unreal
+        """Motivo del fallo o asset."""
+        return self.reason if name == "last_load_error" else self.asset
+
+
+class SplatActor:
+    """Actor de splats con su componente."""
+
+    def __init__(self, component: SplatComponent) -> None:
+        self.splat_component = component
+        self.label = ""
+
+    def set_actor_label(self, label: str) -> None:
+        """Etiqueta."""
+        self.label = label
+
+    def get_actor_label(self) -> str:
+        """Etiqueta."""
+        return self.label
+
+    def set_actor_scale3d(self, scale) -> None:  # noqa: ANN001
+        """Escala."""
+
+    def set_folder_path(self, folder) -> None:  # noqa: ANN001
+        """Carpeta del Outliner."""
+
+
+class LoadSplatTests(unittest.TestCase):
+    """Cargar un Gaussian Splat: informe y limpieza si falla (REQ-63)."""
+
+    def setUp(self) -> None:
+        self.file = tempfile.NamedTemporaryFile(suffix=".ply", delete=False)  # noqa: SIM115 — se borra en tearDown
+        self.file.close()
+        self.destroyed: list[SplatActor] = []
+        unreal_mod = sys.modules["unreal"]
+        self.saved = {name: getattr(unreal_mod, name, None) for name in ("load_class", "Vector", "Rotator", "Name")}
+        unreal_mod.load_class = lambda outer, path: SplatActor
+        unreal_mod.Vector = lambda *args: args
+        unreal_mod.Rotator = lambda **kwargs: kwargs
+        unreal_mod.Name = str
+        ACTORS.clear()
+
+    def tearDown(self) -> None:
+        Path(self.file.name).unlink(missing_ok=True)
+        unreal_mod = sys.modules["unreal"]
+        for name, value in self.saved.items():
+            setattr(unreal_mod, name, value)
+        for name in ("spawn_actor_from_class", "destroy_actor"):
+            if hasattr(EditorActorSubsystem, name):
+                delattr(EditorActorSubsystem, name)
+
+    def load(self, component: SplatComponent) -> dict:
+        """``load_gaussian_splat`` con un actor recién creado que lleva ``component``."""
+        EditorActorSubsystem.spawn_actor_from_class = lambda _self, cls, loc, rot: SplatActor(component)
+        EditorActorSubsystem.destroy_actor = lambda _self, actor: self.destroyed.append(actor) or True
+        return json.loads(editor.load_gaussian_splat(self.file.name, "Iglesia_Splat"))
+
+    def test_el_informe_da_splats_dibujados_y_grado_de_sh(self) -> None:
+        """@spec REQ-63 — la IA puede decirle al usuario qué se ve."""
+        report = self.load(SplatComponent(loads=True, total=9975598, drawn=9975598, sh_degree=3))
+        self.assertTrue(report["success"])
+        self.assertEqual((report["splats"], report["drawn"], report["sh_degree"]), (9975598, 9975598, 3))
+        self.assertNotIn("note", report)
+
+    def test_si_no_se_dibujan_todos_hay_una_nota(self) -> None:
+        """@spec REQ-63"""
+        report = self.load(SplatComponent(loads=True, total=20, drawn=5))
+        self.assertIn("5 most visible splats of 20", report["note"])
+
+    def test_si_falla_da_el_motivo_y_no_deja_un_actor_vacio(self) -> None:
+        """@spec REQ-63 — en la prueba del 2026-10-31 quedaba un actor vacío y la IA improvisó 38 minutos."""
+        report = self.load(SplatComponent(loads=False, reason="PLY format 'ascii' is not supported (only binary_little_endian)"))
+        self.assertFalse(report["success"])
+        self.assertIn("binary_little_endian", report["error"])
+        self.assertIn("do not try to load it with your own code", report["error"])
+        self.assertEqual(len(self.destroyed), 1)
+
+    def test_un_fichero_que_no_existe_se_explica(self) -> None:
+        """@spec REQ-63"""
+        report = json.loads(editor.load_gaussian_splat("Z:/no/existe.ply", "X"))
+        self.assertFalse(report["success"])
+        self.assertIn("does not exist", report["error"])
+
+
 if __name__ == "__main__":
     unittest.main()
 

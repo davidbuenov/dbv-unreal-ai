@@ -241,12 +241,12 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
 
     Aplica la orientación validada para World Labs (Roll 90.0, Escala 100x). Un fichero muy grande se carga entero
     pero el visor nativo dibuja solo sus splats más visibles: el informe lo dice (``splats``, ``drawn``, ``note``).
-    Si la carga falla, no deja un actor vacío y explica el motivo. @spec REQ-54
+    Si la carga falla, no deja un actor vacío y explica el motivo. @spec REQ-54, REQ-63
     """
     result: dict[str, Any] = {"success": False}
     source_path = Path(source_file)
     if not source_path.exists():
-        result["error"] = f"El archivo de splat no existe: {source_file}"
+        result["error"] = f"the Gaussian Splat file does not exist: {source_file}. Tell the user."
     else:
         actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         target_actor = None
@@ -292,11 +292,12 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
 
 
 def _splat_counts(component: Any) -> dict[str, Any]:
-    """Splats del fichero y los que dibuja el visor nativo, con una nota si no son todos. @spec REQ-54"""
+    """Splats del fichero, los que se dibujan y el grado de SH, con una nota si no son todos. @spec REQ-63"""
     asset = component.get_editor_property("splat_asset")
     drawn = int(asset.get_num_splats()) if asset else 0
     total = int(asset.get_total_splats()) if asset and hasattr(asset, "get_total_splats") else drawn
-    counts: dict[str, Any] = {"splats": total, "drawn": drawn}
+    sh_degree = int(asset.get_sh_degree()) if asset and hasattr(asset, "get_sh_degree") else 0
+    counts: dict[str, Any] = {"splats": total, "drawn": drawn, "sh_degree": sh_degree}
     if drawn < total:
         counts["note"] = (
             f"the built-in viewer draws the {drawn} most visible splats of {total}: the whole scene is there, "

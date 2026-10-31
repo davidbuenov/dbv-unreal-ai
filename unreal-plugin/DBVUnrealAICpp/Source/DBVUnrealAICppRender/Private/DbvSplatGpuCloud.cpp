@@ -31,10 +31,11 @@ namespace
 	/** Bits útiles de la clave de profundidad. */
 	constexpr uint32 SortKeyMask = 0xFFFF;
 
-	FBufferRHIRef UploadStructured(FRHICommandListBase& RHICmdList, const TCHAR* Name, const TArray<FVector4f>& Values)
+	template <typename T>
+	FBufferRHIRef UploadStructured(FRHICommandListBase& RHICmdList, const TCHAR* Name, const TArray<T>& Values)
 	{
-		const uint32 Bytes = Values.Num() * sizeof(FVector4f);
-		const FRHIBufferCreateDesc Desc = FRHIBufferCreateDesc::CreateStructured(Name, Bytes, sizeof(FVector4f))
+		const uint32 Bytes = Values.Num() * sizeof(T);
+		const FRHIBufferCreateDesc Desc = FRHIBufferCreateDesc::CreateStructured(Name, Bytes, sizeof(T))
 			.AddUsage(EBufferUsageFlags::ShaderResource | EBufferUsageFlags::Static)
 			.SetInitialState(ERHIAccess::SRVMask)
 			.SetInitActionInitializer();
@@ -67,6 +68,8 @@ FDbvSplatGpuCloud::FDbvSplatGpuCloud(FDbvSplatGpuData&& InData)
 {
 	NumSplats = Data.Num();
 	LocalBounds = Data.Bounds;
+	SHDegree = Data.SHStride > 0 ? Data.SHDegree : 0;
+	SHStride = Data.SHStride;
 }
 
 void FDbvSplatGpuCloud::InitRHI(FRHICommandListBase& RHICmdList)
@@ -80,6 +83,12 @@ void FDbvSplatGpuCloud::InitRHI(FRHICommandListBase& RHICmdList)
 	CovBuffer = UploadStructured(RHICmdList, TEXT("DbvSplatCov"), Data.Cov);
 	PosSRV = RHICmdList.CreateShaderResourceView(PosBuffer, FRHIViewDesc::CreateBufferSRV().SetTypeFromBuffer(PosBuffer));
 	CovSRV = RHICmdList.CreateShaderResourceView(CovBuffer, FRHIViewDesc::CreateBufferSRV().SetTypeFromBuffer(CovBuffer));
+	if (SHStride > 0 && Data.SH.Num() > 0)
+	{
+		// Armónicos esféricos en half (REQ-62); los usa la proyección para el color según el ángulo.
+		SHBuffer = UploadStructured(RHICmdList, TEXT("DbvSplatSH"), Data.SH);
+		SHSRV = RHICmdList.CreateShaderResourceView(SHBuffer, FRHIViewDesc::CreateBufferSRV().SetTypeFromBuffer(SHBuffer));
+	}
 	// Ya están en la GPU: la copia de la CPU sobra.
 	Data = FDbvSplatGpuData();
 
@@ -106,7 +115,7 @@ void FDbvSplatGpuCloud::InitRHI(FRHICommandListBase& RHICmdList)
 
 void FDbvSplatGpuCloud::ReleaseRHI()
 {
-	PosSRV.SafeRelease(); CovSRV.SafeRelease(); ProjectedSRV.SafeRelease(); IndicesSRV.SafeRelease();
+	PosSRV.SafeRelease(); CovSRV.SafeRelease(); SHSRV.SafeRelease(); SHBuffer.SafeRelease(); ProjectedSRV.SafeRelease(); IndicesSRV.SafeRelease();
 	ProjectedUAV.SafeRelease(); IndicesUAV.SafeRelease();
 	PosBuffer.SafeRelease(); CovBuffer.SafeRelease(); ProjectedBuffer.SafeRelease(); IndicesBuffer.SafeRelease();
 	for (int32 i = 0; i < 2; ++i)

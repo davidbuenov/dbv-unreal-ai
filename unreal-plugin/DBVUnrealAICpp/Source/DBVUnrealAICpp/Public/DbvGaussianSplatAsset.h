@@ -1,16 +1,20 @@
 // Copyright (c) 2026 David Bueno Vallejo & David Bueno Carmona. All rights reserved.
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 // Developed using dbv-specs-ops methodology.
+//
+// @spec REQ-61, REQ-62, REQ-63
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "DbvGaussianSplatTypes.h"
+#include "DbvSplatRender.h"
 #include "DbvGaussianSplatAsset.generated.h"
 
 /**
- * Unreal Engine asset holding 3D Gaussian Splatting point cloud data.
+ * A loaded Gaussian Splatting cloud, already packed for the GPU (D37). The component moves the data to the GPU
+ * and keeps only the counts here; the points are never serialized (the component reloads them from the file).
  */
 UCLASS(BlueprintType)
 class DBVUNREALAICPP_API UDbvGaussianSplatAsset : public UObject
@@ -35,13 +39,17 @@ public:
 	/** Most splats kept for the GPU renderer (REQ-61). S63 replaces it with the VRAM budget (D36). */
 	static constexpr int32 MaxDrawnSplats = 16 * 1024 * 1024;
 
-	/** Number of Gaussian splats kept for drawing (at most MaxDrawnSplats) */
+	/** Number of Gaussian splats kept for drawing */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
-	int32 GetNumSplats() const { return Points.Num(); }
+	int32 GetNumSplats() const { return NumKept; }
 
 	/** Number of Gaussian splats in the source file */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
 	int32 GetTotalSplats() const { return Header.NumPoints; }
+
+	/** Degree of the spherical harmonics drawn (0 = base colour only) */
+	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
+	int32 GetSHDegree() const { return SHDegreeKept; }
 
 	/** Loads an .spz file into this asset */
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
@@ -51,13 +59,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Gaussian Splat")
 	bool LoadPlyFile(const FString& FilePath, FString& OutErrorMessage);
 
-	/** Access to the raw splat points */
-	const TArray<FDbvGaussianPoint>& GetPoints() const { return Points; }
+	/** Hands the packed splats over (to the GPU); the counts stay. */
+	FDbvSplatGpuData TakeData() { return MoveTemp(Data); }
 
 private:
-	/** Above MaxDrawnSplats, keeps the most visible splats of the whole scene (not the first ones of the file). */
-	void KeepMostVisible();
+	/** Common end of a successful load: selection of the most visible splats if needed. */
+	void FinishLoad();
 
-	/** Internal storage of splat points */
-	TArray<FDbvGaussianPoint> Points;
+	FDbvSplatGpuData Data;
+	int32 NumKept = 0;
+	int32 SHDegreeKept = 0;
 };

@@ -2,13 +2,14 @@
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 // Developed using dbv-specs-ops methodology.
 //
-// @spec REQ-54
+// @spec REQ-62, REQ-63
 //
 // El fichero se lee por bloques con tamaños de 64 bits: un .ply de 3DGS con armónicos esféricos pasa con facilidad
 // de 2 GB (la iglesia de la prueba del 2026-10-31: 2,35 GB, 9.975.598 splats), y `LoadFileToArray` con un
 // `TArray<uint8>` no admite más de 2 GB. Se aceptan propiedades de cualquier tipo escalar de PLY, no solo `float`.
 
 #include "DbvPlyReader.h"
+#include "DbvSplatPack.h"
 #include "HAL/PlatformFileManager.h"
 #include "Templates/UniquePtr.h"
 
@@ -81,6 +82,7 @@ namespace
 		}
 	};
 
+
 	/** Lo que dice la cabecera: cuántos vértices, dónde empiezan, cuánto ocupa cada uno y dónde está cada campo. */
 	struct FPlyLayout
 	{
@@ -88,6 +90,9 @@ namespace
 		int64 DataOffset = 0;
 		int32 Stride = 0;
 		FPlyField X, Y, Z, DC0, DC1, DC2, Opacity, Scale0, Scale1, Scale2, Rot0, Rot1, Rot2, Rot3;
+		/** f_rest_* en el orden del fichero: primero todos los del rojo, luego el verde y el azul. @spec REQ-62 */
+		TArray<FPlyField> Rest;
+		int32 SHDegree = 0;
 	};
 
 	/** Interpreta la cabecera de `Data` (los primeros bytes del fichero). */
@@ -175,56 +180,58 @@ namespace
 		Out.Opacity = Get(TEXT("opacity"));
 		Out.Scale0 = Get(TEXT("scale_0")); Out.Scale1 = Get(TEXT("scale_1")); Out.Scale2 = Get(TEXT("scale_2"));
 		Out.Rot0 = Get(TEXT("rot_0")); Out.Rot1 = Get(TEXT("rot_1")); Out.Rot2 = Get(TEXT("rot_2")); Out.Rot3 = Get(TEXT("rot_3"));
+
+		// Los SH completos de un grado: 9, 24 o 45 f_rest (3, 8 o 15 por canal). Otra cantidad se ignora.
+		int32 RestCount = 0;
+		while (Fields.Contains(FString::Printf(TEXT("f_rest_%d"), RestCount)))
+		{
+			++RestCount;
+		}
+		Out.SHDegree = RestCount == 45 ? 3 : RestCount == 24 ? 2 : RestCount == 9 ? 1 : 0;
+		for (int32 i = 0; Out.SHDegree > 0 && i < RestCount; ++i)
+		{
+			Out.Rest.Add(Fields[FString::Printf(TEXT("f_rest_%d"), i)]);
+		}
 		Out.DataOffset = EndHeader;
 		return true;
 	}
 
-	/** Convierte `Count` vértices seguidos de `Data` en splats, a partir de `OutPoints[First]`. */
-	void ConvertVertices(const uint8* Data, int64 Count, int64 First, const FPlyLayout& Layout, TArray<FDbvGaussianPoint>& OutPoints, FBox& Bounds)
+	/** Convierte `Count` vértices seguidos de `Data` en splats empaquetados, a partir del splat `First`. */
+	void ConvertVertices(const uint8* Data, int64 Count, int64 First, const FPlyLayout& Layout, FDbvSplatGpuData& Out)
 	{
-		constexpr float SH_C0 = 0.28209479177387814f;
+		const int32 PerChannel = DbvSplatPack::RestCoefficients(Layout.SHDegree);
 		for (int64 i = 0; i < Count; ++i)
 		{
 			const uint8* Vertex = Data + i * Layout.Stride;
-			FDbvGaussianPoint& Pt = OutPoints[static_cast<int32>(First + i)];
-
-			Pt.Position = FVector3f(Layout.X.Read(Vertex, 0.0f), Layout.Y.Read(Vertex, 0.0f), Layout.Z.Read(Vertex, 0.0f));
-			Bounds += FVector(Pt.Position);
-
-			// Escala guardada como logaritmo.
-			Pt.Scale.X = Layout.Scale0.IsSet() ? FMath::Exp(Layout.Scale0.Read(Vertex, 0.0f)) : 1.0f;
-			Pt.Scale.Y = Layout.Scale1.IsSet() ? FMath::Exp(Layout.Scale1.Read(Vertex, 0.0f)) : 1.0f;
-			Pt.Scale.Z = Layout.Scale2.IsSet() ? FMath::Exp(Layout.Scale2.Read(Vertex, 0.0f)) : 1.0f;
-
-			Pt.Rotation = FVector4f(Layout.Rot0.Read(Vertex, 1.0f), Layout.Rot1.Read(Vertex, 0.0f), Layout.Rot2.Read(Vertex, 0.0f), Layout.Rot3.Read(Vertex, 0.0f));
-
-			// Opacidad guardada antes de la sigmoide.
-			Pt.Opacity = 1.0f / (1.0f + FMath::Exp(-Layout.Opacity.Read(Vertex, 0.0f)));
-
-			// Color difuso desde el armónico de grado 0.
-			Pt.Color.R = FMath::Clamp(0.5f + SH_C0 * Layout.DC0.Read(Vertex, 0.0f), 0.0f, 1.0f);
-			Pt.Color.G = FMath::Clamp(0.5f + SH_C0 * Layout.DC1.Read(Vertex, 0.0f), 0.0f, 1.0f);
-			Pt.Color.B = FMath::Clamp(0.5f + SH_C0 * Layout.DC2.Read(Vertex, 0.0f), 0.0f, 1.0f);
-			Pt.Color.A = Pt.Opacity;
+			const int32 Index = static_cast<int32>(First + i);
+			const FVector3f Position(Layout.X.Read(Vertex, 0.0f), Layout.Y.Read(Vertex, 0.0f), Layout.Z.Read(Vertex, 0.0f));
+			// Escala guardada como logaritmo y opacidad antes de la sigmoide.
+			const FVector3f Scale(
+				Layout.Scale0.IsSet() ? FMath::Exp(Layout.Scale0.Read(Vertex, 0.0f)) : 1.0f,
+				Layout.Scale1.IsSet() ? FMath::Exp(Layout.Scale1.Read(Vertex, 0.0f)) : 1.0f,
+				Layout.Scale2.IsSet() ? FMath::Exp(Layout.Scale2.Read(Vertex, 0.0f)) : 1.0f);
+			const FVector4f Rotation(Layout.Rot0.Read(Vertex, 1.0f), Layout.Rot1.Read(Vertex, 0.0f), Layout.Rot2.Read(Vertex, 0.0f), Layout.Rot3.Read(Vertex, 0.0f));
+			const float Opacity = 1.0f / (1.0f + FMath::Exp(-Layout.Opacity.Read(Vertex, 0.0f)));
+			const FVector3f DC(Layout.DC0.Read(Vertex, 0.0f), Layout.DC1.Read(Vertex, 0.0f), Layout.DC2.Read(Vertex, 0.0f));
+			DbvSplatPack::Set(Out, Index, Position, Scale, Rotation, Opacity, DbvSplatPack::RgbFromDC(DC));
+			for (int32 k = 0; k < PerChannel; ++k)
+			{
+				const FVector3f Coefficient(Layout.Rest[k].Read(Vertex, 0.0f), Layout.Rest[PerChannel + k].Read(Vertex, 0.0f), Layout.Rest[2 * PerChannel + k].Read(Vertex, 0.0f));
+				DbvSplatPack::SetSH(Out, Index, k, Coefficient);
+			}
 		}
 	}
 
-	void BeginPoints(const FPlyLayout& Layout, FDbvSplatHeader& OutHeader, TArray<FDbvGaussianPoint>& OutPoints)
+	void BeginPoints(const FPlyLayout& Layout, FDbvSplatHeader& OutHeader, FDbvSplatGpuData& Out)
 	{
 		OutHeader.NumPoints = static_cast<int32>(Layout.VertexCount);
+		OutHeader.SHDegree = Layout.SHDegree;
 		OutHeader.FractionalBits = 0;
-		OutHeader.BoundingBox.Init();
-		// `SetNum`, no `SetNumUninitialized`: cada punto lleva un TArray (`HigherOrderSH`) que debe nacer vacío.
-		OutPoints.Empty(OutHeader.NumPoints);
-		OutPoints.SetNum(OutHeader.NumPoints);
+		DbvSplatPack::Reset(Out, OutHeader.NumPoints, Layout.SHDegree);
 	}
 }
 
-bool FDbvPlyReader::LoadFromFile(
-	const FString& FilePath,
-	FDbvSplatHeader& OutHeader,
-	TArray<FDbvGaussianPoint>& OutPoints,
-	FString& OutErrorMessage)
+bool FDbvPlyReader::LoadFromFile(const FString& FilePath, FDbvSplatHeader& OutHeader, FDbvSplatGpuData& Out, FString& OutErrorMessage, int64 VerticesPerChunk)
 {
 	TUniquePtr<IFileHandle> File(FPlatformFileManager::Get().GetPlatformFile().OpenRead(*FilePath));
 	if (!File)
@@ -250,36 +257,33 @@ bool FDbvPlyReader::LoadFromFile(
 		return false;
 	}
 
-	BeginPoints(Layout, OutHeader, OutPoints);
-	constexpr int64 VerticesPerChunk = 65536;
+	BeginPoints(Layout, OutHeader, Out);
+	const int64 ChunkVertices = FMath::Max<int64>(1, VerticesPerChunk);
 	TArray64<uint8> Chunk;
-	Chunk.SetNumUninitialized(VerticesPerChunk * Layout.Stride);
+	Chunk.SetNumUninitialized(ChunkVertices * Layout.Stride);
 	bool bRead = File->Seek(Layout.DataOffset);
-	for (int64 First = 0; bRead && First < Layout.VertexCount; First += VerticesPerChunk)
+	for (int64 First = 0; bRead && First < Layout.VertexCount; First += ChunkVertices)
 	{
-		const int64 Count = FMath::Min(VerticesPerChunk, Layout.VertexCount - First);
+		const int64 Count = FMath::Min(ChunkVertices, Layout.VertexCount - First);
 		bRead = File->Read(Chunk.GetData(), Count * Layout.Stride);
 		if (bRead)
 		{
-			ConvertVertices(Chunk.GetData(), Count, First, Layout, OutPoints, OutHeader.BoundingBox);
+			ConvertVertices(Chunk.GetData(), Count, First, Layout, Out);
 		}
 	}
 	if (!bRead)
 	{
-		OutPoints.Empty();
+		Out = FDbvSplatGpuData();
 		OutErrorMessage = FString::Printf(TEXT("Failed to read the PLY vertex data: %s"), *FilePath);
 		return false;
 	}
 
-	UE_LOG(LogDbvPlyReader, Log, TEXT("Parsed PLY file: %d splats (%lld bytes), bounds %s"), OutHeader.NumPoints, FileSize, *OutHeader.BoundingBox.ToString());
+	OutHeader.BoundingBox = Out.Bounds;
+	UE_LOG(LogDbvPlyReader, Log, TEXT("Parsed PLY file: %d splats, SH degree %d (%lld bytes), bounds %s"), OutHeader.NumPoints, OutHeader.SHDegree, FileSize, *OutHeader.BoundingBox.ToString());
 	return true;
 }
 
-bool FDbvPlyReader::LoadFromMemory(
-	const TArray<uint8>& FileData,
-	FDbvSplatHeader& OutHeader,
-	TArray<FDbvGaussianPoint>& OutPoints,
-	FString& OutErrorMessage)
+bool FDbvPlyReader::LoadFromMemory(const TArray<uint8>& FileData, FDbvSplatHeader& OutHeader, FDbvSplatGpuData& Out, FString& OutErrorMessage)
 {
 	FPlyLayout Layout;
 	if (!ParseHeader(FileData.GetData(), FileData.Num(), Layout, OutErrorMessage))
@@ -292,7 +296,8 @@ bool FDbvPlyReader::LoadFromMemory(
 		OutErrorMessage = FString::Printf(TEXT("PLY file truncated: expected %lld bytes, got %d"), Expected, FileData.Num());
 		return false;
 	}
-	BeginPoints(Layout, OutHeader, OutPoints);
-	ConvertVertices(FileData.GetData() + Layout.DataOffset, Layout.VertexCount, 0, Layout, OutPoints, OutHeader.BoundingBox);
+	BeginPoints(Layout, OutHeader, Out);
+	ConvertVertices(FileData.GetData() + Layout.DataOffset, Layout.VertexCount, 0, Layout, Out);
+	OutHeader.BoundingBox = Out.Bounds;
 	return true;
 }
