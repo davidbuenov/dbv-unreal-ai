@@ -1,19 +1,23 @@
 ---
-# Frontmatter de la fase vigente: v0.3.0 (§9). Los de fases anteriores se conservan en el historial de git.
+# Frontmatter de la fase vigente: ampliación de la v0.3.0 (§10). Los anteriores se conservan en el historial de git.
 dependencies:
-  - Código de la v0.2.4 (MCP propio, memoria del proyecto, toolset C++ DBV 0.3.0 con load_gaussian_splat)
-  - Plugin ConvAI 4.0.0-beta.27 de Fab (solo para REQ-55..REQ-57; la app funciona sin él)
-  - Crate dirs 6 (ya en Cargo.lock como dependencia de Tauri) para la carpeta Documentos con su ruta real (OneDrive incluido)
+  - Rama v0.3.0 (commit 5dbcec6) con REQ-50..REQ-60 construidos y probados
+  - UE 5.8.4 con D3D12 SM6; motor del Launcher (precompilado) para compilar el plugin C++ con UBT
+  - APIs públicas del motor: FSceneViewExtensionBase + SubscribeToPostProcessingPass (SceneViewExtension.h), SortGPUBuffers (Engine/Public/GPUSort.h), shaders globales de plugin (AddShaderSourceDirectoryMapping)
+  - Plugins experimentales de Epic LiveCodingToolset (CompileLiveCoding) y AutomationTestToolset (RunTestsByFilter), y UAgentSkill de ToolsetRegistry
+  - Base de guías local en formato MCPCLiente (index_guides.json + guides/*.md) para REQ-25
 risks:
-  - "R-20: el recorte esconde lo que la IA necesitaba → el recorte lo dice y explica cómo pedir menos; esquema completo por herramienta con tool"
-  - "R-21: la migración de la biblioteca duplica o pierde → solo copia, nunca borra, reutiliza merge_from (dedup por id), una vez y anotada"
-  - "R-25: la API beta de Convai cambia → detección por final de nombre, adaptador único de zonas, fixtures grabadas del editor real"
-  - "R-26: la clave de Convai en DefaultEngine.ini → solo se comprueba si está vacía; test de que no llega a ningún resultado ni al log"
-  - "R-27: los cambios de Convai guardan Blueprints y no se deshacen → aviso en la tarjeta de aprobación y en Deshacer este turno"
+  - "R-28: APIs internas del renderizador cambian entre versiones → un solo módulo de render, solo puntos de extensión públicos, captura de referencia por versión"
+  - "R-29: un splat enorme agota la VRAM → presupuesto: primero se quitan los SH, después se seleccionan los más visibles; el informe lo dice"
+  - "R-30: la IA edita código del proyecto → solo texto dentro del proyecto, diff revisado por fichero, copia y Revertir, dos reintentos"
+  - "R-31: Live Coding no aplica todo → se detecta el caso y se ofrece compilar con el editor cerrado"
+  - "R-32 (nuevo): ordenar 10 M de claves por fotograma y por vista es caro → solo los visibles, claves de 32 bits, una ordenación por vista y nube; se mide en S67"
+  - "R-15: guías de Epic → se leen de una carpeta local del usuario; descargarlas queda tras P-13 (decisión del usuario)"
 rollback_strategy: >
-  Un commit por slice; se revierte con `git revert` el slice que falle. La biblioteca antigua nunca se borra
-  (la migración solo copia), así que volver a la v0.2.4 la encuentra intacta; los ajustes nuevos
-  (library_migrated) son opcionales con valor por defecto y la v0.2.4 los ignora. El formato de memory.md no cambia.
+  Un commit por slice en la rama v0.3.0; se revierte el slice que falle. El render por GPU se construye detrás de
+  la puerta del spike S61: si el spike no cumple, se vuelve al render por CPU mejorado (lector de más de 2 GB y
+  selección de los más visibles, ya escritos) y REQ-61/REQ-62 pasan a otra versión con el motivo en la Rejection
+  Memory. REQ-18/22/23/25/64 son independientes entre sí y del render: cada uno se puede retirar sin tocar los demás.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -237,3 +241,77 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
 - `cargo test`, `npx vitest run`, tests de Python, `dbv-lint`, banco e2e (lección del 2026-10-29: en el `/test` de cada versión).
 - En vivo contra `DBVUnrealAITest1`: describir Niagara por el MCP (< 12.000 caracteres), sección Convai en ✓, crear y deshacer tres zonas, enviar un `.ply` por el MCP.
 - Lo que solo puede comprobar el usuario: un personaje Convai que habla en Play y va a una zona; la MSIX en un equipo limpio.
+
+## 10. Plan de la ampliación de la v0.3.0 — splats por GPU y pendientes adelantados (REQ-61..REQ-64, REQ-18, REQ-22, REQ-23, REQ-25)
+
+> **Modo:** Orquestador (C++ con shaders, Rust, JS, Python; decenas de ficheros).
+> **Aprobación:** el usuario aprobó el plan el 2026-10-31 («adelante»), con un commit y la actualización del estado tras cada slice.
+
+### Architect Review (resumen; el debate completo se imprimió en la conversación)
+
+- **Evidencia:**
+  - `DbvGaussianSplatSceneProxy.cpp:58`: tope de 262.144 y ordenación en la CPU en cada fotograma.
+  - `DbvPlyReader.cpp`: antes leía con `LoadFileToArray` en un `TArray<uint8>`.
+  - `Engine/Public/GPUSort.h:52`: `ENGINE_API int32 SortGPUBuffers(FRHICommandList&, FGPUSortBuffers, …)`.
+  - `Engine/Public/SceneViewExtension.h:222`: `SubscribeToPostProcessingPass`.
+  - `ToolsetRegistry/AgentSkill.cpp:35`: `GetDerivedClasses(UAgentSkill::StaticClass())`, así que basta una clase C++ derivada.
+  - `LiveCodingToolset.h`: `static FString CompileLiveCoding()`.
+  - `MCPCLiente/.../knowledge/index_guides.json`: 3.374 guías y 5.294 fragmentos con URL y palabras clave.
+- **Adversario:** las **capturas de la app (REQ-13)** salen de `EditorAppToolset.CaptureViewport`. Si esa captura renderiza sin la pasada de tonemap, los splats compuestos tras el tonemap no aparecerían en lo que ve la IA. Además, **9.975.598 splats a 30 fps** obligan a ordenar unos 10 M de claves por vista, y el editor puede tener varias vistas abiertas.
+- **Respuesta:**
+  - El spike S61 solo se da por bueno si el splat de prueba se ve en el viewport, en PIE **y en una captura de la app**. Si la captura no pasa por el tonemap, esas vistas tendrán un camino que dibuja antes del postproceso.
+  - Contra el coste: se ordenan solo los visibles (descarte por frustum y opacidad), con claves de 32 bits y la radix del motor. Se mide con `stat GPU` en S67; si no llega a 30 fps, se baja el presupuesto por defecto.
+- **Confianza:**
+  - Requisitos: **alta**.
+  - Arquitectura del render: **media**. `SortGPUBuffers` dentro de RDG y la profundidad tras el tonemap no se habrán verificado hasta S61.
+  - Verificación: **media**, porque necesita reinicios del editor con el usuario.
+  - REQ-22: **media**, porque `CompileLiveCoding` es experimental.
+  - REQ-25: **baja** para «Construir índice», que no se construye sin la decisión del usuario sobre P-13; **alta** para leer una carpeta local.
+
+### Decisiones (para aprobar)
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| D33 | **Composición tras el tonemap.** Una extensión de vista (`FSceneViewExtensionBase`) suscrita a `EPostProcessingPass::Tonemap`. Los splats se mezclan sobre la imagen ya tonemapeada, en espacio de pantalla, que es donde se entrenan los 3DGS. La profundidad se prueba en el píxel contra `SceneDepth`, convirtiendo las UV de la resolución de render a la de salida. | El color sale igual que en la captura y no se toca la exposición del proyecto. XGrids, en cambio, pone `r.DefaultFeature.AutoExposure 0` para todo el proyecto (visto en el log). |
+| D34 | **Datos en la GPU, subidos una sola vez:** posición (`float3`), covarianza 3D (6 × `half`), color base y opacidad (4 × `half`) y, si los hay, SH de grado 1 a 3 (45 × `half`). Son 32 o 122 B por splat; la iglesia ocupa unos 1,2 GB. | Cabe en 12 GB, y la covarianza se calcula al cargar, no en cada fotograma. |
+| D35 | **Por vista y por nube, tres pasos:** (1) un compute descarta por frustum y opacidad y calcula la cónica 2D, el radio, el color con los SH según la dirección de vista y la clave de profundidad; (2) se ordena con `SortGPUBuffers` del motor (radix, clave y valor de 32 bits); (3) se dibujan quads instanciados que leen el índice ordenado. Si `SortGPUBuffers` no encaja en RDG, se usa una radix propia de 4 pasadas de 8 bits. | La ordenación del motor ya está probada con partículas y no hay que mantener una propia. |
+| D36 | **Presupuesto de VRAM:** por defecto, el 40 % de la memoria de vídeo dedicada; se cambia con `dbv.Splat.VRAMBudgetMB`. Si un splat no cabe, primero se quitan los SH y después se eligen los más visibles (opacidad × área). | REQ-61 y REQ-62; R-29. |
+| D37 | **En la CPU, una estructura de arrays empaquetada** (`FDbvSplatCloud`, un `TArray64` por campo, ya en el formato de la GPU). Los lectores la llenan directamente y se libera tras subirla. Desaparece `FDbvGaussianPoint`, que llevaba un `TArray` por punto (10 M de reservas de memoria). | Menos memoria y menos tiempo de carga. Corrige de raíz el `SetNumUninitialized`. |
+| D38 | **Varias nubes y visibilidad:** la extensión lleva un registro en el hilo de render por escena (`FSceneInterface`). Cada proxy se da de alta al crear sus recursos y de baja al destruirlos. Se respetan la visibilidad del componente y «oculto en juego», y las nubes se dibujan de la más lejana a la más cercana. El camino por CPU desaparece. | Que funcione en el editor, en PIE y con varios niveles abiertos. |
+| D39 | **Tests de C++:** tests de Automation en el propio módulo (`WITH_DEV_AUTOMATION_TESTS`) para los lectores (tipos, formatos rechazados, lectura por bloques con un tamaño pequeño), el empaquetado de SH y las claves de orden. Se lanzan por MCP con `AutomationTestToolset.RunTestsByFilter("DBV")`. **Antes de pedir un reinicio al usuario**, compruebo con UBT que compila, sobre un proyecto anfitrión temporal en el scratchpad con los dos plugins. | Solo se reinicia el editor del usuario con código que ya compila. |
+| D40 | **Versiones:** `DBVUnrealAICpp` pasa de 0.2.0 a 0.3.0 y el toolset Python de 0.3.0 a 0.3.1, para que la vista Proyecto pida actualizar. El `.uplugin` del C++ pasa a `LoadingPhase` `PostConfigInit`, que lo exige el registro de shaders de un plugin. | `readiness` solo compara la versión del plugin Python (`prepare.rs:189`). |
+| D41 | **Mundos (REQ-18):** `send_world` en el toolset Python (escala métrica, suelo en Z = 0, carpeta `DBV/Worlds/<nombre>`), elegido desde `send_plan` (Rust) y `sendToUnreal.js`, con test de paridad. El cielo necesita un spike: si el panorama se importa como `TextureCube` (lat-long), se usa un `HDRIBackdrop`, plugin del motor que «Preparar» activaría; si no, una esfera de cielo con material sin iluminación y un `SkyLight` que captura la escena. | No añade fuentes nuevas de terceros. |
+| D42 | **Código del proyecto (REQ-22):** herramienta `propose_code_changes { changes: [{ path, edits: [{ old, new }] } o { path, content }], reason }`.<br>• Un módulo Rust `code_changes` valida (dentro del proyecto, rutas permitidas, nunca los plugins de la app, texto de 1 MB como máximo), calcula el diff con la crate `similar` (MIT/Apache), aplica con copia de seguridad (el mecanismo de `prepare`) y revierte.<br>• Compila con `CompileLiveCoding` por el MCP de Epic.<br>• Si cambian cabeceras con `UCLASS`, `USTRUCT` o `UENUM`, o un `Build.cs`, `.uplugin` o `.Target.cs`, avisa y ofrece compilar con el editor cerrado (UBT `Build.bat`).<br>• Como mucho, dos compilaciones fallidas seguidas por turno. | Las ediciones «antiguo → nuevo», como las de un agente, son fiables para un modelo y fáciles de revisar. |
+| D43 | **Recetas (REQ-23):**<br>• Datos en `recipes/recipes.json`, incluido en el binario: textos ES/EN/ZH, qué necesita cada receta y el id de su comprobación.<br>• Herramienta `recipes_list` en las dos superficies y un menú en la conversación.<br>• La comprobación final se hace con Python fijo del toolset (`check_recipe`).<br>• Para los agentes, cuatro clases C++ `UAgentSkill` en `DBVUnrealAICpp`, que se descubren solas. En la variante solo Python se intenta una clase `@unreal.uclass`; si el registro no la descubre, no se publica. | Cada receta se define una sola vez. |
+| D44 | **Guías (REQ-25):** `search_unreal_guides` lee una carpeta local en formato MCPCLiente (`index_guides.json` y `guides/*.md`), que se elige en Ajustes → Conocimiento. La búsqueda la hace Rust en memoria, puntuando título, palabras clave y texto. Devuelve como mucho 5 fragmentos con su URL, dentro del tope de REQ-51. **«Construir índice» desde la web no se implementa** hasta que el usuario decida P-13 tras leer los términos de Epic. | Nada de Epic se redistribuye ni se descarga sin una decisión humana. |
+| D45 | **Chino (REQ-64):**<br>• Diccionarios `zh-CN` en `i18n.js` y en los dos `translations.js`.<br>• La ayuda (`helpModal.js`, que hoy usa ramas `isEs ? … : …`) pasa a una tabla por idioma, con el inglés como respaldo.<br>• Los idiomas `zh*` se detectan como `zh-CN`, y un test comprueba que tiene las mismas claves que `es`.<br>• La traducción la hace la IA y conviene que la revise un hablante. | El mismo patrón que `es` y `en`. |
+
+### Slices (un commit por slice; los pasos en `task.md`)
+
+**Bloque A — splats por GPU (va primero porque es lo más arriesgado):**
+1. **S61 · Spike con puerta:**
+   - Montaje: proyecto anfitrión en el scratchpad, compilado con UBT.
+   - Qué se prueba: una extensión de vista y un shader global del plugin dibujan una nube de prueba fija, compuesta tras el tonemap y con la prueba de profundidad, y `SortGPUBuffers` se llama dentro de RDG.
+   - Puerta: la nube se ve en el viewport, en PIE y en una captura de la app. Si no, se aplica el rollback.
+2. **S62 · Nube empaquetada y lectores:** `FDbvSplatCloud`; PLY y SPZ con SH (`f_rest_*`); tests de Automation (D39).
+3. **S63 · Recursos en la GPU y presupuesto:** subida única; presupuesto con SH quitados y selección de los más visibles; `sh_degree` y `drawn` en el informe.
+4. **S64 · Proyección, ordenación y dibujo, con el color base.**
+5. **S65 · Armónicos esféricos de grado 1 a 3** en la proyección.
+6. **S66 · Varias nubes, PIE y capturas.** Se retira el camino por CPU, se suben las versiones (D40) y se completan el informe de Python (REQ-63) y sus tests.
+7. **S67 · Verificación con el usuario:** iglesia con Victoria dentro, desierto, PIE, `stat GPU` y capturas comparadas.
+
+**Bloque B — pendientes adelantados:**
+8. **S68 · Mundos completos (REQ-18):** spike del cielo, `send_world`, plan de envío con su test de paridad y prueba en vivo con el desierto.
+9. **S69 · Código del proyecto, núcleo (REQ-22):** `code_changes` en Rust (validar, diff, aplicar, revertir) y la herramienta en las dos superficies, con tests.
+10. **S70 · Código del proyecto, ventana y compilación:** tarjeta de diff, Live Coding, caso «editor cerrado» y reintentos; prueba en vivo con `ADemoActor`.
+11. **S71 · Recetas (REQ-23):** datos, `recipes_list`, menú y `check_recipe`; AgentSkills en C++.
+12. **S72 · Guías sin red (REQ-25):** lector y búsqueda en Rust, herramienta en las dos superficies y pestaña Conocimiento (Ajustes pasa a ocho pestañas).
+13. **S73 · Chino (REQ-64):** diccionarios, ayuda por idioma, detección y test de paridad.
+14. **S74 · Documentación y cierre:** `docs/IA*.md`, ayuda de splats y CHANGELOG ES/EN; después, `/test` y `/code-simplify` de la ampliación.
+
+### Verificación
+
+- **Tests automáticos:** Automation (C++), Rust, Vitest, Python, e2e y `dbv-lint`.
+- **Pruebas en vivo con el usuario:** S61 (la puerta), S67, S68 y S70.
+- **Rendimiento:** `stat GPU` sobre la iglesia.
+- **Pendiente:** las evals con un modelo real, hasta que haya uno disponible.

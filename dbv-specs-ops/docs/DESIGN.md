@@ -226,6 +226,14 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 - **Propuesta de zonas (REQ-57):** igual que la propuesta de plan (REQ-36): una fila editable por zona (nombre, descripción, posición en metros en `--font-mono`) que se puede quitar, y «Crear zonas (n)» como primario. Las zonas que ya existían llevan la etiqueta «actualizar».
 - **Ruta de la biblioteca (REQ-53):** en Ajustes, la ruta real en `--font-mono` con «Abrir carpeta». Si se migró desde la ubicación antigua, una nota en `caption`: «Se copiaron n assets de la ubicación anterior, que se conserva».
 
+### Decisiones de diseño de la ampliación v0.3.0 (2026-10-31)
+
+- **Splats en la conversación (REQ-63):** al enviar un splat, la tarjeta de resultado añade una línea en `caption`: «9.975.598 splats · SH grado 3». Si no se dibujan todos o se reducen los armónicos, la línea pasa a `warning` con la nota del informe. No hay controles de render en la app: se ajustan en el actor dentro de Unreal.
+- **Diff de código (REQ-22):** una tarjeta por propuesta con una sección plegable por fichero. Cabecera con la ruta en `--font-mono` y `+n −m`; cuerpo con el diff unificado en `--font-mono`, líneas añadidas sobre `success` suave y quitadas sobre `error` suave. Acciones por fichero: «Aplicar» y «Descartar»; en el pie, «Aplicar todo (n)» (primario). Después, una línea de estado de la compilación: «Compilando con Live Coding…», «Compilado ✓» o los errores en `--font-mono` (plegados si son más de 10 líneas), más «Revertir» (texto).
+- **Menú Recetas (REQ-23):** un botón «Recetas» junto a las sugerencias de la conversación abre una lista corta (nombre, una línea de qué hace y qué necesita). Elegir una escribe su prompt en la caja, sin enviarlo, para que la persona lo revise. Las que necesitan algo que falta (Convai, Tripo) salen deshabilitadas con el motivo.
+- **Guías sin red (REQ-25):** en Ajustes, una pestaña nueva **Conocimiento** (después de Biblioteca; REQ-60 pasa a ocho pestañas), con el estado del índice («sin construir» o «n páginas, fecha»), «Construir índice» con su explicación de qué se descarga y de dónde, y «Borrar índice».
+- **Chino (REQ-64):** el selector de idioma ofrece «中文»; con una fuente del sistema para CJK en la pila de `--font-sans` (`"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC"`), sin incrustar fuentes.
+
 ---
 
 ## ✨ Movimiento e Interacción

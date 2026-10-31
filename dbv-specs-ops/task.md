@@ -133,6 +133,23 @@
 - [ ] **Prueba de Convai con el usuario** — *(2026-10-31: configurado por el MCP de la app en `/Game/DBV/Maps/ConvaiTest`: `BP_VictoriaNew` con chatbot, Character ID, FaceSync y movimiento (Pawn); `BP_ThirdPersonCharacter` con el componente de jugador; NavMesh ajustado al suelo; zonas «Inicio», «Rincón de Victoria» y «Mirador norte». Falta que el usuario hable con ella en Play y le pida ir a una zona.)* Antes: ensamblar un MetaHuman (VictoriaNew no se puede construir aún desde script: `can_build_meta_human` = False; necesita abrirlo en el editor de MetaHuman y el auto-rigging en la nube), un Character ID del Playground y el Blueprint del jugador; luego «Haz que este MetaHuman hable con Convai» y zonas en `/Game/DBV/Maps/ConvaiTest`.
 - [x] **`/test`** v0.3.0 (2026-10-31) — Rust 206, Vitest 324 (37 ficheros), Python OK, clippy sin avisos, `dbv-lint` sin errores (75 requisitos, 73 con test: faltan REQ-21 y REQ-23, fuera de esta versión), banco e2e correcto. Prueba de consumo: 79 % menos texto. **Evals con modelo real sin ejecutar** (no había Ollama ni otro modelo disponible sin el usuario): preparados `convai-skills-first` (REQ-56) y `convai-registered-id` (REQ-58) en `scripts/eval/unreal-eval.mjs`. Verificado en vivo: zonas, Convai (Victoria habla, sigue, «Move to <zona>» y «Take me to <zona>» con `Escort` redefinido), MCP compacto.
 - [x] **`/code-simplify`** v0.3.0 (2026-10-31) — 0 Críticos; 2 Importantes resueltos y en el CHANGELOG (pie del turno perdido al reabrir una conversación, desde la v0.2.0; consola de `git` visible en Windows); refactor: `unreal::commands::run_fixed_python` en lugar de dos copias (zonas y comprobaciones de tareas). Seguridad: la clave de Convai solo se mira vacía y no llega al log (test), el log tapa claves (test), las zonas viajan como dato en hexadecimal, `dirs` 6 ya estaba en `Cargo.lock` (dependencia real de Tauri). Vitest 325, Rust 206, clippy limpio, `dbv-lint` sin errores, e2e correcto.
+- [x] **Commit de seguridad** (2026-10-31, pedido por el usuario): rama `v0.3.0`, commit `5dbcec6`, sin push.
+- [x] **`/spec` de la ampliación** (2026-10-31, con el usuario) — §3.13: REQ-61 (render de splats por GPU propio), REQ-62 (armónicos esféricos), REQ-63 (splats grandes y fallos explicados; lector por bloques ya hecho, C++ sin compilar), REQ-64 (chino) y concreciones para la v0.3.0 de REQ-18, REQ-22, REQ-23 y REQ-25. P-09 y P-10 cerradas; P-13 abierta (fuente de las guías, no bloquea); riesgos R-28..R-31.
+- [x] **`/plan` de la ampliación** (2026-10-31) — `implementation_plan.md` §10: Architect Review, D33–D45, S61–S74. **Aprobado por el usuario el 2026-10-31**: commit y estado actualizado tras cada slice.
+  - [ ] S61 · Spike del render por GPU con puerta (viewport, PIE y captura de la app) (REQ-61)
+  - [ ] S62 · Nube empaquetada y lectores con SH + tests de Automation (REQ-62, REQ-63)
+  - [ ] S63 · Recursos en GPU y presupuesto de VRAM (REQ-61, REQ-62)
+  - [ ] S64 · Proyección, ordenación y dibujo (color base) (REQ-61)
+  - [ ] S65 · Armónicos esféricos de grado 1 a 3 (REQ-62)
+  - [ ] S66 · Varias nubes, PIE, capturas, retirar CPU, versiones, informe (REQ-61, REQ-63)
+  - [ ] S67 · Verificación con el usuario: iglesia, Victoria, desierto, `stat GPU` (REQ-61, REQ-62)
+  - [ ] S68 · Mundos de World Labs completos (REQ-18)
+  - [ ] S69 · Código del proyecto: núcleo en Rust y herramienta (REQ-22)
+  - [ ] S70 · Código del proyecto: diff en la ventana y Live Coding (REQ-22)
+  - [ ] S71 · Recetas y AgentSkills (REQ-23)
+  - [ ] S72 · Guías de la API sin red desde carpeta local (REQ-25)
+  - [ ] S73 · Chino (REQ-64)
+  - [ ] S74 · Documentación, `/test` y `/code-simplify` de la ampliación
 - [ ] **`/ship`** v0.3.0 — con el usuario (tipo de versión, commit y tag).
 
 ## Próxima versión — hallazgos de la prueba de la v0.1.0

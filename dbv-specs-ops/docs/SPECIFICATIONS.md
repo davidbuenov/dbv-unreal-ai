@@ -327,21 +327,21 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
 
 *Concreciones para la v0.3.0 de requisitos anteriores (se adelantan a petición del usuario):*
 
-- **REQ-18 (mundos completos, S28):** «Enviar a Unreal» un mundo de World Labs, desde la ventana o el `--mcp`, crea en el Outliner `DBV/Worlds/<nombre>`:
+- **Concreción v0.3.0 de REQ-18 (mundos completos, S28):** «Enviar a Unreal» un mundo de World Labs, desde la ventana o el `--mcp`, crea en el Outliner `DBV/Worlds/<nombre>`:
   - el splat con el render de REQ-61;
   - la malla de colisión, oculta y con colisión, a la **escala métrica** (`semantics_metadata.metric_scale_factor`) y con el **suelo en Z = 0** (`ground_plane_offset`);
   - si se pide, el **cielo**: el panorama como HDRI en un `HDRIBackdrop` o en un cielo con `SkyLight`, con iluminación coherente.
 
   Un mundo sin metadatos se coloca como ahora y la app lo dice.
   *Aceptación:* contra el editor real, el mundo del «Desierto» se envía con un clic; un personaje en PIE camina sobre su suelo sin caer ni flotar; el cielo es el del panorama.
-- **REQ-22 (editar código del proyecto):** herramienta `propose_code_changes` (modificación), con una sola definición para las dos superficies (D10).
+- **Concreción v0.3.0 de REQ-22 (editar código del proyecto):** herramienta `propose_code_changes` (modificación), con una sola definición para las dos superficies (D10).
   - **Qué propone:** cambios en ficheros de texto del proyecto (`Source/**` en C++, `*.Build.cs`, `Content/Python/**`, `Config/*.ini`) como diffs. Nunca en `.uasset` ni `.umap`, ni fuera de la carpeta del proyecto, ni en los plugins que gestiona la app.
   - **Revisión y aplicación:** la ventana los muestra en una tarjeta de diff por fichero, con aplicar o descartar por fichero. Al aplicar, guarda una copia de seguridad como «Preparar» y ofrece «Revertir».
   - **Compilación:** compila con `LiveCodingToolset.CompileLiveCoding` y devuelve los errores a la IA, que puede corregir hasta dos veces.
   - **Cuando Live Coding no basta** (cabeceras con `UCLASS` nuevas, `Build.cs`): la app lo dice y ofrece compilar con el editor cerrado.
   - **En el `--mcp`:** aplica lo que el cliente aprobó.
   *Aceptación:* contra el editor real, «añade a `ADemoActor` una propiedad `Speed`» propone un diff, se aplica, compila con Live Coding y la propiedad aparece. Un error de compilación vuelve a la IA y lo corrige. «Revertir» deja los ficheros como estaban. Un intento de tocar un `.uasset` o un fichero fuera del proyecto se rechaza.
-- **REQ-23 (recetas guiadas):** un menú **Recetas** en la conversación y su herramienta de lectura `recipes_list`. Cada receta es un prompt con pasos y una comprobación final determinista sobre el estado del editor, como las tareas de REQ-37:
+- **Concreción v0.3.0 de REQ-23 (recetas guiadas):** un menú **Recetas** en la conversación y su herramienta de lectura `recipes_list`. Cada receta es un prompt con pasos y una comprobación final determinista sobre el estado del editor, como las tareas de REQ-37:
   1. «Nivel de prueba»: suelo, luz, cielo, `PlayerStart` y NavMesh.
   2. «Personaje Tripo con rig y animaciones en un Character Blueprint».
   3. «Iluminar con el cielo de un mundo de World Labs».
@@ -349,7 +349,7 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
 
   El toolset DBV las publica como Agent Skills (`toolset_registry.agent_skill`), para que un agente las vea con `ListSkills`. Cada paso de modificación sigue pidiendo aprobación.
   *Aceptación:* lanzar «Nivel de prueba» en un nivel vacío termina con la comprobación en verde; `ListSkills` del editor lista las recetas DBV.
-- **REQ-25 (guías de la API sin red, P-06):** además de la referencia sintáctica que ya existe (`describe_python_api`), una búsqueda **conceptual** `search_unreal_guides` en las guías de Unreal 5.8.
+- **Concreción v0.3.0 de REQ-25 (guías de la API sin red, P-06):** además de la referencia sintáctica que ya existe (`describe_python_api`), una búsqueda **conceptual** `search_unreal_guides` en las guías de Unreal 5.8.
   - **El índice se construye en el equipo del usuario**, con una descarga opcional y explícita desde Ajustes. **La app no redistribuye documentación de Epic** (R-15).
   - **Funcionamiento:** el índice es local, la búsqueda no usa la red y cada resultado es un fragmento corto con su URL de origen, dentro del tope de REQ-51.
   - Cómo se obtiene el contenido respetando los términos de Epic se decide en `/plan` (P-13).
