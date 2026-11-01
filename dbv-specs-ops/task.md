@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.2.4** publicada (2026-10-29); **v0.3.0** en `/build` (rama `v0.3.0`): REQ-50..REQ-60 hechos; ampliación REQ-61..REQ-64 con S61–S67 hechos y S68 casi cerrado.
+* **Estado actual**: **v0.2.4** publicada (2026-10-29); **v0.3.0** en `/build` (rama `v0.3.0`): REQ-50..REQ-60 hechos; ampliación REQ-61..REQ-64 con S61–S68 hechos.
 * **Última decisión técnica**: render de splats por GPU propio en el módulo `DBVUnrealAICppRender` (D33–D45); el editor se lanza fuera del Job Object de la app; **no usar Live Coding** (pedido por el usuario): cerrar el editor y compilar con UBT.
-* **Próximo paso**: terminar S68 (panorama y cielo) y seguir con S69–S74 (`implementation_plan.md` §10).
+* **Próximo paso**: S69–S74 (`implementation_plan.md` §10), empezando por S69 (código del proyecto, REQ-22).
 
 ## Checklist de Tareas
 
@@ -154,15 +154,15 @@
     - [ ] Calidad del desierto: el usuario no lo recuerda «tan mal»; pendiente de comparar con XGrids desde la misma cámara si hace falta.
     - Incidente: el editor del usuario se cerró solo a las 21:48 y a las 22:36. Causa real (diagnosticada en S68): la app lo lanzaba dentro del Job Object de `cargo run` y `tauri dev` lo mataba al reiniciarse por cada edición de Rust. Arreglado en `unreal_open_project`. El UDP del anfitrión se dejó desactivado por higiene.
   - [x] S67 · Verificación con el usuario (2026-10-31): iglesia de 10 M de splats con SH 3 en el editor y en Play sin parpadeo (GPU 12,7 ms, ~72 fps, Prims 184 K); el maniquí la tapa y queda tapado; desierto `.spz` del derecho en el nivel `isla`; capturas de la app. Queda como propuesta, sin REQ: suelo automático de un splat importado y comparar la calidad con XGrids si se notan diferencias.
-  - [ ] S68 · Mundos de World Labs completos (REQ-18)
+  - [x] S68 · Mundos de World Labs completos (REQ-18)
     - [x] Verificado en vivo con el desierto (2026-10-31): splat a escala 100·m; **colisión con escala (m, m, −m)** (el `.glb` viene en RDF y al importarlo como glTF queda reflejado en Z; sin reflejo sus triángulos miran hacia abajo y los rayos la atraviesan); los dos subidos 100·m·g, con el suelo en Z ≈ 0 (rayos simples a 1–1,8 m sobre las dunas); colisión compleja como simple (si no, el personaje pisaría la caja). Antes, `place_asset` dejaba la colisión «delante de la cámara», sin alinear.
     - [x] `editor.place_world` (toolset); `library::world_metadata` y `world_place_code` en Rust (una sola definición; textos como literales JSON); el MCP importa la colisión sin colocarla y ejecuta `place_world`; la ventana pide el código con `library_world_place_code` y lo ejecuta con `run_python`. Tests: Rust, Vitest (2) y Python.
     - [x] `place_world` verificado en vivo (2026-10-31): escala ×1,976, elevación 217 cm, rayos a 97–183 cm sobre la colisión. El desierto salía boca abajo porque la DLL instalada era anterior a los arreglos hechos con Live Coding (giro del `.spz` y parpadeo): recompilado desde cero con UBT. El usuario pide no usar Live Coding.
     - [x] El editor lanzado desde la app ya no muere con la app (`CREATE_BREAKAWAY_FROM_JOB` o WMI). Verificado en vivo: el editor reabierto desde la app tiene `IsProcessInJob = False` y su padre es `WmiPrvSE.exe`.
     - [x] `place_world` sube sobre el terreno el `PlayerStart` que quede debajo (en vivo: de 92 a 204 cm; la duna está a 104). Con la DLL nueva el desierto sale del derecho; el usuario confirma que Play no parpadea.
-    - [x] Panorama: `import_worldlabs_manifest` (por donde pasan importar y generar) descarga `imagery.pano_url`/`panoUrl` a `panorama.<ext>` y lo guarda en `pano_file`; reimportar el manifiesto de un mundo antiguo lo completa sin duplicar. Tests Rust (2). Un personaje ya corrió por las dunas en Play (2026-10-31).
+    - [x] Un personaje corrió por las dunas en Play (2026-10-31).
     - [x] Spike del cielo (2026-11-01, en vivo): esfera de 1 km con `M_DBV_PanoSky` (`IsSky`, sin luz, panorama con espejo y 90°) en el nivel `isla`; orientación verificada contra el splat. Solo se ve ocultando `SM_SkySphere`, `SkyAtmosphere`, `VolumetricCloud` y `ExponentialHeightFog` (ver `memory.md`). Desde dentro lo tapa la cáscara de cielo del propio splat.
-    - [ ] Pendiente de decidir con el usuario: si «Enviar a Unreal» pone el cielo y qué hace con el cielo del nivel; luego llevarlo a `place_world` (toolset) y al plan de envío, con tests.
+    - [x] **Panorama y cielo descartados por el usuario (2026-11-01)**: desde dentro no se ve y obliga a ocultar el cielo del nivel (REJECTED-08). Se revirtió la descarga del panorama en la biblioteca.
   - [ ] S69 · Código del proyecto: núcleo en Rust y herramienta (REQ-22)
   - [ ] S70 · Código del proyecto: diff en la ventana y Live Coding (REQ-22)
   - [ ] S71 · Recetas y AgentSkills (REQ-23)
@@ -202,9 +202,9 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-10-31 (noche), `/build` de la ampliación v0.3.0, rama `v0.3.0`, último commit de S68. Rust 209, Python OK (incluye `LiftPlayerStartTests`), Vitest OK, `dbv-lint` sin errores.
+> **Last update / Última actualización:** 2026-11-01 (mañana), `/build` de la ampliación v0.3.0, rama `v0.3.0`. S68 cerrado. Logos de Tripo, World Labs y Convai en Ajustes. Rust 209, Vitest 328.
 >
 > **Exact point / Punto exacto:** S68 (REQ-18, mundos de World Labs) verificado en vivo con el usuario. El desierto se ve del derecho, Play no parpadea y el usuario corre y sube por las dunas: colisión `.glb` alineada con escala (m, m, −m), compleja como simple, y `PlayerStart` subido sobre el terreno. El editor abierto desde la app ya no muere al reiniciarse la app (`CREATE_BREAKAWAY_FROM_JOB` o WMI; comprobado con `IsProcessInJob = False`).
 > **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`): plugins instalados y compilados desde cero con UBT (`%TEMP%\dbvh\install-test1.ps1`) a las 23:06. Nivel `/Game/DBV/Maps/isla`: `DBV_Desierto_GPU` (×1,976, Z 217), `Arid_Desert_Sand_Dunes_Collider` y `PlayerStart` a 204 cm; el usuario borró `Floor`. La iglesia está en `version030`.
-> **Pending / Pendiente:** (1) S68: descargar el panorama (`imagery.pano_url`) al importar el manifiesto y al generar (guardar `pano_file`), y spike del cielo (HDRIBackdrop/TextureCube frente a una esfera con material); (2) S69–S74 (en S70, proponer al usuario compilar normal con el editor cerrado en vez de Live Coding); (3) `/test`, `/code-simplify` y `/ship` v0.3.0 con el usuario; (4) propuestas sin REQ: suelo automático de un splat importado, y comparar la calidad con XGrids.
-> **Next step / Próximo paso:** terminar S68 (panorama y cielo); al tocar C++ del plugin, pedir al usuario que cierre el editor y compilar con UBT.
+> **Pending / Pendiente:** (1) el panorama y el cielo quedan descartados (REJECTED-08); (2) S69–S74 (en S70, proponer al usuario compilar normal con el editor cerrado en vez de Live Coding); (3) `/test`, `/code-simplify` y `/ship` v0.3.0 con el usuario; (4) propuestas sin REQ: suelo automático de un splat importado, y comparar la calidad con XGrids.
+> **Next step / Próximo paso:** S69 (código del proyecto, núcleo en Rust, REQ-22); al tocar C++ del plugin, pedir al usuario que cierre el editor y compilar con UBT.
