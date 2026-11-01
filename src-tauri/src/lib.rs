@@ -45,6 +45,9 @@ pub mod convai_characters;
 // Zonas del nivel para los personajes (Convai), una sola definición para las dos superficies (REQ-57).
 #[cfg(desktop)]
 pub mod zones;
+// Recetas guiadas: menú, herramientas y comprobación, una sola definición (REQ-23).
+#[cfg(desktop)]
+pub mod recipes;
 // Log local rotativo de la ventana y del `--mcp`, sin claves (RNF-08).
 #[cfg(desktop)]
 pub mod logging;
@@ -361,6 +364,14 @@ pub fn run() {
             zones::zones_apply,
             #[cfg(desktop)]
             zones::zones_list,
+            #[cfg(desktop)]
+            recipes::recipes_all,
+            #[cfg(desktop)]
+            recipes::recipes_prompt,
+            #[cfg(desktop)]
+            recipes::recipes_tool_specs,
+            #[cfg(desktop)]
+            recipes::recipes_run_tool,
             #[cfg(desktop)]
             project_memory::commands::memory_tool_specs,
             #[cfg(desktop)]

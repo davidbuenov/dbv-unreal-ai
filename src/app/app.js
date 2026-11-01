@@ -11,7 +11,7 @@
 // la primera vez que se abre la Conversación o «Conectar una IA» (RNF-IA.1 adaptado): sin IA, la
 // app ya detecta, prepara, genera y gestiona la biblioteca.
 
-import { registerTranslations, t } from '../ai/i18nBridge.js';
+import { getLanguage, registerTranslations, t } from '../ai/i18nBridge.js';
 import { createApprovalCard } from '../unreal/approvalCard.js';
 import { createPermissionMemory } from '../unreal/permissions.js';
 import { createUnrealTools, describeCapture, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
@@ -26,6 +26,7 @@ import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
 import { createCodeCompiler } from './codeCompile.js';
 import { improvePrompt } from '../generation/promptImprover.js';
+import { createRecipeTools, localized, recipesCard } from './recipes.js';
 import { button, dirName, el } from './dom.js';
 import { confirmCost, createGenerateView } from './generateView.js';
 import { assetThumbnail, createLibraryView, sendBackend } from './libraryView.js';
@@ -183,6 +184,8 @@ export function start() {
   let memorySpecs = [];
   // Zonas del nivel (REQ-57), definidas en Rust como las del MCP propio.
   let zoneSpecs = [];
+  // Recetas guiadas (REQ-23): definiciones de Rust, como las del MCP propio.
+  let recipeSpecs = [];
   // Personajes de Convai registrados en Ajustes (REQ-58): misma definición que en el MCP propio.
   let convaiCharactersSpec = null;
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
@@ -317,6 +320,15 @@ export function start() {
       // Memoria del proyecto (REQ-34, REQ-35): ficha de contexto y botón «Recordar».
       contextNotes: () => projectMemory.contextNotes(),
       rememberRequest: (language) => rememberRequest(language),
+      // Menú «Recetas» (REQ-23): elegir una se la pide a la IA con sus pasos y su comprobación final.
+      openRecipes: async ({ panel, ask }) => {
+        const listed = await api.recipesAll();
+        if (!listed.ok) return toast(listed.error.message, 'error');
+        return panel.addNode(recipesCard(listed.value, async (recipe) => {
+          const prompt = await api.recipesPrompt(recipe.id);
+          if (prompt.ok) await ask(prompt.value, { label: `📋 ${localized(recipe.title, getLanguage())}` });
+        }));
+      },
       beforeTurn: async () => {
         let startUndo = null;
         if (state.connection?.status === 'online') {
@@ -482,7 +494,8 @@ export function start() {
                 return listed.ok ? listed.value : `error: ${listed.error.message ?? listed.error}`;
               } }]
             : [];
-        return withUsage([...unreal, ...generation, ...memory, ...zones, ...convai], turnContext?.usage);
+        const recipes = createRecipeTools({ specs: recipeSpecs, run: (name, args) => api.recipesRunTool(state.connection?.status === 'online' ? state.connection.endpoint : null, name, args) });
+        return withUsage([...unreal, ...generation, ...memory, ...zones, ...convai, ...recipes], turnContext?.usage);
       },
       // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): el diálogo del sistema y Rust los leen.
       pickAttachments: async () => {
@@ -508,8 +521,9 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec()])
-        .then(([entry, markdown, specs, memory, , zones, characters]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs()])
+        .then(([entry, markdown, specs, memory, , zones, characters, recipes]) => {
+          recipeSpecs = recipes?.ok ? recipes.value : [];
           convaiCharactersSpec = characters?.ok ? characters.value : null;
           generationSpecs = specs.ok ? specs.value : [];
           memorySpecs = memory.ok ? memory.value : [];

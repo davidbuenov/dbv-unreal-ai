@@ -199,6 +199,8 @@ pub fn tool_specs() -> Vec<Value> {
     specs.extend(memory_tools::specs());
     // Zonas del nivel (REQ-57): la misma definición que el asistente integrado.
     specs.extend(crate::zones::specs());
+    // Recetas guiadas (REQ-23): la misma definición que el asistente integrado.
+    specs.extend(crate::recipes::specs());
     // Personajes de Convai registrados en Ajustes (REQ-58).
     specs.push(crate::convai_characters::spec());
     specs
@@ -384,6 +386,7 @@ impl McpServer {
                 crate::zones::report_text(&self.run_fixed(&crate::zones::apply_code(&zones))?)
             }
             "level_zones_list" => crate::zones::report_text(&self.run_fixed(&crate::zones::list_code())?),
+            "recipes_list" | "recipe_check" => crate::recipes::run_tool(name, args, |code| self.run_fixed(code))?,
             "convai_characters" => crate::convai_characters::text(&crate::convai_characters::load(&self.config.config_dir)),
             "project_task_update" => {
                 let dir = self.project_dir()?;

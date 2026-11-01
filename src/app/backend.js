@@ -30,6 +30,11 @@ export const unrealCompilePlan = (paths) => call('unreal_compile_plan', { paths 
 export const unrealCompileLive = (endpoint) => call('unreal_compile_live', { endpoint });
 /** Compila el editor del proyecto con UBT; el editor tiene que estar cerrado (REQ-22). */
 export const unrealBuildProject = (path) => call('unreal_build_project', { path });
+/** Recetas guiadas (REQ-23): la lista, el prompt de una, las definiciones de sus herramientas y su ejecución. */
+export const recipesAll = () => call('recipes_all');
+export const recipesPrompt = (id) => call('recipes_prompt', { id });
+export const recipesToolSpecs = () => call('recipes_tool_specs');
+export const recipesRunTool = (endpoint, name, args) => call('recipes_run_tool', { endpoint, name, args });
 export const unrealCallTool = (endpoint, toolset, tool, args, timeoutSecs) => call('unreal_call_tool', { endpoint, toolset, tool, arguments: args ?? {}, timeoutSecs: timeoutSecs ?? null });
 export const unrealReadiness = (path) => call('unreal_readiness', { path });
 export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_plan', { path, variant, port: port ?? null });

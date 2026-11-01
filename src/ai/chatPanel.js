@@ -101,12 +101,15 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   // «Recordar» (REQ-35): pide a la IA que proponga guardar lo decidido en la memoria del proyecto; solo si el host la tiene.
   const remember = button(t('ai.remember'), () => callbacks.onRemember?.(), 'button button--compact button--ghost ai-panel__remember', t('ai.rememberHint'));
   if (!callbacks.onRemember) remember.classList.add('hidden');
+  // «Recetas» (REQ-23 de DBV Unreal AI): solo si el host las tiene.
+  const recipes = button(`📋 ${t('ai.recipes')}`, () => callbacks.onRecipes?.(), 'button button--compact button--ghost ai-panel__recipes', t('ai.recipesHint'));
+  if (!callbacks.onRecipes) recipes.classList.add('hidden');
   const attachments = el('span', 'ai-panel__attachments');
   const usage = el('span', 'ai-panel__usage');
   const speed = el('span', 'ai-panel__usage ai-panel__speed');
   const stopButton = button(t('ai.stop'), () => callbacks.onStop(), 'button button--compact hidden');
   const sendButton = button(t('ai.send'), () => send(), 'button button--primary button--compact');
-  composerActions.append(attachFiles, attachSection, remember, attachments, speed, usage, stopButton, sendButton);
+  composerActions.append(attachFiles, attachSection, remember, recipes, attachments, speed, usage, stopButton, sendButton);
   composer.append(mentionList, input, composerActions);
   host.append(header, destination, warning, contextBar, messages, composer);
 

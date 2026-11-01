@@ -23,3 +23,9 @@ else:
         unreal.log("DBV Unreal AI: toolset registrado")
     else:
         unreal.log_warning("DBV Unreal AI: ToolsetRegistry no disponible; el toolset no se registró")
+
+# Recetas como Agent Skills (REQ-23), en las dos variantes. Tiene que ser aquí, al arrancar: el registro de assets
+# no ve las clases de Python creadas después de la primera vez que se le piden las derivadas (visto en vivo).
+from dbv_unreal_ai import recipes
+
+unreal.log(f"DBV Unreal AI: {recipes.register_skills()} recetas publicadas como Agent Skills")

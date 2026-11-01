@@ -222,6 +222,8 @@ export function createAiApp(deps) {
       onAttachFiles: host.pickAttachments ? () => attachExternal() : undefined,
       // La petición la escribe el host (sabe si hay memoria del proyecto y en qué idioma): REQ-35.
       onRemember: host.rememberRequest ? () => ask(host.rememberRequest(getLanguage())) : undefined,
+      // Menú de recetas del host (en DBV Unreal AI, REQ-23): una tarjeta en la conversación.
+      onRecipes: host.openRecipes ? () => host.openRecipes({ panel, ask }) : undefined,
       onCopy: (code) => navigator.clipboard.writeText(code).then(() => host.toast(t('ai.copied'))),
       onInsert: (code) => insertAtCursor(code),
     },

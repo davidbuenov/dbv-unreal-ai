@@ -248,6 +248,8 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .brand-logo--small { padding: 3px 6px; border-radius: 4px; }
 .brand-logo--small img { height: 11px; }
 .segmented-btn--brand { display: inline-flex; align-items: center; gap: 8px; }
+.recipes .recipe { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--border); }
+.recipes .recipe button { align-self: flex-start; }
 .editor-card .row { justify-content: space-between; }
 .checklist { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .check { display: grid; grid-template-columns: 20px 1fr; gap: 6px; align-items: start; }
