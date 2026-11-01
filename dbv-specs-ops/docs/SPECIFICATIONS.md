@@ -1,7 +1,7 @@
 # 📋 Especificaciones: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` (Especificación)
-> **Estado:** Validado para `/plan` v0.3.0 (v1.7: ampliación de la v0.3.0 con splats por GPU con armónicos esféricos, splats grandes, chino y adelanto de REQ-18, REQ-22, REQ-23 y REQ-25 —§3.13, REQ-61..REQ-64—; v1.6: memoria con varias entradas, consumo de contexto, biblioteca visible fuera de la virtualización de MSIX, Convai y zonas del nivel —§3.12, REQ-50..REQ-57—; v1.5: clasificación tripartita de IAs, Antigravity CLI, Acerca de enriquecido y Centro de Ayuda —§3.9, REQ-43..REQ-46—; v1.4: alcance de la v0.2.0 —§3.7 y §3.8, REQ-34..REQ-40—)
+> **Estado:** Validado para `/plan` v0.3.0 (v1.8: logos en Generar y «Mejorar con IA» —REQ-65, REQ-66—, decisiones del usuario sobre REQ-22 y REQ-23 y cielo de World Labs descartado; v1.7: ampliación de la v0.3.0 con splats por GPU con armónicos esféricos, splats grandes, chino y adelanto de REQ-18, REQ-22, REQ-23 y REQ-25 —§3.13, REQ-61..REQ-64—; v1.6: memoria con varias entradas, consumo de contexto, biblioteca visible fuera de la virtualización de MSIX, Convai y zonas del nivel —§3.12, REQ-50..REQ-57—; v1.5: clasificación tripartita de IAs, Antigravity CLI, Acerca de enriquecido y Centro de Ayuda —§3.9, REQ-43..REQ-46—; v1.4: alcance de la v0.2.0 —§3.7 y §3.8, REQ-34..REQ-40—)
 > **Última Revisión:** 2026-10-31
 
 ---
@@ -324,27 +324,34 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - **Tiempo de espera:** 600 s en las dos superficies, porque un fichero de varios GB tarda en leerse. Si se agota, el mensaje dice que el editor sigue cargándolo y que se compruebe con `unreal_scene_summary` antes de reenviarlo.
   *Aceptación:* la iglesia se envía desde la biblioteca con un clic y desde el `--mcp` con una sola llamada. Un `.ply` ASCII devuelve «only binary_little_endian», sin actor nuevo en el nivel. Tests de Automation en el plugin para el lector (tipos, cabeceras, truncado, lectura por bloques con un tamaño de bloque pequeño) y tests de Python para el informe y la limpieza.
 - [ ] **REQ-64 · Idioma chino (`zh-CN`):** tercer idioma de la interfaz, de la ayuda (F1, incluido el tutorial de Convai) y de los textos de las tarjetas. Se detecta del sistema y se puede elegir en el selector. Los documentos del repositorio (README, CHANGELOG, notas de versión) siguen en español e inglés. *Aceptación:* no falta ninguna clave de `es` en `zh-CN`; un test lo comprueba igual que entre `es` y `en`; con el sistema en chino, la app arranca en chino.
+- [ ] **REQ-65 · Logos en Generar** *(pedido por el usuario el 2026-11-01)*: las pestañas de Tripo y World Labs de la vista Generar llevan el logo del servicio, como sus pestañas de Ajustes (REQ-60), para que quede claro con qué se genera. *Aceptación:* cada pestaña de Generar muestra su logo, y el logo se ve igual en los temas oscuro, claro y sepia.
+- [ ] **REQ-66 · «Mejorar con IA» el prompt de texto** *(pedido por el usuario el 2026-11-01)*: junto al prompt de texto de Tripo y de World Labs, un botón **Mejorar con IA** convierte una idea corta («ciudad bonita») en una descripción elaborada y adecuada a cada servicio. Para Tripo, un solo objeto con su forma, materiales y estilo. Para World Labs, un escenario con su distribución, luz y ambiente.
+  - **El resultado sustituye al texto del campo, sin generar nada**: la persona lo revisa o edita antes de pulsar Generar, que es lo que gasta créditos. Se puede deshacer y volver al texto anterior. No contradice REQ-27: la app no cambia el prompt por su cuenta, se lo pide la persona, y la consola sigue mostrando lo que se envía.
+  - **Con un modelo conectado** (local o de nube) se hace una consulta suelta fuera de la conversación. **Con un agente** (Claude Code, Codex…) no hay consulta suelta: la petición va a la conversación, como las acciones rápidas, y la respuesta sale allí. **Sin IA conectada**, el botón está desactivado y su ayuda dice por qué.
+  - La descripción sale en inglés, que es el idioma con el que mejor trabajan los dos servicios; la persona puede cambiarla.
+  *Aceptación:* con un modelo simulado, «ciudad bonita» en World Labs se sustituye por la descripción devuelta, no se lanza ninguna generación y «Deshacer» recupera «ciudad bonita»; sin conexión, el botón está desactivado.
 
 *Concreciones para la v0.3.0 de requisitos anteriores (se adelantan a petición del usuario):*
 
 - **Concreción v0.3.0 de REQ-18 (mundos completos, S28):** «Enviar a Unreal» un mundo de World Labs, desde la ventana o el `--mcp`, crea en el Outliner `DBV/Worlds/<nombre>`:
   - el splat con el render de REQ-61;
   - la malla de colisión, oculta y con colisión, a la **escala métrica** (`semantics_metadata.metric_scale_factor`) y con el **suelo en Z = 0** (`ground_plane_offset`);
-  - si se pide, el **cielo**: el panorama como HDRI en un `HDRIBackdrop` o en un cielo con `SkyLight`, con iluminación coherente.
+  - ~~si se pide, el **cielo**: el panorama como HDRI en un `HDRIBackdrop` o en un cielo con `SkyLight`, con iluminación coherente.~~ *Descartado por el usuario el 2026-11-01 tras probarlo en vivo (REJECTED-08): desde dentro del mundo no se ve, porque el splat trae su propio cielo, y obliga a ocultar el cielo del nivel. El mundo usa el cielo que tenga el nivel.*
 
   Un mundo sin metadatos se coloca como ahora y la app lo dice.
-  *Aceptación:* contra el editor real, el mundo del «Desierto» se envía con un clic; un personaje en PIE camina sobre su suelo sin caer ni flotar; el cielo es el del panorama.
+  *Aceptación:* contra el editor real, el mundo del «Desierto» se envía con un clic; un personaje en PIE camina sobre su suelo sin caer ni flotar; ~~el cielo es el del panorama~~ (descartado, ver arriba).
 - **Concreción v0.3.0 de REQ-22 (editar código del proyecto):** herramienta `propose_code_changes` (modificación), con una sola definición para las dos superficies (D10).
   - **Qué propone:** cambios en ficheros de texto del proyecto (`Source/**` en C++, `*.Build.cs`, `Content/Python/**`, `Config/*.ini`) como diffs. Nunca en `.uasset` ni `.umap`, ni fuera de la carpeta del proyecto, ni en los plugins que gestiona la app.
   - **Revisión y aplicación:** la ventana los muestra en una tarjeta de diff por fichero, con aplicar o descartar por fichero. Al aplicar, guarda una copia de seguridad como «Preparar» y ofrece «Revertir».
   - **Compilación:** compila con `LiveCodingToolset.CompileLiveCoding` y devuelve los errores a la IA, que puede corregir hasta dos veces.
   - **Cuando Live Coding no basta** (cabeceras con `UCLASS` nuevas, `Build.cs`): la app lo dice y ofrece compilar con el editor cerrado.
+  - *Confirmado por el usuario el 2026-11-01:* compilación **mixta** (Live Coding si solo cambian `.cpp`; si no, editor cerrado y UBT) y **solo las rutas de arriba** (no los plugins propios del usuario). Se reutiliza la propuesta revisable que ya tiene la conversación (`propose_changes`, RF-IA-04) en vez de crear otra herramienta para la ventana.
   - **En el `--mcp`:** aplica lo que el cliente aprobó.
   *Aceptación:* contra el editor real, «añade a `ADemoActor` una propiedad `Speed`» propone un diff, se aplica, compila con Live Coding y la propiedad aparece. Un error de compilación vuelve a la IA y lo corrige. «Revertir» deja los ficheros como estaban. Un intento de tocar un `.uasset` o un fichero fuera del proyecto se rechaza.
 - **Concreción v0.3.0 de REQ-23 (recetas guiadas):** un menú **Recetas** en la conversación y su herramienta de lectura `recipes_list`. Cada receta es un prompt con pasos y una comprobación final determinista sobre el estado del editor, como las tareas de REQ-37:
   1. «Nivel de prueba»: suelo, luz, cielo, `PlayerStart` y NavMesh.
   2. «Personaje Tripo con rig y animaciones en un Character Blueprint».
-  3. «Iluminar con el cielo de un mundo de World Labs».
+  3. ~~«Iluminar con el cielo de un mundo de World Labs»~~ «Caminar por un mundo de World Labs»: colocar el mundo a escala con su colisión, subir el `PlayerStart` y comprobar que un personaje pisa la colisión *(cambiada por el usuario el 2026-11-01, al descartarse el cielo con el panorama)*.
   4. «MetaHuman que habla con Convai», la que ya existe.
 
   El toolset DBV las publica como Agent Skills (`toolset_registry.agent_skill`), para que un agente las vea con `ListSkills`. Cada paso de modificación sigue pidiendo aprobación.
