@@ -466,6 +466,10 @@ export function createAiApp(deps) {
       apply: async () => {
         const applied = await applier.apply(proposal);
         diskChanged();
+        // Lo que haga la app con los ficheros escritos (en DBV Unreal AI, compilar el C++: REQ-22), sin esperar.
+        const report = applied?.report ?? applied;
+        const written = [...(report?.modified ?? []), ...(report?.created ?? [])];
+        if (written.length) Promise.resolve(host.onProposalApplied?.(written)).catch((error) => console.error('[ai]', error));
         return applied;
       },
       openFile: (relative) => host.openDocument(relative),

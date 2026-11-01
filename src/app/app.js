@@ -24,6 +24,7 @@ import { createUsageCounter, formatUsage, withUsage } from '../unreal/toolUsage.
 import { createZoneTools, createZonesCard } from '../unreal/zones.js';
 import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
+import { createCodeCompiler } from './codeCompile.js';
 import { button, dirName, el } from './dom.js';
 import { confirmCost, createGenerateView } from './generateView.js';
 import { assetThumbnail, createLibraryView, sendBackend } from './libraryView.js';
@@ -246,6 +247,8 @@ export function start() {
 
   // ─── Asistente de IA ───────────────────────────────────────────────
   let aiApp = null;
+  // REQ-22: compilar el C++ que la IA cambió, al aceptar su propuesta.
+  const codeCompiler = createCodeCompiler({ getConnection: () => state.connection, getAi: () => aiApp });
   let aiLoading = null;
   const memories = new Map();
 
@@ -369,6 +372,7 @@ export function start() {
           }
         }
       },
+      onProposalApplied: (paths) => codeCompiler.afterApply(paths),
       // REQ-22: la IA solo propone cambios donde deja la regla de Rust (la misma que aplica al escribir).
       checkProposalPath: async (path) => {
         const problem = await api.unrealCodePathProblem(path);

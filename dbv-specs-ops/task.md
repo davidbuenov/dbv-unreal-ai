@@ -166,7 +166,8 @@
   - [x] S69 · Código del proyecto: regla de rutas (REQ-22) — `unreal/code_policy.rs` (una definición, tests Rust) que consulta la conversación al proponer (`applyChange` con `checkPath`), al pedir permiso un agente (`permissionRefusal`) y al escribir un agente (`stageWrite`), y que `ai_write_file` vuelve a aplicar; regla en el prompt de Unreal. Se reutiliza `propose_changes` en vez de un módulo nuevo (memoria 2026-11-01). Vitest +4.
   - [ ] S70 · Código del proyecto: compilar (REQ-22)
     - [x] Núcleo en Rust (`unreal/compile.rs`): plan mixto (solo `.cpp` → Live Coding; cabeceras/`Build.cs`/`Target.cs` → editor cerrado y UBT), `CompileLiveCoding` por la sesión MCP, UBT por sistema operativo con el target de editor del proyecto, errores recortados; comandos `unreal_compile_plan`, `unreal_compile_live`, `unreal_build_project`; «Preparar» activa `LiveCodingToolset` solo con C++. Tests Rust (5).
-    - [ ] Ventana: compilar al aceptar la propuesta, errores de vuelta a la IA (2 reintentos), caso editor cerrado (esperar cierre, UBT, reabrir); herramienta para agentes en el `--mcp`; prueba en vivo con `ADemoActor`.
+    - [x] Ventana (`src/app/codeCompile.js`): al aceptar una propuesta (`host.onProposalApplied`) compila; errores a la IA con `ask` (2 reintentos seguidos, luego botón); tarjeta de editor cerrado con «Compilar» (UBT) y «Abrir el editor». `--mcp`: `compile_project_code`. Vitest +5, Rust +1.
+    - [ ] Prueba en vivo con el usuario: «añade a `ADemoActor` una propiedad `Speed`» (cabecera → editor cerrado), un `.cpp` con Live Coding, un error que la IA corrige y «Revertir».
   - [ ] S71 · Recetas y AgentSkills (REQ-23) — la receta 3 pasa a «Caminar por un mundo de World Labs» (usuario, 2026-11-01).
   - [ ] S72 · Guías de la API sin red desde carpeta local (REQ-25)
   - [ ] S73 · Chino (REQ-64)

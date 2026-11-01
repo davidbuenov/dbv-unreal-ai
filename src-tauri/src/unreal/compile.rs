@@ -191,6 +191,45 @@ pub fn build_project(engine_root: &Path, project_path: &Path) -> Result<CompileO
     Ok(CompileOutcome { ok, summary, errors })
 }
 
+/// Herramienta del `--mcp` para los agentes que editan el código por su cuenta (en la ventana compila la app).
+pub const MCP_TOOL: &str = "compile_project_code";
+pub const MCP_DESCRIPTION: &str = "Compile the project C++ after you changed it, and get the compiler errors to fix. Pass the files you changed, relative to the project folder. Only .cpp files: Live Coding in the open editor. Headers, *.Build.cs or *.Target.cs: Live Coding cannot apply them, so the Unreal editor must be closed; if it is open the tool says so: ask the user to save and close it, call again, and tell the user to reopen it from DBV Unreal AI afterwards. Python and .ini do not need compiling. After two failed fixes in a row, stop and explain the errors to the user.";
+
+/// Texto para un agente con el resultado.
+pub fn outcome_text(outcome: &CompileOutcome) -> String {
+    let text = if outcome.ok {
+        format!("Compiled ({}).", outcome.summary)
+    } else {
+        format!("It did not compile ({}). Compiler errors:
+{}", outcome.summary, outcome.errors.iter().map(|e| format!("- {e}")).collect::<Vec<_>>().join("
+"))
+    };
+    text
+}
+
+/// El `.uproject` de la carpeta del proyecto.
+pub fn find_uproject(project_dir: &Path) -> Result<PathBuf, UnrealError> {
+    let found = std::fs::read_dir(project_dir).ok().and_then(|entries| {
+        entries.flatten().map(|entry| entry.path()).find(|path| path.extension().is_some_and(|e| e.eq_ignore_ascii_case("uproject")))
+    });
+    found.ok_or_else(|| UnrealError::NotFound(format!("no .uproject in {}", project_dir.display())))
+}
+
+/// `compile_project_code` del `--mcp`: decide cómo compilar y lo hace. `live` compila con Live Coding en el editor.
+pub fn compile_for_agent(project_dir: &Path, files: &[String], live: impl FnOnce() -> Result<CompileOutcome, UnrealError>) -> Result<String, UnrealError> {
+    let result = match compile_plan(files) {
+        CompilePlan::Nothing => Ok("Nothing to compile: no C++ among the files (Python and .ini changes do not need compiling).".to_string()),
+        CompilePlan::LiveCoding => live().map(|outcome| outcome_text(&outcome)),
+        CompilePlan::EditorClosed { files } => {
+            let uproject = find_uproject(project_dir)?;
+            build_project(&engine_root_for(&uproject)?, &uproject)
+                .map(|outcome| outcome_text(&outcome))
+                .map_err(|error| UnrealError::Format(format!("{error} [files that need it: {}]", files.join(", "))))
+        }
+    };
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,6 +277,20 @@ mod tests {
         assert!(errors[1].contains("LNK2019"));
         let many: String = (0..50).map(|i| format!("A.cpp({i}): error C2: e{i}\n")).collect();
         assert_eq!(compiler_errors(&many).len(), MAX_ERRORS);
+    }
+
+    /// @spec REQ-22
+    #[test]
+    fn la_herramienta_del_agente_compila_segun_los_ficheros() {
+        let dir = tempfile::tempdir().unwrap();
+        let nothing = compile_for_agent(dir.path(), &paths(&["Content/Python/a.py"]), || unreachable!()).unwrap();
+        assert!(nothing.starts_with("Nothing to compile"));
+        let failed = CompileOutcome { ok: false, summary: "Failure".into(), errors: vec!["A.cpp(1): error C1: x".into()] };
+        let live = compile_for_agent(dir.path(), &paths(&["Source/Demo/A.cpp"]), || Ok(failed.clone())).unwrap();
+        assert_eq!(live, "It did not compile (Failure). Compiler errors:
+- A.cpp(1): error C1: x");
+        let closed = compile_for_agent(dir.path(), &paths(&["Source/Demo/A.h"]), || unreachable!()).unwrap_err();
+        assert!(closed.to_string().contains(".uproject"), "{closed}");
     }
 
     /// @spec REQ-22

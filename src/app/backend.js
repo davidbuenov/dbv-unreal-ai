@@ -24,6 +24,12 @@ export const unrealListToolsets = (endpoint) => call('unreal_list_toolsets', { e
 export const unrealDescribeToolset = (endpoint, toolset) => call('unreal_describe_toolset', { endpoint, toolset });
 /** Por qué la IA no puede cambiar ese fichero del proyecto, o `null` (REQ-22). */
 export const unrealCodePathProblem = (relative) => call('unreal_code_path_problem', { relative });
+/** Cómo compilar esos ficheros cambiados: `{mode: 'nothing'|'liveCoding'|'editorClosed', files?}` (REQ-22). */
+export const unrealCompilePlan = (paths) => call('unreal_compile_plan', { paths });
+/** Compila con Live Coding en el editor conectado (REQ-22). */
+export const unrealCompileLive = (endpoint) => call('unreal_compile_live', { endpoint });
+/** Compila el editor del proyecto con UBT; el editor tiene que estar cerrado (REQ-22). */
+export const unrealBuildProject = (path) => call('unreal_build_project', { path });
 export const unrealCallTool = (endpoint, toolset, tool, args, timeoutSecs) => call('unreal_call_tool', { endpoint, toolset, tool, arguments: args ?? {}, timeoutSecs: timeoutSecs ?? null });
 export const unrealReadiness = (path) => call('unreal_readiness', { path });
 export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_plan', { path, variant, port: port ?? null });

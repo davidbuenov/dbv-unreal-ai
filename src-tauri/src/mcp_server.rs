@@ -182,6 +182,12 @@ pub fn tool_specs() -> Vec<Value> {
             json!(["id"]),
         ),
         tool(
+            crate::unreal::compile::MCP_TOOL,
+            crate::unreal::compile::MCP_DESCRIPTION,
+            json!({ "files": { "type": "array", "items": { "type": "string" }, "description": "Files you changed, relative to the project folder." } }),
+            json!(["files"]),
+        ),
+        tool(
             "generation_jobs",
             "Status and progress of the generation jobs of this session (also those started from the app). With wait_seconds it waits for the running ones to finish (up to 45 s per call) and returns their result. Use it after generate_3d_model returned running jobs.",
             json!({ "job_id": { "type": "string", "description": "Only this job." }, "wait_seconds": { "type": "integer", "minimum": 0, "maximum": 45 } }),
@@ -359,6 +365,12 @@ impl McpServer {
             }
             "library_send_to_unreal" => self.send_to_unreal(&text(args, "id"), args.get("place").and_then(Value::as_bool).unwrap_or(true))?,
             "generation_jobs" => self.jobs(args)?,
+            // REQ-22: el agente edita con sus herramientas; aquí solo se compila (con su permiso, que pone el cliente).
+            crate::unreal::compile::MCP_TOOL => {
+                let files: Vec<String> = args.get("files").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+                let dir = self.project_dir()?;
+                crate::unreal::compile::compile_for_agent(&dir, &files, || self.editor(crate::unreal::compile::live_coding)).map_err(err)?
+            }
             "tripo_operations" => tools::operations_text(args)?,
             "tripo_balance" => self.balance()?,
             launcher if tools::LAUNCHERS.contains(&launcher) => self.launch(launcher, args)?,
