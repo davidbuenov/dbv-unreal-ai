@@ -161,7 +161,8 @@
     - [x] El editor lanzado desde la app ya no muere con la app (`CREATE_BREAKAWAY_FROM_JOB` o WMI). Verificado en vivo: el editor reabierto desde la app tiene `IsProcessInJob = False` y su padre es `WmiPrvSE.exe`.
     - [x] `place_world` sube sobre el terreno el `PlayerStart` que quede debajo (en vivo: de 92 a 204 cm; la duna está a 104). Con la DLL nueva el desierto sale del derecho; el usuario confirma que Play no parpadea.
     - [x] Panorama: `import_worldlabs_manifest` (por donde pasan importar y generar) descarga `imagery.pano_url`/`panoUrl` a `panorama.<ext>` y lo guarda en `pano_file`; reimportar el manifiesto de un mundo antiguo lo completa sin duplicar. Tests Rust (2). Un personaje ya corrió por las dunas en Play (2026-10-31).
-    - [ ] Pendiente: el cielo con el panorama (spike con el editor abierto).
+    - [x] Spike del cielo (2026-11-01, en vivo): esfera de 1 km con `M_DBV_PanoSky` (`IsSky`, sin luz, panorama con espejo y 90°) en el nivel `isla`; orientación verificada contra el splat. Solo se ve ocultando `SM_SkySphere`, `SkyAtmosphere`, `VolumetricCloud` y `ExponentialHeightFog` (ver `memory.md`). Desde dentro lo tapa la cáscara de cielo del propio splat.
+    - [ ] Pendiente de decidir con el usuario: si «Enviar a Unreal» pone el cielo y qué hace con el cielo del nivel; luego llevarlo a `place_world` (toolset) y al plan de envío, con tests.
   - [ ] S69 · Código del proyecto: núcleo en Rust y herramienta (REQ-22)
   - [ ] S70 · Código del proyecto: diff en la ventana y Live Coding (REQ-22)
   - [ ] S71 · Recetas y AgentSkills (REQ-23)
