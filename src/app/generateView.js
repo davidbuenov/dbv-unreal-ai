@@ -15,6 +15,7 @@
 import { t } from '../ai/i18nBridge.js';
 import { createJobCard, createJobWatcher } from '../generation/jobCard.js';
 import * as api from './backend.js';
+import { brandLogo } from './brandHeader.js';
 import { baseName, button, el } from './dom.js';
 
 /** Tarjeta de coste común a la vista y a la herramienta de la IA. `true` si el usuario acepta. */
@@ -81,7 +82,8 @@ export function formArgs({ mode, prompt, image, name, variants, faceLimit, lowPo
 
 /**
  * @param {HTMLElement} host
- * @param {object} deps `{confirm, toast, onSpent, openLibrary, suggestName?(prompt) → Promise<string|null>, renderResult?(record, slot)}`.
+ * @param {object} deps `{confirm, toast, onSpent, openLibrary, suggestName?(prompt) → Promise<string|null>, renderResult?(record, slot),
+ *   improvePrompt?(service, idea) → Promise<{kind, text?}>, improveAvailable?() → Promise<boolean>}`.
  */
 export function createGenerateView(host, deps) {
   const cards = new Map();
@@ -159,12 +161,55 @@ export function createGenerateView(host, deps) {
       }
     }
 
-    const textPane = el('div', { className: 'stack' }, el('label', {}, t('gen.prompt'), prompt), el('div', { className: 'row' }, el('label', {}, t('gen.faceLimit'), faces), el('label', { className: 'row' }, lowPoly, t('gen.lowPoly'))));
+    /**
+     * «Mejorar con IA» bajo un prompt: sustituye el texto por la descripción de la IA, sin generar nada, con
+     * «Deshacer». Con un agente la petición va a la conversación. @spec REQ-66
+     */
+    function improveControls(field, service) {
+      let previous = null;
+      const undo = button(t('gen.improveUndo'), () => {
+        field.value = previous ?? field.value;
+        undo.hidden = true;
+        refreshEstimate();
+      }, 'btn-ghost');
+      undo.hidden = true;
+      const improve = button(t('gen.improve'), async () => {
+        const idea = field.value.trim();
+        if (!idea) {
+          field.focus();
+          return;
+        }
+        improve.disabled = true;
+        improve.textContent = t('gen.improving');
+        const result = (await deps.improvePrompt?.(service, idea).catch(() => null)) ?? { kind: 'none' };
+        improve.disabled = false;
+        improve.textContent = t('gen.improve');
+        if (result.kind === 'text') {
+          previous = field.value;
+          field.value = result.text;
+          undo.hidden = false;
+          refreshEstimate();
+        } else if (result.kind === 'sent') deps.toast(t('gen.improveSent'));
+        else deps.toast(t(result.kind === 'empty' ? 'gen.improveEmpty' : 'gen.improveNoAi'), 'error');
+      }, 'btn-ghost');
+      improve.dataset.improve = service;
+      improve.title = t('gen.improveHint');
+      deps.improveAvailable?.().then((available) => {
+        if (available === false) {
+          improve.disabled = true;
+          improve.title = t('gen.improveNoAi');
+        }
+      });
+      return el('div', { className: 'row' }, improve, undo);
+    }
+
+    const textPane = el('div', { className: 'stack' }, el('label', {}, t('gen.prompt'), prompt), improveControls(prompt, 'tripo'), el('div', { className: 'row' }, el('label', {}, t('gen.faceLimit'), faces), el('label', { className: 'row' }, lowPoly, t('gen.lowPoly'))));
     const worldPane = el(
       'div',
       { className: 'stack hidden' },
       el('p', { className: 'hint', text: t('gen.worldHint') }),
       el('label', {}, t('gen.prompt'), worldPrompt),
+      improveControls(worldPrompt, 'worldlabs'),
       el('div', { className: 'row' }, el('label', {}, t('gen.worldModel'), worldModel)),
     );
     const imagePane = el(
@@ -237,10 +282,10 @@ export function createGenerateView(host, deps) {
       }
     }
 
+    // REQ-65: cada pestaña dice con qué servicio se genera.
     const tabs = ['text', 'image', 'world'].map((key) =>
       el('button', {
-        className: 'segmented-btn',
-        text: t(`gen.mode.${key}`),
+        className: 'segmented-btn segmented-btn--brand',
         attrs: { type: 'button', 'aria-pressed': String(key === mode), 'data-mode': key },
         on: {
           click: () => {
@@ -255,7 +300,7 @@ export function createGenerateView(host, deps) {
             refreshEstimate();
           },
         },
-      }),
+      }, el('span', { text: t(`gen.mode.${key}`) }), brandLogo(key === 'world' ? 'worldlabs' : 'tripo', true)),
     );
 
     updateServiceState();

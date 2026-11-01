@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **"Improve with AI" in Generate (REQ-66):** next to the Tripo and World Labs text prompt, a button turns a short idea into a detailed description suited to each service (one object for Tripo, a place for World Labs), in English. It replaces the field text without generating anything, with "Undo". With a model connected it is a one-off request; with an agent, the request goes to the conversation; with no AI, the button is disabled.
+- **Logos in Generate (REQ-65):** each Generate tab shows the Tripo or World Labs logo.
 - **Compile after an AI code change (REQ-22):** when you accept a proposal that touches C++, the app compiles. If only `.cpp` files change, it uses Live Coding with the editor open. If headers, `*.Build.cs` or `*.Target.cs` change, a card asks you to close the editor, compiles with UnrealBuildTool and offers to reopen it. Errors go back to the AI on their own at most twice in a row; after that you decide. Agents using `--mcp` get `compile_project_code`. "Prepare" enables `LiveCodingToolset` in C++ projects.
 - **The AI only changes the code it should (REQ-22):** in the conversation, change proposals and agent writes are only accepted in the project's `Source/**` (C++ and `*.Build.cs`), `Content/Python/**` and `Config/*.ini`. Never `.uasset`/`.umap`, nothing outside the project or under `Plugins/`, least of all the plugins the app installs. Anything forbidden is refused with the reason, the AI knows the rule beforehand, and the app checks it again when writing.
 - **Logos in Settings (REQ-60):** the Tripo, World Labs and Convai tabs show the service logo next to the title, on a dark badge that looks the same in the dark, light and sepia themes.

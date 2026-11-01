@@ -25,6 +25,7 @@ import { createZoneTools, createZonesCard } from '../unreal/zones.js';
 import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
 import { createCodeCompiler } from './codeCompile.js';
+import { improvePrompt } from '../generation/promptImprover.js';
 import { button, dirName, el } from './dom.js';
 import { confirmCost, createGenerateView } from './generateView.js';
 import { assetThumbnail, createLibraryView, sendBackend } from './libraryView.js';
@@ -165,7 +166,17 @@ export function start() {
     return name.replace(/^["'«“]+|["'»”.]+$/g, '').slice(0, 60) || null;
   }
 
-  views.generate = createGenerateView($('#view-generate'), { confirm, toast, onSpent: refreshSpent, openLibrary: () => show('library'), suggestName, renderResult: renderJobResult });
+  views.generate = createGenerateView($('#view-generate'), {
+    confirm,
+    toast,
+    onSpent: refreshSpent,
+    openLibrary: () => show('library'),
+    suggestName,
+    renderResult: renderJobResult,
+    // REQ-66: «Mejorar con IA» con la IA conectada (modelo: consulta suelta; agente: en la conversación).
+    improvePrompt: async (service, idea) => improvePrompt(await loadAi().catch(() => null), service, idea, t('gen.improveLabel', { idea })),
+    improveAvailable: async () => Boolean((await loadAi().catch(() => null))?.activeConnection?.()),
+  });
   const chatJobs = createChatJobs({ list: api.generationJobs, renderResult: renderJobResult });
   // Herramientas de Tripo y de memoria de Rust (las mismas que ve un agente): se piden una vez al cargar la IA.
   let generationSpecs = [];

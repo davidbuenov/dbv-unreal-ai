@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-60
+// @spec REQ-60, REQ-65
 //
 // Los logos son claros (Tripo y World Labs en blanco, Convai sobre negro): van sobre una pastilla oscura para
 // verse igual en los temas oscuro, claro y sepia.
@@ -20,6 +20,15 @@ export const BRAND_LOGOS = {
 };
 
 /**
+ * Logo de un servicio en su pastilla oscura; `small` para dentro de un botón (REQ-65).
+ * @param {keyof typeof BRAND_LOGOS} brand
+ */
+export function brandLogo(brand, small = false) {
+  const names = { tripo: 'Tripo', worldlabs: 'World Labs', convai: 'Convai' };
+  return el('span', { className: small ? 'brand-logo brand-logo--small' : 'brand-logo' }, el('img', { attrs: { src: BRAND_LOGOS[brand], alt: names[brand] ?? brand } }));
+}
+
+/**
  * Título de la tarjeta a la izquierda y logo del servicio a la derecha.
  * @param {string} title
  * @param {keyof typeof BRAND_LOGOS} brand
@@ -29,6 +38,6 @@ export function brandHeader(title, brand) {
     'div',
     { className: 'brand-header' },
     el('h3', { text: title }),
-    el('span', { className: 'brand-logo' }, el('img', { attrs: { src: BRAND_LOGOS[brand], alt: title, height: '18' } })),
+    el('span', { className: 'brand-logo' }, el('img', { attrs: { src: BRAND_LOGOS[brand], alt: title } })),
   );
 }

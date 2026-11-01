@@ -171,7 +171,7 @@
   - [ ] S71 · Recetas y AgentSkills (REQ-23) — la receta 3 pasa a «Caminar por un mundo de World Labs» (usuario, 2026-11-01).
   - [ ] S72 · Guías de la API sin red desde carpeta local (REQ-25)
   - [ ] S73 · Chino (REQ-64)
-  - [ ] S75 · Logos en Generar y «Mejorar con IA» el prompt de Tripo y World Labs (REQ-65, REQ-66) — pedidos por el usuario el 2026-11-01.
+  - [x] S75 · Logos en Generar y «Mejorar con IA» (REQ-65, REQ-66) — `brandLogo` pequeño en cada pestaña; `src/generation/promptImprover.js` (instrucciones por servicio, limpieza, tope 1.000/2.000, modelo → consulta suelta, agente → conversación) y controles con «Deshacer» en `generateView.js`. Vitest +6. README con el bloque v0.3.0. Falta verlo en la app (temas claro/sepia y una mejora real).
   - [ ] S74 · Documentación, `/test` y `/code-simplify` de la ampliación
 - [ ] **`/ship`** v0.3.0 — con el usuario (tipo de versión, commit y tag).
 

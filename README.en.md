@@ -146,6 +146,13 @@ These channels are not available yet; they will arrive in an upcoming version. I
 
 ## 🚧 Status
 
+**v0.3.0** (in development, branch `v0.3.0`). New so far:
+
+- **GPU Gaussian Splatting, our own, with no third-party plugins (REQ-61..REQ-63):** 10-million-splat scenes with view-dependent color (spherical harmonics), no flicker in Play and around 70 fps;
+- **Walkable World Labs worlds (REQ-18):** at metric scale, with the ground at Z = 0, aligned collision and the `PlayerStart` on the terrain;
+- **The AI edits and compiles the project code (REQ-22):** it proposes changes in `Source/`, `Content/Python/` and `Config/*.ini` as diffs you review; once accepted it compiles with Live Coding or, if headers change, asks you to close the editor, compiles with UnrealBuildTool and reopens it; errors go back to the AI;
+- **"Improve with AI" in Generate (REQ-66):** turns a short idea ("pretty city") into a detailed prompt for Tripo or World Labs, spending no credits until you press Generate; and each tab shows its service logo (REQ-65).
+
 **v0.2.3** (2026-10-29). The AI connection and its guide are now the same as in every DBV app ([`dbv-tauri-starter`](https://github.com/davidbuenov/dbv-tauri-starter), where they were tested agent by agent):
 
 - **Every subscription agent works (REQ-49):** Google Antigravity through its official `agy_acp_server` and sign-in with your Google account, Codex with the current adapter (no more "Internal error"), GitHub Copilot telling its CLI apart from the VS Code launcher, and Claude Code;

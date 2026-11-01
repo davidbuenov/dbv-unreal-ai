@@ -146,6 +146,13 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 
 ## 🚧 Estado
 
+**v0.3.0** (en desarrollo, rama `v0.3.0`). Lo nuevo hasta ahora:
+
+- **Gaussian Splatting por GPU, propio y sin plugins de terceros (REQ-61..REQ-63):** splats de 10 millones con color según el ángulo (armónicos esféricos), sin parpadeo en Play y a unos 70 fps;
+- **Mundos de World Labs caminables (REQ-18):** a escala métrica, con el suelo en Z = 0, la colisión alineada y el `PlayerStart` sobre el terreno;
+- **La IA edita y compila el código del proyecto (REQ-22):** propone cambios en `Source/`, `Content/Python/` y `Config/*.ini` como diffs que revisas; al aceptarlos compila con Live Coding o, si cambian cabeceras, te pide cerrar el editor, compila con UnrealBuildTool y lo reabre; los errores vuelven a la IA;
+- **«Mejorar con IA» en Generar (REQ-66):** convierte una idea corta («ciudad bonita») en un prompt elaborado para Tripo o World Labs, sin gastar créditos hasta que pulses Generar; y cada pestaña lleva el logo de su servicio (REQ-65).
+
 **v0.2.3** (2026-10-29). La conexión a IAs y su guía pasan a ser las mismas de todas las apps DBV ([`dbv-tauri-starter`](https://github.com/davidbuenov/dbv-tauri-starter), donde se probaron agente por agente):
 
 - **Todos los agentes por suscripción funcionan (REQ-49):** Google Antigravity con su servidor oficial `agy_acp_server` e inicio de sesión con tu cuenta de Google, Codex con el adaptador actual (adiós al «Internal error»), GitHub Copilot distinguiendo su CLI del lanzador de VS Code, y Claude Code;
