@@ -682,6 +682,8 @@ impl Library {
                 .or_else(|| json.get("scene_url"))
                 .or_else(|| json.pointer("/rawResponse/assets/splats/spz_urls/500k"))
                 .or_else(|| json.pointer("/assets/splats/spz_urls/500k"))
+                // La API no fija las claves de `spz_urls`: si no están las conocidas, la primera que haya.
+                .or_else(|| json.pointer("/rawResponse/assets/splats/spz_urls").and_then(Value::as_object).and_then(|urls| urls.values().next()))
                 .and_then(|v| v.as_str());
 
             let mut splat_filename = None;

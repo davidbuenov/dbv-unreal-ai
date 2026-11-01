@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { confirmCost, createGenerateView } from '../../src/app/generateView.js';
-import { createJobCard } from '../../src/generation/jobCard.js';
+import { barPercent, createJobCard, stageText } from '../../src/generation/jobCard.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 import { cleanImproved, IMPROVE_LIMITS, improveMessages, improvePrompt } from '../../src/generation/promptImprover.js';
 
@@ -73,18 +73,18 @@ describe('Generar', () => {
     expect(field.value).toBe('ciudad bonita');
   });
 
-  it('sin IA conectada el botón está desactivado y dice por qué; con un agente avisa de que va a la conversación @spec REQ-66', async () => {
+  it('sin IA conectada el botón está desactivado y dice por qué; si el agente está ocupado lo dice y no toca el campo @spec REQ-66', async () => {
     const host = await renderView({ improvePrompt: vi.fn(), improveAvailable: async () => false });
     const button = host.querySelector('[data-improve="tripo"]');
     await vi.waitFor(() => expect(button.disabled).toBe(true));
     expect(button.title).toContain('Conecta una IA');
 
     const toast = vi.fn();
-    const withAgent = await renderView({ toast, improvePrompt: async () => ({ kind: 'sent' }), improveAvailable: async () => true });
-    const field = withAgent.querySelector('textarea');
+    const busy = await renderView({ toast, improvePrompt: async () => ({ kind: 'busy' }), improveAvailable: async () => true });
+    const field = busy.querySelector('textarea');
     field.value = 'cofre del tesoro';
-    withAgent.querySelector('[data-improve="tripo"]').click();
-    await vi.waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining('conversación')));
+    busy.querySelector('[data-improve="tripo"]').click();
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining('cuando termine'), 'error'));
     expect(field.value).toBe('cofre del tesoro');
   });
 });
@@ -105,6 +105,43 @@ describe('Tripo y World Labs, cada uno lo suyo @spec REQ-18, RNF-04', () => {
     const tripo = createJobCard({ id: 't', name: 'Cofre', kind: 'text_to_model', endpoint: '/generation/text-to-model', stage: 'running', log: [], request: {} });
     expect(tripo.node.querySelector('summary').textContent).toBe('Consola: lo que se envía a Tripo');
   });
+
+  /**
+   * Regresión (2026-11-01, lo vio el usuario): un mundo decía «Enviado a Tripo…» y se quedaba en «0 %» los ~5 min,
+   * porque World Labs no da porcentaje (solo `IN_PROGRESS`). Ahora: su nombre, el tiempo y una barra estimada.
+   * @spec REQ-18, REQ-27
+   */
+  it('un mundo dice World Labs y, sin porcentaje, enseña el tiempo y una barra estimada', () => {
+    const now = 1_000_000_000;
+    const world = (stage, extra = {}) => ({ kind: 'generate_world', endpoint: '/marble/v1/worlds:generate', stage, startedAt: now / 1000 - 150, ...extra });
+    expect(stageText(world('submitted'), now)).toBe('Enviado a World Labs…');
+    expect(stageText(world('running'), now)).toBe('Generando el mundo… 2:30 (suele tardar unos 5 min)');
+    expect(barPercent(world('running'), now)).toBe(50);
+    expect(barPercent(world('running', { startedAt: now / 1000 - 900 }), now)).toBe(95);
+    expect(stageText(world('downloading'), now)).toBe('Descargando el mundo…');
+    expect(barPercent(world('done'), now)).toBe(100);
+    // Tripo sigue con su porcentaje real.
+    const tripo = { kind: 'text_to_model', endpoint: '/generation/text-to-model', stage: 'running', progress: 42, startedAt: now / 1000 };
+    expect(stageText(tripo, now)).toBe('Generando… 42%');
+    expect(barPercent(tripo, now)).toBe(42);
+    expect(stageText({ ...tripo, stage: 'submitted' }, now)).toBe('Enviado a Tripo…');
+  });
+
+  it('la tarjeta de un mundo avanza el reloj sola y para al terminar', () => {
+    vi.useFakeTimers();
+    try {
+      const startedAt = Math.floor(Date.now() / 1000);
+      const card = createJobCard({ id: 'w', name: 'Ciudad', kind: 'generate_world', endpoint: '/marble/v1/worlds:generate', stage: 'running', startedAt, log: [], request: {} });
+      const stage = card.node.querySelector('.job-stage');
+      expect(stage.textContent).toContain('0:00');
+      vi.advanceTimersByTime(61_000);
+      expect(stage.textContent).toContain('1:01');
+      card.update({ ...card.record(), stage: 'done' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('Mejorar el prompt', () => {
@@ -123,21 +160,24 @@ describe('Mejorar el prompt', () => {
     expect(long.endsWith('word')).toBe(true);
   });
 
-  it('con un modelo es una consulta suelta; con un agente va a la conversación; sin IA no hace nada @spec REQ-66', async () => {
-    const model = { activeConnection: () => ({ provider: 'ollama' }), complete: vi.fn(async () => 'A cozy village'), ask: vi.fn() };
-    expect(await improvePrompt(model, 'worldlabs', 'pueblo', 'l')).toEqual({ kind: 'text', text: 'A cozy village' });
+  it('con un modelo o con un agente es una consulta suelta, nunca la conversación; sin IA no hace nada @spec REQ-66', async () => {
+    const model = { activeConnection: () => ({ provider: 'ollama' }), complete: vi.fn(async () => 'A cozy village'), ask: vi.fn(), askAside: vi.fn() };
+    expect(await improvePrompt(model, 'worldlabs', 'pueblo')).toEqual({ kind: 'text', text: 'A cozy village' });
     expect(model.ask).not.toHaveBeenCalled();
 
-    // Con un agente, su respuesta vuelve al campo aunque añada una frase delante.
-    const agent = { activeConnection: () => ({ provider: 'agent' }), complete: vi.fn(), ask: vi.fn(async () => 'Here is an improved prompt:\n\nAn old wooden treasure chest with iron bands and a brass lock, stylized.') };
-    expect(await improvePrompt(agent, 'tripo', 'cofre', 'Mejorar el prompt: «cofre»')).toEqual({ kind: 'text', text: 'An old wooden treasure chest with iron bands and a brass lock, stylized.' });
-    expect(agent.ask.mock.calls[0][0]).toContain('Idea: cofre');
-    expect(agent.ask.mock.calls[0][1]).toEqual({ label: 'Mejorar el prompt: «cofre»' });
+    // Regresión (2026-11-01): con un agente la petición iba a la conversación y la app saltaba a ella. Ahora va a una
+    // sesión aparte y su respuesta vuelve al campo aunque añada una frase delante.
+    const agent = { activeConnection: () => ({ provider: 'agent' }), complete: vi.fn(), ask: vi.fn(), askAside: vi.fn(async () => 'Here is an improved prompt:\n\nAn old wooden treasure chest with iron bands and a brass lock, stylized.') };
+    expect(await improvePrompt(agent, 'tripo', 'cofre')).toEqual({ kind: 'text', text: 'An old wooden treasure chest with iron bands and a brass lock, stylized.' });
+    expect(agent.askAside.mock.calls[0][0]).toContain('Idea: cofre');
+    expect(agent.ask).not.toHaveBeenCalled();
     expect(agent.complete).not.toHaveBeenCalled();
-    // Si el agente no devuelve nada (se paró, falló), la respuesta queda en la conversación.
-    expect(await improvePrompt({ ...agent, ask: async () => '' }, 'tripo', 'cofre', 'l')).toEqual({ kind: 'sent' });
+    expect(await improvePrompt({ ...agent, askAside: async () => '' }, 'tripo', 'cofre')).toEqual({ kind: 'empty' });
+    const busy = async () => Promise.reject(Object.assign(new Error('ocupado'), { kind: 'busy' }));
+    expect(await improvePrompt({ ...agent, askAside: busy }, 'tripo', 'cofre')).toEqual({ kind: 'busy' });
+    expect(await improvePrompt({ ...agent, askAside: async () => Promise.reject(new Error('sin red')) }, 'tripo', 'cofre')).toEqual({ kind: 'error', message: 'sin red' });
 
-    expect(await improvePrompt(null, 'tripo', 'x', 'l')).toEqual({ kind: 'none' });
-    expect(await improvePrompt({ ...model, complete: async () => null }, 'tripo', 'x', 'l')).toEqual({ kind: 'empty' });
+    expect(await improvePrompt(null, 'tripo', 'x')).toEqual({ kind: 'none' });
+    expect(await improvePrompt({ ...model, complete: async () => null }, 'tripo', 'x')).toEqual({ kind: 'empty' });
   });
 });

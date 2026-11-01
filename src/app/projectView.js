@@ -188,7 +188,7 @@ export function createProjectView(host, deps) {
     }
     if (selected && readiness) {
       // Encima del diagnóstico: el agente vería el editor dos veces (REQ-52).
-      sections.push(directAccessBanner(readiness.directAccess));
+      sections.push(directAccessBanner(readiness.directAccess, { reveal: (file) => window.__TAURI__?.opener?.revealItemInDir?.(`${dirName(selected)}/${file}`) }));
       sections.push(readinessCard(open.find((e) => e.editor.project.toLowerCase() === selected.toLowerCase())));
       // Convai (REQ-55): toolsets y guías solo se comprueban con ESTE proyecto conectado.
       const connection = deps.state.connection;

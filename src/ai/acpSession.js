@@ -14,11 +14,19 @@
 //   · `fs/write_text_file` → NO escribe: pasa a la propuesta del turno.
 // Antes de cada turno se toma un punto de restauración; al acabar, se piden
 // los cambios que el agente hizo en disco por su cuenta.
+// Las consultas sueltas (`askAside`, p. ej. «Mejorar con IA») van en otra sesión
+// del mismo agente, sin servidores MCP: solo devuelven texto, nunca tocan nada.
 
 import { APP_NAME } from './appInfo.js';
 
 /** Versión del protocolo ACP que habla la app. */
 export const PROTOCOL_VERSION = 1;
+
+/** Espera máxima de una consulta suelta (ms): luego se cancela. */
+export const ASIDE_TIMEOUT_MS = 120_000;
+
+/** Lo que se responde a una sesión de consulta suelta que pide algo: no tiene acceso a nada. */
+const ASIDE_REFUSAL = 'consulta suelta: sin acceso a ficheros ni herramientas';
 
 /**
  * Traduce una actualización de sesión (`session/update`) a algo que pintar.
@@ -83,6 +91,8 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
   let sessionId = null;
   let root = null;
   let listening = null;
+  /** Sesiones de consulta suelta abiertas: id → recoge su texto. */
+  const asides = new Map();
 
   async function respond(id, result, error = null) {
     await backend.acpRespond(id, result ?? null, error);
@@ -91,11 +101,16 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
   async function handle(message) {
     if (message.kind === 'notification') {
       if (message.method === 'session/update' && message.params?.sessionId === sessionId) onUpdate(describeUpdate(message.params.update));
+      else if (message.method === 'session/update') asides.get(message.params?.sessionId)?.(describeUpdate(message.params.update));
       return;
     }
     const { id, method, params } = message;
     try {
-      if (method === 'session/request_permission') {
+      // Una consulta suelta no pide permisos ni toca ficheros: se le deniega todo sin preguntar.
+      if (asides.has(params?.sessionId)) {
+        if (method === 'session/request_permission') await respond(id, { outcome: { outcome: 'cancelled' } });
+        else await respond(id, null, ASIDE_REFUSAL);
+      } else if (method === 'session/request_permission') {
         const optionId = await askPermission(params);
         await respond(id, { outcome: optionId ? { outcome: 'selected', optionId } : { outcome: 'cancelled' } });
       } else if (method === 'fs/read_text_file') {
@@ -182,9 +197,43 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
     return { result, changes: changes.ok ? changes.value : [] };
   }
 
+  /**
+   * Una pregunta suelta, fuera de la conversación: otra sesión del mismo agente (ya arrancado con
+   * `ensureSession`), sin servidores MCP, sin punto de restauración y sin panel. Devuelve el texto del agente.
+   * @spec REQ-66
+   */
+  async function askAside(text, timeoutMs = ASIDE_TIMEOUT_MS) {
+    const opened = await backend.acpRequest('session/new', { cwd: root, mcpServers: [] });
+    if (!opened.ok) throw Object.assign(new Error(opened.error.message), { kind: opened.error.kind });
+    const asideId = opened.value.sessionId;
+    if (spec?.model && spec.model !== spec.id && spec.model !== 'antigravity' && spec.model !== 'agy') {
+      await backend.acpRequest('session/set_config_option', { sessionId: asideId, configId: 'model', value: spec.model });
+    }
+    let reply = '';
+    asides.set(asideId, (update) => {
+      if (update.type === 'text') reply += update.text;
+    });
+    let timer = null;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        backend.acpNotify('session/cancel', { sessionId: asideId });
+        reject(Object.assign(new Error('el agente no respondió a tiempo'), { kind: 'timeout' }));
+      }, timeoutMs);
+    });
+    try {
+      const result = await Promise.race([backend.acpRequest('session/prompt', { sessionId: asideId, prompt: [{ type: 'text', text }] }), timeout]);
+      if (!result.ok) throw Object.assign(new Error(result.error.message), { kind: result.error.kind });
+    } finally {
+      clearTimeout(timer);
+      asides.delete(asideId);
+    }
+    return reply;
+  }
+
   return {
     ensureSession,
     prompt,
+    askAside,
     cancel: () => sessionId && backend.acpNotify('session/cancel', { sessionId }),
     stop: async () => {
       sessionId = null;

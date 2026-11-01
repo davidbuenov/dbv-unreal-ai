@@ -125,7 +125,7 @@ describe('enviar a Unreal (REQ-19)', () => {
 describe('herramientas de generación (REQ-15, REQ-33, RNF-04)', () => {
   const status = async () => ({ ok: true, value: { spent: 0, budget: 300, hasKey: { tripo: true } } });
   // Lo que da Rust (`generation_tool_specs`): aquí basta con el nombre y el esquema.
-  const specs = ['generate_3d_model', 'image_to_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'tripo_operations', 'tripo_balance'].map((name) => ({ name, description: name, inputSchema: { type: 'object', properties: {}, required: [] } }));
+  const specs = ['generate_3d_model', 'image_to_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'tripo_operations', 'tripo_balance', 'generate_world', 'worldlabs_balance'].map((name) => ({ name, description: name, inputSchema: { type: 'object', properties: {}, required: [] } }));
   const prepared = { operation: 'text_to_model', endpoint: '/generation/text-to-model', name: 'Linterna', variants: 2, params: { prompt: 'lantern' }, total: 40, pricing: '…' };
   const tools = (over = {}) => {
     const deps = {
@@ -137,6 +137,7 @@ describe('herramientas de generación (REQ-15, REQ-33, RNF-04)', () => {
       showJobs: vi.fn(),
       operations: vi.fn(async () => ({ ok: true, value: '- rig …' })),
       balance: vi.fn(async () => ({ ok: true, value: { balance: 2370, frozen: 30 } })),
+      worldlabsBalance: vi.fn(async () => ({ ok: true, value: { balance: 4200 } })),
       listLibrary: vi.fn(async () => ({ ok: true, value: [ENTRY] })),
       rename: vi.fn(async (id, name) => ({ ok: true, value: { ...ENTRY, name } })),
       send: vi.fn(),
@@ -161,13 +162,15 @@ describe('herramientas de generación (REQ-15, REQ-33, RNF-04)', () => {
     const world = { operation: 'generate_world', endpoint: '/marble/v1/worlds:generate', name: 'Ciudad', variants: 1, params: { prompt: 'city' }, total: 1580, pricing: '…', service: 'worldlabs' };
     const both = async () => ({ ok: true, value: { spent: 120, budget: 300, spentByService: { tripo: 120, worldlabs: 0 }, budgetByService: { tripo: 300, worldlabs: 2000 }, hasKey: { tripo: false, worldlabs: true } } });
     const { deps, byName } = tools({ status: both, prepare: vi.fn(async () => ({ ok: true, value: world })), launch: vi.fn(async () => ({ ok: true, value: ['w-1'] })) });
-    await byName('generate_3d_model').run({ prompt: 'city', name: 'Ciudad' });
+    // Regresión (2026-11-01): generate_world no estaba en LAUNCHERS y el asistente integrado respondía «unknown tool».
+    await byName('generate_world').run({ prompt: 'city', name: 'Ciudad' });
+    expect(deps.prepare).toHaveBeenCalledWith('generate_world', { prompt: 'city', name: 'Ciudad' });
     expect(deps.confirmCost).toHaveBeenCalledWith(expect.objectContaining({ service: 'worldlabs', total: 1580, spent: 0, budget: 2000 }));
     expect(deps.launch).toHaveBeenCalled();
 
     const noKey = async () => ({ ok: true, value: { ...(await both()).value, hasKey: { tripo: true, worldlabs: false } } });
     const { byName: withoutKey } = tools({ status: noKey, prepare: vi.fn(async () => ({ ok: true, value: world })) });
-    expect(await withoutKey('generate_3d_model').run({ prompt: 'city', name: 'Ciudad' })).toBe('error: there is no World Labs API key. Tell the user to add it in Settings.');
+    expect(await withoutKey('generate_world').run({ prompt: 'city', name: 'Ciudad' })).toBe('error: there is no World Labs API key. Tell the user to add it in Settings.');
   });
 
   it('sin aceptar el coste no se lanza nada @spec REQ-15, RNF-04', async () => {
@@ -210,6 +213,8 @@ describe('herramientas de generación (REQ-15, REQ-33, RNF-04)', () => {
   it('el saldo y el catálogo no cuestan nada @spec REQ-33', async () => {
     const { deps, byName } = tools();
     expect(await byName('tripo_balance').run({})).toMatch(/2370 credits available \(30 reserved/);
+    // World Labs es otra cuenta: su saldo, con su herramienta (REQ-18).
+    expect(await byName('worldlabs_balance').run({})).toBe('World Labs balance: 4200 credits available.');
     expect(await byName('tripo_operations').run({ operation: 'rig' })).toMatch(/rig/);
     expect(deps.confirmCost).not.toHaveBeenCalled();
   });

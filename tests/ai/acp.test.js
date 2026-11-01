@@ -83,6 +83,45 @@ describe('funciones puras', () => {
 });
 
 describe('sesión con un agente simulado', () => {
+  /**
+   * «Mejorar con IA» con un agente: otra sesión, sin MCP ni punto de restauración, solo su texto; lo que pida se
+   * deniega sin preguntar y la conversación no recibe nada. @spec REQ-66
+   */
+  it('una consulta suelta va en otra sesión, sin herramientas, y devuelve solo su texto', async () => {
+    const { backend, session, updates } = setup();
+    await session.ensureSession({ id: 'agy' });
+    backend.acpSnapshot.mockClear();
+    backend.acpRequest = vi.fn(async (method, params) => {
+      backend.sent.push({ method, params });
+      if (method === 'session/new') return { ok: true, value: { sessionId: 'aside-1' } };
+      if (method === 'session/prompt') {
+        await backend.emit({ kind: 'notification', method: 'session/update', params: { sessionId: 'aside-1', update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'pienso' } } } });
+        await backend.emit({ kind: 'notification', method: 'session/update', params: { sessionId: 'aside-1', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'A futuristic ' } } } });
+        await backend.emit({ kind: 'notification', method: 'session/update', params: { sessionId: 'aside-1', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'boulevard' } } } });
+        await backend.emit({ kind: 'request', id: 31, method: 'session/request_permission', params: { sessionId: 'aside-1', options: [{ optionId: 'allow' }] } });
+        await backend.emit({ kind: 'request', id: 32, method: 'fs/read_text_file', params: { sessionId: 'aside-1', path: 'D:/libro/main.typ' } });
+        return { ok: true, value: { stopReason: 'end_turn' } };
+      }
+      return { ok: false, error: { kind: 'badRequest', message: 'x' } };
+    });
+    expect(await session.askAside('mejora esto')).toBe('A futuristic boulevard');
+    expect(backend.sent.find((m) => m.method === 'session/new' && m.params.mcpServers.length === 0)).toBeTruthy();
+    expect(backend.sent.find((m) => m.method === 'session/prompt').params).toEqual({ sessionId: 'aside-1', prompt: [{ type: 'text', text: 'mejora esto' }] });
+    expect(backend.acpSnapshot).not.toHaveBeenCalled();
+    expect(backend.responses.find((r) => r.id === 31).result).toEqual({ outcome: { outcome: 'cancelled' } });
+    expect(backend.responses.find((r) => r.id === 32).error).toMatch(/consulta suelta/);
+    expect(updates).toEqual([]);
+    expect(session.sessionId).toBe('s1');
+  });
+
+  it('una consulta suelta que no responde se cancela', async () => {
+    const { backend, session } = setup();
+    await session.ensureSession({ id: 'agy' });
+    backend.acpRequest = vi.fn(async (method) => (method === 'session/new' ? { ok: true, value: { sessionId: 'aside-2' } } : new Promise(() => {})));
+    await expect(session.askAside('hola', 10)).rejects.toMatchObject({ kind: 'timeout' });
+    expect(backend.acpNotify).toHaveBeenCalledWith('session/cancel', { sessionId: 'aside-2' });
+  });
+
   it('inicia, abre sesión en la carpeta del proyecto y no ofrece terminal', async () => {
     const { backend, session } = setup();
     const opened = await session.ensureSession({ id: 'claude' });

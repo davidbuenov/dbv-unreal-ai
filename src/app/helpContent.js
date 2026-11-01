@@ -107,7 +107,7 @@ const TEXTS = {
       issues: [
         '<strong>Brazos y piernas estirados:</strong> abre <span class="mono">metahuman_base_skel</span>, activa <em>Show Retargeting Options</em>, clic derecho en <span class="mono">root</span> → <em>Recursively Set Translation Retargeting Skeleton</em>, pon <span class="mono">pelvis</span> en <em>Animation Scaled</em> y guarda.',
         '<strong>«Llévame a…» y no se mueve:</strong> pide a la IA que mejore la descripción de la acción <em>Escort</em>. Si en tu idioma sigue sin moverse, configura el idioma del personaje en el Playground; «Ve a…» usa <em>Move to</em>, que es más directa.',
-        '<strong>Un agente ve el editor dos veces:</strong> el asistente «Set Up AI Coding» de Convai escribe un <span class="mono">.mcp.json</span> y un <span class="mono">CLAUDE.md</span> en el proyecto. La vista <em>Proyecto</em> lo avisa; quítalos si usas la app.',
+        '<strong>Un agente ve el editor dos veces:</strong> el asistente «Set Up AI Coding» de Convai (o Unreal) puede escribir un <span class="mono">.mcp.json</span> que conecta a los agentes directamente con el editor. La vista <em>Proyecto</em> lo avisa: borra en ese fichero la entrada que termina en <span class="mono">/mcp</span>. Las instrucciones que Convai deja en <span class="mono">CLAUDE.md</span> no molestan y puedes dejarlas.',
         '<strong>Volver a ensamblar el MetaHuman</strong> regenera su Blueprint y borra la configuración de Convai: repite el paso 2.',
         'Las acciones de Convai <strong>guardan Blueprints</strong>: «Deshacer este turno» puede no revertirlas. Ten el proyecto en control de versiones.',
       ],
@@ -144,7 +144,7 @@ const TEXTS = {
       issues: [
         '<strong>Stretched arms and legs:</strong> open <span class="mono">metahuman_base_skel</span>, enable <em>Show Retargeting Options</em>, right-click <span class="mono">root</span> → <em>Recursively Set Translation Retargeting Skeleton</em>, set <span class="mono">pelvis</span> to <em>Animation Scaled</em> and save.',
         '<strong>"Take me to…" and it does not move:</strong> ask the AI to improve the description of the <em>Escort</em> action. If it still does not move in your language, set the character language in the Playground; "Go to…" uses <em>Move to</em>, which is more direct.',
-        '<strong>An agent sees the editor twice:</strong> the Convai "Set Up AI Coding" assistant writes a <span class="mono">.mcp.json</span> and a <span class="mono">CLAUDE.md</span> in the project. The <em>Project</em> view warns about it; remove them if you use the app.',
+        '<strong>An agent sees the editor twice:</strong> the Convai "Set Up AI Coding" assistant (or Unreal) can write a <span class="mono">.mcp.json</span> that connects agents directly to the editor. The <em>Project</em> view warns about it: delete the entry ending in <span class="mono">/mcp</span> in that file. The instructions Convai leaves in <span class="mono">CLAUDE.md</span> do no harm and you can keep them.',
         '<strong>Re-assembling the MetaHuman</strong> regenerates its Blueprint and deletes the Convai setup: repeat step 2.',
         'Convai actions <strong>save Blueprints</strong>: "Undo this turn" may not revert them. Keep the project under version control.',
       ],
@@ -181,7 +181,7 @@ const TEXTS = {
       issues: [
         '<strong>手臂和腿被拉长：</strong>打开 <span class="mono">metahuman_base_skel</span>，启用 <em>Show Retargeting Options</em>，右键点击 <span class="mono">root</span> → <em>Recursively Set Translation Retargeting Skeleton</em>，把 <span class="mono">pelvis</span> 设为 <em>Animation Scaled</em> 并保存。',
         '<strong>说「带我去…」但它不动：</strong>让 AI 改进 <em>Escort</em> 动作的描述。如果用你的语言仍然不动，请在 Playground 中设置角色的语言；「去…」使用 <em>Move to</em>，更加直接。',
-        '<strong>智能体看到两次编辑器：</strong>Convai 的「Set Up AI Coding」助手会在项目中写入 <span class="mono">.mcp.json</span> 和 <span class="mono">CLAUDE.md</span>。<em>项目</em>视图会提示；如果使用本应用，请删除它们。',
+        '<strong>智能体看到两次编辑器：</strong>Convai 的「Set Up AI Coding」助手（或 Unreal）可能写入一个 <span class="mono">.mcp.json</span>，让智能体直接连接编辑器。<em>项目</em>视图会提示：请在该文件中删除以 <span class="mono">/mcp</span> 结尾的条目。Convai 留在 <span class="mono">CLAUDE.md</span> 中的说明不会造成影响，可以保留。',
         '<strong>重新组装 MetaHuman</strong> 会重新生成其蓝图并删除 Convai 设置：请重复第 2 步。',
         'Convai 的操作会<strong>保存蓝图</strong>：«撤销本轮» 可能无法还原。请把项目放在版本控制中。',
       ],

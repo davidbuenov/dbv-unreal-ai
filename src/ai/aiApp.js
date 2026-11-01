@@ -851,6 +851,28 @@ export function createAiApp(deps) {
     return fresh ? agentPreamble({ lang: getLanguage(), domain: host.promptDomain?.(getLanguage(), { agent: true }) ?? '' }) : '';
   }
 
+  /** Con qué arrancar el agente de una conexión. */
+  function agentSpec(connection) {
+    return {
+      id: agentId(connection),
+      model: connection.model || undefined,
+      reasoningEffort: connection.reasoningEffort || undefined,
+    };
+  }
+
+  /**
+   * Una pregunta suelta al agente conectado, fuera de la conversación (no abre el panel ni deja rastro en ella):
+   * por ejemplo «Mejorar con IA» en Generar (REQ-66; pedido por el usuario el 2026-11-01). Devuelve su texto, o
+   * `null` si no hay agente, proyecto o permiso para la nube. Lanza `{kind: 'busy'}` si hay un turno en marcha.
+   */
+  async function askAside(text) {
+    const connection = activeConnection();
+    if (connection?.provider !== 'agent' || !projectState || !(await confirmCloud(connection))) return null;
+    if (busy) throw Object.assign(new Error(t('ai.busy')), { kind: 'busy' });
+    await acp.ensureSession(agentSpec(connection));
+    return acp.askAside(text);
+  }
+
   async function askAgent(connection, text, options, current) {
     const startedAt = Date.now();
     busy = true;
@@ -864,11 +886,7 @@ export function createAiApp(deps) {
     agentTurn = { proposal: createProposal(), bubble };
     let finalText = '';
     try {
-      const spec = {
-        id: agentId(connection),
-        model: connection.model || undefined,
-        reasoningEffort: connection.reasoningEffort || undefined,
-      };
+      const spec = agentSpec(connection);
       panel.addStep(t('ai.agentStarting').replace('{agent}', providerName(connection)));
       // El agente trabaja en su propio proceso: el host sigue desde aquí lo que lance (p. ej. trabajos de Tripo).
       host.onTurnStart?.({ panel, agent: true, isBusy: () => busy });
@@ -1003,6 +1021,7 @@ export function createAiApp(deps) {
     panel,
     inline,
     complete: completeOnce,
+    askAside,
     refreshContext: () => projectRoot && renderContextPreview(),
     /** Tras cambiar «Mostrar las funciones de IA» o las conexiones desde fuera. */
     setFile: (next) => {

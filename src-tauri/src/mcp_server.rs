@@ -31,6 +31,7 @@ use crate::ai::secrets::Secrets;
 use crate::generation::commands::GenerationSettings;
 use crate::generation::jobs::{describe, resume_orphans, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
 use crate::generation::tripo::TripoClient;
+use crate::generation::worldlabs::WorldLabsClient;
 use crate::generation::{key_account, tools, within_budget, Polling};
 use crate::project_memory::tools as memory_tools;
 use crate::library::{now_secs, Library};
@@ -124,7 +125,7 @@ const fn schema_object() -> &'static str {
 /// Herramientas que solo consultan (REQ-12): se publican con `readOnlyHint` y, cuando un agente de la conversación
 /// pide permiso para usarlas, la app lo concede sola. Lo que modifica, ejecuta Python o gasta créditos sigue
 /// preguntando (pedido por el usuario el 2026-11-01: las aprobaciones de simples consultas eran muy pesadas).
-pub const READ_ONLY_TOOLS: [&str; 16] = [
+pub const READ_ONLY_TOOLS: [&str; 17] = [
     "unreal_list_toolsets",
     "unreal_describe_toolset",
     "unreal_capture_viewport",
@@ -134,6 +135,7 @@ pub const READ_ONLY_TOOLS: [&str; 16] = [
     "generation_jobs",
     "tripo_operations",
     "tripo_balance",
+    "worldlabs_balance",
     "project_memory_read",
     "project_tasks_list",
     "level_zones_list",
@@ -410,6 +412,7 @@ impl McpServer {
             }
             "tripo_operations" => tools::operations_text(args)?,
             "tripo_balance" => self.balance()?,
+            "worldlabs_balance" => self.worldlabs_balance()?,
             launcher if tools::LAUNCHERS.contains(&launcher) => self.launch(launcher, args)?,
             "project_memory_read" => memory_tools::read_text(&self.project_dir()?, args)?,
             "project_memory_propose" => memory_tools::propose_and_save(&self.project_dir()?, args)?,
@@ -644,6 +647,17 @@ impl McpServer {
         Ok(format!("Tripo balance: {} credits available ({} reserved by running tasks). This session has used about {} Tripo credits.", balance.balance, balance.frozen, self.session_spent("tripo")))
     }
 
+    /// Saldo de World Labs, con su clave: es otra cuenta y otros créditos que los de Tripo. @spec REQ-18
+    fn worldlabs_balance(&self) -> Result<String, String> {
+        let key = (self.config.key)("worldlabs").ok_or("there is no World Labs API key: add it in DBV Unreal AI → Settings → World Labs")?;
+        let client = match &self.config.tripo_base {
+            Some(base) => WorldLabsClient::with_base_url(&key, base),
+            None => WorldLabsClient::new(&key),
+        };
+        let credits = client.credits().map_err(|e| e.to_string())?;
+        Ok(format!("World Labs balance: {} credits available. This session has used about {} World Labs credits.", credits.balance, self.session_spent("worldlabs")))
+    }
+
     /// Cualquier herramienta que gasta (Tripo o World Labs): traduce, exige confirmar el coste TOTAL, respeta el tope
     /// de SU servicio y lanza con SU clave (antes World Labs usaba la de Tripo: «No API key found», 2026-11-01).
     fn launch(&mut self, tool: &str, args: &Value) -> Result<String, String> {
@@ -826,7 +840,7 @@ mod tests {
         assert_eq!(init["result"]["serverInfo"]["name"], "dbv-unreal-ai");
         let tools = rpc(&mut s, "tools/list", json!({}));
         let names: Vec<&str> = tools["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-        for expected in ["unreal_run_python", "generate_3d_model", "image_to_3d_model", "rig_model", "animate_model", "tripo_run", "tripo_operations", "tripo_balance", "generation_jobs", "library_send_to_unreal"] {
+        for expected in ["unreal_run_python", "generate_3d_model", "image_to_3d_model", "rig_model", "animate_model", "tripo_run", "tripo_operations", "tripo_balance", "worldlabs_balance", "generation_jobs", "library_send_to_unreal"] {
             assert!(names.contains(&expected), "{expected}");
         }
     }
@@ -915,12 +929,32 @@ mod tests {
         rpc(&mut s, "tools/call", json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad", "confirm_cost": true } }));
         let seen = handle.join().unwrap();
         assert!(seen[0].starts_with("POST /marble/v1/worlds:generate"), "{}", seen[0]);
-        assert!(seen[0].contains("wl-key") && !seen[0].contains("tripo-key"), "la clave de World Labs, no la de Tripo");
+        assert!(seen[0].contains("wlt-api-key: wl-key") && !seen[0].contains("tripo-key"), "la clave de World Labs, con su cabecera, no la de Tripo");
 
         // Con su tope por debajo del coste, se frena y lo dice con su nombre.
         GenerationSettings { worldlabs_budget_credits: 1000.0, ..GenerationSettings::default() }.save(dir.path()).unwrap();
         let capped = rpc(&mut s, "tools/call", json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad", "confirm_cost": true } }));
         assert!(capped["result"]["content"][0]["text"].as_str().unwrap().contains("World Labs session cap of 1000"), "{capped}");
+    }
+
+    /// El agente consulta el saldo de World Labs con su clave, no el de Tripo (2026-11-01: Antigravity llamaba a
+    /// tripo_balance antes de generar un mundo porque no había otra). @spec REQ-18, REQ-12
+    #[test]
+    fn worldlabs_balance_con_su_clave_y_sin_permiso() {
+        use crate::unreal::mcp_client::tests::{fake_server, http};
+        assert!(READ_ONLY_TOOLS.contains(&"worldlabs_balance"));
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let none = rpc(&mut s, "tools/call", json!({ "name": "worldlabs_balance", "arguments": {} }));
+        assert!(none["result"]["content"][0]["text"].as_str().unwrap().contains("no World Labs API key"), "{none}");
+
+        s.config.key = Box::new(|service| Some(if service == "worldlabs" { "wl-key".into() } else { "tripo-key".into() }));
+        let (api, handle) = fake_server(vec![http("200 OK", "", r#"{"remaining_credits":4200}"#)]);
+        s.config.tripo_base = Some(api.trim_end_matches("/mcp").to_string());
+        let ok = rpc(&mut s, "tools/call", json!({ "name": "worldlabs_balance", "arguments": {} }));
+        assert!(ok["result"]["content"][0]["text"].as_str().unwrap().contains("World Labs balance: 4200 credits available"), "{ok}");
+        let seen = handle.join().unwrap();
+        assert!(seen[0].starts_with("GET /marble/v1/credits") && seen[0].contains("wlt-api-key: wl-key"), "{}", seen[0]);
     }
 
     /// @spec RNF-04

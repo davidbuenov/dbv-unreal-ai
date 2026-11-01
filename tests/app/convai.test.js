@@ -23,13 +23,23 @@ beforeAll(() => {
 });
 
 describe('Accesos directos al editor (REQ-52)', () => {
-  it('avisa de lo que escribió Convai y explica cómo evitarlo; sin ficheros no pinta nada @spec REQ-52', () => {
+  it('avisa de lo que escribió Convai y explica qué hacer; sin ficheros no pinta nada @spec REQ-52', () => {
     expect(directAccessBanner([])).toBeNull();
-    const banner = directAccessBanner([{ file: '.mcp.json', kind: 'mcp' }, { file: 'CLAUDE.md', kind: 'primer' }]);
+    const reveal = vi.fn();
+    const banner = directAccessBanner([{ file: '.mcp.json', kind: 'mcp' }, { file: 'CLAUDE.md', kind: 'primer' }], { reveal });
     expect(banner.textContent).toContain('Un agente vería el editor dos veces');
     expect(banner.textContent).toContain('.mcp.json');
-    expect(banner.textContent).toContain('instrucciones de Convai');
-    expect(banner.textContent).toContain('La app no modifica estos ficheros');
+    expect(banner.textContent).toContain('borra la entrada que apunta al editor');
+    expect(banner.textContent).toContain('La app no modifica este fichero');
+    // Solo el fichero que da acceso directo se lista; el CLAUDE.md de Convai, no.
+    expect([...banner.querySelectorAll('li .mono')].map((n) => n.textContent)).toEqual(['.mcp.json']);
+    banner.querySelector('li button').click();
+    expect(reveal).toHaveBeenCalledWith('.mcp.json');
+  });
+
+  /** Regresión (2026-11-01, lo vio el usuario): solo con el CLAUDE.md de Convai salía «vería el editor dos veces». */
+  it('las instrucciones de Convai en CLAUDE.md solas no avisan: no dan acceso al editor @spec REQ-52', () => {
+    expect(directAccessBanner([{ file: 'CLAUDE.md', kind: 'primer' }])).toBeNull();
   });
 });
 

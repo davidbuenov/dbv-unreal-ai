@@ -32,10 +32,37 @@ export function consoleText(record) {
   return `${request}${request ? '\n\n' : ''}${(record.log ?? []).join('\n')}${output}`;
 }
 
-/** Etapa legible de un trabajo. */
-export function stageText(record) {
+/** ¿Es de World Labs? Sus operaciones van a `/marble/…`. */
+export const isWorldLabs = (record) => String(record?.endpoint ?? '').startsWith('/marble/');
+
+/** Lo que suele tardar un mundo de World Labs (s), según su documentación: para la barra estimada. */
+export const WORLD_EXPECTED_SECS = 300;
+
+/** Segundos desde que empezó el trabajo. */
+export const elapsedSecs = (record, nowMs = Date.now()) => Math.max(0, Math.floor(nowMs / 1000) - (record?.startedAt ?? Math.floor(nowMs / 1000)));
+
+/** `m:ss`. */
+export const clock = (secs) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+
+/**
+ * Etapa legible de un trabajo. World Labs no da porcentaje (solo «IN_PROGRESS»): en vez de un 0 % fijo se ve el
+ * tiempo que lleva y lo que suele tardar (2026-11-01, lo vio el usuario). @spec REQ-18, REQ-27
+ */
+export function stageText(record, nowMs = Date.now()) {
   const progress = String(Math.round(record.progress ?? 0));
-  return t(`gen.stage.${record.stage}`, { progress, error: record.error ?? '' });
+  const world = isWorldLabs(record);
+  let key = `gen.stage.${record.stage}`;
+  if (world && ['submitted', 'downloading'].includes(record.stage)) key = `gen.stage.${record.stage}WorldLabs`;
+  else if (world && record.stage === 'running' && record.progress == null) key = record.kind === 'generate_world' ? 'gen.stage.runningWorld' : 'gen.stage.runningElapsed';
+  return t(key, { progress, error: record.error ?? '', elapsed: clock(elapsedSecs(record, nowMs)) });
+}
+
+/** Ancho de la barra (%): el progreso real o, en un mundo sin progreso, una estimación por tiempo que no pasa del 95 %. */
+export function barPercent(record, nowMs = Date.now()) {
+  let percent = Math.round(record.progress ?? 0);
+  if (isFinal(record)) percent = 100;
+  else if (record.progress == null && record.stage === 'running' && record.kind === 'generate_world') percent = Math.min(95, Math.round((elapsedSecs(record, nowMs) / WORLD_EXPECTED_SECS) * 100));
+  return percent;
 }
 
 /**
@@ -50,13 +77,20 @@ export function createJobCard(record, deps = {}) {
   const progress = el('div', { className: 'progress' }, bar);
   const pre = el('pre', { className: 'job-console-text' });
   // Las operaciones de World Labs van a `/marble/…`: su consola no es «lo que se envía a Tripo».
-  const consoleLabel = String(record.endpoint ?? '').startsWith('/marble/') ? t('job.consoleWorldLabs') : t('job.console');
+  const consoleLabel = isWorldLabs(record) ? t('job.consoleWorldLabs') : t('job.console');
   const consoleBox = el('details', { className: 'job-console' }, el('summary', { text: consoleLabel }), pre);
   const result = el('div', { className: 'job-result' });
   const cancel = el('button', { className: 'btn-ghost btn-link', text: t('gen.cancelJob'), attrs: { type: 'button' }, on: { click: () => deps.onCancel?.(current.id) } });
   const node = el('div', { className: 'job-card' }, el('div', { className: 'job-head' }, title, meta, el('span', { className: 'spacer' }), stage, cancel), progress, consoleBox, result);
   let current = record;
   let rendered = false;
+  // Sin porcentaje (World Labs), el reloj avanza aunque el fichero de trabajo no cambie.
+  let ticker = null;
+
+  function paintStage() {
+    stage.textContent = stageText(current);
+    bar.style.width = `${barPercent(current)}%`;
+  }
 
   function update(next) {
     current = next;
@@ -65,8 +99,14 @@ export function createJobCard(record, deps = {}) {
     const cost = next.credits ?? next.estimatedCredits;
     const source = next.source === 'agent' ? ` · ${t('job.byAgent')}` : '';
     meta.textContent = `${next.kind}${cost ? ` · ${t('gen.spent', { spent: String(cost) })}` : ''}${source}`;
-    stage.textContent = stageText(next);
-    bar.style.width = `${isFinal(next) ? 100 : Math.round(next.progress ?? 0)}%`;
+    paintStage();
+    const ticking = isWorldLabs(next) && !isFinal(next) && next.progress == null;
+    if (ticking && !ticker) {
+      ticker = setInterval(() => (isFinal(current) ? (clearInterval(ticker), (ticker = null)) : paintStage()), 1000);
+    } else if (!ticking && ticker) {
+      clearInterval(ticker);
+      ticker = null;
+    }
     progress.classList.toggle('hidden', next.stage === 'failed' || next.stage === 'cancelled');
     pre.textContent = consoleText(next);
     cancel.classList.toggle('hidden', isFinal(next) || next.source === 'agent' || !deps.onCancel);

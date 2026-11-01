@@ -164,7 +164,7 @@ export function createGenerateView(host, deps) {
 
     /**
      * «Mejorar con IA» bajo un prompt: sustituye el texto por la descripción de la IA, sin generar nada, con
-     * «Deshacer». Con un agente la petición va a la conversación. @spec REQ-66
+     * «Deshacer». Nunca lleva a la conversación, tampoco con un agente. @spec REQ-66
      */
     function improveControls(field, service) {
       let previous = null;
@@ -190,8 +190,8 @@ export function createGenerateView(host, deps) {
           field.value = result.text;
           undo.hidden = false;
           refreshEstimate();
-        } else if (result.kind === 'sent') deps.toast(t('gen.improveSent'));
-        else deps.toast(t(result.kind === 'empty' ? 'gen.improveEmpty' : 'gen.improveNoAi'), 'error');
+        } else if (result.kind === 'error') deps.toast(result.message, 'error');
+        else deps.toast(t({ empty: 'gen.improveEmpty', busy: 'gen.improveBusy' }[result.kind] ?? 'gen.improveNoAi'), 'error');
       }, 'btn-ghost');
       improve.dataset.improve = service;
       improve.title = t('gen.improveHint');
@@ -273,7 +273,8 @@ export function createGenerateView(host, deps) {
         keyWarning.classList.add('hidden');
         if (service === 'worldlabs') {
           api.generationWorldLabsBalance().then((result) => {
-            balance.textContent = result.ok ? t('gen.worldLabsBalance', { balance: String(result.value.balance) }) : '';
+            // Si falla (clave rechazada, cuenta sin API), se ve el motivo en vez de quedar en blanco.
+            balance.textContent = result.ok ? t('gen.worldLabsBalance', { balance: String(result.value.balance) }) : (result.error?.message ?? '');
           });
         } else {
           api.generationBalance().then((result) => {

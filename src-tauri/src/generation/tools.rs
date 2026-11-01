@@ -101,13 +101,13 @@ pub fn specs(confirm: bool) -> Vec<Value> {
         ),
         tool(
             "generate_world",
-            &format!("Generate a photorealistic 3D world with World Labs Marble (1580 credits for marble-1.1; 230 credits for marble-1.0-draft). Produces splats (.spz), collider mesh (.glb), panorama and scale metadata saved in the library as kind \"world\". Does NOT export HQ mesh: use export_world_mesh.{ask}"),
+            &format!("Generate a photorealistic 3D world with World Labs Marble (1580 World Labs credits for marble-1.1; 230 for marble-1.0-draft). World Labs is a separate account from Tripo: check its credits with worldlabs_balance, not tripo_balance. Produces splats (.spz), collider mesh (.glb), panorama and scale metadata saved in the library as kind \"world\". Does NOT export HQ mesh: use export_world_mesh.{ask}"),
             json!({ "prompt": { "type": "string" }, "name": name, "model": { "type": "string", "enum": ["marble-1.1", "marble-1.0-draft"], "description": "marble-1.1 (full, 1580 credits) or marble-1.0-draft (draft, 230 credits)" }, "image": { "type": "string", "description": "Optional local reference image path" } }),
             &["prompt", "name"],
         ),
         tool(
             "export_world_mesh",
-            &format!("Export high-resolution 3D mesh (GLB) from an existing World Labs world in the library (3500 credits).{ask}"),
+            &format!("Export high-resolution 3D mesh (GLB) from an existing World Labs world in the library (3500 World Labs credits; check them with worldlabs_balance).{ask}"),
             json!({ "id": { "type": "string", "description": "Library id of the world (kind \"world\")" }, "name": { "type": "string" } }),
             &["id"],
         ),
@@ -120,7 +120,8 @@ pub fn specs(confirm: bool) -> Vec<Value> {
         json!({ "operation": { "type": "string" } }),
         &[],
     ));
-    all.push(tool("tripo_balance", "Credits available in the user's Tripo account (and credits reserved by running tasks). Free.", json!({}), &[]));
+    all.push(tool("tripo_balance", "Credits available in the user's Tripo account (and credits reserved by running tasks). Only for Tripo tools, not for World Labs. Free.", json!({}), &[]));
+    all.push(tool("worldlabs_balance", "Credits available in the user's World Labs account (for generate_world and export_world_mesh; separate from Tripo). Free.", json!({}), &[]));
     all
 }
 

@@ -40,16 +40,23 @@ export async function convaiLive(api, endpoint) {
   return live;
 }
 
-/** Franja de aviso: el agente vería el editor dos veces (REQ-52). La app no toca esos ficheros. */
-export function directAccessBanner(list) {
-  return list?.length
+/**
+ * Franja de aviso: el agente vería el editor dos veces (REQ-52). Solo por una configuración MCP que apunta al editor;
+ * las instrucciones de Convai en `CLAUDE.md` no dan acceso a nada y le enseñan sus guías al agente (el preámbulo le
+ * dice cómo se llaman esas herramientas en la app), así que no avisan (2026-11-01: el aviso confundía al usuario).
+ * La app no toca esos ficheros. `reveal(file)` muestra el fichero en su carpeta.
+ */
+export function directAccessBanner(list, { reveal } = {}) {
+  const direct = (list ?? []).filter((item) => item.kind === 'mcp');
+  return direct.length
     ? el(
         'div',
         { className: 'card banner banner--warning', attrs: { role: 'status' } },
         el('strong', { text: t('project.directAccess.title') }),
-        el('ul', {}, list.map((item) => el('li', {}, el('span', { className: 'mono', text: item.file }), ` — ${t(`project.directAccess.${item.kind === 'primer' ? 'primer' : 'mcp'}`)}`))),
-        el('p', { className: 'hint', text: t('project.directAccess.why') }),
-        el('p', { className: 'hint', text: t('project.directAccess.how') }),
+        el('p', { text: t('project.directAccess.why') }),
+        el('ul', {}, direct.map((item) => el('li', { className: 'row' }, el('span', { className: 'mono', text: item.file }), reveal ? button(t('project.directAccess.reveal'), () => reveal(item.file), 'btn-ghost') : null))),
+        el('p', { text: t('project.directAccess.how') }),
+        el('p', { className: 'hint', text: t('project.directAccess.note') }),
       )
     : null;
 }

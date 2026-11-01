@@ -175,8 +175,8 @@ export function start() {
     openLibrary: () => show('library'),
     suggestName,
     renderResult: renderJobResult,
-    // REQ-66: «Mejorar con IA» con la IA conectada (modelo: consulta suelta; agente: en la conversación).
-    improvePrompt: async (service, idea) => improvePrompt(await loadAi().catch(() => null), service, idea, t('gen.improveLabel', { idea })),
+    // REQ-66: «Mejorar con IA» con la IA conectada, siempre fuera de la conversación (agente: sesión ACP aparte).
+    improvePrompt: async (service, idea) => improvePrompt(await loadAi().catch(() => null), service, idea),
     improveAvailable: async () => Boolean((await loadAi().catch(() => null))?.activeConnection?.()),
   });
   const chatJobs = createChatJobs({ list: api.generationJobs, renderResult: renderJobResult });
@@ -440,6 +440,7 @@ export function start() {
           },
           operations: api.generationOperations,
           balance: api.generationBalance,
+          worldlabsBalance: api.generationWorldLabsBalance,
           rename: api.libraryRename,
           listLibrary: api.libraryList,
           send: async (entry) => {

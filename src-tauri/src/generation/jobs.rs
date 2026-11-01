@@ -384,19 +384,16 @@ fn run_worldlabs_operation(context: &JobContext, request: &OperationRequest, can
         "generate_world" => {
             let prompt = request.params.get("prompt").and_then(Value::as_str).unwrap_or("");
             let model = request.params.get("model").and_then(Value::as_str);
-            let image_base64 = request.params.get("image").and_then(Value::as_str).and_then(|p| {
-                let path = Path::new(p);
-                if path.is_file() {
-                    std::fs::read(path).ok().map(|b| {
-                        use base64::Engine;
-                        base64::engine::general_purpose::STANDARD.encode(&b)
-                    })
-                } else {
-                    None
-                }
+            // La API quiere la imagen en base64 con su extensión (`jpg`, `png`…).
+            let image = request.params.get("image").and_then(Value::as_str).map(Path::new).filter(|path| path.is_file()).and_then(|path| {
+                let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("jpg").to_ascii_lowercase();
+                std::fs::read(path).ok().map(|bytes| {
+                    use base64::Engine;
+                    (base64::engine::general_purpose::STANDARD.encode(&bytes), extension)
+                })
             });
 
-            let op_id = client.generate_world(prompt, model, image_base64.as_deref())?;
+            let op_id = client.generate_world(prompt, model, image.as_ref().map(|(data, ext)| (data.as_str(), ext.as_str())), Some(&request.name))?;
             report(JobEvent::Task(&op_id));
             report(JobEvent::Stage("running", None));
 

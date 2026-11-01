@@ -35,7 +35,7 @@ export function withSessionCap(prepared, status) {
 export const JOB_WAIT_MS = 12 * 60 * 1000;
 
 /** Herramientas de Rust que lanzan una operación con coste (`tools::LAUNCHERS`). */
-export const LAUNCHERS = ['generate_3d_model', 'image_to_3d_model', 'rig_model', 'animate_model', 'tripo_run'];
+export const LAUNCHERS = ['generate_3d_model', 'image_to_3d_model', 'rig_model', 'animate_model', 'tripo_run', 'generate_world', 'export_world_mesh'];
 
 const object = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 
@@ -73,7 +73,8 @@ export function describeEnds(ends) {
  * @param {(jobId: string, timeoutMs: number) => Promise<{stage: string, entry?: object, error?: string}>} deps.waitJob
  * @param {(ids: string[]) => void} [deps.showJobs] Tarjetas vivas de los trabajos en la conversación.
  * @param {(operation?: string) => Promise<{ok: boolean, value?: string}>} deps.operations
- * @param {() => Promise<{ok: boolean, value?: object}>} deps.balance
+ * @param {() => Promise<{ok: boolean, value?: object}>} deps.balance Saldo de Tripo.
+ * @param {() => Promise<{ok: boolean, value?: object}>} [deps.worldlabsBalance] Saldo de World Labs (otra cuenta).
  * @param {() => Promise<{ok: boolean, value?: object[]}>} deps.listLibrary
  * @param {(id: string, name: string) => Promise<{ok: boolean, value?: object}>} deps.rename
  * @param {(entry: object) => Promise<{ok: boolean, assetPath?: string, actor?: string, error?: string}>} deps.send
@@ -118,6 +119,9 @@ export function createGenerationTools(deps) {
     } else if (tool === 'tripo_balance') {
       const balance = await deps.balance();
       text = balance.ok ? `Tripo balance: ${balance.value.balance} credits available (${balance.value.frozen} reserved by running tasks).` : `error: ${balance.error.message}`;
+    } else if (tool === 'worldlabs_balance' && deps.worldlabsBalance) {
+      const balance = await deps.worldlabsBalance();
+      text = balance.ok ? `World Labs balance: ${balance.value.balance} credits available.` : `error: ${balance.error.message}`;
     } else text = `error: unknown tool ${tool}`;
     return text;
   }

@@ -94,6 +94,9 @@ export function createSettingsView(host, deps) {
     const hasKey = status.ok && status.value.hasKey?.tripo;
     const balance = el('p', { className: 'hint' });
     if (hasKey) api.generationBalance().then((result) => (balance.textContent = result.ok && result.value ? t('gen.balance', { balance: String(result.value.balance), frozen: String(result.value.frozen) }) : (result.error?.message ?? '')));
+    // Los créditos de World Labs, como los de Tripo: es otra cuenta (REQ-18).
+    const worldlabsBalance = el('p', { className: 'hint' });
+    if (status.ok && status.value.hasKey?.worldlabs) api.generationWorldLabsBalance().then((result) => (worldlabsBalance.textContent = result.ok && result.value ? t('gen.worldLabsBalance', { balance: String(result.value.balance) }) : (result.error?.message ?? '')));
     const copyExisting = el('input', { attrs: { type: 'checkbox', checked: '' } });
     async function moveLibrary(path) {
       const moved = await api.librarySetLocation(path, copyExisting.checked);
@@ -176,6 +179,7 @@ export function createSettingsView(host, deps) {
         'div',
         { className: 'card stack' },
         brandHeader('World Labs', 'worldlabs'),
+        worldlabsBalance,
         el('p', { className: 'hint', text: t('settings.worldlabsHint') }),
         ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs),
         // Su propio tope: los créditos de World Labs no son los de Tripo (REQ-18, RNF-04).

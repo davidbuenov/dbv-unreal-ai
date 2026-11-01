@@ -8,9 +8,9 @@
 // @spec REQ-66, REQ-27
 //
 // Convierte una idea corta en una descripción adecuada a cada servicio. El resultado solo sustituye al texto del
-// campo: no se genera nada, porque generar gasta créditos y la persona tiene que revisarlo (REQ-27). Con un modelo
-// conectado es una consulta suelta; con un agente no la hay, así que la petición va a la conversación y su respuesta
-// vuelve al campo (pedido por el usuario el 2026-11-01: copiarla a mano eran demasiados pasos).
+// campo: no se genera nada, porque generar gasta créditos y la persona tiene que revisarlo (REQ-27). Siempre es una
+// consulta suelta, fuera de la conversación: con un modelo, una llamada sin herramientas; con un agente, una sesión
+// ACP aparte (pedido por el usuario el 2026-11-01: «Mejorar con IA» no debe llevarle a la conversación).
 
 /** Longitud máxima del prompt que se deja en el campo, por servicio. */
 export const IMPROVE_LIMITS = { tripo: 1000, worldlabs: 2000 };
@@ -32,7 +32,7 @@ export function improveMessages(service, idea) {
   ];
 }
 
-/** Lo que se le pide a un agente en la conversación (no hay consulta suelta). */
+/** Lo que se le pide a un agente en su sesión aparte (un solo mensaje: instrucciones e idea juntas). */
 export function improveRequestForAgent(service, idea) {
   return `${INSTRUCTIONS[service] ?? INSTRUCTIONS.tripo} ${ANSWER_ONLY} Do not call any tool and do not generate anything: only write the description.\n\nIdea: ${String(idea ?? '').trim()}`;
 }
@@ -60,19 +60,22 @@ export function cleanImproved(reply, service) {
 }
 
 /**
- * Pide la mejora a la IA conectada.
- * @param {{activeConnection: () => ({provider: string}|null), complete: (messages: object[]) => Promise<string|null>, ask: (text: string, options?: object) => Promise<string|void>} | null} ai
+ * Pide la mejora a la IA conectada, sin pasar por la conversación.
+ * @param {{activeConnection: () => ({provider: string}|null), complete: (messages: object[]) => Promise<string|null>, askAside: (text: string) => Promise<string|null>} | null} ai
  * @param {'tripo'|'worldlabs'} service
  * @param {string} idea
- * @param {string} label lo que se ve en la conversación si va a un agente.
- * @returns {Promise<{kind: 'text', text: string} | {kind: 'sent'} | {kind: 'none'} | {kind: 'empty'}>}
+ * @returns {Promise<{kind: 'text', text: string} | {kind: 'none'} | {kind: 'empty'} | {kind: 'busy'} | {kind: 'error', message: string}>}
  */
-export async function improvePrompt(ai, service, idea, label) {
+export async function improvePrompt(ai, service, idea) {
   const connection = ai?.activeConnection?.() ?? null;
   let result = { kind: 'none' };
   if (connection?.provider === 'agent') {
-    const text = cleanImproved(await ai.ask(improveRequestForAgent(service, idea), { label }), service);
-    result = text ? { kind: 'text', text } : { kind: 'sent' };
+    try {
+      const text = cleanImproved(await ai.askAside(improveRequestForAgent(service, idea)), service);
+      result = text ? { kind: 'text', text } : { kind: 'empty' };
+    } catch (error) {
+      result = error?.kind === 'busy' ? { kind: 'busy' } : { kind: 'error', message: error?.message ?? String(error) };
+    }
   } else if (connection) {
     const text = cleanImproved(await ai.complete(improveMessages(service, idea)), service);
     result = text ? { kind: 'text', text } : { kind: 'empty' };
