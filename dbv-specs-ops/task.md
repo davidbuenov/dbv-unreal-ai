@@ -160,7 +160,8 @@
     - [x] `place_world` verificado en vivo (2026-10-31): escala ×1,976, elevación 217 cm, rayos a 97–183 cm sobre la colisión. El desierto salía boca abajo porque la DLL instalada era anterior a los arreglos hechos con Live Coding (giro del `.spz` y parpadeo): recompilado desde cero con UBT. El usuario pide no usar Live Coding.
     - [x] El editor lanzado desde la app ya no muere con la app (`CREATE_BREAKAWAY_FROM_JOB` o WMI). Verificado en vivo: el editor reabierto desde la app tiene `IsProcessInJob = False` y su padre es `WmiPrvSE.exe`.
     - [x] `place_world` sube sobre el terreno el `PlayerStart` que quede debajo (en vivo: de 92 a 204 cm; la duna está a 104). Con la DLL nueva el desierto sale del derecho; el usuario confirma que Play no parpadea.
-    - [ ] Pendiente: descargar el panorama (`imagery.pano_url`) al importar o generar; el cielo (spike); un personaje en Play caminando sobre las dunas.
+    - [x] Panorama: `import_worldlabs_manifest` (por donde pasan importar y generar) descarga `imagery.pano_url`/`panoUrl` a `panorama.<ext>` y lo guarda en `pano_file`; reimportar el manifiesto de un mundo antiguo lo completa sin duplicar. Tests Rust (2). Un personaje ya corrió por las dunas en Play (2026-10-31).
+    - [ ] Pendiente: el cielo con el panorama (spike con el editor abierto).
   - [ ] S69 · Código del proyecto: núcleo en Rust y herramienta (REQ-22)
   - [ ] S70 · Código del proyecto: diff en la ventana y Live Coding (REQ-22)
   - [ ] S71 · Recetas y AgentSkills (REQ-23)

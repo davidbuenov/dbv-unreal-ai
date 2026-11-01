@@ -172,6 +172,27 @@ pub fn download_or_copy(
     }
 }
 
+/// URL (o ruta local) del panorama equirectangular de un manifiesto de World Labs:
+/// `assets.imagery.pano_url` en la respuesta de la API, `panoUrl` en los manifiestos de Wordsmith.
+fn panorama_url(json: &Value) -> Option<&str> {
+    json.pointer("/rawResponse/assets/imagery/pano_url")
+        .or_else(|| json.pointer("/assets/imagery/pano_url"))
+        .or_else(|| json.get("panoUrl"))
+        .or_else(|| json.get("pano_url"))
+        .and_then(Value::as_str)
+        .filter(|url| !url.is_empty())
+}
+
+/// Descarga el panorama a `dir/panorama.<ext>` y devuelve el nombre del fichero. Un fallo no impide
+/// importar el mundo (el cielo es opcional), así que se ignora. @spec REQ-18
+fn download_panorama(agent: &ureq::Agent, json: &Value, base_dir: &Path, dir: &Path) -> Option<String> {
+    panorama_url(json).and_then(|url| {
+        let ext = filename_from_url(url).map(|f| extension(Path::new(&f))).filter(|e| !e.is_empty()).unwrap_or_else(|| "png".to_string());
+        let fname = format!("panorama.{ext}");
+        download_or_copy(agent, url, base_dir, &dir.join(&fname), 64 * 1024 * 1024).ok().map(|()| fname)
+    })
+}
+
 /// Comprueba si un JSON describe una escena de World Labs (Marble v1.1). @spec REQ-42
 pub fn is_worldlabs_manifest(value: &Value) -> bool {
     value.get("sceneUrl").is_some()
@@ -650,7 +671,7 @@ impl Library {
             (!world_id.is_empty() && e.parameters.get("world_id").and_then(|v| v.as_str()) == Some(&world_id))
                 || e.parameters.get("manifest_source").and_then(|v| v.as_str()) == Some(&source.to_string_lossy())
         }) {
-            return Ok(existing);
+            return self.complete_panorama(existing, &json, base_dir);
         }
 
         let candidate_name = name.map(str::to_string)
@@ -727,7 +748,11 @@ impl Library {
                 }
             }
 
-            // 4. Copia del manifiesto original
+            // 4. Panorama equirectangular (para el cielo en Unreal); si falla, el mundo se importa igual
+            let pano_file = download_panorama(&agent, &json, base_dir, &dir);
+            files.extend(pano_file.clone());
+
+            // 5. Copia del manifiesto original
             let manifest_dest = dir.join("manifest.json");
             let _ = std::fs::copy(source, &manifest_dest);
             files.push("manifest.json".to_string());
@@ -767,6 +792,7 @@ impl Library {
                     "ground_plane_offset": ground_offset,
                     "splat_file": splat_filename,
                     "collider_file": collider_filename,
+                    "pano_file": pano_file,
                 }),
                 task_id: String::new(),
                 created_at: now_secs(),
@@ -786,6 +812,36 @@ impl Library {
             let _ = std::fs::remove_dir_all(&dir);
         }
         outcome
+    }
+
+    /// Un mundo importado antes de que la app guardase el panorama lo consigue al reimportar su manifiesto,
+    /// sin duplicarse. Si ya lo tiene, o el manifiesto no trae panorama, se devuelve tal cual. @spec REQ-18
+    fn complete_panorama(&self, existing: LibraryEntry, json: &Value, base_dir: &Path) -> Result<LibraryEntry, UnrealError> {
+        let has_pano = existing.parameters.get("pano_file").and_then(Value::as_str).is_some();
+        if has_pano || panorama_url(json).is_none() {
+            return Ok(existing);
+        }
+        let dir = inside(&self.root, &existing.id)?;
+        let agent = ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .timeout_global(Some(Duration::from_secs(120)))
+            .build()
+            .new_agent();
+        let result = match download_panorama(&agent, json, base_dir, &dir) {
+            Some(fname) => self.update(|entries| {
+                let entry = entries.iter_mut().find(|e| e.id == existing.id)
+                    .ok_or_else(|| UnrealError::NotFound(format!("no existe el asset {}", existing.id)))?;
+                if !entry.files.contains(&fname) {
+                    entry.files.push(fname.clone());
+                }
+                if let Some(params) = entry.parameters.as_object_mut() {
+                    params.insert("pano_file".into(), Value::String(fname));
+                }
+                Ok(entry.clone())
+            }),
+            None => Ok(existing),
+        };
+        result
     }
 
     /// Descarga un fichero desde una URL (HTTPS, HTTP o localhost en tests) y lo importa a la biblioteca.
@@ -1215,6 +1271,59 @@ mod tests {
         let e2 = library.import_file(&manifest_path, None).unwrap();
         assert_eq!(e1.id, e2.id);
         assert_eq!(library.list().len(), 1);
+    }
+
+    /// @spec REQ-18
+    #[test]
+    fn importa_el_panorama_del_mundo() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("source");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("isla.spz"), b"SPZ data").unwrap();
+        std::fs::write(src.join("rgb_0.png"), b"PNG pano").unwrap();
+        let manifest = serde_json::json!({
+            "id": "wl-pano-1",
+            "sceneUrl": "isla.spz",
+            "rawResponse": { "world_id": "wl-pano-1", "assets": { "imagery": { "pano_url": "rgb_0.png" } } }
+        });
+        let manifest_path = src.join("manifest.json");
+        std::fs::write(&manifest_path, manifest.to_string()).unwrap();
+
+        let library = Library::new(dir.path().join("library"));
+        let entry = library.import_file(&manifest_path, None).unwrap();
+
+        assert_eq!(entry.parameters["pano_file"], "panorama.png");
+        assert!(entry.files.contains(&"panorama.png".to_string()));
+        assert_eq!(entry.primary_file().as_deref(), Some("isla.spz"), "el panorama no es el fichero principal");
+        assert_eq!(std::fs::read(library.file_path(&entry.id, "panorama.png").unwrap()).unwrap(), b"PNG pano");
+    }
+
+    /// Un mundo importado sin panorama lo consigue al reimportar su manifiesto, sin duplicarse.
+    /// @spec REQ-18
+    #[test]
+    fn reimportar_completa_el_panorama_que_faltaba() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("source");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("isla.spz"), b"SPZ data").unwrap();
+        let manifest_path = src.join("manifest.json");
+        let without = serde_json::json!({ "id": "wl-pano-2", "sceneUrl": "isla.spz" });
+        std::fs::write(&manifest_path, without.to_string()).unwrap();
+
+        let library = Library::new(dir.path().join("library"));
+        let old = library.import_file(&manifest_path, None).unwrap();
+        assert!(old.parameters["pano_file"].is_null());
+
+        std::fs::write(src.join("pano.jpg"), b"JPG pano").unwrap();
+        let with = serde_json::json!({ "id": "wl-pano-2", "sceneUrl": "isla.spz", "panoUrl": "pano.jpg" });
+        std::fs::write(&manifest_path, with.to_string()).unwrap();
+        let again = library.import_file(&manifest_path, None).unwrap();
+
+        assert_eq!(again.id, old.id);
+        assert_eq!(library.list().len(), 1);
+        assert_eq!(again.parameters["pano_file"], "panorama.jpg");
+        assert_eq!(library.get(&old.id).unwrap().parameters["pano_file"], "panorama.jpg", "queda guardado en el índice");
+        assert!(library.file_path(&old.id, "panorama.jpg").unwrap().is_file());
     }
 
     /// @spec REQ-42
