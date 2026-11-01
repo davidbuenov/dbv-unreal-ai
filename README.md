@@ -5,9 +5,9 @@
 **🇪🇸 Español · [🇬🇧 English](./README.en.md)**
 
 [![Sitio Web](https://img.shields.io/badge/Sitio_Web-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/)
-[![Releases v0.2.4](https://img.shields.io/badge/Releases-v0.2.4-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.3.0](https://img.shields.io/badge/Releases-v0.3.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
-[![status](https://img.shields.io/badge/status-estable_%7C_v0.2.4-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.2.4)
+[![status](https://img.shields.io/badge/status-estable_%7C_v0.3.0-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.3.0)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -146,7 +146,7 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 
 ## 🚧 Estado
 
-**v0.3.0** (en desarrollo, rama `v0.3.0`). Lo nuevo hasta ahora:
+**v0.3.0** (2026-11-01). Lo nuevo:
 
 - **Gaussian Splatting por GPU, propio y sin plugins de terceros (REQ-61..REQ-63):** splats de 10 millones con color según el ángulo (armónicos esféricos), sin parpadeo en Play y a unos 70 fps;
 - **Mundos de World Labs caminables (REQ-18):** a escala métrica, con el suelo en Z = 0, la colisión alineada y el `PlayerStart` sobre el terreno;
@@ -154,7 +154,10 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 - **Chino simplificado (REQ-64):** interfaz, ayuda y conversación en 中文, además de español e inglés;
 - **Guías de Unreal sin red (REQ-25):** con una copia local de las guías (Ajustes → Conocimiento), la IA busca en ellas sin conexión y cita la URL de cada fragmento;
 - **Recetas guiadas (REQ-23):** «📋 Recetas» en la conversación: nivel de prueba, personaje de Tripo con animaciones, caminar por un mundo de World Labs y MetaHuman con Convai; la IA las hace paso a paso y al final comprueba el resultado en el editor; los agentes las ven como Agent Skills;
-- **«Mejorar con IA» en Generar (REQ-66):** convierte una idea corta («ciudad bonita») en un prompt elaborado para Tripo o World Labs, sin gastar créditos hasta que pulses Generar; y cada pestaña lleva el logo de su servicio (REQ-65).
+- **«Mejorar con IA» en Generar (REQ-66):** convierte una idea corta («ciudad bonita») en un prompt elaborado para Tripo o World Labs, sin gastar créditos hasta que pulses Generar; y cada pestaña lleva el logo de su servicio (REQ-65);
+- **Menos permisos y mucho menos contexto con los agentes (REQ-12, REQ-51):** las consultas no piden aprobación y las respuestas de las herramientas pesan menos de la mitad;
+- **Convai y zonas del nivel (REQ-55..REQ-59):** personajes que hablan con voz preparados desde la conversación, y lugares con nombre en el nivel para que la IA sepa dónde poner las cosas;
+- **World Labs con su propia cuenta (REQ-18):** su clave, su tope de créditos y su saldo, también para los agentes (`worldlabs_balance`).
 
 **v0.2.3** (2026-10-29). La conexión a IAs y su guía pasan a ser las mismas de todas las apps DBV ([`dbv-tauri-starter`](https://github.com/davidbuenov/dbv-tauri-starter), donde se probaron agente por agente):
 

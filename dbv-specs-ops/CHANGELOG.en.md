@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-01
+
+Version v0.3.0: the AI changes the project's code (only in `Source/`, `Content/Python/` and `Config/*.ini`) and the app compiles the C++ with Live Coding or UBT; guided recipes with a final check in the editor; offline Unreal guides; Simplified Chinese; own GPU Gaussian Splatting with view-dependent colour; World Labs worlds placed at their real scale and also generated from an agent; Convai and level zones; "Improve with AI" in Generate; and fewer approvals and much less context with agents.
+
 ### Added
 
 - **Fewer approvals with agents (REQ-12):** when an agent (Claude Code, Antigravity, Codex…) asks permission for a **read-only query** of the app server (listing or describing toolsets, summarising the scene, capturing the viewport, the library, checking a recipe, searching the guides…), the app grants it on its own and notes it in the conversation with "✓ Read-only, no approval needed". `unreal_call_tool` also goes through on its own if the Unreal tool only reads (`get_…`, `list_…`), with the same rule as the integrated assistant. Anything that modifies, runs Python or spends credits still asks, and so do the agent's own tools. The `--mcp` tools are also published with the standard `readOnlyHint` annotation.
@@ -213,6 +217,11 @@ First release: connection to Unreal 5.8 through MCP, project preparation, conver
 - **[Important]** A job id could clash between the window and an agent's `--mcp` if both launched in the same millisecond; it now carries the process id.
 - Review nits (3): early `return`s outside guard clauses in `tools::build`, `resolve_source` and `uploadable`.
 
-[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.4...v0.3.0
+[0.2.4]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.1.0

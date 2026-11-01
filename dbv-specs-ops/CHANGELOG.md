@@ -11,6 +11,10 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.3.0] - 2026-11-01
+
+Versión v0.3.0: la IA cambia el código del proyecto (solo en `Source/`, `Content/Python/` y `Config/*.ini`) y la app compila el C++ con Live Coding o con UBT; recetas guiadas con comprobación final en el editor; guías de Unreal sin red; chino simplificado; Gaussian Splatting propio por GPU con color según el ángulo; mundos de World Labs colocados a su escala real y generados también desde un agente; Convai y zonas del nivel; «Mejorar con IA» en Generar; y menos permisos y mucho menos contexto con los agentes.
+
 ### Added
 
 - **Menos permisos con los agentes (REQ-12):** cuando un agente (Claude Code, Antigravity, Codex…) pide permiso para una **consulta** del servidor de la app (listar o describir toolsets, resumir la escena, capturar el viewport, la biblioteca, comprobar una receta, buscar en las guías…), la app lo concede sola y lo apunta en la conversación con «✓ Consulta, sin pedir permiso». `unreal_call_tool` también va solo si la herramienta de Unreal solo lee (`get_…`, `list_…`), con la misma regla que el asistente integrado. Lo que modifica, ejecuta Python o gasta créditos sigue preguntando, y también las herramientas propias del agente. Además, las herramientas del `--mcp` se publican con la anotación estándar `readOnlyHint`.
@@ -213,6 +217,11 @@ Primera versión: conexión con Unreal 5.8 por MCP, preparación del proyecto, c
 - **[Importante]** El id de un trabajo podía coincidir entre la ventana y el `--mcp` de un agente si lanzaban en el mismo milisegundo; ahora lleva el id del proceso.
 - Nits de la revisión (3): `return` tempranos fuera de las guardas en `tools::build`, `resolve_source` y `uploadable`.
 
-[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.0...HEAD
+[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.4...v0.3.0
+[0.2.4]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.1.0

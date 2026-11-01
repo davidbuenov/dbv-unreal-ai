@@ -1,56 +1,54 @@
-# 🧭 Walkthrough — DBV Unreal AI v0.2.0
+# 🧭 Walkthrough — DBV Unreal AI v0.3.0
 
-> **Fecha:** 2026-10-27 · **Versión:** 0.2.0 · **Autores:** David Bueno Vallejo y David Bueno Carmona
-> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md)
+> **Fecha:** 2026-11-01 · **Versión:** 0.3.0 (Minor, desde la 0.2.4) · **Autores:** David Bueno Vallejo y David Bueno Carmona
+> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.12 y §3.13) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.3.0.md`](./releases/v0.3.0.md)
 
 ## Qué es
 
-Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cualquier IA a proyectos abiertos de Unreal Engine 5.8 por su servidor MCP experimental, prepara el proyecto si hace falta, deja que la IA actúe en el editor **con permiso**, permite deshacer turnos completos con un clic, genera modelos 3D con Tripo y mundos fotorrealistas con World Labs Marble, y gestiona memoria persistente del proyecto y tareas comprobadas en el editor.
+Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cualquier IA (modelos locales, de nube o agentes por suscripción como Claude Code, Codex o Antigravity) a proyectos abiertos de Unreal Engine 5.8 por su servidor MCP. La IA actúa en el editor **con permiso**, genera assets con Tripo y mundos con World Labs, y lo lleva todo al nivel.
 
-## Qué se entrega en v0.2.0
+## Qué se entrega en v0.3.0
 
 | Área | Qué hace | Requisitos |
 | --- | --- | --- |
-| Generación de mundos (World Labs) | Integración completa con World Labs Marble API (`marble-1.1`, `marble-1.0-draft`): texto/imagen → mundo, estimación de créditos, descarga automática de `.spz`, mallas `.glb` y metadatos de escala a la biblioteca, pestaña dedicada en Generar y herramientas para el asistente y MCP | REQ-18, S27 |
-| Deshacer turno de la IA | Botón «↩️ Deshacer este turno» en la conversación que revierte en bloque las transacciones en Unreal Engine vía Slate post-tick callback, con detección de cambios externos y borrado opcional de assets generados | REQ-40, S26 |
-| Múltiples instancias | Detección y gestión de editores abiertos concurrentemente en puertos contiguos (8000, 8001…), propuesta de puerto libre al preparar, verificación de identidad por `get_project_info` y selector dinámico en la píldora | REQ-07, S24 |
-| Animaciones y personajes | Selector interactivo de rig en el visor 3D que acopla clips esqueléticos a cualquier cuerpo de la biblioteca en tiempo real, con desempaquetado de sobres IPC y corrección de etiquetas modales | REQ-16, REQ-31 |
-| Componente C++ 3DGS | Módulo C++ `DBVUnrealAICpp` con `UDbvGaussianSplatComponent` y `ADbvGaussianSplatActor` (licencia MIT) para carga nativa de `.spz` y `.ply`, renderizado anisótropo y colocación sincronizada en el nivel | REQ-41, REQ-42, S28b |
-| Visor 3D y miniaturas | Miniaturas automáticas fuera de pantalla con Three.js, iluminación de estudio de 3 puntos, sombreado suave con arcilla mate neutra para mallas de colisión y conmutador visual con render fotorrealista | REQ-31, REQ-42, S28c |
-| Importación de escenarios | Soporte para manifiestos JSON de World Labs (archivos o carpetas completas), progreso en vivo por pasos, bloqueo de botones y deduplicación por `world_id` | REQ-42, S28d |
-| Memoria del proyecto | `dbv-unreal-ai/memory.md` y `task.md` junto al `.uproject` con control de concurrencia atómico; propuestas automáticas de la IA al decidir y consulta por herramientas MCP | REQ-34, REQ-35 |
-| Vista Plan y verificación | Gestión visual de tareas con criterios de «hecho» comprobados en el editor (`asset exists`, `actor exists`, `level is`), estimación de costes y planificación asistida | REQ-36, REQ-37 |
-| Captura del viewport | `unreal_capture_viewport` para modelos con visión con rejilla en metros y etiquetado de actores | REQ-13 |
-| Tripo en vivo | Verificado contra la API real de Tripo (105 créditos gastados): generación, rigging, animación y reproducción en el viewport de Unreal 5.8.4 | REQ-15, REQ-16 |
+| Código del proyecto | La IA propone cambios solo en `Source/`, `Content/Python/` y `Config/*.ini` (diff revisable, nunca `.uasset` ni `Plugins/`). Al aceptar, la app compila: Live Coding si solo cambian `.cpp`; si cambian cabeceras, cierra el editor, compila con UBT y lo reabre. Los errores vuelven a la IA | REQ-22 |
+| Recetas guiadas | «📋 Recetas»: nivel de prueba, personaje de Tripo animado, caminar por un mundo de World Labs, MetaHuman con Convai. Paso a paso, con permiso, y comprobación final en el editor; también como AgentSkills del editor | REQ-23 |
+| Guías de Unreal sin red | `search_unreal_guides` busca (BM25) en una copia local de las guías de UE 5.8 y cita la URL de cada fragmento | REQ-25 |
+| Gaussian Splatting por GPU | Render propio (módulo `DBVUnrealAICppRender`): subida única, proyección y ordenación en GPU, armónicos esféricos de grado 1 a 3, 10 M de splats a ~57–70 fps, sin parpadeo en Play | REQ-61, REQ-62, REQ-63 |
+| Mundos de World Labs | Colocados a escala métrica con el suelo en Z = 0, colisión alineada y `PlayerStart` sobre el terreno. Cliente según la API real (`WLT-Api-Key`, `world_prompt`, `remaining_credits`); clave, tope y saldo propios; `worldlabs_balance` para agentes; tarjeta con tiempo transcurrido (la API no da porcentaje) | REQ-18 |
+| Agentes más ligeros | Las consultas del MCP de la app no piden permiso; `describe_toolset` compacto y tope de resultados (79 % menos texto en el guion fijo); contador de herramientas al pie de cada respuesta | REQ-12, REQ-51 |
+| Convai y zonas | Detección del plugin, reglas en la conversación, personajes en Ajustes, tutorial F1; lugares con nombre en el nivel | REQ-55..REQ-59, REQ-57 |
+| Generar | Logos de cada servicio y «Mejorar con IA»: una idea corta → prompt elaborado, siempre fuera de la conversación (con un agente, en una sesión ACP aparte sin herramientas) | REQ-65, REQ-66 |
+| Chino simplificado | Interfaz, ayuda, conversación y recetas en 中文 | REQ-64 |
+| Biblioteca y diagnóstico | Biblioteca en `Documentos/DBV Unreal AI/Library` (visible fuera del MSIX), migración sin borrar; log local rotativo sin claves; aviso cuando un `.mcp.json` da a los agentes un acceso directo al editor, con qué hacer | REQ-53, RNF-08, REQ-52 |
 
 ## Cómo probarlo
 
-1. `npm install` y `npm run tauri dev` (en la raíz).
-2. Abre uno o más proyectos de Unreal 5.8; la píldora detecta los editores y permite alternar entre proyectos.
-3. **Ajustes:** conecta una IA y configura tus claves de Tripo y World Labs (en el llavero del sistema).
-4. **Generar:**
-   - En **Modelos (Tripo)**: genera un modelo, riggealo o anímalo.
-   - En **Mundos (World Labs)**: escribe un prompt o sube una imagen de referencia para generar un entorno fotorrealista con splats gaussianos y malla de colisión.
-5. **Biblioteca:** visualiza los modelos y mundos generados en 3D con Three.js; abre un clip de animación y elige qué personaje de la biblioteca debe interpretarlo.
-6. **Enviar a Unreal:** coloca el modelo o el actor Gaussian Splatting con su collider directamente en el nivel abierto.
-7. **Conversación:** pide cambios a la IA; tras una ejecución que altere el nivel, pulsa «↩️ Deshacer este turno» para revertir todas las acciones de ese turno en bloque.
-8. **Plan:** crea tareas y objetivos, o pide a la IA que planifique tu escena; marca tareas comprobando automáticamente su cumplimiento en el editor.
+1. `npm install` y `npm run tauri dev` (en la raíz). La app es de escritorio: no hay scripts `start`/`stop`.
+2. Abre un proyecto de Unreal 5.8 y conéctalo desde **Proyecto** («Preparar» si hace falta).
+3. **Ajustes:** conecta una IA; pon las claves de Tripo y de World Labs (cada una con su saldo y su tope).
+4. **Generar → Escenario 3D:** escribe una idea, pulsa «✨ Mejorar con IA» y luego Generar; un mundo tarda unos 5 minutos.
+5. **Conversación:** pide un cambio de C++ («crea un actor que gire») y acepta la propuesta: la app compila. Prueba también «📋 Recetas».
+6. **Biblioteca → Enviar a Unreal** un mundo: el splat queda a escala, caminable en Play.
 
 ## Verificación
 
-- **Automática (en verde el 2026-10-27):**
-  - 170 tests de Rust (`cargo test --manifest-path src-tauri/Cargo.toml`).
-  - 269 tests de Vitest en 29 suites (`npx vitest run`).
-  - 34 tests de Python del toolset (`python -I -m unittest discover -s tests/python -v`).
-  - Linter determinista `dbv-lint.py` en 9 ficheros Python: 0 errores, 0 avisos.
-- **En vivo contra Unreal 5.8.4:**
-  - Carga de nivel con gaussian splatting desde conversación, inserción y posicionamiento automático de más de 30 actores en escena.
-  - Generación, rig y animación con Tripo verificados con saldo real.
-  - Componente C++ `DBVUnrealAICpp` compilado e integrado en proyecto de Unreal.
+- **Automática (en verde el 2026-11-01, antes del tag):** Rust 233 (`npm test`), Vitest 366 en 43 ficheros (`npm run test:ai`), Python 47 (`npm run test:python`), `dbv-lint` sin errores, `cargo clippy --all-targets` sin avisos y banco e2e correcto (`npm run test:e2e`).
+- **En vivo con el usuario (UE 5.8.4, `DBVUnrealAITest1`):**
+  - Render GPU de splats: la iglesia de 9.975.598 splats en viewport, Play y captura de la app; desierto de World Labs caminable con un personaje.
+  - Código: la IA creó `ADemoActor`, la app cerró el editor, compiló con UBT y lo reabrió; un cambio de `.cpp` compiló con Live Coding.
+  - Recetas: las cuatro comprobaciones y `ListSkills` con las cuatro recetas en el editor.
+  - World Labs: dos mundos `marble-1.1` reales (uno desde un agente y otro desde Generar, 309 s), saldo visible en la app.
+  - «Mejorar con IA» con Antigravity sin salir de Generar; chino revisado por el usuario.
+- **Sin verificar:** evals con un modelo real en esta versión, revisión nativa del chino, macOS y Linux en máquina real.
 
-## Revisión de código y estándares
+## Revisión de código
 
-- Revisión exhaustiva `/code-simplify` completada:
-  - Garantizada limpieza de carpetas temporales ante cancelaciones o errores en operaciones World Labs.
-  - Regla de un solo `return` + guard clauses aplicada en comandos Rust, JavaScript (`generateView.js`) y Python.
-  - Documentación de IA actualizada en `docs/IA.md` y `docs/IA.en.md`.
+- `/code-simplify` de la v0.3.0 y de su ampliación: 0 Críticos; los Importantes resueltos están en el CHANGELOG (pie del turno perdido al reabrir, consolas visibles en Windows, `Build.bat` con ventana…).
+- Correcciones de las pruebas del usuario el 2026-11-01, con test de regresión cada una: World Labs con la clave y el tope de Tripo, cliente de World Labs contra una API supuesta, «Mejorar con IA» que saltaba a la conversación, tarjeta del mundo en «0 %» y aviso de accesos duplicados que confundía.
+
+## Pendiente para la siguiente versión
+
+- Reanudar un trabajo huérfano de World Labs (hoy, si la app se cierra a mitad, el mundo se genera pero no se descarga).
+- Canales de distribución (Homebrew, Microsoft Store, Uptodown) y actualizaciones automáticas.
+- Evals con un modelo real y revisión nativa del chino.
