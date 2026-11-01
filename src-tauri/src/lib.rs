@@ -271,6 +271,9 @@ pub fn run() {
             #[cfg(desktop)]
             unreal::commands::unreal_call_tool,
             unreal::commands::unreal_code_path_problem,
+            unreal::commands::unreal_compile_plan,
+            unreal::commands::unreal_compile_live,
+            unreal::commands::unreal_build_project,
             #[cfg(desktop)]
             unreal::commands::unreal_readiness,
             #[cfg(desktop)]

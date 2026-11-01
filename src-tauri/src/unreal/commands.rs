@@ -266,6 +266,31 @@ pub async fn unreal_call_tool(app: AppHandle, endpoint: Endpoint, toolset: Strin
     .await
 }
 
+// ─── Compilar el código del proyecto (REQ-22) ─────────────────────────
+
+/// Cómo se compilan esos ficheros cambiados (Live Coding, editor cerrado o nada). @spec REQ-22
+#[tauri::command]
+pub fn unreal_compile_plan(paths: Vec<String>) -> super::compile::CompilePlan {
+    super::compile::compile_plan(&paths)
+}
+
+/// Compila con Live Coding en el editor conectado. @spec REQ-22
+#[tauri::command]
+pub async fn unreal_compile_live(app: AppHandle, endpoint: Endpoint) -> Result<super::compile::CompileOutcome, UnrealError> {
+    let url = endpoint.url();
+    blocking(move || with_session(&app.state::<UnrealState>(), &url, super::compile::live_coding)).await
+}
+
+/// Compila el editor del proyecto con UBT; el editor tiene que estar cerrado. @spec REQ-22
+#[tauri::command]
+pub async fn unreal_build_project(path: String) -> Result<super::compile::CompileOutcome, UnrealError> {
+    blocking(move || {
+        let project = Path::new(&path);
+        super::compile::build_project(&super::compile::engine_root_for(project)?, project)
+    })
+    .await
+}
+
 /// Captura del viewport reducida a JPEG para un modelo con visión. @spec REQ-13
 #[tauri::command]
 pub async fn unreal_capture_viewport(app: AppHandle, endpoint: Endpoint, annotate: bool, detail: Option<String>) -> Result<super::capture::Capture, UnrealError> {

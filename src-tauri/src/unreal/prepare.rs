@@ -31,6 +31,17 @@ use super::{ini, io_error, UnrealError};
 
 /// Plugins de Epic que la preparación activa.
 pub const REQUIRED_PLUGINS: [&str; 6] = ["ModelContextProtocol", "ToolsetRegistry", "PythonScriptPlugin", "EditorToolset", "AutomationTestToolset", "SlateInspectorToolset"];
+/// Solo en proyectos con C++: compilar con Live Coding desde la app (REQ-22).
+pub const CPP_PLUGINS: [&str; 1] = ["LiveCodingToolset"];
+
+/// Plugins que necesita este proyecto.
+fn required_plugins(has_cpp: bool) -> Vec<&'static str> {
+    let mut plugins = REQUIRED_PLUGINS.to_vec();
+    if has_cpp {
+        plugins.extend_from_slice(&CPP_PLUGINS);
+    }
+    plugins
+}
 /// Plugin de solo contenido con el toolset en Python.
 pub const PYTHON_PLUGIN: &str = "DBVUnrealAI";
 /// Plugin C++ (registra el toolset desde C++ y delega en el paquete Python).
@@ -180,7 +191,7 @@ pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealErro
         ok: version.is_some_and(|v| v >= MIN_ENGINE) && engine.is_some(),
         detail: engine.as_ref().map(|e| e.version.clone()).unwrap_or_else(|| project.engine_association.clone()),
     }];
-    for name in REQUIRED_PLUGINS {
+    for name in required_plugins(project.has_cpp) {
         let enabled = project.plugins.iter().any(|p| p.name == name && p.enabled);
         checks.push(Check { id: format!("plugin:{name}"), ok: enabled, detail: String::new() });
     }
@@ -275,7 +286,7 @@ pub fn plan(uproject: &Path, source: &Path, variant: Variant, port: Option<u16>)
     let mut changes = Vec::new();
     // 1. Plugins del `.uproject`.
     let before = std::fs::read_to_string(uproject).map_err(|error| io_error(uproject, &error))?;
-    let mut wanted: Vec<&str> = REQUIRED_PLUGINS.to_vec();
+    let mut wanted = required_plugins(discovery::read_uproject(uproject)?.has_cpp);
     wanted.extend_from_slice(variant.plugins());
     let after = enable_plugins(&before, &wanted)?;
     if after != before {
@@ -481,6 +492,22 @@ mod tests {
         assert!(super::plan(&path, &source(), Variant::Python, Some(8123)).unwrap().changes.is_empty(), "preparar dos veces no cambia nada");
         revert(&path, backups.path(), &id).unwrap();
         assert_eq!(snapshot(dir.path()), original, "revertir deja el proyecto byte a byte como estaba");
+    }
+
+    /// Live Coding desde la app solo tiene sentido con C++: un proyecto de Blueprints no lo pide.
+    /// @spec REQ-22, REQ-05
+    #[test]
+    fn un_proyecto_con_cpp_pide_el_toolset_de_live_coding() {
+        let (dir, path) = project();
+        let ids = |path: &Path| readiness(path, &source()).unwrap().checks.into_iter().map(|c| c.id).collect::<Vec<_>>();
+        assert!(!ids(&path).contains(&"plugin:LiveCodingToolset".to_string()));
+        assert!(!plan(&path, &source(), Variant::Python, None).unwrap().changes[0].after.contains("LiveCodingToolset"));
+
+        std::fs::create_dir_all(dir.path().join("Source").join("Demo")).unwrap();
+        assert!(ids(&path).contains(&"plugin:LiveCodingToolset".to_string()));
+        let uproject = &plan(&path, &source(), Variant::Python, None).unwrap().changes[0];
+        assert!(uproject.relative.ends_with("Demo.uproject"));
+        assert!(uproject.after.contains("\"Name\": \"LiveCodingToolset\",\r\n\t\t\t\"Enabled\": true"));
     }
 
     /// @spec REQ-05

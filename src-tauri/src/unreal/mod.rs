@@ -13,11 +13,12 @@
 //   · `prepare`: diagnóstico y preparación de un proyecto (REQ-04, REQ-05).
 //   · `compact`: tope y formato compacto de lo que se devuelve a la IA (REQ-51).
 //   · `duplicates` y `convai`: accesos directos al editor y Convai en el proyecto (REQ-52, REQ-55).
-//   · `code_policy`: qué ficheros del proyecto puede cambiar la IA (REQ-22).
+//   · `code_policy` y `compile`: qué ficheros del proyecto puede cambiar la IA y cómo se compilan (REQ-22).
 //   · `commands`: frontera con el frontend.
 
 pub mod capture;
 pub mod code_policy;
+pub mod compile;
 pub mod commands;
 pub mod compact;
 pub mod convai;
