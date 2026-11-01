@@ -18,7 +18,10 @@ Características principales:
 • Soporte integrado de Google Antigravity CLI, Claude Code, GitHub Copilot, Codex y Gemini CLI
 • Generación y colocación de mundos fotorrealistas con World Labs Marble (Gaussian Splatting .spz y colisión .glb)
 • Generación, auto-rigging y animación de modelos 3D con Tripo3D v3
-• Componente nativo libre en C++ de Gaussian Splatting (UDbvGaussianSplatComponent) sin dependencias comerciales
+• Gaussian Splatting propio en C++, dibujado por la GPU con color según el ángulo: escenas de 10 millones de splats sin plugins comerciales
+• La IA edita el código C++ del proyecto (siempre como cambios que revisas) y la app lo compila con Live Coding o Unreal Build Tool
+• Recetas guiadas paso a paso con comprobación final en el editor y búsqueda en las guías de Unreal sin conexión
+• Personajes conversacionales de Convai y zonas con nombre en el nivel
 • Previsualización interactiva en 3D con Three.js e iluminación de estudio
 • Preparación automática de proyectos de Unreal Engine con copias de seguridad reversibles
 • Inspección y captura del viewport en vivo para comprensión contextual visual
@@ -26,7 +29,7 @@ Características principales:
 • Sistema de Memoria y Plan del Proyecto independiente y versionable en disco
 • Detección automática de múltiples instancias y proyectos de Unreal Engine en paralelo
 • Centro de Ayuda interactivo (F1) con guías de Unreal Engine 5.8, atajos y la guía completa para conectar cada IA, disponible sin conexión
-• Interfaz cuidada con diseño cálido, modo oscuro y temas de alto contraste
+• Interfaz en español, inglés y chino simplificado, con diseño cálido, modo oscuro y temas de alto contraste
 • Totalmente privado: tus proyectos y niveles no salen de tu equipo
 • Licencia de código abierto MIT
 
@@ -34,12 +37,14 @@ Características principales:
 
 ## Novedades de esta versión
 
-v0.2.3:
-• Todos los agentes por suscripción funcionan: Google Antigravity (con su servidor oficial agy_acp_server e inicio de sesión con tu cuenta de Google), Codex, GitHub Copilot y Claude Code.
-• Inicio de sesión guiado: si el agente lo pide, la app lo solicita con tu cuenta y te avisa de que puede abrirse el navegador.
-• Guía completa para conectar cada IA dentro de la app (F1 → Guía de IAs y desde «Conectar una IA»), sin conexión y con botón Copiar para cada orden de instalación.
-• Si un agente está instalado pero le falta algo (el servidor de Antigravity o la CLI de Copilot), la app lo dice y te lleva a las instrucciones.
-• Panel del asistente más claro: las etiquetas de contexto ya no se cortan.
+v0.3.0:
+• La IA edita el código C++ del proyecto (siempre como cambios que revisas) y la app compila: Live Coding o, si hace falta, cierra el editor, compila y lo vuelve a abrir.
+• Recetas guiadas: nivel de prueba, personaje animado, caminar por un mundo de World Labs y MetaHuman con Convai, con comprobación final en el editor.
+• Guías de Unreal sin conexión: la IA busca en tu copia local y cita la URL de cada fragmento.
+• Gaussian Splatting propio por GPU, con color según el ángulo: escenas de 10 millones de splats sin parpadeos.
+• Mundos de World Labs a su escala real y caminables, con su propia clave, tope y saldo.
+• «Mejorar con IA» en Generar: una idea corta se convierte en una descripción completa.
+• Chino simplificado, personajes de Convai, zonas del nivel, y menos permisos y menos consumo con los agentes.
 
 ---
 
@@ -50,7 +55,7 @@ v0.2.3:
 3. Compatible con Google Antigravity CLI, Claude Code y Copilot
 4. Generación de mundos 3D con Gaussian Splats (.spz)
 5. Generación y animación de personajes con Tripo3D
-6. Componente libre de Gaussian Splatting en C++
+6. Gaussian Splatting propio por GPU, sin plugins comerciales
 7. Visor 3D interactivo con iluminación de estudio
 8. Preparación automática y reversible de proyectos Unreal
 9. Captura del viewport para análisis contextual de escenas
@@ -60,9 +65,11 @@ v0.2.3:
 13. Centro de Ayuda integrado con atajo rápido F1
 14. Atajos globales: F1, Ctrl+Mayús+I, Esc, Ctrl+S
 15. 100% privado y local por defecto
-16. Interfaz bilingüe (español e inglés)
+16. Interfaz en español, inglés y chino simplificado
 17. Sin telemetría oculta ni recopilación de datos
 18. Código abierto bajo licencia MIT
+19. La IA edita y compila el código C++ del proyecto
+20. Recetas guiadas y guías de Unreal sin conexión
 
 ---
 
@@ -93,3 +100,5 @@ Las funciones de Inteligencia Artificial son 100% opcionales y están desactivad
 - Si el usuario decide conectar una IA, puede elegir entre IAs 100% locales (Ollama o LM Studio sin salida a red), agentes CLI con sus propias credenciales, o modelos en la nube mediante su propia clave privada custodiada en el sistema.
 - Ningún dato ni proyecto sale del equipo sin la acción y consentimiento explícito del usuario.
 - Los agentes por suscripción (Claude Code, Codex, Gemini CLI, Google Antigravity, GitHub Copilot CLI) son programas aparte que el usuario instala y en los que inicia sesión por su cuenta; la app solo los lanza, con la carpeta del proyecto como directorio de trabajo, cuando el usuario conecta uno. Si un agente pide iniciar sesión, puede abrir el navegador del sistema para que el usuario entre en ese servicio.
+- Cuando la IA cambia el código C++ del proyecto y el usuario acepta el cambio, la app compila con las herramientas de Unreal instaladas por el usuario (Live Coding a través del editor, o Unreal Build Tool con el editor cerrado) y vuelve a abrir el editor. Solo se compila el proyecto que el usuario tiene abierto.
+- La app guarda su biblioteca de assets en Documentos\DBV Unreal AI\Library y un registro local rotativo, sin claves ni datos personales.

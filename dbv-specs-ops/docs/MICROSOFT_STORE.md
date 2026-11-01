@@ -1,8 +1,8 @@
 # 🏬 Publicación en Microsoft Store: DBV Unreal AI
 
-> **Estado:** 📦 Paquete de la `v0.2.3` generado y listo para subir a Partner Center (§4).  
-> **Versión base:** `v0.2.3`  
-> **Última revisión:** 2026-10-29  
+> **Estado:** 📦 Paquete de la `v0.3.0` generado y listo para subir a Partner Center (§6).  
+> **Versión base:** `v0.3.0`  
+> **Última revisión:** 2026-11-01  
 
 Documento operativo: checklist accionable para empaquetar y publicar **DBV Unreal AI** en la **Microsoft Store** mediante paquetes MSIX auto-firmados por la tienda, siguiendo las lecciones y estándares de `MARKETPLACE_PUBLISHING.md`.
 
@@ -53,7 +53,7 @@ Identidad en `bundle.config.json`:
    - Ejecutar `python scripts/generate-store-assets.py` para asegurar que ningún asset en `src-tauri/gen/windows/Assets/` sea un rectángulo sólido.
 5. **Política de Privacidad:** Enlazar a `https://davidbuenov.github.io/dbv-unreal-ai/privacidad.html`.
 6. **Ficha de Store:**
-   - Copiar textos de `descripcionStore_es.md` (Español) y `descripcionStore_en.md` (Inglés).
+   - Copiar textos de `descripcionStore_es.md` (Español), `descripcionStore_en.md` (Inglés) y `descripcionStore_zh.md` (Chino simplificado, desde la v0.3.0). Cada idioma de la ficha necesita al menos una captura: valen las mismas de `docs/screenshots/`.
 7. **Notas para la certificación:** Indicar que la conexión a Unreal Engine usa el servidor MCP local en `localhost:8000` y que la IA externa es completamente opcional y desactivada por defecto.
 8. **Subir paquete y enviar a certificación.**
 
@@ -96,3 +96,28 @@ Identidad en `bundle.config.json`:
 1. **Paquetes:** subir `dbv-unreal-ai_0.2.4.0.msixbundle` y retirar del envío el anterior.
 2. **Novedades de esta versión:** «Corrección en la inicialización del servidor MCP propio al conectar agentes externos de IA».
 3. **Enviar a certificación.**
+
+---
+
+## 6. Envío de la v0.3.0 (2026-11-01)
+
+**Paquete generado** con `npm run tauri:windows:build`:
+
+| Fichero | Uso |
+| --- | --- |
+| `src-tauri/target/msix/dbv-unreal-ai_0.3.0.0.msixbundle` | **El que se sube** a Partner Center (Paquetes) |
+| `src-tauri/target/msix/dbv-unreal-ai_0.3.0.0_x64.msix` | El paquete x64 que va dentro del bundle |
+
+**Comprobado antes de subir** (leyendo el `AppxManifest.xml` del `.msix`):
+
+- `Identity`: `Name="davidbuenov.DBVUnrealAI"`, `Publisher="CN=13EE2A5D-F49E-48C9-8873-941069B15D63"`, `Version="0.3.0.0"`, `x64`.
+- Capacidades `runFullTrust` e `internetClient`; alias `dbv-unreal-ai.exe` para que los agentes lancen el `--mcp`. La v0.3.0 no necesita capacidades nuevas: compilar (Live Coding, UBT) y abrir el editor son procesos que ya cubre `runFullTrust`.
+- Assets sin rectángulos de relleno (`python scripts/generate-store-assets.py`: entre 471 y 998 colores).
+- Tests: Rust 233, Vitest 366, Python 47, `dbv-lint`, clippy y banco e2e en verde.
+
+**Pasos en Partner Center:**
+1. **Paquetes:** subir `dbv-unreal-ai_0.3.0.0.msixbundle` y retirar del envío el de la 0.2.4.
+2. **Fichas de Store:** actualizar español e inglés (descripción, *Novedades de esta versión* y características) y **añadir el idioma Chino (simplificado)** con `descripcionStore_zh.md` y las capturas.
+3. **Notas para la certificación:** las de `descripcionStore_en.md`, que ahora explican la compilación con las herramientas de Unreal y la biblioteca en Documentos.
+4. **Enviar a certificación.**
+
