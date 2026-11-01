@@ -531,8 +531,9 @@ export function start() {
     if (!aiLoading) {
       aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec()])
         .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides]) => {
-          recipeSpecs = recipes?.ok ? recipes.value : [];
-          guidesSpec = guides?.ok ? guides.value : null;
+          // Un backend que no conoce el comando devuelve `null`: sin estas comprobaciones, la IA no cargaría (lección de la v0.2.0).
+          recipeSpecs = recipes?.ok && Array.isArray(recipes.value) ? recipes.value : [];
+          guidesSpec = guides?.ok && guides.value?.name ? guides.value : null;
           convaiCharactersSpec = characters?.ok ? characters.value : null;
           generationSpecs = specs.ok ? specs.value : [];
           memorySpecs = memory.ok ? memory.value : [];

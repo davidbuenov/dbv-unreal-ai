@@ -7,8 +7,10 @@
 //
 // @spec REQ-22, R-30
 //
-// Una sola definición para la conversación de la ventana (`propose_changes`, al proponer y al escribir) y para el
-// `--mcp` de los agentes. Solo texto del proyecto: `Source/**` (C++ y `*.Build.cs`), `Content/Python/**` y
+// Una sola definición, que se aplica donde la IA propone o escribe: la propuesta de la conversación
+// (`applyChange` con `checkPath`), el permiso de un agente (`permissionRefusal`) y su escritura (`stageWrite`). No
+// en la escritura a disco (`ai_write_file`): ahí también pasa «Deshacer», que tiene que poder devolver un fichero a
+// como estaba aunque un agente lo hubiese tocado por su cuenta. Solo texto del proyecto: `Source/**` (C++ y `*.Build.cs`), `Content/Python/**` y
 // `Config/*.ini`. Nunca `.uasset`/`.umap`, nada fuera del proyecto ni en `Plugins/` (los de la app la mantiene ella;
 // los del usuario quedan fuera por decisión suya, 2026-11-01). Los mensajes van en inglés: los lee el modelo.
 

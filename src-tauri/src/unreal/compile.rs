@@ -176,7 +176,16 @@ pub fn build_project(engine_root: &Path, project_path: &Path) -> Result<CompileO
     if !program.is_file() {
         return Err(UnrealError::NotFound(format!("UnrealBuildTool not found: {}", program.display())));
     }
-    let output = Command::new(&program).args(&args).output().map_err(|error| UnrealError::Io(format!("{}: {error}", program.display())))?;
+    let mut command = Command::new(&program);
+    command.args(&args);
+    #[cfg(windows)]
+    {
+        // Sin esto, lanzar `Build.bat` desde la ventana abre una consola negra durante toda la compilación.
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = command.output().map_err(|error| UnrealError::Io(format!("{}: {error}", program.display())))?;
     let text = format!("{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
     let ok = output.status.success();
     let mut errors = compiler_errors(&text);

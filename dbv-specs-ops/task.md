@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.2.4** publicada (2026-10-29); **v0.3.0** en `/build` (rama `v0.3.0`): REQ-50..REQ-60 hechos; ampliación REQ-61..REQ-64 con S61–S68 hechos.
-* **Última decisión técnica**: render de splats por GPU propio en el módulo `DBVUnrealAICppRender` (D33–D45); el editor se lanza fuera del Job Object de la app; **no usar Live Coding** (pedido por el usuario): cerrar el editor y compilar con UBT.
-* **Próximo paso**: S69–S74 (`implementation_plan.md` §10), empezando por S69 (código del proyecto, REQ-22).
+* **Estado actual**: **v0.2.4** publicada (2026-10-29); **v0.3.0** con todo el `/build`, `/test` y `/code-simplify` hechos (rama `v0.3.0`): REQ-50..REQ-66 y S61–S75. Falta `/ship` con el usuario.
+* **Última decisión técnica**: REQ-22 reutiliza `propose_changes` con la regla de rutas en Rust y compila en modo mixto (Live Coding solo con `.cpp`; si no, editor cerrado y UBT); las recetas se publican como Agent Skills desde Python (sin C++); para el plugin propio sigue sin usarse Live Coding (cerrar el editor y compilar con UBT).
+* **Próximo paso**: pruebas del usuario en la app (lista en el Snapshot de abajo) y `/ship` v0.3.0.
 
 ## Checklist de Tareas
 
@@ -163,7 +163,7 @@
     - [x] Un personaje corrió por las dunas en Play (2026-10-31).
     - [x] Spike del cielo (2026-11-01, en vivo): esfera de 1 km con `M_DBV_PanoSky` (`IsSky`, sin luz, panorama con espejo y 90°) en el nivel `isla`; orientación verificada contra el splat. Solo se ve ocultando `SM_SkySphere`, `SkyAtmosphere`, `VolumetricCloud` y `ExponentialHeightFog` (ver `memory.md`). Desde dentro lo tapa la cáscara de cielo del propio splat.
     - [x] **Panorama y cielo descartados por el usuario (2026-11-01)**: desde dentro no se ve y obliga a ocultar el cielo del nivel (REJECTED-08). Se revirtió la descarga del panorama en la biblioteca.
-  - [x] S69 · Código del proyecto: regla de rutas (REQ-22) — `unreal/code_policy.rs` (una definición, tests Rust) que consulta la conversación al proponer (`applyChange` con `checkPath`), al pedir permiso un agente (`permissionRefusal`) y al escribir un agente (`stageWrite`), y que `ai_write_file` vuelve a aplicar; regla en el prompt de Unreal. Se reutiliza `propose_changes` en vez de un módulo nuevo (memoria 2026-11-01). Vitest +4.
+  - [x] S69 · Código del proyecto: regla de rutas (REQ-22) — `unreal/code_policy.rs` (una definición, tests Rust) que consulta la conversación al proponer (`applyChange` con `checkPath`), al pedir permiso un agente (`permissionRefusal`) y al escribir un agente (`stageWrite`), y en el prompt de Unreal (no en `ai_write_file`: bloquearía «Deshacer», corregido en S74). Se reutiliza `propose_changes` en vez de un módulo nuevo (memoria 2026-11-01). Vitest +4.
   - [x] S70 · Código del proyecto: compilar (REQ-22)
     - [x] Núcleo en Rust (`unreal/compile.rs`): plan mixto (solo `.cpp` → Live Coding; cabeceras/`Build.cs`/`Target.cs` → editor cerrado y UBT), `CompileLiveCoding` por la sesión MCP, UBT por sistema operativo con el target de editor del proyecto, errores recortados; comandos `unreal_compile_plan`, `unreal_compile_live`, `unreal_build_project`; «Preparar» activa `LiveCodingToolset` solo con C++. Tests Rust (5).
     - [x] Ventana (`src/app/codeCompile.js`): al aceptar una propuesta (`host.onProposalApplied`) compila; errores a la IA con `ask` (2 reintentos seguidos, luego botón); tarjeta de editor cerrado con «Compilar» (UBT) y «Abrir el editor». `--mcp`: `compile_project_code`. Vitest +5, Rust +1.
@@ -172,7 +172,7 @@
   - [x] S72 · Guías de la API sin red desde carpeta local (REQ-25) — `guides.rs`: carpeta en `knowledge.json` (vale la raíz de MCPCLiente), fragmentos en memoria tras la primera búsqueda, BM25 con idf² y CamelCase separado, hasta 5 fragmentos con la URL de su sección; `search_unreal_guides` en las dos superficies; pestaña Ajustes → Conocimiento (8 pestañas). Probado con la copia real de MCPCLiente (6 consultas, `guias_reales` ignorado por defecto: <0,1 s tras la primera). «Construir índice» sigue pendiente de P-13. Tests: Rust +4 (+1 ignorado), Vitest +1. Test de la ayuda con más margen de tiempo (fallaba por carga con la suite en paralelo).
   - [x] S73 · Chino (REQ-64) — diccionarios `zh-CN` (`src/app/translations.zh.js`, `src/ai/translations.zh.js` y la ventana en `i18n.js`: 680 textos), detección `zh*` → `zh-CN` y botón 中文, respaldo en inglés; la ayuda pasa a tablas por idioma (`src/app/helpContent.js`); frases de idioma de los prompts, del Plan y de «Recordar» en tablas; recetas con `zh-CN`. Tests de paridad de claves y marcadores (Vitest +5). Traducción de la IA: falta la revisión de una persona nativa. Quedan en ES/EN la guía común de IAs (canónica del starter) y los errores del backend en Rust.
   - [x] S75 · Logos en Generar y «Mejorar con IA» (REQ-65, REQ-66) — `brandLogo` pequeño en cada pestaña; `src/generation/promptImprover.js` (instrucciones por servicio, limpieza, tope 1.000/2.000, modelo → consulta suelta, agente → conversación) y controles con «Deshacer» en `generateView.js`. Vitest +6. README con el bloque v0.3.0. Falta verlo en la app (temas claro/sepia y una mejora real).
-  - [ ] S74 · Documentación, `/test` y `/code-simplify` de la ampliación
+  - [x] S74 · Documentación, `/test` y `/code-simplify` de la ampliación (2026-11-01) — `docs/IA*.md` con las novedades de la v0.3.0 (código, recetas, guías, «Mejorar con IA», chino); README ES/EN con el bloque v0.3.0. `/test`: Rust 228, Vitest 354, Python 47, `dbv-lint` sin errores, banco e2e entero en verde (con recetas y guías en el simulador y la carga de la IA blindada ante `null`). `/code-simplify`: (1) `Build.bat` se lanzaba con consola visible → `CREATE_NO_WINDOW`; (2) la regla de rutas en `ai_write_file` bloqueaba «Deshacer» → fuera; (3) un `index_guides.json` con `../` podía hacer leer ficheros de fuera → solo rutas dentro de su carpeta (+1 test). Evals con un modelo real: pendientes (sin modelo disponible).
 - [ ] **`/ship`** v0.3.0 — con el usuario (tipo de versión, commit y tag).
 
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
@@ -206,9 +206,10 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-11-01 (mañana), `/build` de la ampliación v0.3.0, rama `v0.3.0`. S68 cerrado. Logos de Tripo, World Labs y Convai en Ajustes. Rust 209, Vitest 328.
->
-> **Exact point / Punto exacto:** S68 (REQ-18, mundos de World Labs) verificado en vivo con el usuario. El desierto se ve del derecho, Play no parpadea y el usuario corre y sube por las dunas: colisión `.glb` alineada con escala (m, m, −m), compleja como simple, y `PlayerStart` subido sobre el terreno. El editor abierto desde la app ya no muere al reiniciarse la app (`CREATE_BREAKAWAY_FROM_JOB` o WMI; comprobado con `IsProcessInJob = False`).
-> **Estado del editor de pruebas** (`D:\Programacion\Unreal\DBVUnrealAITest1`): plugins instalados y compilados desde cero con UBT (`%TEMP%\dbvh\install-test1.ps1`) a las 23:06. Nivel `/Game/DBV/Maps/isla`: `DBV_Desierto_GPU` (×1,976, Z 217), `Arid_Desert_Sand_Dunes_Collider` y `PlayerStart` a 204 cm; el usuario borró `Floor`. La iglesia está en `version030`.
-> **Pending / Pendiente:** (1) el panorama y el cielo quedan descartados (REJECTED-08); (2) S69–S74 (en S70, proponer al usuario compilar normal con el editor cerrado en vez de Live Coding); (3) `/test`, `/code-simplify` y `/ship` v0.3.0 con el usuario; (4) propuestas sin REQ: suelo automático de un splat importado, y comparar la calidad con XGrids.
-> **Next step / Próximo paso:** S69 (código del proyecto, núcleo en Rust, REQ-22); al tocar C++ del plugin, pedir al usuario que cierre el editor y compilar con UBT.
+> **Last update / Última actualización:** 2026-11-01 (tarde), rama `v0.3.0`, trabajo autónomo autorizado por el usuario («continúa tú solo… a mi vuelta hacemos pruebas»). Rust 228, Vitest 354, Python 47, `dbv-lint` y banco e2e en verde.
+
+> **Exact point / Punto exacto:** cerrados S69–S75 y S74 (`/test` y `/code-simplify` de la ampliación). Verificado en vivo con el editor (DBVUnrealAITest1, puerto 8001): S70 por el usuario (UBT + Live Coding); S71 por la IA (las cuatro comprobaciones, `ListSkills` con las 4 recetas tras reiniciar el editor, `recipe_check` por el `--mcp` real); S72 con la copia real de MCPCLiente. El plugin Python 0.3.2 está instalado en DBVUnrealAITest1 (copiado a mano, como «Preparar»). El editor quedó abierto en su nivel por defecto.
+
+> **Pending / Pendiente:** (1) pruebas del usuario en la app: logos y «✨ Mejorar con IA» en Generar (con un modelo y con un agente), «📋 Recetas» de punta a punta (por ejemplo *Nivel de prueba* en un nivel vacío), Ajustes → Conocimiento con la carpeta de MCPCLiente y una pregunta «cómo…», el idioma 中文 (y que alguien nativo revise la traducción), un error de compilación que la IA corrige; (2) `/ship` v0.3.0 con el usuario (tipo de versión, commit, tag; walkthrough y notas de versión); (3) evals con un modelo real; (4) propuestas sin REQ: suelo automático de un splat importado, comparar la calidad con XGrids, P-13 («Construir índice» de las guías).
+
+> **Next step / Próximo paso:** que el usuario pruebe la lista de (1) con `npm run tauri dev` y, con lo que salga, `/ship` v0.3.0.

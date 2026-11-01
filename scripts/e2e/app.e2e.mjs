@@ -72,6 +72,11 @@ function extra(connections, hasKey = false) {
     convai_characters_spec: { name: 'convai_characters', description: 'x', inputSchema: { type: 'object', properties: {}, required: [] } },
     convai_characters_list: [],
     convai_characters_text: 'No Convai characters are registered yet.',
+    // REQ-23, REQ-25: recetas y guías (se cargan con la IA; Ajustes pide el estado de las guías).
+    recipes_tool_specs: [{ name: 'recipes_list', description: 'x', inputSchema: { type: 'object', properties: {}, required: [] } }],
+    recipes_all: [],
+    guides_tool_spec: { name: 'search_unreal_guides', description: 'x', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+    guides_status: { folder: null, indexFolder: null, guides: 0, chunks: 0, updated: '', problem: 'No local copy' },
     // REQ-51: contador del pie del turno (sin llamadas del --mcp).
     tool_usage_since: { calls: 0, text: 0, images: 0, clipped: 0 },
   });

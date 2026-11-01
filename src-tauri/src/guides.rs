@@ -227,6 +227,12 @@ struct Doc {
     meta: String,
 }
 
+/// ¿Es una ruta relativa que no sale de la carpeta del índice?
+fn inside_folder(file: &str) -> bool {
+    let path = Path::new(file);
+    !file.is_empty() && path.is_relative() && !file.contains(':') && path.components().all(|c| matches!(c, std::path::Component::Normal(_)))
+}
+
 /// Los fragmentos de la última carpeta usada: se leen una vez (33 MB con la copia de MCPCLiente) y se vuelven a leer
 /// si cambia la carpeta o su `index_guides.json`.
 type DocCache = Option<(PathBuf, Option<SystemTime>, Arc<Vec<Doc>>)>;
@@ -243,7 +249,8 @@ fn docs(dir: &Path) -> Result<Arc<Vec<Doc>>, String> {
             let mut loaded = Vec::new();
             for guide in index.guides.values() {
                 let meta = format!("{} {}", guide.keywords.join(" "), guide.category).to_lowercase();
-                for chunk in &guide.chunks {
+                // Un índice manipulado no puede hacer leer (y dar a la IA) ficheros de fuera de su carpeta.
+                for chunk in guide.chunks.iter().filter(|c| inside_folder(&c.file)) {
                     let Ok(text) = std::fs::read_to_string(dir.join(&chunk.file)) else { continue };
                     let title = if chunk.title.is_empty() || chunk.title == "General" { guide.title.clone() } else { format!("{} — {}", guide.title, chunk.title) };
                     loaded.push(Doc { title, url: section_url(&text, &guide.url), text, guide_title: guide.title.to_lowercase(), chunk_title: chunk.title.to_lowercase(), meta: meta.clone() });
@@ -442,6 +449,15 @@ mod tests {
                 println!("  {} [{}] {}", hit.title, hit.score, hit.url);
             }
             assert!(!hits.is_empty(), "{query}");
+        }
+    }
+
+    /// @spec REQ-25, R-15
+    #[test]
+    fn un_indice_no_lee_fuera_de_su_carpeta() {
+        assert!(inside_folder("guides/nav_1.md"));
+        for bad in ["../secret.md", "guides/../../x.md", "/etc/passwd", "C:/Users/x/.ssh/id", ""] {
+            assert!(!inside_folder(bad), "{bad}");
         }
     }
 
