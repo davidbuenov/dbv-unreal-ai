@@ -49,7 +49,9 @@ export function createJobCard(record, deps = {}) {
   const bar = el('div');
   const progress = el('div', { className: 'progress' }, bar);
   const pre = el('pre', { className: 'job-console-text' });
-  const consoleBox = el('details', { className: 'job-console' }, el('summary', { text: t('job.console') }), pre);
+  // Las operaciones de World Labs van a `/marble/…`: su consola no es «lo que se envía a Tripo».
+  const consoleLabel = String(record.endpoint ?? '').startsWith('/marble/') ? t('job.consoleWorldLabs') : t('job.console');
+  const consoleBox = el('details', { className: 'job-console' }, el('summary', { text: consoleLabel }), pre);
   const result = el('div', { className: 'job-result' });
   const cancel = el('button', { className: 'btn-ghost btn-link', text: t('gen.cancelJob'), attrs: { type: 'button' }, on: { click: () => deps.onCancel?.(current.id) } });
   const node = el('div', { className: 'job-card' }, el('div', { className: 'job-head' }, title, meta, el('span', { className: 'spacer' }), stage, cancel), progress, consoleBox, result);

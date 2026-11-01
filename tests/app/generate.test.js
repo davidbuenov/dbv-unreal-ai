@@ -8,7 +8,8 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createGenerateView } from '../../src/app/generateView.js';
+import { confirmCost, createGenerateView } from '../../src/app/generateView.js';
+import { createJobCard } from '../../src/generation/jobCard.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 import { cleanImproved, IMPROVE_LIMITS, improveMessages, improvePrompt } from '../../src/generation/promptImprover.js';
 
@@ -85,6 +86,24 @@ describe('Generar', () => {
     withAgent.querySelector('[data-improve="tripo"]').click();
     await vi.waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining('conversación')));
     expect(field.value).toBe('cofre del tesoro');
+  });
+});
+
+describe('Tripo y World Labs, cada uno lo suyo @spec REQ-18, RNF-04', () => {
+  it('la tarjeta de coste de un mundo habla de créditos de World Labs y lo que se envía a World Labs', async () => {
+    const confirm = vi.fn(async () => 'cancel');
+    await confirmCost(confirm, { service: 'worldlabs', name: 'Ciudad', operation: 'generate_world', variants: 1, total: 1580, spent: 0, budget: 2000, endpoint: '/marble/v1/worlds:generate', params: {} });
+    const text = confirm.mock.calls[0][0].text;
+    expect(text).toContain('1580 créditos de World Labs');
+    expect(text).toContain('tope de 2000 créditos de World Labs');
+    expect(text).not.toContain('Tripo:');
+  });
+
+  it('la consola de un trabajo de World Labs dice a quién se envía', () => {
+    const world = createJobCard({ id: 'w', name: 'Ciudad', kind: 'generate_world', endpoint: '/marble/v1/worlds:generate', stage: 'running', log: [], request: {} });
+    expect(world.node.querySelector('summary').textContent).toBe('Consola: lo que se envía a World Labs');
+    const tripo = createJobCard({ id: 't', name: 'Cofre', kind: 'text_to_model', endpoint: '/generation/text-to-model', stage: 'running', log: [], request: {} });
+    expect(tripo.node.querySelector('summary').textContent).toBe('Consola: lo que se envía a Tripo');
   });
 });
 

@@ -301,6 +301,18 @@ pub fn run_tripo_job(client: &TripoClient, request: &TextToModel, name: &str, li
     outcome.entry.ok_or_else(|| UnrealError::Protocol(format!("la tarea {} terminó sin modelo", outcome.task_id)))
 }
 
+/// Servicio de una operación del catálogo. Cada uno tiene su clave, su tope y su gasto: Tripo y World Labs son
+/// empresas y cuentas distintas (el 2026-11-01 una generación de World Labs se frenó con el tope de Tripo y el `--mcp`
+/// le mandaba la clave de Tripo). @spec REQ-18, RNF-04
+pub fn service_of(category: &str) -> &'static str {
+    if category == "worldlabs" { "worldlabs" } else { "tripo" }
+}
+
+/// Nombre del servicio para los mensajes.
+pub fn service_name(service: &str) -> &'static str {
+    if service == "worldlabs" { "World Labs" } else { "Tripo" }
+}
+
 /// ¿Cabe un gasto más en el tope? `budget <= 0` significa «sin tope».
 pub fn within_budget(spent: f64, cost: f64, budget: f64) -> bool {
     budget <= 0.0 || spent + cost <= budget

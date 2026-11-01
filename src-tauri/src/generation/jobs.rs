@@ -85,6 +85,11 @@ pub struct JobRecord {
 }
 
 impl JobRecord {
+    /// Servicio del trabajo, por su endpoint (las operaciones de World Labs van a `/marble/…`).
+    pub fn service(&self) -> &'static str {
+        if self.endpoint.starts_with("/marble/") { "worldlabs" } else { "tripo" }
+    }
+
     pub fn is_active(&self) -> bool {
         !matches!(self.stage.as_str(), "done" | "failed" | "cancelled")
     }
@@ -205,8 +210,9 @@ impl JobBoard {
     }
 
     /// Créditos de la sesión: los trabajos iniciados desde `since` (lo de los dos procesos).
-    pub fn spent_since(&self, since: u64) -> f64 {
-        self.list().iter().filter(|r| r.started_at >= since).map(JobRecord::counted_credits).sum()
+    /// Créditos gastados en `service` desde `since` (cada servicio tiene su tope, RNF-04).
+    pub fn spent_since(&self, since: u64, service: &str) -> f64 {
+        self.list().iter().filter(|r| r.started_at >= since && r.service() == service).map(JobRecord::counted_credits).sum()
     }
 
     /// Borra los ficheros más antiguos de los `KEEP_JOBS` últimos que ya no están activos.
@@ -322,7 +328,8 @@ pub fn start_jobs(context: &JobContext, operation: &'static Operation, params: &
 pub fn resume_orphans(context: &JobContext) -> Vec<String> {
     let mut ids = Vec::new();
     for mut record in context.board.claim_orphans() {
-        let Some(operation) = catalog::find(&record.kind) else {
+        // Solo se sabe reanudar una tarea de Tripo: una de World Labs no se sondea con el cliente de Tripo.
+        let Some(operation) = catalog::find(&record.kind).filter(|op| super::service_of(op.category) == "tripo") else {
             context.board.release(&record.id);
             continue;
         };
@@ -583,7 +590,7 @@ mod tests {
         let mut refunded = record("e", "failed", true, session);
         refunded.refunded = true;
         board.write(&refunded).unwrap();
-        assert_eq!(board.spent_since(session), 60.0, "en curso + en cola; el fallido antes de crear tarea no cuenta; el que Tripo dio por fallido no se cobra; el de una sesión anterior tampoco");
+        assert_eq!(board.spent_since(session, "tripo"), 60.0, "en curso + en cola; el fallido antes de crear tarea no cuenta; el que Tripo dio por fallido no se cobra; el de una sesión anterior tampoco");
     }
 
     /// @spec REQ-27

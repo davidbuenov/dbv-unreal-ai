@@ -596,8 +596,8 @@ impl McpServer {
         Ok(message)
     }
 
-    fn session_spent(&self) -> f64 {
-        self.board.spent_since(self.board.session_start(self.started_at))
+    fn session_spent(&self, service: &str) -> f64 {
+        self.board.spent_since(self.board.session_start(self.started_at), service)
     }
 
     /// Espera a que los trabajos `ids` terminen (o se acabe `wait`) y devuelve su estado.
@@ -641,23 +641,27 @@ impl McpServer {
 
     fn balance(&self) -> Result<String, String> {
         let balance = self.client()?.balance().map_err(|e| e.to_string())?;
-        Ok(format!("Tripo balance: {} credits available ({} reserved by running tasks). This session has used about {} credits.", balance.balance, balance.frozen, self.session_spent()))
+        Ok(format!("Tripo balance: {} credits available ({} reserved by running tasks). This session has used about {} Tripo credits.", balance.balance, balance.frozen, self.session_spent("tripo")))
     }
 
-    /// Cualquier herramienta de Tripo que gasta: traduce, exige confirmar el coste TOTAL, respeta el tope y lanza.
+    /// Cualquier herramienta que gasta (Tripo o World Labs): traduce, exige confirmar el coste TOTAL, respeta el tope
+    /// de SU servicio y lanza con SU clave (antes World Labs usaba la de Tripo: «No API key found», 2026-11-01).
     fn launch(&mut self, tool: &str, args: &Value) -> Result<String, String> {
         let launch = tools::build(tool, args, &self.config.library)?;
         let total = launch.total();
         let free = total <= 0.0;
+        let service = crate::generation::service_of(launch.operation.category);
+        let name = crate::generation::service_name(service);
         if !free && args.get("confirm_cost").and_then(Value::as_bool) != Some(true) {
             let each = if launch.variants > 1 { format!(" ({} x {})", launch.variants, total / f64::from(launch.variants)) } else { String::new() };
-            return Err(format!("not run: {} costs about {total} Tripo credits{each}. Tell the user and call again with confirm_cost=true only if they accept.", launch.operation.name));
+            return Err(format!("not run: {} costs about {total} {name} credits{each}. Tell the user and call again with confirm_cost=true only if they accept.", launch.operation.name));
         }
-        let client_key = self.tripo_key()?;
+        let client_key = (self.config.key)(service).ok_or_else(|| format!("there is no {name} API key: add it in DBV Unreal AI → Settings → {name}"))?;
         let settings = GenerationSettings::load(&self.config.config_dir);
-        let spent = self.session_spent();
-        if !within_budget(spent, total, settings.budget_credits) {
-            return Err(format!("not run: it would exceed the session cap of {} credits ({spent} already used)", settings.budget_credits));
+        let budget = settings.budget_for(service);
+        let spent = self.session_spent(service);
+        if !within_budget(spent, total, budget) {
+            return Err(format!("not run: it would exceed the {name} session cap of {budget} credits ({spent} already used). The user can raise it in DBV Unreal AI → Settings → {name}. Tripo and World Labs have separate caps and credits."));
         }
         let context = self.job_context(client_key);
         let ids = start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone());
@@ -893,6 +897,32 @@ mod tests {
     }
 
     /// Si Tripo rechaza la petición no se crea tarea: el tope de la sesión no se consume (hallazgo de `/code-simplify`).
+    /// Regresión (2026-11-01, la vio el usuario con Antigravity): World Labs se frenaba con el tope de Tripo y, al
+    /// subirlo, recibía la clave de Tripo («No API key found»). Cada servicio, su clave, su tope y sus créditos.
+    /// @spec REQ-18, RNF-04
+    #[test]
+    fn world_labs_usa_su_clave_y_su_tope_no_los_de_tripo() {
+        use crate::unreal::mcp_client::tests::{fake_server, http};
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        s.config.key = Box::new(|service| Some(if service == "worldlabs" { "wl-key".into() } else { "tripo-key".into() }));
+        let ask = rpc(&mut s, "tools/call", json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad" } }));
+        assert!(ask["result"]["content"][0]["text"].as_str().unwrap().contains("1580 World Labs credits"), "{ask}");
+
+        // El tope de Tripo por defecto es 300 y un mundo cuesta 1.580: no lo frena (World Labs tiene el suyo, 2.000).
+        let (api, handle) = fake_server(vec![http("401 Unauthorized", "", r#"{"error":{"message":"No API key found in request"}}"#)]);
+        s.config.tripo_base = Some(api.trim_end_matches("/mcp").to_string());
+        rpc(&mut s, "tools/call", json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad", "confirm_cost": true } }));
+        let seen = handle.join().unwrap();
+        assert!(seen[0].starts_with("POST /marble/v1/worlds:generate"), "{}", seen[0]);
+        assert!(seen[0].contains("wl-key") && !seen[0].contains("tripo-key"), "la clave de World Labs, no la de Tripo");
+
+        // Con su tope por debajo del coste, se frena y lo dice con su nombre.
+        GenerationSettings { worldlabs_budget_credits: 1000.0, ..GenerationSettings::default() }.save(dir.path()).unwrap();
+        let capped = rpc(&mut s, "tools/call", json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad", "confirm_cost": true } }));
+        assert!(capped["result"]["content"][0]["text"].as_str().unwrap().contains("World Labs session cap of 1000"), "{capped}");
+    }
+
     /// @spec RNF-04
     #[test]
     fn un_rechazo_de_tripo_no_consume_el_tope() {
@@ -905,7 +935,7 @@ mod tests {
         let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "confirm_cost": true } }));
         assert_eq!(call["result"]["isError"], true);
         assert!(call["result"]["content"][0]["text"].as_str().unwrap().contains("invalid api key"));
-        assert_eq!(s.session_spent(), 0.0);
+        assert_eq!(s.session_spent("tripo"), 0.0);
         handle.join().unwrap();
     }
 
@@ -967,7 +997,7 @@ mod tests {
         assert_eq!(jobs.len(), 2);
         assert!(jobs.iter().all(|j| j.source == "agent" && j.stage == "done" && j.request["prompt"] == "stylized pirate in T-pose" && j.log.iter().any(|l| l.contains("POST /generation/text-to-model"))));
         assert!(!serde_json::to_string(&jobs).unwrap().contains("sk-ok"), "la clave nunca llega a los ficheros de trabajo");
-        assert_eq!(s.session_spent(), 40.0, "2 × 20 (texto con textura, tabla oficial)");
+        assert_eq!(s.session_spent("tripo"), 40.0, "2 × 20 (texto con textura, tabla oficial)");
         let listed = rpc(&mut s, "tools/call", json!({ "name": "generation_jobs", "arguments": {} }));
         assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("[done"));
         api_handle.join().unwrap();
@@ -1009,7 +1039,7 @@ mod tests {
         let retarget = jobs.iter().find(|j| j.kind == "retarget").unwrap();
         assert_eq!(retarget.request["input"], rig.task_id, "las animaciones usan la tarea del rig");
         assert_eq!(retarget.request["animations"], json!(["preset:biped:dance_01", "preset:biped:wave_goodbye_01"]));
-        assert_eq!(s.session_spent(), 20.0 + 25.0 + 20.0);
+        assert_eq!(s.session_spent("tripo"), 20.0 + 25.0 + 20.0);
         api_handle.join().unwrap();
     }
 

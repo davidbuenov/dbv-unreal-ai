@@ -38,8 +38,11 @@ pub struct GenerationState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationSettings {
-    /// Tope de créditos por sesión (0 = sin tope).
+    /// Tope de créditos de Tripo por sesión (0 = sin tope).
     pub budget_credits: f64,
+    /// Tope de créditos de World Labs por sesión (0 = sin tope): son otra cuenta, con otros precios.
+    #[serde(default = "default_worldlabs_budget")]
+    pub worldlabs_budget_credits: f64,
     /// Carpeta de la biblioteca elegida por el usuario; sin ella, `Documentos/DBV Unreal AI/Library` (REQ-30, REQ-53).
     #[serde(default)]
     pub library_dir: Option<String>,
@@ -53,7 +56,19 @@ pub struct GenerationSettings {
 
 impl Default for GenerationSettings {
     fn default() -> Self {
-        Self { budget_credits: 300.0, library_dir: None, library_migrated: false, library_migrated_count: 0 }
+        Self { budget_credits: 300.0, worldlabs_budget_credits: default_worldlabs_budget(), library_dir: None, library_migrated: false, library_migrated_count: 0 }
+    }
+}
+
+/// Cabe un mundo completo (`marble-1.1`, 1.580) pero no dos ni una malla HQ (3.500) sin subirlo.
+fn default_worldlabs_budget() -> f64 {
+    2000.0
+}
+
+impl GenerationSettings {
+    /// Tope de un servicio (`tripo` o `worldlabs`).
+    pub fn budget_for(&self, service: &str) -> f64 {
+        if service == "worldlabs" { self.worldlabs_budget_credits } else { self.budget_credits }
     }
 }
 
@@ -96,7 +111,7 @@ impl GenerationSettings {
         self.library_dir.as_deref().filter(|d| !d.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| default_library_root(data_dir))
     }
 
-    fn save(&self, config_dir: &std::path::Path) -> Result<(), UnrealError> {
+    pub(crate) fn save(&self, config_dir: &std::path::Path) -> Result<(), UnrealError> {
         std::fs::create_dir_all(config_dir).map_err(|error| io_error(config_dir, &error))?;
         let text = serde_json::to_string_pretty(self).map_err(|error| UnrealError::Format(error.to_string()))?;
         let path = settings_path(config_dir);
@@ -108,8 +123,12 @@ impl GenerationSettings {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationStatus {
+    /// Lo de Tripo, como siempre (la píldora de gasto y su tarjeta de coste).
     pub spent: f64,
     pub budget: f64,
+    /// Gasto y tope por servicio (`tripo`, `worldlabs`).
+    pub spent_by_service: HashMap<String, f64>,
+    pub budget_by_service: HashMap<String, f64>,
     pub has_key: HashMap<String, bool>,
 }
 
@@ -152,8 +171,8 @@ fn allow_assets(app: &AppHandle, dir: &std::path::Path) {
 }
 
 /// Créditos de la sesión, sumando también lo que lanzaron los agentes.
-fn session_spent(app: &AppHandle, state: &GenerationState) -> f64 {
-    board(app).map(|board| board.spent_since(state.session_start.load(Ordering::Relaxed))).unwrap_or(0.0)
+fn session_spent(app: &AppHandle, state: &GenerationState, service: &str) -> f64 {
+    board(app).map(|board| board.spent_since(state.session_start.load(Ordering::Relaxed), service)).unwrap_or(0.0)
 }
 
 fn load_settings(app: &AppHandle) -> GenerationSettings {
@@ -170,8 +189,10 @@ fn known_service(service: &str) -> Result<(), UnrealError> {
 #[tauri::command]
 pub fn generation_status(app: AppHandle, ai: State<'_, AiState>, state: State<'_, GenerationState>) -> GenerationStatus {
     let has_key = SERVICES.iter().map(|s| (s.to_string(), ai.secrets.get(&key_account(s)).is_some())).collect();
-    let spent = session_spent(&app, &state);
-    GenerationStatus { spent, budget: load_settings(&app).budget_credits, has_key }
+    let settings = load_settings(&app);
+    let spent_by_service: HashMap<String, f64> = SERVICES.iter().map(|s| (s.to_string(), session_spent(&app, &state, s))).collect();
+    let budget_by_service: HashMap<String, f64> = SERVICES.iter().map(|s| (s.to_string(), settings.budget_for(s))).collect();
+    GenerationStatus { spent: spent_by_service.get("tripo").copied().unwrap_or(0.0), budget: settings.budget_credits, spent_by_service, budget_by_service, has_key }
 }
 
 /// Guarda la clave de un servicio en el almacén del sistema (solo de ida). @spec RNF-IA.4
@@ -190,11 +211,18 @@ pub fn generation_delete_key(ai: State<'_, AiState>, service: String) -> Result<
     ai.secrets.delete(&key_account(&service)).map_err(|error| UnrealError::Io(error.to_string()))
 }
 
-/// Cambia el tope de créditos por sesión. @spec RNF-04
+/// Cambia el tope de créditos por sesión de un servicio (`tripo` si no se dice). @spec RNF-04, REQ-18
 #[tauri::command]
-pub fn generation_set_budget(app: AppHandle, credits: f64) -> Result<(), UnrealError> {
+pub fn generation_set_budget(app: AppHandle, credits: f64, service: Option<String>) -> Result<(), UnrealError> {
     let dir = config_dir(&app)?;
-    GenerationSettings { budget_credits: credits.max(0.0), ..GenerationSettings::load(&dir) }.save(&dir)
+    let current = GenerationSettings::load(&dir);
+    let credits = credits.max(0.0);
+    let updated = if service.as_deref() == Some("worldlabs") {
+        GenerationSettings { worldlabs_budget_credits: credits, ..current }
+    } else {
+        GenerationSettings { budget_credits: credits, ..current }
+    };
+    updated.save(&dir)
 }
 
 /// Lo que hará una herramienta de generación, sin gastar nada: para la tarjeta de coste. @spec RNF-04, REQ-27
@@ -210,6 +238,8 @@ pub struct Prepared {
     /// Créditos estimados en total (todas las variantes).
     pub total: f64,
     pub pricing: String,
+    /// De qué servicio son los créditos (`tripo` o `worldlabs`).
+    pub service: String,
 }
 
 /// Herramientas de generación para el asistente integrado: las mismas que ve un agente por MCP (D10). @spec REQ-33
@@ -230,6 +260,7 @@ pub fn generation_prepare(app: AppHandle, tool: String, args: serde_json::Value)
         params: launch.params.clone(),
         total: launch.total(),
         pricing: launch.operation.pricing.into(),
+        service: super::service_of(launch.operation.category).into(),
     })
 }
 
@@ -241,15 +272,13 @@ pub fn generation_launch(app: AppHandle, ai: State<'_, AiState>, state: State<'_
     if total > 0.0 && !confirm_cost {
         return Err(UnrealError::Protocol("falta confirmar el coste antes de generar".into()));
     }
-    let service = if launch.operation.category == "worldlabs" { "worldlabs" } else { "tripo" };
-    let key = ai.secrets.get(&key_account(service)).ok_or_else(|| {
-        let name = if service == "worldlabs" { "World Labs" } else { "Tripo" };
-        UnrealError::NotFound(format!("no hay clave de {name}: añádela en Ajustes"))
-    })?;
-    let budget = load_settings(&app).budget_credits;
-    let spent = session_spent(&app, &state);
+    let service = super::service_of(launch.operation.category);
+    let name = super::service_name(service);
+    let key = ai.secrets.get(&key_account(service)).ok_or_else(|| UnrealError::NotFound(format!("no hay clave de {name}: añádela en Ajustes")))?;
+    let budget = load_settings(&app).budget_for(service);
+    let spent = session_spent(&app, &state, service);
     if !within_budget(spent, total, budget) {
-        return Err(UnrealError::Protocol(format!("superaría el tope de {budget} créditos de esta sesión (llevas {spent} y esto son {total})")));
+        return Err(UnrealError::Protocol(format!("superaría el tope de {budget} créditos de {name} de esta sesión (llevas {spent} y esto son {total}); súbelo en Ajustes → {name}")));
     }
     let context = job_context(&app, &state, key)?;
     let job_ids = start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone());

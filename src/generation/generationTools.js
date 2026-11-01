@@ -15,6 +15,23 @@
 // del proyecto y también pide permiso (REQ-12).
 
 /** Espera máxima de un trabajo de generación desde la herramienta (ms). */
+/** Servicio de una operación preparada (`tripo` o `worldlabs`): cada uno tiene su clave, su tope y sus créditos. */
+export const serviceOf = (prepared) => (prepared?.service === 'worldlabs' ? 'worldlabs' : 'tripo');
+
+/** Nombre del servicio para los mensajes. */
+export const serviceName = (service) => (service === 'worldlabs' ? 'World Labs' : 'Tripo');
+
+/**
+ * La operación preparada con el gasto y el tope de SU servicio, para la tarjeta de coste (antes World Labs enseñaba y
+ * contaba los de Tripo, 2026-11-01). @spec REQ-18, RNF-04
+ */
+export function withSessionCap(prepared, status) {
+  const service = serviceOf(prepared);
+  const spent = status?.spentByService?.[service] ?? (service === 'tripo' ? status?.spent : 0) ?? 0;
+  const budget = status?.budgetByService?.[service] ?? (service === 'tripo' ? status?.budget : 0) ?? 0;
+  return { ...prepared, service, spent, budget };
+}
+
 export const JOB_WAIT_MS = 12 * 60 * 1000;
 
 /** Herramientas de Rust que lanzan una operación con coste (`tools::LAUNCHERS`). */
@@ -68,7 +85,7 @@ export function createGenerationTools(deps) {
     name: spec.name,
     description: spec.description,
     parameters: { ...spec.inputSchema, additionalProperties: false },
-    label: (args) => `Tripo: ${args.name ?? args.operation ?? args.id ?? spec.name}`,
+    label: (args) => `${spec.name === 'generate_world' || spec.name === 'export_world_mesh' ? 'World Labs' : 'Tripo'}: ${args.name ?? args.operation ?? args.id ?? spec.name}`,
     run: (args) => run(spec.name, args ?? {}),
   }));
 
@@ -77,8 +94,8 @@ export function createGenerationTools(deps) {
     const status = await deps.status();
     let text;
     if (!prepared.ok) text = `error: ${prepared.error.message}`;
-    else if (status.ok && !status.value.hasKey?.tripo) text = 'error: there is no Tripo API key. Tell the user to add it in Settings.';
-    else if (prepared.value.total > 0 && !(await deps.confirmCost({ ...prepared.value, spent: status.value?.spent ?? 0, budget: status.value?.budget ?? 0 }))) {
+    else if (status.ok && !status.value.hasKey?.[serviceOf(prepared.value)]) text = `error: there is no ${serviceName(serviceOf(prepared.value))} API key. Tell the user to add it in Settings.`;
+    else if (prepared.value.total > 0 && !(await deps.confirmCost(withSessionCap(prepared.value, status.value)))) {
       text = 'The user did NOT accept the cost: nothing was run. Do not retry unless the user asks.';
     } else {
       const launched = await deps.launch(tool, args);

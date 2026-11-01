@@ -153,6 +153,23 @@ describe('herramientas de generación (REQ-15, REQ-33, RNF-04)', () => {
     expect(list.map((tool) => tool.name)).toEqual([...specs.map((spec) => spec.name), 'library_list', 'library_rename', 'library_send_to_unreal']);
   });
 
+  /**
+   * Regresión (2026-11-01): un mundo de World Labs pedía la clave de Tripo y se medía con el tope de Tripo.
+   * @spec REQ-18, RNF-04
+   */
+  it('World Labs usa su clave, su gasto y su tope, no los de Tripo', async () => {
+    const world = { operation: 'generate_world', endpoint: '/marble/v1/worlds:generate', name: 'Ciudad', variants: 1, params: { prompt: 'city' }, total: 1580, pricing: '…', service: 'worldlabs' };
+    const both = async () => ({ ok: true, value: { spent: 120, budget: 300, spentByService: { tripo: 120, worldlabs: 0 }, budgetByService: { tripo: 300, worldlabs: 2000 }, hasKey: { tripo: false, worldlabs: true } } });
+    const { deps, byName } = tools({ status: both, prepare: vi.fn(async () => ({ ok: true, value: world })), launch: vi.fn(async () => ({ ok: true, value: ['w-1'] })) });
+    await byName('generate_3d_model').run({ prompt: 'city', name: 'Ciudad' });
+    expect(deps.confirmCost).toHaveBeenCalledWith(expect.objectContaining({ service: 'worldlabs', total: 1580, spent: 0, budget: 2000 }));
+    expect(deps.launch).toHaveBeenCalled();
+
+    const noKey = async () => ({ ok: true, value: { ...(await both()).value, hasKey: { tripo: true, worldlabs: false } } });
+    const { byName: withoutKey } = tools({ status: noKey, prepare: vi.fn(async () => ({ ok: true, value: world })) });
+    expect(await withoutKey('generate_3d_model').run({ prompt: 'city', name: 'Ciudad' })).toBe('error: there is no World Labs API key. Tell the user to add it in Settings.');
+  });
+
   it('sin aceptar el coste no se lanza nada @spec REQ-15, RNF-04', async () => {
     const { deps, byName } = tools({ confirmCost: vi.fn(async () => false) });
     expect(await byName('generate_3d_model').run({ prompt: 'lantern', name: 'Linterna', variants: 2 })).toMatch(/did NOT accept/);

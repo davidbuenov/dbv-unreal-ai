@@ -16,6 +16,7 @@ import { t } from '../ai/i18nBridge.js';
 import { createJobCard, createJobWatcher } from '../generation/jobCard.js';
 import * as api from './backend.js';
 import { brandLogo } from './brandHeader.js';
+import { serviceOf, withSessionCap } from '../generation/generationTools.js';
 import { baseName, button, el } from './dom.js';
 
 /** Tarjeta de coste común a la vista y a la herramienta de la IA. `true` si el usuario acepta. */
@@ -23,7 +24,7 @@ export async function confirmCost(confirm, request) {
   const variants = request.variants > 1 ? t('gen.variantsNote', { n: String(request.variants) }) : '';
   const choice = await confirm({
     title: t('gen.costTitle'),
-    text: t('gen.costText', { name: request.name, operation: request.operation, cost: String(request.total), variants, spent: String(request.spent ?? 0), budget: request.budget > 0 ? String(request.budget) : '∞' }),
+    text: t(serviceOf(request) === 'worldlabs' ? 'gen.costTextWorldLabs' : 'gen.costText', { name: request.name, operation: request.operation, cost: String(request.total), variants, spent: String(request.spent ?? 0), budget: request.budget > 0 ? String(request.budget) : '∞' }),
     detail: `POST ${request.endpoint}\n${JSON.stringify(request.params ?? {}, null, 2)}`,
     // El último botón recibe el foco: «Cancelar» va el último para que un Intro no gaste créditos.
     choices: [
@@ -48,7 +49,7 @@ export async function confirmAndLaunch(deps, tool, args) {
     const service = tool === 'generate_world' || tool === 'export_world_mesh' ? 'worldlabs' : 'tripo';
     if (status.ok && !status.value.hasKey?.[service]) {
       deps.toast(service === 'worldlabs' ? t('gen.noKeyWorldLabs') : t('gen.noKey'), 'error');
-    } else if (await confirmCost(deps.confirm, { ...prepared.value, spent: status.value?.spent ?? 0, budget: status.value?.budget ?? 0 })) {
+    } else if (await confirmCost(deps.confirm, withSessionCap(prepared.value, status.value))) {
       const launched = await api.generationLaunch(tool, args);
       if (launched.ok) ids = launched.value;
       else deps.toast(launched.error.message, 'error');
@@ -143,7 +144,7 @@ export function createGenerateView(host, deps) {
         const { tool, args } = formArgs({ ...values(), name: name.value.trim() || '—' });
         const ready = mode === 'image' ? Boolean(image) : Boolean((mode === 'world' ? worldPrompt.value : prompt.value).trim());
         const prepared = ready ? await api.generationPrepare(tool, args) : null;
-        estimate.textContent = prepared?.ok ? t('gen.estimate', { cost: String(prepared.value.total), spent: String(status.value?.spent ?? 0) }) : '';
+        estimate.textContent = prepared?.ok ? t('gen.estimate', { cost: String(prepared.value.total), spent: String(withSessionCap(prepared.value, status.value).spent) }) : '';
       }, 250);
     }
     for (const input of [prompt, worldPrompt, name, variants, faces, lowPoly, quality, worldModel]) input.addEventListener('input', refreshEstimate);

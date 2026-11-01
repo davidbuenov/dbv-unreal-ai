@@ -88,6 +88,7 @@ export function createSettingsView(host, deps) {
   async function render() {
     const status = await api.generationStatus();
     const budget = el('input', { attrs: { type: 'number', min: '0', step: '10', value: String(status.ok ? status.value.budget : 300), 'aria-label': t('settings.budget') } });
+    const worldlabsBudget = el('input', { attrs: { type: 'number', min: '0', step: '10', value: String(status.ok ? status.value.budgetByService?.worldlabs ?? 2000 : 2000), 'aria-label': t('settings.worldlabsBudget') } });
     const port = deps.state.connection?.endpoint?.port ?? 8000;
     const [command, location] = await Promise.all([api.appMcpCommand(port, deps.state.connection?.projectPath ?? null), api.libraryLocation()]);
     const hasKey = status.ok && status.value.hasKey?.tripo;
@@ -171,7 +172,19 @@ export function createSettingsView(host, deps) {
         })),
       ),
       // @spec REQ-18, RNF-IA.4 — la clave de World Labs, en el mismo llavero que la de Tripo.
-      worldlabs: el('div', { className: 'card stack' }, brandHeader('World Labs', 'worldlabs'), el('p', { className: 'hint', text: t('settings.worldlabsHint') }), ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs)),
+      worldlabs: el(
+        'div',
+        { className: 'card stack' },
+        brandHeader('World Labs', 'worldlabs'),
+        el('p', { className: 'hint', text: t('settings.worldlabsHint') }),
+        ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs),
+        // Su propio tope: los créditos de World Labs no son los de Tripo (REQ-18, RNF-04).
+        el('label', {}, t('settings.worldlabsBudget'), worldlabsBudget),
+        el('div', { className: 'row' }, button(t('settings.save'), async () => {
+          const saved = await api.generationSetBudget(Number(worldlabsBudget.value) || 0, 'worldlabs');
+          deps.toast(saved.ok ? t('settings.budgetSaved') : saved.error.message, saved.ok ? 'info' : 'error');
+        })),
+      ),
       convai,
       library: libraryCard,
       knowledge,

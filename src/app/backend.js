@@ -77,7 +77,7 @@ export const appDiagnostics = () => call('app_diagnostics');
 export const generationStatus = () => call('generation_status');
 export const generationSetKey = (service, key) => call('generation_set_key', { service, key });
 export const generationDeleteKey = (service) => call('generation_delete_key', { service });
-export const generationSetBudget = (credits) => call('generation_set_budget', { credits });
+export const generationSetBudget = (credits, service) => call('generation_set_budget', { credits, service: service ?? null });
 /** Herramientas de Tripo para el asistente integrado: las mismas que ve un agente por MCP (D10). */
 export const generationToolSpecs = () => call('generation_tool_specs');
 /** Qué hará una herramienta y cuánto cuesta, sin gastar (tarjeta de coste). */
