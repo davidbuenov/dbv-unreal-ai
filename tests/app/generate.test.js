@@ -109,11 +109,14 @@ describe('Mejorar el prompt', () => {
     expect(await improvePrompt(model, 'worldlabs', 'pueblo', 'l')).toEqual({ kind: 'text', text: 'A cozy village' });
     expect(model.ask).not.toHaveBeenCalled();
 
-    const agent = { activeConnection: () => ({ provider: 'agent' }), complete: vi.fn(), ask: vi.fn(async () => {}) };
-    expect(await improvePrompt(agent, 'tripo', 'cofre', 'Mejorar el prompt: «cofre»')).toEqual({ kind: 'sent' });
+    // Con un agente, su respuesta vuelve al campo aunque añada una frase delante.
+    const agent = { activeConnection: () => ({ provider: 'agent' }), complete: vi.fn(), ask: vi.fn(async () => 'Here is an improved prompt:\n\nAn old wooden treasure chest with iron bands and a brass lock, stylized.') };
+    expect(await improvePrompt(agent, 'tripo', 'cofre', 'Mejorar el prompt: «cofre»')).toEqual({ kind: 'text', text: 'An old wooden treasure chest with iron bands and a brass lock, stylized.' });
     expect(agent.ask.mock.calls[0][0]).toContain('Idea: cofre');
     expect(agent.ask.mock.calls[0][1]).toEqual({ label: 'Mejorar el prompt: «cofre»' });
     expect(agent.complete).not.toHaveBeenCalled();
+    // Si el agente no devuelve nada (se paró, falló), la respuesta queda en la conversación.
+    expect(await improvePrompt({ ...agent, ask: async () => '' }, 'tripo', 'cofre', 'l')).toEqual({ kind: 'sent' });
 
     expect(await improvePrompt(null, 'tripo', 'x', 'l')).toEqual({ kind: 'none' });
     expect(await improvePrompt({ ...model, complete: async () => null }, 'tripo', 'x', 'l')).toEqual({ kind: 'empty' });

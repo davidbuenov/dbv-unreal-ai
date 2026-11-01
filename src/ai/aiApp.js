@@ -590,9 +590,9 @@ export function createAiApp(deps) {
     current.entries.push({ role: 'user', content: options.label ?? text });
     panel.setConversations(projectState.conversations, projectState.activeId);
     // con un agente, el turno lo lleva el agente por ACP.
+    // Con un agente devuelve su texto final, para quien lo necesite (p. ej. «Mejorar con IA», REQ-66).
     if (connection.provider === 'agent') {
-      await askAgent(connection, text, options, current);
-      return;
+      return askAgent(connection, text, options, current);
     }
 
     busy = true;
@@ -914,6 +914,7 @@ export function createAiApp(deps) {
       renderContextPreview();
       persist();
     }
+    return finalText;
   }
 
   /** «Conectar» un agente detectado: crea su conexión y la activa. */

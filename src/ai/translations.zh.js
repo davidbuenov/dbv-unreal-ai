@@ -126,6 +126,7 @@ export const ZH_AI = {
   'ai.attachFiles': '附加参考图片或文档',
   'ai.remember': '记住',
   'ai.recipes': '配方',
+  'ai.recipesShow': '查看引导式配方',
   'ai.recipesHint': '引导式任务：AI 一步步完成，最后在编辑器中检查结果。',
   'ai.rememberHint': '让 AI 提议把已决定的内容保存到项目记忆中',
   'ai.attachKinds': '图片和文档',

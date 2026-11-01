@@ -135,6 +135,10 @@ describe('Ajustes', () => {
     await createSettingsView(host, { toast, openConnect: vi.fn(), state: { connection: null } }).render();
     const panel = host.querySelector('[data-settings-panel="knowledge"]');
     expect(panel.textContent).toContain('Sin guías');
+    // De dónde salen las guías: el enlace al repositorio de la otra aplicación.
+    window.__TAURI__.opener.openUrl = vi.fn();
+    buttonWithText(panel, 'Abrir dbv-mcp-server en GitHub').click();
+    expect(window.__TAURI__.opener.openUrl).toHaveBeenCalledWith('https://github.com/davidbuenov/dbv-mcp-server');
     window.__TAURI__.dialog.open = vi.fn(async () => 'D:/Unreal/MCPCLiente');
     buttonWithText(panel, 'Elegir carpeta…').click();
     await vi.waitFor(() => expect(invoked.find(([c]) => c === 'guides_set_folder')?.[1]).toEqual({ folder: 'D:/Unreal/MCPCLiente' }));

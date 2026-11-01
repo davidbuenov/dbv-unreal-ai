@@ -218,6 +218,8 @@ export const ZH_APP = {
   'settings.knowledgeHint': 'AI 可以离线搜索 Unreal Engine 5.8 指南，并给出每个片段的网址。请选择一个包含 index_guides.json 和 guides/*.md 的文件夹（MCPCLiente 的 dbv-unreal-python-api 技能格式；其根文件夹也可以）。应用不会下载或附带任何 Epic 文档。',
   'settings.knowledgeStatus': '{guides} 篇指南，{chunks} 个片段（更新于 {updated}）。',
   'settings.knowledgeNone': '没有指南：AI 只有引擎自带的 Python API 参考。',
+  'settings.knowledgeHow': '应用不附带这些指南：需要用另一个应用 dbv-mcp-server（原 MCPCLiente）下载并准备。请安装它，按照其步骤创建指南文件夹，然后在这里选择该文件夹。',
+  'settings.knowledgeRepo': '在 GitHub 上打开 dbv-mcp-server',
   'settings.knowledgeChoose': '选择文件夹…',
   'settings.knowledgeRemove': '移除',
   'settings.knowledgeSaved': '指南已就绪：{n} 个片段',

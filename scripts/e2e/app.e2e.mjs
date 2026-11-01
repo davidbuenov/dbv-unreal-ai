@@ -187,6 +187,10 @@ const shot = async (h, name) => shots && (await h.screenshot(path.join(shots, na
     const start = await h.eval(`return { suggestions: [...document.querySelectorAll('.ai-panel__suggestion')].map((b) => b.textContent), contextHidden: document.querySelector('.ai-panel__context')?.classList.contains('hidden') ?? null, placeholder: document.querySelector('.ai-panel__input')?.placeholder }`);
     ok('las sugerencias de la conversación son de Unreal, no de un editor de texto', start.suggestions.length === 3 && start.suggestions.join(' ').includes('nivel') && !/documento|ortograf|tabla/i.test(start.suggestions.join(' ')), JSON.stringify(start.suggestions));
     ok('el campo de texto habla del proyecto de Unreal', /Unreal/.test(start.placeholder ?? ''), start.placeholder);
+    // REQ-23: el botón de recetas se ve (el usuario no lo encontraba).
+    const recipesButton = await h.eval(`const b = document.querySelector('.ai-panel__recipes'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.classList.contains('hidden'), w: Math.round(r.width), h: Math.round(r.height), text: b.textContent }`);
+    ok('el botón «📋 Recetas» se ve en la conversación', recipesButton && !recipesButton.hidden && recipesButton.w > 0 && recipesButton.h > 0, JSON.stringify(recipesButton));
+    await shot(h, 'conversation-composer.png');
     ok('cargar la IA no borra el estado de la conexión de la píldora', (await h.eval(`return document.getElementById('unreal-pill').textContent`)) === 'DBVMCPFirst · UE 5.8 · :8000');
     await h.eval(`const i = document.querySelector('.ai-panel__input'); i.value = '¿Cuánto es la respuesta?'; i.dispatchEvent(new Event('input', { bubbles: true }));`);
     await h.key('Enter', 'Enter', 13);

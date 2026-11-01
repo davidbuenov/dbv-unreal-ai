@@ -17,6 +17,9 @@ import { button, el } from './dom.js';
 import { convaiSettingsCard } from './convaiSettings.js';
 import { brandHeader } from './brandHeader.js';
 
+/** Repositorio con las herramientas que descargan y preparan las guías de Unreal (REQ-25). */
+export const KNOWLEDGE_REPO = 'https://github.com/davidbuenov/dbv-mcp-server';
+
 /** Pestañas de Ajustes, en orden (REQ-60). */
 export const SETTINGS_TABS = ['ai', 'tripo', 'worldlabs', 'convai', 'library', 'knowledge', 'mcp', 'diagnostics'];
 
@@ -134,6 +137,8 @@ export function createSettingsView(host, deps) {
       { className: 'card stack' },
       el('h3', { text: t('settings.knowledge') }),
       el('p', { className: 'hint', text: t('settings.knowledgeHint') }),
+      el('p', { className: 'hint', text: t('settings.knowledgeHow') }),
+      el('div', { className: 'row' }, button(t('settings.knowledgeRepo'), () => window.__TAURI__?.opener?.openUrl?.(KNOWLEDGE_REPO), 'btn-ghost')),
       guides?.folder ? el('p', { className: 'mono', text: guides.folder }) : null,
       el('p', {
         className: guides && !guides.problem ? 'hint' : 'hint check-fail',

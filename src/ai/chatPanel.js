@@ -300,6 +300,8 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
       const box = el('div', 'ai-panel__suggestions');
       box.append(el('p', 'ai-panel__hint', t('ai.suggestionsTitle')));
       for (const text of list) box.append(button(text, () => callbacks.onSend(text), 'button button--compact ai-panel__suggestion'));
+      // Las recetas del host, también aquí: en la barra de abajo pasaban desapercibidas (lo dijo el usuario).
+      if (callbacks.onRecipes) box.append(button(`📋 ${t('ai.recipesShow')}`, () => callbacks.onRecipes(), 'button button--compact ai-panel__suggestion ai-panel__suggestion--recipes'));
       messages.append(box);
     },
     addUser(text) {
