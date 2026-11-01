@@ -15,6 +15,7 @@ import { lineOps } from '../ai/diff.js';
 import * as api from './backend.js';
 import { baseName, button, dirName, el } from './dom.js';
 import { convaiCard, convaiLive, directAccessBanner, hasConvaiToolsets } from './convaiCard.js';
+import { isDbvToolset } from '../unreal/unrealTools.js';
 
 const BACKUP_KEY = 'dbv-unreal-ai:lastBackup:';
 
@@ -53,6 +54,20 @@ export function diffPreview(before, after, context = 2) {
 }
 
 /**
+ * Proyecto que tiene abierto el editor de un puerto, según el toolset DBV (`get_project_info` vive en él, no es una
+ * herramienta suelta del MCP). Sin el toolset no se puede saber: `null`, y la conexión sigue. @spec REQ-07
+ * @param {{port: number, path: string}} endpoint
+ * @param {Array<{name: string}>} toolsets los que devuelve `unrealConnect`.
+ * @returns {Promise<{project_name?: string} | null>}
+ */
+export async function editorIdentity(endpoint, toolsets) {
+  const dbv = (toolsets ?? []).find((toolset) => isDbvToolset(toolset?.name))?.name;
+  const info = dbv ? await api.unrealCallTool(endpoint, dbv, 'get_project_info', {}) : null;
+  const value = info?.ok && !info.value?.isError ? info.value?.value : null;
+  return value && typeof value === 'object' ? value : null;
+}
+
+/**
  * @param {HTMLElement} host
  * @param {object} deps `{state, toast, confirmModal, openModal, closeModal}`.
  */
@@ -65,15 +80,7 @@ export function createProjectView(host, deps) {
     deps.state.setConnection({ projectPath: project.path, projectName: project.name, engineVersion: project.engineAssociation, endpoint, status: 'connecting', toolsets: 0 });
     const result = await api.unrealConnect(endpoint);
     if (result.ok) {
-      let identity = null;
-      try {
-        const info = await api.unrealCallTool(endpoint, '', 'get_project_info', {});
-        if (info.ok && info.value) {
-          identity = typeof info.value === 'string' ? JSON.parse(info.value) : info.value;
-        }
-      } catch {
-        // Ignorar si el toolset no está listo
-      }
+      const identity = await editorIdentity(endpoint, result.value);
       if (identity?.project_name && project.name && identity.project_name.toLowerCase() !== project.name.toLowerCase()) {
         deps.state.setConnection({ status: 'offline' }, true);
         deps.toast(t('unreal.identityMismatch', { port: String(mcp.port), found: identity.project_name, expected: project.name }), 'error');

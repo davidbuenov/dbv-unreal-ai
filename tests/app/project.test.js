@@ -53,4 +53,42 @@ describe('Vista Proyecto', () => {
     expect(modal.map((n) => n.textContent).join('\n')).toContain('dbv-unreal-ai/task.md');
     expect(invoked.some(([c]) => c === 'memory_activate')).toBe(false);
   });
+
+  /**
+   * Regresión (2026-11-01, la vio el usuario en el log de Unreal: «Unknown tool: get_project_info» en cada conexión):
+   * se llamaba sin toolset y se leía el sobre `{text, isError, value}` en vez de `value`, así que nunca se comprobaba.
+   * @spec REQ-07
+   */
+  it('la identidad del editor se pide al toolset DBV y lee su valor; sin toolset no se pide', async () => {
+    const endpoint = { port: 8001, path: '/mcp' };
+    window.__TAURI__.core.invoke.mockImplementation(async (command, args) => {
+      invoked.push([command, args]);
+      return command === 'unreal_call_tool' ? { text: '', isError: false, value: { project_name: 'Otro' } } : null;
+    });
+    const { editorIdentity } = await import('../../src/app/projectView.js');
+
+    expect(await editorIdentity(endpoint, [{ name: 'EditorToolset.LogsToolset' }, { name: 'DBVUnrealAICpp.DBVUnrealAICppToolset' }])).toEqual({ project_name: 'Otro' });
+    expect(invoked.find(([c]) => c === 'unreal_call_tool')[1]).toMatchObject({ endpoint, toolset: 'DBVUnrealAICpp.DBVUnrealAICppToolset', tool: 'get_project_info' });
+
+    invoked.length = 0;
+    expect(await editorIdentity(endpoint, [{ name: 'EditorToolset.LogsToolset' }])).toBeNull();
+    expect(invoked).toEqual([]);
+  });
+
+  it('no se conecta a un editor que tiene abierto otro proyecto @spec REQ-07', async () => {
+    const base = window.__TAURI__.core.invoke.getMockImplementation();
+    window.__TAURI__.core.invoke.mockImplementation(async (command, args) => {
+      if (command === 'unreal_connect') { invoked.push([command, args]); return [{ name: 'PythonTypes.DBVUnrealAIToolset_0x1' }]; }
+      if (command === 'unreal_call_tool') { invoked.push([command, args]); return { text: '', isError: false, value: { project_name: 'Otro' } }; }
+      return base(command, args);
+    });
+    const host = document.createElement('div');
+    const deps = { state: { connection: null, setConnection: vi.fn() }, toast: vi.fn(), openModal: vi.fn(), closeModal: vi.fn(), onMemoryChanged: vi.fn(), showView: vi.fn() };
+    const view = createProjectView(host, deps);
+    await view.select(PROJECT);
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Conectar').click();
+    await vi.waitFor(() => expect(deps.toast).toHaveBeenCalled());
+    expect(deps.toast).toHaveBeenCalledWith('El editor en el puerto 8000 pertenece a «Otro», no a «Demo».', 'error');
+    expect(deps.state.setConnection).toHaveBeenLastCalledWith({ status: 'offline' }, true);
+  });
 });
