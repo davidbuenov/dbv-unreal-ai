@@ -5,7 +5,7 @@
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
 * **Estado actual**: **v0.2.4** publicada (2026-10-29); **v0.3.0** con todo el `/build`, `/test` y `/code-simplify` hechos (rama `v0.3.0`): REQ-50..REQ-66 y S61–S75. Falta `/ship` con el usuario.
 * **Última decisión técnica**: REQ-22 reutiliza `propose_changes` con la regla de rutas en Rust y compila en modo mixto (Live Coding solo con `.cpp`; si no, editor cerrado y UBT); las recetas se publican como Agent Skills desde Python (sin C++); para el plugin propio sigue sin usarse Live Coding (cerrar el editor y compilar con UBT).
-* **Próximo paso**: pruebas del usuario en la app (lista en el Snapshot de abajo) y `/ship` v0.3.0.
+* **Próximo paso**: `/ship` v0.3.0 con el usuario.
 
 ## Checklist de Tareas
 
@@ -206,7 +206,7 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-11-01 (tarde), rama `v0.3.0`, trabajo autónomo autorizado por el usuario («continúa tú solo… a mi vuelta hacemos pruebas»). Rust 228, Vitest 354, Python 47, `dbv-lint` y banco e2e en verde.
+> **Last update / Última actualización:** 2026-11-01 (tarde), rama `v0.3.0`, último commit con el usuario: «las consultas del MCP de la app no piden permiso a los agentes» (REQ-12). Rust 229, Vitest 358, Python 47, `dbv-lint` y banco e2e en verde. Sin push.
 
 > **Exact point / Punto exacto:** cerrados S69–S75 y S74 (`/test` y `/code-simplify` de la ampliación). Verificado en vivo con el editor (DBVUnrealAITest1, puerto 8001): S70 por el usuario (UBT + Live Coding); S71 por la IA (las cuatro comprobaciones, `ListSkills` con las 4 recetas tras reiniciar el editor, `recipe_check` por el `--mcp` real); S72 con la copia real de MCPCLiente. El plugin Python 0.3.2 está instalado en DBVUnrealAITest1 (copiado a mano, como «Preparar»). El editor quedó abierto en su nivel por defecto.
 
@@ -214,4 +214,4 @@
 
 > **Pruebas del usuario (2026-11-01, tarde):** 1) «Mejorar con IA» con un agente obligaba a copiar la respuesta → ahora vuelve sola al campo (`ask` devuelve el texto final del agente); 2) no encontraba «📋 Recetas» (estaba abajo, junto a «Recordar») → también en la conversación vacía, y el banco e2e comprueba que se ve; 3) Conocimiento no decía de dónde salen las guías → explicación y enlace a dbv-mcp-server (los pasos en esa app, más adelante); 4) chino, bien; 5) Live Coding ya probado; 6) con un agente, cada consulta del MCP pedía permiso → la app concede sola las de solo lectura (REQ-12, `src/unreal/agentPermissions.js`, Vitest +4, Rust +1).
 
-> **Next step / Próximo paso:** que el usuario pruebe la lista de (1) con `npm run tauri dev` y, con lo que salga, `/ship` v0.3.0.
+> **Next step / Próximo paso:** **`/ship` v0.3.0** con el usuario: preguntar el tipo de versión (la recomendada es Minor, 0.2.4 → 0.3.0), mover el CHANGELOG ES/EN de «Sin publicar» a la versión, notas de versión en `dbv-specs-ops/releases/v0.3.0.md` y `.en.md`, `walkthrough.md`, README, Memory Gate, commit y tag `v0.3.0` (sin push). La revisión nativa del chino y las evals con un modelo real quedan como pendientes, no bloquean.
