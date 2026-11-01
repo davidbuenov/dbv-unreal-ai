@@ -163,7 +163,7 @@
     - [x] Un personaje corrió por las dunas en Play (2026-10-31).
     - [x] Spike del cielo (2026-11-01, en vivo): esfera de 1 km con `M_DBV_PanoSky` (`IsSky`, sin luz, panorama con espejo y 90°) en el nivel `isla`; orientación verificada contra el splat. Solo se ve ocultando `SM_SkySphere`, `SkyAtmosphere`, `VolumetricCloud` y `ExponentialHeightFog` (ver `memory.md`). Desde dentro lo tapa la cáscara de cielo del propio splat.
     - [x] **Panorama y cielo descartados por el usuario (2026-11-01)**: desde dentro no se ve y obliga a ocultar el cielo del nivel (REJECTED-08). Se revirtió la descarga del panorama en la biblioteca.
-  - [ ] S69 · Código del proyecto: núcleo en Rust y herramienta (REQ-22)
+  - [x] S69 · Código del proyecto: regla de rutas (REQ-22) — `unreal/code_policy.rs` (una definición, tests Rust) que consulta la conversación al proponer (`applyChange` con `checkPath`), al pedir permiso un agente (`permissionRefusal`) y al escribir un agente (`stageWrite`), y que `ai_write_file` vuelve a aplicar; regla en el prompt de Unreal. Se reutiliza `propose_changes` en vez de un módulo nuevo (memoria 2026-11-01). Vitest +4.
   - [ ] S70 · Código del proyecto: diff en la ventana y Live Coding (REQ-22)
   - [ ] S71 · Recetas y AgentSkills (REQ-23) — la receta 3 pasa a «Caminar por un mundo de World Labs» (usuario, 2026-11-01).
   - [ ] S72 · Guías de la API sin red desde carpeta local (REQ-25)

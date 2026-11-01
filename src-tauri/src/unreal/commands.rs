@@ -60,6 +60,12 @@ pub async fn unreal_engines() -> Result<Vec<EngineInstall>, UnrealError> {
     blocking(|| Ok(discovery::find_engines())).await
 }
 
+/// Por qué la IA no puede proponer cambiar ese fichero del proyecto, o `None` si puede. @spec REQ-22
+#[tauri::command]
+pub fn unreal_code_path_problem(relative: String) -> Option<String> {
+    super::code_policy::code_path_problem(&relative)
+}
+
 /// Lee un `.uproject` elegido por el usuario. @spec REQ-03
 #[tauri::command]
 pub fn unreal_read_project(path: String) -> Result<UProject, UnrealError> {

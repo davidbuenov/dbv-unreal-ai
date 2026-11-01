@@ -98,10 +98,12 @@ function pathProblem(path, original) {
  * @param {ReturnType<typeof createProposal>} proposal
  * @param {{path: string, action: 'edit'|'create'|'replace_all', search?: string, replace?: string, content?: string}} change
  * @param {(path: string) => Promise<string|null>} readBase
+ * @param {((path: string) => Promise<string|null>) | null} [checkPath] regla de la app sobre qué ficheros se pueden
+ *   tocar (en DBV Unreal AI, REQ-22): devuelve el motivo si no, o `null`.
  */
-export async function applyChange(proposal, change, readBase) {
+export async function applyChange(proposal, change, readBase, checkPath = null) {
   const path = normalizePath(change.path);
-  const problem = pathProblem(path, change.path);
+  const problem = pathProblem(path, change.path) ?? (checkPath ? await checkPath(path) : null);
   if (problem) return { ok: false, message: problem };
   let file = proposal.files.get(path);
   if (!file) {

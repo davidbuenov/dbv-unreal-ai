@@ -270,6 +270,7 @@ pub fn run() {
             unreal::commands::unreal_describe_toolset,
             #[cfg(desktop)]
             unreal::commands::unreal_call_tool,
+            unreal::commands::unreal_code_path_problem,
             #[cfg(desktop)]
             unreal::commands::unreal_readiness,
             #[cfg(desktop)]

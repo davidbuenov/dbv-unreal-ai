@@ -243,6 +243,10 @@ pub async fn ai_write_file(root: String, relative: String, content: String) -> R
     if !is_text_document(&path) {
         return Err(AiError::BadRequest(format!("«{relative}» no es un documento de texto (.md, .markdown, .txt)")));
     }
+    // La carpeta es la del `.uproject`: la IA solo escribe donde deja REQ-22, aunque la propuesta llegase sin comprobar.
+    if let Some(problem) = crate::unreal::code_policy::code_path_problem(&relative) {
+        return Err(AiError::BadRequest(problem));
+    }
     tauri::async_runtime::spawn_blocking(move || write_atomic(&path, &content)).await.map_err(|e| AiError::Server(e.to_string()))?
 }
 

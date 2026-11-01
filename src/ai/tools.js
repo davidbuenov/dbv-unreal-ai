@@ -163,7 +163,7 @@ export function createTools(deps) {
           return 'error: no changes were received, so NOTHING was proposed. Call propose_changes again with `changes` as a non-empty array of {path, action, search, replace}. Do not tell the user a proposal was made.';
         }
         for (const change of received) {
-          const result = await applyChange(proposal, change, (path) => deps.readText(path));
+          const result = await applyChange(proposal, change, (path) => deps.readText(path), deps.checkPath ?? null);
           report.push(result.ok ? `ok: ${change.action} ${change.path}` : `error: ${change?.path}: ${result.message}`);
         }
         if (!proposal.files.size) {

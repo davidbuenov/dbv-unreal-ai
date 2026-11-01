@@ -369,6 +369,11 @@ export function start() {
           }
         }
       },
+      // REQ-22: la IA solo propone cambios donde deja la regla de Rust (la misma que aplica al escribir).
+      checkProposalPath: async (path) => {
+        const problem = await api.unrealCodePathProblem(path);
+        return problem.ok ? problem.value : null;
+      },
       extraTools: ({ panel, conversationId, vision = false, turnContext = null }) => {
         if (!memories.has(conversationId)) memories.set(conversationId, createPermissionMemory());
         const askApproval = (request) => {

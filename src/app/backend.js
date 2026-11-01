@@ -22,6 +22,8 @@ export const unrealOpenProject = (path) => call('unreal_open_project', { path })
 export const unrealConnect = (endpoint) => call('unreal_connect', { endpoint });
 export const unrealListToolsets = (endpoint) => call('unreal_list_toolsets', { endpoint });
 export const unrealDescribeToolset = (endpoint, toolset) => call('unreal_describe_toolset', { endpoint, toolset });
+/** Por qué la IA no puede cambiar ese fichero del proyecto, o `null` (REQ-22). */
+export const unrealCodePathProblem = (relative) => call('unreal_code_path_problem', { relative });
 export const unrealCallTool = (endpoint, toolset, tool, args, timeoutSecs) => call('unreal_call_tool', { endpoint, toolset, tool, arguments: args ?? {}, timeoutSecs: timeoutSecs ?? null });
 export const unrealReadiness = (path) => call('unreal_readiness', { path });
 export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_plan', { path, variant, port: port ?? null });

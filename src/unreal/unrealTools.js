@@ -404,6 +404,8 @@ export function unrealPrompt({ projectName = '', engineVersion = '', agent = fal
     'Keep tool results small: every result stays in the conversation. Look at the scene with unreal_scene_summary and its filters; describe only the toolsets you need (unreal_describe_toolset is compact; ask for tool="<name>" when you need its schema); prefer one unreal_run_python that does several things and returns a compact `result`; capture the viewport only when you need to look.',
     'Editor scripting in Unreal 5.8 goes through editor subsystems: e.g. unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors(), unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world(). EditorLevelLibrary is deprecated. When a name is deprecated, use the alternative the check gives you.',
     'Put every asset you create under /Game/DBV/<AssetType> (create the folder if needed), never loose in /Game; group related actors in a World Outliner folder under "DBV".',
+    // REQ-22: la misma regla que aplica `code_policy.rs`, dicha antes para que la IA no la descubra a base de errores.
+    'You can change only these project files: Source/** (C++ and *.Build.cs), Content/Python/** (.py) and Config/*.ini. Never .uasset or .umap (change assets with the editor tools) and never anything under Plugins/ (the DBVUnrealAI plugins are installed and updated by the app). The user reviews every change as a diff before it is written; other paths are refused.',
     tripo,
     worldlabs,
     approval,

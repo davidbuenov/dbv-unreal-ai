@@ -23,7 +23,7 @@ import { createProposalApplier } from './applyProposal.js';
 import { createChatPanel, mentionedPaths } from './chatPanel.js';
 import { createConnectWizard } from './connectWizard.js';
 import { createAcpSession, insideProject } from './acpSession.js';
-import { createChangesCard, createPermissionCard } from './acpView.js';
+import { createChangesCard, createPermissionCard, permissionDiffs } from './acpView.js';
 import { agentPreamble, buildContext, estimateTokens, systemPrompt } from './context.js';
 import { adviceMessages, createModelInfoLookup, effectiveContext } from './modelAdvice.js';
 import { contextBudget as contextBudgetFor } from './modelFit.js';
@@ -81,6 +81,23 @@ export function historyMessages(entries, budget) {
 const TOOLS_UNSUPPORTED = /(?:does(?:n'?t| not) support|not support(?:ed)?|unsupported|no support for)[^.\n]{0,40}\b(?:tools?|tool[ _-]?use|function[ _-]?calling)\b|\b(?:tools?|tool[ _-]?use|function[ _-]?calling)\b[^.\n]{0,40}\b(?:not (?:supported|available|enabled)|unsupported)\b/i;
 
 /** ¿Ve imágenes este modelo? Si la conexión no lo dice, los de nube sí y los locales no (un modelo local sin visión falla con ellas). @spec REQ-32 */
+/**
+ * Un permiso de un agente que toca un fichero que la regla de la app no deja cambiar (REQ-22): el motivo y la opción
+ * de rechazo que se le responde (o `null`, que es «cancelado»). `null` si no hay nada que rechazar.
+ * @param {object} params los de `session/request_permission`.
+ * @param {(absolute: string) => string|null} toRelative
+ * @param {((relative: string) => Promise<string|null>) | null} checkPath
+ */
+export async function permissionRefusal(params, toRelative, checkPath) {
+  let message = null;
+  const relatives = permissionDiffs(params).map((diff) => toRelative(diff.path)).filter(Boolean);
+  for (const relative of checkPath ? relatives : []) {
+    message ??= await checkPath(relative);
+  }
+  const optionId = (params?.options ?? []).find((option) => option.kind?.startsWith('reject'))?.optionId ?? null;
+  return message ? { message, optionId } : null;
+}
+
 export function canSeeImages(connection, providerInfo = []) {
   const cloud = providerInfo.find((p) => p.provider === connection.provider)?.cloud === true;
   return connection.supportsImages === true || (connection.supportsImages == null && cloud);
@@ -615,6 +632,8 @@ export function createAiApp(deps) {
         outline: host.getOutline ? () => host.getOutline() : null,
         checkProposal: check,
         getProposal: () => proposal,
+        // Qué ficheros del proyecto se pueden tocar (REQ-22): lo decide el host.
+        checkPath: host.checkProposalPath ?? null,
       }), ...extra];
       const result = await runAgent({
         tools: toolset,
@@ -652,7 +671,7 @@ export function createAiApp(deps) {
       if (!useTools) {
         const blocks = parseChangeBlocks(finalText);
         for (const change of blocks) {
-          const applied = await applyChange(proposal, change, readText);
+          const applied = await applyChange(proposal, change, readText, host.checkProposalPath ?? null);
           if (!applied.ok) panel.addNote(`${change.path}: ${applied.message}`, 'error');
         }
         // Un diff escrito en un formato que la app no entiende: no hay nada que revisar, y mejor decirlo que dejarlo como un bloque de código más.
@@ -748,6 +767,12 @@ export function createAiApp(deps) {
     mcpServers: () => host.mcpServers?.() ?? [],
     askPermission: async (params) => {
       const toRelative = (absolute) => insideProject(projectRoot, absolute);
+      // REQ-22: lo que la regla de la app no deja tocar se deniega sin preguntar, como lo que sale del proyecto.
+      const refusal = await permissionRefusal(params, toRelative, host.checkProposalPath ?? null);
+      if (refusal) {
+        panel.addNote(refusal.message, 'error');
+        return refusal.optionId;
+      }
       const permission = createPermissionCard(params, {
         toRelative,
         isDirty: (relative) => host.isOpenDocument(relative) && host.isDirty(),
@@ -775,7 +800,9 @@ export function createAiApp(deps) {
     },
     stageWrite: async (relative, content) => {
       if (!agentTurn) return;
-      await applyChange(agentTurn.proposal, { path: relative, action: 'replace_all', content }, readText);
+      const staged = await applyChange(agentTurn.proposal, { path: relative, action: 'replace_all', content }, readText, host.checkProposalPath ?? null);
+      // El agente tiene que saber que no se escribió (si no, cree que sí y sigue).
+      if (!staged.ok) throw new Error(staged.message);
     },
     onUpdate: (update) => {
       if (!agentTurn) return;
