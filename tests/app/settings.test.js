@@ -113,6 +113,20 @@ describe('Ajustes', () => {
     expect(visible()).toEqual(['convai']);
   });
 
+  it('las pestañas de Tripo, World Labs y Convai llevan el logo del servicio, y el logo existe @spec REQ-60', async () => {
+    const { existsSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const host = document.createElement('div');
+    await createSettingsView(host, { toast: vi.fn(), openConnect: vi.fn(), state: { connection: null } }).render();
+    for (const [panel, name] of [['tripo', 'Tripo'], ['worldlabs', 'World Labs'], ['convai', 'Convai']]) {
+      const header = host.querySelector(`[data-settings-panel="${panel}"] .brand-header`);
+      expect(header.querySelector('h3').textContent).toBe(name);
+      const logo = header.querySelector('.brand-logo img');
+      expect(logo.getAttribute('alt')).toBe(name);
+      expect(existsSync(resolve('src', logo.getAttribute('src'))), logo.getAttribute('src')).toBe(true);
+    }
+  });
+
   it('Convai: sin clave, con los personajes registrados, añadir y guardar; el tutorial abre la ayuda @spec REQ-58, REQ-59', async () => {
     const host = document.createElement('div');
     const toast = vi.fn();

@@ -15,6 +15,7 @@ import { t } from '../ai/i18nBridge.js';
 import * as api from './backend.js';
 import { button, el } from './dom.js';
 import { convaiSettingsCard } from './convaiSettings.js';
+import { brandHeader } from './brandHeader.js';
 
 /** Pestañas de Ajustes, en orden (REQ-60). */
 export const SETTINGS_TABS = ['ai', 'tripo', 'worldlabs', 'convai', 'library', 'mcp', 'diagnostics'];
@@ -124,7 +125,7 @@ export function createSettingsView(host, deps) {
       tripo: el(
         'div',
         { className: 'card stack' },
-        el('h3', { text: 'Tripo' }),
+        brandHeader('Tripo', 'tripo'),
         balance,
         ...keyControls('tripo', hasKey),
         el('label', {}, t('settings.budget'), budget),
@@ -134,7 +135,7 @@ export function createSettingsView(host, deps) {
         })),
       ),
       // @spec REQ-18, RNF-IA.4 — la clave de World Labs, en el mismo llavero que la de Tripo.
-      worldlabs: el('div', { className: 'card stack' }, el('h3', { text: 'World Labs' }), el('p', { className: 'hint', text: t('settings.worldlabsHint') }), ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs)),
+      worldlabs: el('div', { className: 'card stack' }, brandHeader('World Labs', 'worldlabs'), el('p', { className: 'hint', text: t('settings.worldlabsHint') }), ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs)),
       convai,
       library: libraryCard,
       mcp: el('div', { className: 'card stack' }, el('h3', { text: t('settings.mcp') }), el('p', { className: 'hint', text: t('settings.mcpHint') }), command.ok ? el('pre', { className: 'diff', text: mcpClientConfig(command.value) }) : null),

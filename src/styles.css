@@ -241,6 +241,10 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .card + .card { margin-top: 12px; }
 .card h3 { margin-bottom: 8px; }
+.brand-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.brand-header h3 { margin-bottom: 0; }
+.brand-logo { display: inline-flex; align-items: center; padding: 6px 10px; background: #0b0b0c; border-radius: 6px; }
+.brand-logo img { display: block; height: 18px; width: auto; }
 .editor-card .row { justify-content: space-between; }
 .checklist { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .check { display: grid; grid-template-columns: 20px 1fr; gap: 6px; align-items: start; }

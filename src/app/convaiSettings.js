@@ -14,6 +14,7 @@
 import { t } from '../ai/i18nBridge.js';
 import * as api from './backend.js';
 import { button, el } from './dom.js';
+import { brandHeader } from './brandHeader.js';
 
 /** El Playground de Convai, donde se crean los personajes y se copia su Character ID. */
 export const CONVAI_PLAYGROUND = 'https://convai.com';
@@ -62,7 +63,7 @@ export async function convaiSettingsCard(deps) {
   return el(
     'div',
     { className: 'card stack' },
-    el('h3', { text: 'Convai' }),
+    brandHeader('Convai', 'convai'),
     el('p', { className: 'hint', text: t('convai.intro') }),
     el('div', { className: 'row' }, button(t('convai.tutorial'), openConvaiHelp), button(t('convai.playground'), () => window.__TAURI__?.opener?.openUrl?.(CONVAI_PLAYGROUND), 'btn-ghost')),
     el('div', { className: 'subheading', text: t('convai.characters') }),

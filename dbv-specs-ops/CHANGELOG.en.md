@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Logos in Settings (REQ-60):** the Tripo, World Labs and Convai tabs show the service logo next to the title, on a dark badge that looks the same in the dark, light and sepia themes.
 - **World Labs world panorama (REQ-18):** when a manifest is imported or a world is generated, the library also downloads its 360° panorama (`panorama.png`) to use as the sky in Unreal. A world imported earlier gets it by importing its manifest again, without duplicating.
 - **World Labs worlds placed for real (REQ-18):** when a world is sent to Unreal, the splat goes at its metric scale with the ground at Z = 0, the `.glb` collision is aligned with it (scale (m, m, −m): the glTF import mirrors it in Z), uses its complex collision as simple so a character walks on the dunes and not on the mesh box, and a `PlayerStart` left under the terrain is lifted onto it. Before, the collision was left "in front of the camera", unaligned.
 - **View-dependent colour on splats (REQ-62):** degree 1–3 spherical harmonics of `.ply` and `.spz` files are evaluated on the GPU with the view direction, so highlights change as you move, as in the original viewer. Each cloud has a video memory budget (`dbv.Splat.VRAMBudgetMB`; 40% of VRAM by default): if it does not fit, the harmonics go first and then only the most visible splats stay, and the report to the AI says so. Only visible splats are drawn: the GPU counts them and the draw is indirect.
