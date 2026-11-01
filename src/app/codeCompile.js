@@ -14,9 +14,20 @@
 import { t } from '../ai/i18nBridge.js';
 import * as api from './backend.js';
 import { button, el } from './dom.js';
+import { sameProjectPath } from './projectView.js';
 
 /** Reintentos automáticos seguidos tras un fallo de compilación. */
 export const MAX_RETRIES = 2;
+
+/**
+ * Dónde escucha AHORA el editor del proyecto, o `null` si no está abierto o aún arranca. No vale la conexión guardada:
+ * al reabrir el editor el puerto puede ser otro (2026-11-01: la app compiló contra el 8000 y el editor estaba en el 8001).
+ */
+export async function liveEndpoint(projectPath) {
+  const editors = await api.unrealEditors();
+  const own = editors.ok ? editors.value.find((e) => sameProjectPath(e.editor?.project ?? e.project?.path, projectPath)) : null;
+  return own?.listening ? own.mcp : null;
+}
 
 /** Mensaje para la IA con los errores (en inglés: lo lee el modelo). */
 export function errorsForAi(outcome, attempt) {
@@ -28,10 +39,13 @@ export function errorsForAi(outcome, attempt) {
  * @param {{
  *   getConnection: () => ({projectPath?: string, endpoint?: {port: number, path: string}, status?: string} | null),
  *   getAi: () => ({ask: (text: string, options?: object) => Promise<void>, panel: {addNode: (node: Node) => void, addNote: (text: string, kind?: string) => void}} | null),
+ *   reconnect?: (projectPath: string) => Promise<boolean>,
+ *   pollMs?: number,
  * }} deps
  */
 export function createCodeCompiler(deps) {
   let retries = 0;
+  const pollMs = deps.pollMs ?? 3000;
 
   function note(text, kind = 'info') {
     deps.getAi()?.panel.addNote(text, kind);
@@ -58,19 +72,47 @@ export function createCodeCompiler(deps) {
     deps.getAi()?.panel.addNode(el('div', { className: 'ai-review code-compile' }, el('p', { text: t('code.giveUp') }), el('div', { className: 'row' }, again)));
   }
 
+  /** Un aviso con «Reintentar» (el editor aún arranca, o Live Coding no respondió). */
+  function failedWithRetry(message, retry) {
+    const again = button(t('code.retryNow'), () => {
+      again.disabled = true;
+      retry();
+    }, 'btn-ghost');
+    deps.getAi()?.panel.addNode(el('div', { className: 'ai-review code-compile' }, el('p', { className: 'hint', text: message }), el('div', { className: 'row' }, again)));
+  }
+
   async function liveCoding(connection) {
+    const endpoint = await liveEndpoint(connection.projectPath);
+    if (!endpoint) {
+      failedWithRetry(t('code.noEditor'), () => liveCoding(connection));
+      return;
+    }
     note(t('code.compiling'));
-    const compiled = await api.unrealCompileLive(connection.endpoint);
+    const compiled = await api.unrealCompileLive(endpoint);
     if (compiled.ok) await report(compiled.value);
-    else note(compiled.error.message, 'error');
+    else failedWithRetry(compiled.error.message, () => liveCoding(connection));
+  }
+
+  /** Tras reabrir el editor, espera a que su servidor MCP escuche (hasta 5 min) y conecta la app con él. */
+  async function reconnectWhenReady(projectPath, status) {
+    let endpoint = null;
+    for (let waited = 0; !endpoint && waited < 300_000; waited += pollMs) {
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+      endpoint = await liveEndpoint(projectPath);
+    }
+    const connected = endpoint ? await deps.reconnect?.(projectPath) : false;
+    status.textContent = connected ? t('code.reconnected') : endpoint ? '' : t('code.notReady');
   }
 
   /** Tarjeta para compilar con el editor cerrado: lo cierra la persona, que sabe si tiene algo sin guardar. */
   function editorClosedCard(connection, files) {
     const status = el('p', { className: 'hint' });
     const reopen = button(t('code.openEditor'), async () => {
+      reopen.disabled = true;
       const opened = await api.unrealOpenProject(connection.projectPath);
-      if (!opened.ok) status.textContent = opened.error.message;
+      status.textContent = opened.ok ? t('code.opening') : opened.error.message;
+      if (opened.ok) await reconnectWhenReady(connection.projectPath, status);
+      else reopen.disabled = false;
     }, 'btn-ghost');
     reopen.hidden = true;
     const build = button(t('code.build'), async () => {
@@ -103,8 +145,7 @@ export function createCodeCompiler(deps) {
     const connection = deps.getConnection();
     const planned = paths.length && connection?.projectPath ? await api.unrealCompilePlan(paths) : null;
     const mode = planned?.ok ? planned.value.mode : 'nothing';
-    if (mode === 'liveCoding' && connection.status === 'online') await liveCoding(connection);
-    else if (mode === 'liveCoding') note(t('code.noEditor'), 'error');
+    if (mode === 'liveCoding') await liveCoding(connection);
     else if (mode === 'editorClosed') deps.getAi()?.panel.addNode(editorClosedCard(connection, planned.value.files));
   }
 

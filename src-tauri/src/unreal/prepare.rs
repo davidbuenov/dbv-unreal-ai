@@ -202,7 +202,7 @@ pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealErro
     let toolset_enabled = project.plugins.iter().any(|p| p.name == PYTHON_PLUGIN && p.enabled);
     checks.push(Check { id: "toolset".into(), ok: toolset_enabled && installed.as_deref() == Some(bundled.as_str()), detail: installed.clone().unwrap_or_default() });
     let ready = checks.iter().all(|c| c.ok);
-    let proposed_port = propose_free_port(&mcp);
+    let proposed_port = propose_free_port(&mcp, discovery::editor_open_for(uproject));
     let direct_access = super::duplicates::scan(dir, mcp.port);
     let engine_ok = version.is_some_and(|v| v >= MIN_ENGINE);
     let convai = super::convai::status(dir, &project, engine.as_ref(), engine_ok);
@@ -211,9 +211,11 @@ pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealErro
 }
 
 /// Propone un puerto libre a partir de 8000 para no chocar con otros proyectos o editores abiertos (REQ-07).
-pub fn propose_free_port(mcp: &McpSettings) -> u16 {
+/// Con el editor del propio proyecto abierto, su puerto está ocupado por él mismo: se conserva (el 2026-11-01 se movió
+/// al 8001 al preparar con el editor abierto, y la app siguió hablando con el 8000).
+pub fn propose_free_port(mcp: &McpSettings, own_editor_open: bool) -> u16 {
     let mut candidate = mcp.port;
-    if mcp.auto_start != Some(true) || candidate == discovery::DEFAULT_MCP_PORT {
+    if !own_editor_open && (mcp.auto_start != Some(true) || candidate == discovery::DEFAULT_MCP_PORT) {
         let mut port = discovery::DEFAULT_MCP_PORT;
         while port < 65535 && discovery::port_listening(port) {
             port += 1;
@@ -572,7 +574,16 @@ mod tests {
     #[test]
     fn propone_puerto_libre_distinto_si_el_puerto_base_esta_en_uso() {
         let mcp = McpSettings { port: 8000, path: "/mcp".into(), auto_start: None };
-        let port = propose_free_port(&mcp);
+        let port = propose_free_port(&mcp, false);
         assert!(port >= 8000);
+    }
+
+    /// @spec REQ-07, REQ-05
+    #[test]
+    fn con_el_editor_del_proyecto_abierto_conserva_su_puerto() {
+        let mcp = McpSettings { port: 8000, path: "/mcp".into(), auto_start: Some(true) };
+        // Aunque el 8000 esté ocupado: lo ocupa su propio editor.
+        let _busy = std::net::TcpListener::bind(("127.0.0.1", 8000));
+        assert_eq!(propose_free_port(&mcp, true), 8000);
     }
 }

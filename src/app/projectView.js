@@ -53,6 +53,9 @@ export function diffPreview(before, after, context = 2) {
   return lines;
 }
 
+/** Misma ruta de proyecto, aunque cambien las barras o las mayúsculas (Windows). */
+export const sameProjectPath = (a, b) => Boolean(a && b) && String(a).replace(/\\/g, '/').toLowerCase() === String(b).replace(/\\/g, '/').toLowerCase();
+
 /**
  * Proyecto que tiene abierto el editor de un puerto, según el toolset DBV (`get_project_info` vive en él, no es una
  * herramienta suelta del MCP). Sin el toolset no se puede saber: `null`, y la conexión sigue. @spec REQ-07
@@ -303,5 +306,16 @@ export function createProjectView(host, deps) {
     } else await render();
   }
 
-  return { render, autoConnect, select };
+  /** Conecta el editor de ESE proyecto si está escuchando (tras reabrirlo desde la app, REQ-22). `true` si lo hizo. */
+  async function connectProject(path) {
+    const editors = await api.unrealEditors();
+    const live = editors.ok ? editors.value.find((e) => e.listening && sameProjectPath(e.editor?.project ?? e.project?.path, path)) : null;
+    if (live) {
+      await select(live.editor.project);
+      await connect(live.project, live.mcp);
+    }
+    return Boolean(live);
+  }
+
+  return { render, autoConnect, select, connectProject };
 }

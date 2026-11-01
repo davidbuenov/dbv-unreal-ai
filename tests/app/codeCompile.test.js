@@ -9,10 +9,14 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCodeCompiler, errorsForAi, MAX_RETRIES } from '../../src/app/codeCompile.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 
+// La conexión guardada dice 8000; el editor reabierto escucha en el 8001 (lo que pasó en vivo el 2026-11-01).
 const CONNECTION = { projectPath: 'D:/Unreal/Demo/Demo.uproject', endpoint: { port: 8000, path: '/mcp' }, status: 'online' };
+const LIVE = { port: 8001, path: '/mcp' };
+const OPEN_EDITOR = [{ editor: { project: 'd:\\Unreal\\Demo\\Demo.uproject' }, project: { path: 'D:/Unreal/Demo/Demo.uproject', name: 'Demo' }, listening: true, mcp: LIVE }];
 const FAILED = { ok: false, summary: 'Failure', errors: ["DemoActor.cpp(12): error C2065: 'Speed': undeclared identifier"] };
 let invoked;
 let outcomes;
+let editors;
 
 beforeAll(() => {
   window.DBV_I18N.register(APP_TRANSLATIONS);
@@ -22,6 +26,7 @@ beforeAll(() => {
 beforeEach(() => {
   invoked = [];
   outcomes = [];
+  editors = OPEN_EDITOR;
   window.__TAURI__ = {
     core: {
       invoke: vi.fn(async (command, args) => {
@@ -32,6 +37,7 @@ beforeEach(() => {
           return !cpp ? { mode: 'nothing' } : structural.length ? { mode: 'editorClosed', files: structural } : { mode: 'liveCoding' };
         }
         if (command === 'unreal_compile_live' || command === 'unreal_build_project') return outcomes.shift();
+        if (command === 'unreal_editors') return editors;
         return null;
       }),
     },
@@ -50,7 +56,7 @@ describe('Compilar tras aplicar cambios de código', () => {
     outcomes.push(FAILED, FAILED, FAILED);
 
     await compiler.afterApply(['Source/Demo/Private/DemoActor.cpp']);
-    expect(invoked.find(([c]) => c === 'unreal_compile_live')[1]).toEqual({ endpoint: CONNECTION.endpoint });
+    expect(invoked.find(([c]) => c === 'unreal_compile_live')[1]).toEqual({ endpoint: LIVE });
     expect(ai.ask).toHaveBeenCalledTimes(1);
     expect(ai.ask.mock.calls[0][0]).toContain("error C2065: 'Speed'");
     expect(ai.ask.mock.calls[0][1]).toEqual({ label: `Errores de compilación: se los paso a la IA (intento 1 de ${MAX_RETRIES})` });
@@ -73,9 +79,10 @@ describe('Compilar tras aplicar cambios de código', () => {
     expect(ai.panel.addNote).toHaveBeenLastCalledWith('Compilado (Success).', 'info');
   });
 
-  it('cabeceras o Build.cs: tarjeta para cerrar el editor, compilar con UBT y reabrirlo @spec REQ-22', async () => {
+  it('cabeceras o Build.cs: tarjeta para cerrar el editor, compilar con UBT, reabrirlo y reconectar @spec REQ-22', async () => {
     const ai = fakeAi();
-    const compiler = createCodeCompiler({ getConnection: () => CONNECTION, getAi: () => ai });
+    const reconnect = vi.fn(async () => true);
+    const compiler = createCodeCompiler({ getConnection: () => CONNECTION, getAi: () => ai, reconnect, pollMs: 1 });
     outcomes.push({ ok: true, summary: 'Success', errors: [] });
     await compiler.afterApply(['Source/Demo/Public/DemoActor.h', 'Source/Demo/Private/DemoActor.cpp']);
     expect(invoked.some(([c]) => c === 'unreal_compile_live')).toBe(false);
@@ -88,16 +95,25 @@ describe('Compilar tras aplicar cambios de código', () => {
     await vi.waitFor(() => expect(buttons().find((b) => b.textContent === 'Abrir el editor').hidden).toBe(false));
     buttons().find((b) => b.textContent === 'Abrir el editor').click();
     await vi.waitFor(() => expect(invoked.some(([c, a]) => c === 'unreal_open_project' && a.path === CONNECTION.projectPath)).toBe(true));
+    await vi.waitFor(() => expect(reconnect).toHaveBeenCalledWith(CONNECTION.projectPath));
+    await vi.waitFor(() => expect(ai.host.textContent).toContain('Editor abierto y conectado.'));
   });
 
-  it('Python o .ini no se compilan, y sin editor conectado no se lanza Live Coding @spec REQ-22', async () => {
+  it('Python o .ini no se compilan, y con el editor arrancando no se lanza Live Coding hasta «Reintentar» @spec REQ-22, REQ-07', async () => {
     const ai = fakeAi();
     await createCodeCompiler({ getConnection: () => CONNECTION, getAi: () => ai }).afterApply(['Content/Python/tools.py', 'Config/DefaultGame.ini']);
     expect(invoked.some(([c]) => c === 'unreal_compile_live' || c === 'unreal_build_project')).toBe(false);
 
-    await createCodeCompiler({ getConnection: () => ({ ...CONNECTION, status: 'offline' }), getAi: () => ai }).afterApply(['Source/Demo/Private/DemoActor.cpp']);
+    editors = [{ ...OPEN_EDITOR[0], listening: false }];
+    await createCodeCompiler({ getConnection: () => CONNECTION, getAi: () => ai }).afterApply(['Source/Demo/Private/DemoActor.cpp']);
     expect(invoked.some(([c]) => c === 'unreal_compile_live')).toBe(false);
-    expect(ai.panel.addNote).toHaveBeenCalledWith(expect.stringContaining('No hay un editor conectado'), 'error');
+    expect(ai.host.textContent).toContain('aún está arrancando');
+
+    // Cuando el editor ya escucha, «Reintentar» compila.
+    editors = OPEN_EDITOR;
+    outcomes.push({ ok: true, summary: 'Success', errors: [] });
+    [...ai.host.querySelectorAll('button')].find((b) => b.textContent === 'Reintentar').click();
+    await vi.waitFor(() => expect(invoked.find(([c]) => c === 'unreal_compile_live')?.[1]).toEqual({ endpoint: LIVE }));
   });
 
   it('el mensaje para la IA lleva los errores y el intento @spec REQ-22', () => {

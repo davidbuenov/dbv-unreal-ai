@@ -306,6 +306,12 @@ pub fn running_editors() -> Vec<RunningEditor> {
     editors
 }
 
+/// ¿Está abierto el editor de este `.uproject`? (Windows no distingue mayúsculas en las rutas.)
+pub fn editor_open_for(project_path: &Path) -> bool {
+    let wanted = project_path.to_string_lossy().replace('\\', "/").to_lowercase();
+    running_editors().into_iter().any(|editor| editor.project.is_some_and(|p| p.replace('\\', "/").to_lowercase() == wanted))
+}
+
 /// ¿Hay algo escuchando en `127.0.0.1:port`? Respuesta en ≤ 300 ms.
 pub fn port_listening(port: u16) -> bool {
     let address = SocketAddr::from(([127, 0, 0, 1], port));

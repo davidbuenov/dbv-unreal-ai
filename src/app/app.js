@@ -248,7 +248,7 @@ export function start() {
   // ─── Asistente de IA ───────────────────────────────────────────────
   let aiApp = null;
   // REQ-22: compilar el C++ que la IA cambió, al aceptar su propuesta.
-  const codeCompiler = createCodeCompiler({ getConnection: () => state.connection, getAi: () => aiApp });
+  const codeCompiler = createCodeCompiler({ getConnection: () => state.connection, getAi: () => aiApp, reconnect: (path) => views.project.connectProject(path) });
   let aiLoading = null;
   const memories = new Map();
 

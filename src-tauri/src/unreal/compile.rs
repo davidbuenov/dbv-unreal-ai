@@ -169,10 +169,7 @@ pub fn engine_root_for(project_path: &Path) -> Result<PathBuf, UnrealError> {
 /// Compila el editor del proyecto con UBT. Se niega si su editor está abierto: UBT no puede sustituir sus DLL y la
 /// compilación fallaría a medias. Bloquea hasta que termina (llamar desde un hilo aparte). @spec REQ-22
 pub fn build_project(engine_root: &Path, project_path: &Path) -> Result<CompileOutcome, UnrealError> {
-    let open = discovery::running_editors().into_iter().any(|editor| {
-        editor.project.as_deref().is_some_and(|p| Path::new(p).eq(project_path) || p.eq_ignore_ascii_case(&project_path.to_string_lossy()))
-    });
-    if open {
+    if discovery::editor_open_for(project_path) {
         return Err(UnrealError::Format("the Unreal editor of this project is open: save and close it before compiling (Live Coding cannot apply header or Build.cs changes)".into()));
     }
     let (program, args) = build_command(engine_root, project_path);
