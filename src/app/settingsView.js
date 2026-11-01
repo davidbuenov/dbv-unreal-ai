@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08, REQ-30, REQ-18, REQ-58, REQ-60
+// @spec RNF-IA.4, RNF-04, REQ-20, RNF-08, REQ-30, REQ-18, REQ-58, REQ-60, REQ-25
 //
 // Las claves de Tripo y World Labs solo viajan de ida: el campo nunca se rellena con la guardada, solo se dice
 // si hay una (RNF-IA.4). Cada apartado va en su pestaña (REQ-60): todos se pintan y solo se ve el activo, así cambiar
@@ -18,7 +18,7 @@ import { convaiSettingsCard } from './convaiSettings.js';
 import { brandHeader } from './brandHeader.js';
 
 /** Pestañas de Ajustes, en orden (REQ-60). */
-export const SETTINGS_TABS = ['ai', 'tripo', 'worldlabs', 'convai', 'library', 'mcp', 'diagnostics'];
+export const SETTINGS_TABS = ['ai', 'tripo', 'worldlabs', 'convai', 'library', 'knowledge', 'mcp', 'diagnostics'];
 
 /** Configuración MCP para pegar en un cliente (Claude Code `.mcp.json`, Cursor…). */
 export function mcpClientConfig(command) {
@@ -120,6 +120,37 @@ export function createSettingsView(host, deps) {
         )
       : null;
     const convai = await convaiSettingsCard({ toast: deps.toast });
+    // REQ-25: la copia local de las guías de Unreal (formato de MCPCLiente); la app no descarga nada de Epic.
+    const listed = await api.guidesStatus();
+    const guides = listed.ok && listed.value ? listed.value : null;
+    async function chooseGuides(folder) {
+      const chosen = await api.guidesSetFolder(folder);
+      if (!chosen.ok) return deps.toast(chosen.error.message ?? String(chosen.error), 'error');
+      deps.toast(folder ? t('settings.knowledgeSaved', { n: String(chosen.value.chunks) }) : t('settings.knowledgeRemoved'));
+      return render();
+    }
+    const knowledge = el(
+      'div',
+      { className: 'card stack' },
+      el('h3', { text: t('settings.knowledge') }),
+      el('p', { className: 'hint', text: t('settings.knowledgeHint') }),
+      guides?.folder ? el('p', { className: 'mono', text: guides.folder }) : null,
+      el('p', {
+        className: guides && !guides.problem ? 'hint' : 'hint check-fail',
+        text: guides && !guides.problem
+          ? t('settings.knowledgeStatus', { guides: String(guides.guides), chunks: String(guides.chunks), updated: guides.updated || '—' })
+          : guides?.folder ? guides.problem : t('settings.knowledgeNone'),
+      }),
+      el(
+        'div',
+        { className: 'row' },
+        button(t('settings.knowledgeChoose'), async () => {
+          const folder = await window.__TAURI__.dialog.open({ directory: true });
+          return folder ? chooseGuides(String(folder)) : null;
+        }),
+        guides?.folder ? button(t('settings.knowledgeRemove'), () => chooseGuides(null), 'btn-ghost') : null,
+      ),
+    );
     const panels = {
       ai: el('div', { className: 'card stack' }, el('h3', { text: t('settings.ai') }), el('div', { className: 'row' }, button(t('settings.aiConnect'), deps.openConnect, 'btn-primary'))),
       tripo: el(
@@ -138,6 +169,7 @@ export function createSettingsView(host, deps) {
       worldlabs: el('div', { className: 'card stack' }, brandHeader('World Labs', 'worldlabs'), el('p', { className: 'hint', text: t('settings.worldlabsHint') }), ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs)),
       convai,
       library: libraryCard,
+      knowledge,
       mcp: el('div', { className: 'card stack' }, el('h3', { text: t('settings.mcp') }), el('p', { className: 'hint', text: t('settings.mcpHint') }), command.ok ? el('pre', { className: 'diff', text: mcpClientConfig(command.value) }) : null),
       diagnostics: el(
         'div',

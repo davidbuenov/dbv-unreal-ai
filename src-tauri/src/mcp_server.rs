@@ -201,6 +201,8 @@ pub fn tool_specs() -> Vec<Value> {
     specs.extend(crate::zones::specs());
     // Recetas guiadas (REQ-23): la misma definición que el asistente integrado.
     specs.extend(crate::recipes::specs());
+    // Guías de Unreal sin red (REQ-25).
+    specs.push(crate::guides::spec());
     // Personajes de Convai registrados en Ajustes (REQ-58).
     specs.push(crate::convai_characters::spec());
     specs
@@ -386,6 +388,7 @@ impl McpServer {
                 crate::zones::report_text(&self.run_fixed(&crate::zones::apply_code(&zones))?)
             }
             "level_zones_list" => crate::zones::report_text(&self.run_fixed(&crate::zones::list_code())?),
+            "search_unreal_guides" => crate::guides::search_text(&self.config.config_dir, &text(args, "query"), args.get("limit").and_then(Value::as_u64).unwrap_or(3) as usize),
             "recipes_list" | "recipe_check" => crate::recipes::run_tool(name, args, |code| self.run_fixed(code))?,
             "convai_characters" => crate::convai_characters::text(&crate::convai_characters::load(&self.config.config_dir)),
             "project_task_update" => {

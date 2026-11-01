@@ -35,6 +35,11 @@ export const recipesAll = () => call('recipes_all');
 export const recipesPrompt = (id) => call('recipes_prompt', { id });
 export const recipesToolSpecs = () => call('recipes_tool_specs');
 export const recipesRunTool = (endpoint, name, args) => call('recipes_run_tool', { endpoint, name, args });
+/** Guías de Unreal sin red (REQ-25): estado de la copia local, elegir su carpeta, buscar y la definición de la herramienta. */
+export const guidesStatus = () => call('guides_status');
+export const guidesSetFolder = (folder) => call('guides_set_folder', { folder });
+export const guidesSearch = (query, limit) => call('guides_search', { query, limit: limit ?? null });
+export const guidesToolSpec = () => call('guides_tool_spec');
 export const unrealCallTool = (endpoint, toolset, tool, args, timeoutSecs) => call('unreal_call_tool', { endpoint, toolset, tool, arguments: args ?? {}, timeoutSecs: timeoutSecs ?? null });
 export const unrealReadiness = (path) => call('unreal_readiness', { path });
 export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_plan', { path, variant, port: port ?? null });

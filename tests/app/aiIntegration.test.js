@@ -40,7 +40,8 @@ describe('Centro de Ayuda: la pestaña de IA es la guía común @spec REQ-46, RE
     const help = helpModal();
     help.open('ai');
     const content = document.querySelector('#help-content');
-    await vi.waitFor(() => expect(content.querySelector('.ai-guide__body')).not.toBeNull());
+    // La guía llega por `import()` dinámico: con la suite entera en paralelo tarda más del segundo por defecto.
+    await vi.waitFor(() => expect(content.querySelector('.ai-guide__body')).not.toBeNull(), { timeout: 5000 });
     expect(content.textContent).toContain('DBV Unreal AI');
     const anchors = [...content.querySelectorAll('[data-anchor]')].map((node) => node.dataset.anchor);
     expect(anchors.some((anchor) => anchor.startsWith('google-antigravity'))).toBe(true);

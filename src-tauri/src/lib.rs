@@ -45,6 +45,9 @@ pub mod convai_characters;
 // Zonas del nivel para los personajes (Convai), una sola definición para las dos superficies (REQ-57).
 #[cfg(desktop)]
 pub mod zones;
+// Guías de Unreal sin red desde una carpeta local (REQ-25).
+#[cfg(desktop)]
+pub mod guides;
 // Recetas guiadas: menú, herramientas y comprobación, una sola definición (REQ-23).
 #[cfg(desktop)]
 pub mod recipes;
@@ -364,6 +367,14 @@ pub fn run() {
             zones::zones_apply,
             #[cfg(desktop)]
             zones::zones_list,
+            #[cfg(desktop)]
+            guides::guides_status,
+            #[cfg(desktop)]
+            guides::guides_set_folder,
+            #[cfg(desktop)]
+            guides::guides_search,
+            #[cfg(desktop)]
+            guides::guides_tool_spec,
             #[cfg(desktop)]
             recipes::recipes_all,
             #[cfg(desktop)]

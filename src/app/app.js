@@ -186,6 +186,8 @@ export function start() {
   let zoneSpecs = [];
   // Recetas guiadas (REQ-23): definiciones de Rust, como las del MCP propio.
   let recipeSpecs = [];
+  // Guías de Unreal sin red (REQ-25): la herramienta de Rust, como en el MCP propio.
+  let guidesSpec = null;
   // Personajes de Convai registrados en Ajustes (REQ-58): misma definición que en el MCP propio.
   let convaiCharactersSpec = null;
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
@@ -495,7 +497,13 @@ export function start() {
               } }]
             : [];
         const recipes = createRecipeTools({ specs: recipeSpecs, run: (name, args) => api.recipesRunTool(state.connection?.status === 'online' ? state.connection.endpoint : null, name, args) });
-        return withUsage([...unreal, ...generation, ...memory, ...zones, ...convai, ...recipes], turnContext?.usage);
+        const guides = guidesSpec
+          ? [{ name: guidesSpec.name, description: guidesSpec.description, parameters: { ...guidesSpec.inputSchema, additionalProperties: false }, label: (args) => t('guides.searching', { query: args?.query ?? '' }), run: async (args) => {
+              const found = await api.guidesSearch(String(args?.query ?? ''), args?.limit ?? null);
+              return found.ok ? found.value : `error: ${found.error.message ?? found.error}`;
+            } }]
+          : [];
+        return withUsage([...unreal, ...generation, ...memory, ...zones, ...convai, ...recipes, ...guides], turnContext?.usage);
       },
       // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): el diálogo del sistema y Rust los leen.
       pickAttachments: async () => {
@@ -521,9 +529,10 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs()])
-        .then(([entry, markdown, specs, memory, , zones, characters, recipes]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec()])
+        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides]) => {
           recipeSpecs = recipes?.ok ? recipes.value : [];
+          guidesSpec = guides?.ok ? guides.value : null;
           convaiCharactersSpec = characters?.ok ? characters.value : null;
           generationSpecs = specs.ok ? specs.value : [];
           memorySpecs = memory.ok ? memory.value : [];

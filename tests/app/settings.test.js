@@ -33,6 +33,8 @@ beforeEach(() => {
         if (command === 'library_set_location') return { current: args.path, default: 'C:/x', isDefault: false };
         if (command === 'convai_characters_list') return [{ name: 'Victoria', characterId: 'c1fca5ca-03b4-11ef-ae52-42010a7be00e', notes: '' }];
         if (command === 'convai_characters_save') return args.characters;
+        if (command === 'guides_status') return { folder: null, indexFolder: null, guides: 0, chunks: 0, updated: '', problem: 'No local copy' };
+        if (command === 'guides_set_folder') return { folder: args.folder, indexFolder: args.folder, guides: 3374, chunks: 5294, updated: '2026-07-02', problem: null };
         return null;
       }),
     },
@@ -104,7 +106,7 @@ describe('Ajustes', () => {
     const view = createSettingsView(host, { toast: vi.fn(), openConnect: vi.fn(), state: { connection: null } });
     await view.render();
     const tabs = [...host.querySelectorAll('[data-settings-tab]')].map((b) => b.textContent);
-    expect(tabs).toEqual(['Inteligencia artificial', 'Tripo', 'World Labs', 'Convai', 'Biblioteca', 'Agentes (MCP)', 'Diagnóstico']);
+    expect(tabs).toEqual(['Inteligencia artificial', 'Tripo', 'World Labs', 'Convai', 'Biblioteca', 'Conocimiento', 'Agentes (MCP)', 'Diagnóstico']);
     const visible = () => [...host.querySelectorAll('[data-settings-panel]')].filter((p) => !p.classList.contains('hidden')).map((p) => p.dataset.settingsPanel);
     expect(visible()).toEqual(['ai']);
     buttonWithText(host, 'Convai').click();
@@ -125,6 +127,19 @@ describe('Ajustes', () => {
       expect(logo.getAttribute('alt')).toBe(name);
       expect(existsSync(resolve('src', logo.getAttribute('src'))), logo.getAttribute('src')).toBe(true);
     }
+  });
+
+  it('Conocimiento: sin guías lo dice, y elegir la carpeta la guarda y cuenta los fragmentos @spec REQ-25, REQ-60', async () => {
+    const host = document.createElement('div');
+    const toast = vi.fn();
+    await createSettingsView(host, { toast, openConnect: vi.fn(), state: { connection: null } }).render();
+    const panel = host.querySelector('[data-settings-panel="knowledge"]');
+    expect(panel.textContent).toContain('Sin guías');
+    window.__TAURI__.dialog.open = vi.fn(async () => 'D:/Unreal/MCPCLiente');
+    buttonWithText(panel, 'Elegir carpeta…').click();
+    await vi.waitFor(() => expect(invoked.find(([c]) => c === 'guides_set_folder')?.[1]).toEqual({ folder: 'D:/Unreal/MCPCLiente' }));
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledWith('Guías listas: 5294 fragmentos'));
+    expect(window.__TAURI__.dialog.open).toHaveBeenCalledWith({ directory: true });
   });
 
   it('Convai: sin clave, con los personajes registrados, añadir y guardar; el tutorial abre la ayuda @spec REQ-58, REQ-59', async () => {
