@@ -195,6 +195,7 @@ export const ZH_AI = {
   'ai.permAllowOnce': '允许一次',
   'ai.permChosen': '已选择',
   'ai.permDenied': '已拒绝',
+  'ai.permAuto': '✓ 只读查询，无需批准：{tool}',
   'ai.permDirty': '此文件在应用中有未保存的修改：如果允许，应用会提示你冲突。',
   'ai.permOutside': '它要求访问文档文件夹之外的内容：已拒绝。',
   'ai.permReject': '拒绝',

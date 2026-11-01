@@ -121,6 +121,34 @@ const fn schema_object() -> &'static str {
     "object"
 }
 
+/// Herramientas que solo consultan (REQ-12): se publican con `readOnlyHint` y, cuando un agente de la conversación
+/// pide permiso para usarlas, la app lo concede sola. Lo que modifica, ejecuta Python o gasta créditos sigue
+/// preguntando (pedido por el usuario el 2026-11-01: las aprobaciones de simples consultas eran muy pesadas).
+pub const READ_ONLY_TOOLS: [&str; 16] = [
+    "unreal_list_toolsets",
+    "unreal_describe_toolset",
+    "unreal_capture_viewport",
+    "unreal_scene_summary",
+    "unreal_describe_python_api",
+    "library_list",
+    "generation_jobs",
+    "tripo_operations",
+    "tripo_balance",
+    "project_memory_read",
+    "project_tasks_list",
+    "level_zones_list",
+    "recipes_list",
+    "recipe_check",
+    "search_unreal_guides",
+    "convai_characters",
+];
+
+/// Las herramientas de solo lectura, para que la ventana apruebe sola sus permisos. @spec REQ-12
+#[tauri::command]
+pub fn app_mcp_read_only_tools() -> Vec<String> {
+    READ_ONLY_TOOLS.iter().map(|name| name.to_string()).collect()
+}
+
 /// Herramientas que publica el servidor.
 pub fn tool_specs() -> Vec<Value> {
     let tool = |name: &str, description: &str, properties: Value, required: Value| json!({ "name": name, "description": description, "inputSchema": { "type": schema_object(), "properties": properties, "required": required } });
@@ -205,6 +233,11 @@ pub fn tool_specs() -> Vec<Value> {
     specs.push(crate::guides::spec());
     // Personajes de Convai registrados en Ajustes (REQ-58).
     specs.push(crate::convai_characters::spec());
+    // Anotación estándar de MCP: algunos agentes ya no preguntan por lo que solo consulta.
+    for spec in &mut specs {
+        let read_only = spec["name"].as_str().is_some_and(|name| READ_ONLY_TOOLS.contains(&name));
+        spec["annotations"] = json!({ "readOnlyHint": read_only });
+    }
     specs
 }
 
@@ -746,6 +779,20 @@ pub fn run(args: &[String]) -> i32 {
 mod tests {
     use super::*;
     use crate::library::LibraryEntry;
+
+    /// Las de solo lectura existen y van anotadas; las que modifican, no. @spec REQ-12
+    #[test]
+    fn las_consultas_van_anotadas_como_solo_lectura() {
+        let specs = tool_specs();
+        for name in READ_ONLY_TOOLS {
+            let spec = specs.iter().find(|s| s["name"] == name).unwrap_or_else(|| panic!("{name} no existe"));
+            assert_eq!(spec["annotations"]["readOnlyHint"], true, "{name}");
+        }
+        for name in ["unreal_call_tool", "unreal_run_python", "library_send_to_unreal", "generate_3d_model", "compile_project_code", "project_memory_propose"] {
+            let spec = specs.iter().find(|s| s["name"] == name).unwrap();
+            assert_eq!(spec["annotations"]["readOnlyHint"], false, "{name}");
+        }
+    }
 
     fn server(dir: &std::path::Path) -> McpServer {
         McpServer::new(ServerConfig {

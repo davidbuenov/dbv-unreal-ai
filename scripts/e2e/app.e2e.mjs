@@ -75,6 +75,7 @@ function extra(connections, hasKey = false) {
     // REQ-23, REQ-25: recetas y guías (se cargan con la IA; Ajustes pide el estado de las guías).
     recipes_tool_specs: [{ name: 'recipes_list', description: 'x', inputSchema: { type: 'object', properties: {}, required: [] } }],
     recipes_all: [],
+    app_mcp_read_only_tools: ['unreal_list_toolsets', 'recipe_check'],
     guides_tool_spec: { name: 'search_unreal_guides', description: 'x', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
     guides_status: { folder: null, indexFolder: null, guides: 0, chunks: 0, updated: '', problem: 'No local copy' },
     // REQ-51: contador del pie del turno (sin llamadas del --mcp).

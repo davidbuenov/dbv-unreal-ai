@@ -40,6 +40,8 @@ export const guidesStatus = () => call('guides_status');
 export const guidesSetFolder = (folder) => call('guides_set_folder', { folder });
 export const guidesSearch = (query, limit) => call('guides_search', { query, limit: limit ?? null });
 export const guidesToolSpec = () => call('guides_tool_spec');
+/** Herramientas de solo lectura del servidor MCP de la app: sus permisos se conceden solos (REQ-12). */
+export const appMcpReadOnlyTools = () => call('app_mcp_read_only_tools');
 export const unrealCallTool = (endpoint, toolset, tool, args, timeoutSecs) => call('unreal_call_tool', { endpoint, toolset, tool, arguments: args ?? {}, timeoutSecs: timeoutSecs ?? null });
 export const unrealReadiness = (path) => call('unreal_readiness', { path });
 export const unrealPreparePlan = (path, variant, port) => call('unreal_prepare_plan', { path, variant, port: port ?? null });

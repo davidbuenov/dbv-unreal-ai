@@ -779,6 +779,12 @@ export function createAiApp(deps) {
         panel.addNote(refusal.message, 'error');
         return refusal.optionId;
       }
+      // Lo que solo consulta no pregunta (en DBV Unreal AI, REQ-12): lo decide el host.
+      const allowed = host.autoAllowPermission?.(params);
+      if (allowed) {
+        panel.addStep(t('ai.permAuto').replace('{tool}', allowed.tool));
+        return allowed.optionId;
+      }
       const permission = createPermissionCard(params, {
         toRelative,
         isDirty: (relative) => host.isOpenDocument(relative) && host.isDirty(),

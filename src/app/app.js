@@ -27,6 +27,7 @@ import * as api from './backend.js';
 import { createCodeCompiler } from './codeCompile.js';
 import { improvePrompt } from '../generation/promptImprover.js';
 import { createRecipeTools, localized, recipesCard } from './recipes.js';
+import { autoAllow } from '../unreal/agentPermissions.js';
 import { button, dirName, el } from './dom.js';
 import { confirmCost, createGenerateView } from './generateView.js';
 import { assetThumbnail, createLibraryView, sendBackend } from './libraryView.js';
@@ -188,6 +189,8 @@ export function start() {
   let recipeSpecs = [];
   // Guías de Unreal sin red (REQ-25): la herramienta de Rust, como en el MCP propio.
   let guidesSpec = null;
+  // Consultas del servidor MCP de la app: un agente no pide permiso para ellas (REQ-12).
+  let readOnlyTools = [];
   // Personajes de Convai registrados en Ajustes (REQ-58): misma definición que en el MCP propio.
   let convaiCharactersSpec = null;
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
@@ -398,6 +401,7 @@ export function start() {
         }
       },
       onProposalApplied: (paths) => codeCompiler.afterApply(paths),
+      autoAllowPermission: (params) => autoAllow(params, readOnlyTools),
       // REQ-22: la IA solo propone cambios donde deja la regla de Rust (la misma que aplica al escribir).
       checkProposalPath: async (path) => {
         const problem = await api.unrealCodePathProblem(path);
@@ -529,8 +533,9 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec()])
-        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools()])
+        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly]) => {
+          readOnlyTools = readOnly?.ok && Array.isArray(readOnly.value) ? readOnly.value : [];
           // Un backend que no conoce el comando devuelve `null`: sin estas comprobaciones, la IA no cargaría (lección de la v0.2.0).
           recipeSpecs = recipes?.ok && Array.isArray(recipes.value) ? recipes.value : [];
           guidesSpec = guides?.ok && guides.value?.name ? guides.value : null;

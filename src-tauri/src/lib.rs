@@ -368,6 +368,8 @@ pub fn run() {
             #[cfg(desktop)]
             zones::zones_list,
             #[cfg(desktop)]
+            mcp_server::app_mcp_read_only_tools,
+            #[cfg(desktop)]
             guides::guides_status,
             #[cfg(desktop)]
             guides::guides_set_folder,
