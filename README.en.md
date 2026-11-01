@@ -151,6 +151,7 @@ These channels are not available yet; they will arrive in an upcoming version. I
 - **GPU Gaussian Splatting, our own, with no third-party plugins (REQ-61..REQ-63):** 10-million-splat scenes with view-dependent color (spherical harmonics), no flicker in Play and around 70 fps;
 - **Walkable World Labs worlds (REQ-18):** at metric scale, with the ground at Z = 0, aligned collision and the `PlayerStart` on the terrain;
 - **The AI edits and compiles the project code (REQ-22):** it proposes changes in `Source/`, `Content/Python/` and `Config/*.ini` as diffs you review; once accepted it compiles with Live Coding or, if headers change, asks you to close the editor, compiles with UnrealBuildTool and reopens it; errors go back to the AI;
+- **Simplified Chinese (REQ-64):** interface, help and conversation in 中文, besides Spanish and English;
 - **Offline Unreal guides (REQ-25):** with a local copy of the guides (Settings → Knowledge), the AI searches them offline and cites the URL of each fragment;
 - **Guided recipes (REQ-23):** "📋 Recipes" in the conversation: test level, Tripo character with animations, walk through a World Labs world and Convai MetaHuman; the AI does them step by step and checks the result in the editor at the end; agents see them as Agent Skills;
 - **"Improve with AI" in Generate (REQ-66):** turns a short idea ("pretty city") into a detailed prompt for Tripo or World Labs, spending no credits until you press Generate; and each tab shows its service logo (REQ-65).

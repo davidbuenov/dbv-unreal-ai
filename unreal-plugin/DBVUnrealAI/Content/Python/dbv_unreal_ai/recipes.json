@@ -3,40 +3,44 @@
   "recipes": [
     {
       "id": "test_level",
-      "title": { "es": "Nivel de prueba", "en": "Test level" },
+      "title": { "es": "Nivel de prueba", "en": "Test level", "zh-CN": "测试关卡" },
       "summary": {
         "es": "Suelo, luz, cielo, PlayerStart y NavMesh en el nivel abierto, listo para darle a Play.",
-        "en": "Floor, light, sky, PlayerStart and NavMesh in the open level, ready to press Play."
+        "en": "Floor, light, sky, PlayerStart and NavMesh in the open level, ready to press Play.",
+        "zh-CN": "在当前打开的关卡中放置地面、灯光、天空、PlayerStart 和 NavMesh，可以直接点击 Play。"
       },
       "needs": ["editor"],
       "steps": "Build a test level in the level that is open now; reuse what already exists instead of duplicating it. 1) Floor: one large flat StaticMeshActor with collision at Z = 0, labeled DBV_Floor (for example /Engine/BasicShapes/Cube scaled to (50, 50, 0.2) and placed so its top is at Z = 0). 2) A DirectionalLight. 3) A sky: SkyAtmosphere plus a SkyLight with real-time capture, unless the level already has a sky. 4) A PlayerStart about 100 cm above the floor. 5) A NavMeshBoundsVolume that covers the floor: give it the floor location and half-extent, never the size of the whole level. Put the new actors in the World Outliner folder DBV/TestLevel."
     },
     {
       "id": "tripo_character",
-      "title": { "es": "Personaje de Tripo con animaciones", "en": "Tripo character with animations" },
+      "title": { "es": "Personaje de Tripo con animaciones", "en": "Tripo character with animations", "zh-CN": "带动画的 Tripo 角色" },
       "summary": {
         "es": "Un modelo humanoide de Tripo con esqueleto y animaciones, montado en un Character Blueprint.",
-        "en": "A humanoid Tripo model with a skeleton and animations, set up in a Character Blueprint."
+        "en": "A humanoid Tripo model with a skeleton and animations, set up in a Character Blueprint.",
+        "zh-CN": "一个带骨骼和动画的人形 Tripo 模型，设置在 Character 蓝图中。"
       },
       "needs": ["editor", "tripo"],
       "steps": "Make a playable character from a Tripo model. 1) Pick a humanoid model in the library (library_list) or, only if the user agrees to the cost, generate one standing in an A-pose. 2) Rig it with rig_model and add idle, walk and run animations with animate_model (tell the user the price first; they cost credits). 3) Send the rigged model and its animations to Unreal with library_send_to_unreal. 4) Create a Character Blueprint under /Game/DBV/Blueprints whose Mesh component uses the rigged Skeletal Mesh, turned -90 degrees in yaw and lowered by half the capsule height so the feet touch the ground. 5) Optionally make it the default pawn. Compile and save the Blueprint."
     },
     {
       "id": "world_walk",
-      "title": { "es": "Caminar por un mundo de World Labs", "en": "Walk through a World Labs world" },
+      "title": { "es": "Caminar por un mundo de World Labs", "en": "Walk through a World Labs world", "zh-CN": "漫步 World Labs 世界" },
       "summary": {
         "es": "Un mundo de la biblioteca colocado a escala con su colisión y el PlayerStart sobre el terreno, para recorrerlo en Play.",
-        "en": "A library world placed at scale with its collision and the PlayerStart on the terrain, to walk through it in Play."
+        "en": "A library world placed at scale with its collision and the PlayerStart on the terrain, to walk through it in Play.",
+        "zh-CN": "把资源库中的一个世界按真实比例放入关卡，带碰撞，并把 PlayerStart 放在地面上，在 Play 中走一走。"
       },
       "needs": ["editor", "world"],
       "steps": "Let the user walk through a World Labs world. 1) Choose a world in the library (library_list, kind \"world\"); generate one with generate_world only if the user agrees to the cost. 2) Send it with library_send_to_unreal: the app places the Gaussian splat at metric scale with the ground at Z = 0, aligns its collision mesh and lifts a PlayerStart that was under the terrain. 3) Make sure there is a PlayerStart standing on the collision (move it above the ground if needed) and that the level has a playable character (the project default pawn is fine). 4) Tell the user to press Play and walk."
     },
     {
       "id": "convai_metahuman",
-      "title": { "es": "MetaHuman que habla con Convai", "en": "MetaHuman that talks with Convai" },
+      "title": { "es": "MetaHuman que habla con Convai", "en": "MetaHuman that talks with Convai", "zh-CN": "用 Convai 说话的 MetaHuman" },
       "summary": {
         "es": "Un MetaHuman en el nivel con su personaje de Convai, el jugador preparado para hablar y la NavMesh para moverse.",
-        "en": "A MetaHuman in the level with its Convai character, the player ready to talk and the NavMesh to move."
+        "en": "A MetaHuman in the level with its Convai character, the player ready to talk and the NavMesh to move.",
+        "zh-CN": "关卡中的 MetaHuman 配上它的 Convai 角色，玩家可以对话，并有用于移动的 NavMesh。"
       },
       "needs": ["editor", "convai"],
       "steps": "Make a MetaHuman talk with Convai. 1) Read the Convai skills first: ListSkills and GetSkills of ToolsetRegistry.AgentSkillToolset. 2) Place the assembled MetaHuman Blueprint (/Game/MetaHumans/<Name>/BP_<Name>), not the MetaHumanCharacter asset. 3) Ask which Convai character to use (convai_characters lists the registered ones) and run SetupConvaiCharacter with its Character ID. 4) Run SetupConvaiPlayer on the player pawn. 5) Add a NavMeshBoundsVolume sized to the walkable floor (AddNavMeshVolumeForCurrentLevel with the floor location and half-extent). 6) Optionally name places with level_zones_propose so the character can be asked to go there. Remind the user that the conversation happens in Play, with the microphone."

@@ -326,7 +326,10 @@ export function memoryPrompt({ active, agent = false, summary = '' }) {
 
 /** Petición del botón «Recordar». */
 export function rememberRequest(lang) {
-  return lang === 'es'
-    ? 'Propón guardar en la memoria del proyecto todo lo que hemos decidido o aprendido en esta conversación y merezca recordarse (con project_memory_propose, varias entradas en una sola llamada).'
-    : 'Propose saving in the project memory everything we decided or learned in this conversation that is worth remembering (with project_memory_propose, several entries in one call).';
+  const requests = {
+    es: 'Propón guardar en la memoria del proyecto todo lo que hemos decidido o aprendido en esta conversación y merezca recordarse (con project_memory_propose, varias entradas en una sola llamada).',
+    en: 'Propose saving in the project memory everything we decided or learned in this conversation that is worth remembering (with project_memory_propose, several entries in one call).',
+    'zh-CN': '请提议把这次对话中我们决定或学到、值得记住的内容保存到项目记忆中（用 project_memory_propose，一次调用包含多个条目）。',
+  };
+  return requests[lang] ?? requests.en;
 }

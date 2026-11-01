@@ -7,7 +7,10 @@
 //
 // @spec REQ-24
 
+import { ZH_APP } from './translations.zh.js';
+
 export const APP_TRANSLATIONS = {
+  'zh-CN': ZH_APP,
   es: {
     'unreal.pill.offline': 'Sin editor',
     'unreal.pill.online': '{project} · UE {version} · :{port}',

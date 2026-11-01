@@ -40,15 +40,23 @@ export const isCheck = (criterion) => /^(asset exists|actor exists|level is|no e
 
 /** Petición de «Planificar» para la conversación. */
 export function planRequest(goal, lang) {
-  return lang === 'es'
-    ? `Planifica este objetivo para el proyecto y propón el plan con project_tasks_propose (tareas concretas y en orden, con su comprobación de «hecho» cuando se pueda comprobar en el editor y las generaciones de pago que necesite): ${goal}`
-    : `Plan this goal for the project and propose the plan with project_tasks_propose (concrete tasks in order, each with its done-check when it can be checked in the editor and the paid generations it needs): ${goal}`;
+  const requests = {
+    es: `Planifica este objetivo para el proyecto y propón el plan con project_tasks_propose (tareas concretas y en orden, con su comprobación de «hecho» cuando se pueda comprobar en el editor y las generaciones de pago que necesite): ${goal}`,
+    en: `Plan this goal for the project and propose the plan with project_tasks_propose (concrete tasks in order, each with its done-check when it can be checked in the editor and the paid generations it needs): ${goal}`,
+    'zh-CN': `为项目规划这个目标，并用 project_tasks_propose 提出计划（按顺序列出具体任务；能在编辑器中检查的，写明「完成」的检查方式，以及需要的付费生成）：${goal}`,
+  };
+  return requests[lang] ?? requests.en;
 }
 
 /** Petición de «Hacer esta tarea». */
 export function taskRequest(task, lang) {
-  const check = task.criterion ? (lang === 'es' ? ` Estará hecha cuando: ${task.criterion}.` : ` It is done when: ${task.criterion}.`) : '';
-  return lang === 'es' ? `Hagamos esta tarea del plan: «${task.title}».${check}` : `Let's do this task of the plan: "${task.title}".${check}`;
+  const texts = {
+    es: [`Hagamos esta tarea del plan: «${task.title}».`, ` Estará hecha cuando: ${task.criterion}.`],
+    en: [`Let's do this task of the plan: "${task.title}".`, ` It is done when: ${task.criterion}.`],
+    'zh-CN': [`我们来做计划中的这项任务：「${task.title}」。`, `完成的标准：${task.criterion}。`],
+  };
+  const [ask, done] = texts[lang] ?? texts.en;
+  return `${ask}${task.criterion ? done : ''}`;
 }
 
 /**

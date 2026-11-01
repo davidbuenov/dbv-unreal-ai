@@ -151,6 +151,7 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 - **Gaussian Splatting por GPU, propio y sin plugins de terceros (REQ-61..REQ-63):** splats de 10 millones con color según el ángulo (armónicos esféricos), sin parpadeo en Play y a unos 70 fps;
 - **Mundos de World Labs caminables (REQ-18):** a escala métrica, con el suelo en Z = 0, la colisión alineada y el `PlayerStart` sobre el terreno;
 - **La IA edita y compila el código del proyecto (REQ-22):** propone cambios en `Source/`, `Content/Python/` y `Config/*.ini` como diffs que revisas; al aceptarlos compila con Live Coding o, si cambian cabeceras, te pide cerrar el editor, compila con UnrealBuildTool y lo reabre; los errores vuelven a la IA;
+- **Chino simplificado (REQ-64):** interfaz, ayuda y conversación en 中文, además de español e inglés;
 - **Guías de Unreal sin red (REQ-25):** con una copia local de las guías (Ajustes → Conocimiento), la IA busca en ellas sin conexión y cita la URL de cada fragmento;
 - **Recetas guiadas (REQ-23):** «📋 Recetas» en la conversación: nivel de prueba, personaje de Tripo con animaciones, caminar por un mundo de World Labs y MetaHuman con Convai; la IA las hace paso a paso y al final comprueba el resultado en el editor; los agentes las ven como Agent Skills;
 - **«Mejorar con IA» en Generar (REQ-66):** convierte una idea corta («ciudad bonita») en un prompt elaborado para Tripo o World Labs, sin gastar créditos hasta que pulses Generar; y cada pestaña lleva el logo de su servicio (REQ-65).

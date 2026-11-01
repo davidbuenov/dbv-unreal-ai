@@ -50,10 +50,10 @@ describe('barra superior', () => {
     expect(capability).toContain('core:window:allow-set-always-on-top');
   });
 
-  it('los textos del tema y de la chincheta existen en español e inglés', () => {
+  it('los textos del tema y de la chincheta existen en español, inglés y chino @spec REQ-64', () => {
     const dictionary = readFileSync(path.join(src, 'i18n.js'), 'utf8');
     for (const key of ['theme.light', 'theme.dark', 'theme.sepia', 'action.alwaysOnTop', 'action.alwaysOnTopActive', 'action.alwaysOnTopFailed']) {
-      expect(dictionary.split(`"${key}"`).length - 1, key).toBe(2);
+      expect(dictionary.split(`"${key}"`).length - 1, key).toBe(3);
     }
   });
 });

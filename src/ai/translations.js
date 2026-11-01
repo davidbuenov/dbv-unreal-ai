@@ -13,7 +13,10 @@
 // Parte de los textos viene de dbv-typst-editor; los que hablaban de «proyecto»,
 // de compilar o de Typst se han reescrito para Markdown.
 
+import { ZH_AI } from './translations.zh.js';
+
 export const AI_TRANSLATIONS = {
+  'zh-CN': ZH_AI,
   es: {
     'action.cancel': 'Cancelar',
     'action.close': 'Cerrar',

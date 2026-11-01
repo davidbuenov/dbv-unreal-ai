@@ -1,5 +1,5 @@
 // =============================================================================
-// DBV Unreal AI — Idiomas de la interfaz (ES / EN)
+// DBV Unreal AI — Idiomas de la interfaz (ES / EN / zh-CN)
 // Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
 // Licensed under the MIT License. See LICENSE for details.
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
@@ -114,22 +114,75 @@
       "ai.connectTitle": "Connect an AI",
       "ai.loadFailed": "Could not load the AI assistant",
     },
+    "zh-CN": {
+      "app.title": "DBV Unreal AI",
+      "app.theme": "主题",
+      "theme.light": "浅色",
+      "theme.dark": "深色",
+      "theme.sepia": "棕褐色",
+      "action.alwaysOnTop": "让窗口保持在其他窗口之上",
+      "action.alwaysOnTopActive": "窗口已置顶；点击取消置顶",
+      "action.alwaysOnTopFailed": "无法置顶窗口",
+      "nav.project": "项目",
+      "nav.chat": "对话",
+      "nav.plan": "计划",
+      "nav.generate": "生成",
+      "nav.library": "资源库",
+      "nav.settings": "设置",
+      "unreal.pill.offline": "未连接编辑器",
+      "log.toggle": "操作日志",
+      "gen.spentTitle": "本次会话花费的积分",
+      "lang.label": "语言",
+      "toolbar.about": "关于",
+      "toolbar.help": "帮助（F1）",
+      "about.title": "DBV Unreal AI",
+      "about.version": "版本 {version}",
+      "about.description": "面向 Unreal Engine 5.8 的原生 AI 助手与 3D 生成工具。",
+      "about.authors": "David Bueno Vallejo 和 David Bueno Carmona · MIT 许可证",
+      "about.builtWith": "使用 dbv-specs-ops 构建。",
+      "about.platform": "平台",
+      "about.engine": "目标引擎",
+      "about.engineVal": "Unreal Engine 5.8（MCP HTTP）",
+      "about.agents": "ACP 智能体",
+      "about.agentsVal": "Claude Code、Antigravity、Gemini、Codex、Copilot",
+      "about.generators": "3D 生成",
+      "about.generatorsVal": "Tripo3D v3 · World Labs Marble",
+      "about.storeNote": "从 Microsoft Store 安装 — 会自动更新。",
+      "about.close": "关闭",
+      "help.title": "帮助与指南",
+      "help.tab.ue": "Unreal 5.8",
+      "help.tab.ai": "AI 指南",
+      "help.tab.convai": "Convai",
+      "help.tab.shortcuts": "快捷键",
+      "help.tab.links": "链接",
+      "help.close": "关闭",
+      "action.close": "关闭",
+      "action.copy": "复制",
+      "action.copyDenied": "无法复制到剪贴板",
+      "ai.connectTitle": "连接 AI",
+      "ai.loadFailed": "无法加载 AI 助手",
+    },
   };
 
   const STORAGE_KEY = "dbv-unreal-ai:lang";
 
+  // Chino simplificado como tercer idioma (REQ-64): cualquier variante `zh*` del sistema entra como `zh-CN`.
+  const LANGUAGES = ["es", "en", "zh-CN"];
+
   function detectLanguage() {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "es" || stored === "en") return stored;
-    const browserLang = (navigator.language || "es").slice(0, 2);
-    return browserLang === "en" ? "en" : "es";
+    if (LANGUAGES.includes(stored)) return stored;
+    const system = (navigator.language || "es").toLowerCase();
+    return system.startsWith("zh") ? "zh-CN" : system.startsWith("en") ? "en" : "es";
   }
 
   let currentLang = detectLanguage();
 
   function t(key, vars) {
     const dict = translations[currentLang] || translations.es;
-    let text = dict[key] || translations.es[key] || key;
+    // Lo que falte en chino cae al inglés, no al español (D45).
+    const fallback = currentLang === "es" ? undefined : translations.en?.[key];
+    let text = dict[key] || fallback || translations.es[key] || key;
     if (vars) {
       for (const [placeholder, value] of Object.entries(vars)) {
         text = text.replace(`{${placeholder}}`, value);
@@ -152,7 +205,7 @@
   }
 
   function setLanguage(lang) {
-    if (lang !== "es" && lang !== "en") return;
+    if (!LANGUAGES.includes(lang)) return;
     currentLang = lang;
     localStorage.setItem(STORAGE_KEY, lang);
     applyTranslations();

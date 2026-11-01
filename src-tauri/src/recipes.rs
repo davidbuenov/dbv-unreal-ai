@@ -174,18 +174,18 @@ mod tests {
 
     /// @spec REQ-23
     #[test]
-    fn las_cuatro_recetas_con_textos_en_espanol_e_ingles() {
+    fn las_cuatro_recetas_con_textos_en_espanol_ingles_y_chino() {
         let recipes = all();
         let ids: Vec<&str> = recipes.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(ids, ["test_level", "tripo_character", "world_walk", "convai_metahuman"]);
         for recipe in &recipes {
-            for lang in ["es", "en"] {
+            for lang in ["es", "en", "zh-CN"] {
                 assert!(!text(&recipe.title, lang).is_empty() && !text(&recipe.summary, lang).is_empty(), "{} sin {lang}", recipe.id);
             }
             assert!(recipe.needs.contains(&"editor".to_string()));
             assert!(recipe.id.chars().all(|c| c.is_ascii_lowercase() || c == '_'), "el id va tal cual al código Python");
         }
-        assert_eq!(text(&recipes[0].title, "zh-CN"), "Test level", "sin traducción, inglés");
+        assert_eq!(text(&recipes[0].title, "fr"), "Test level", "sin traducción, inglés");
     }
 
     /// El código de comprobación es fijo: un id desconocido no llega al editor. @spec REQ-23, R-16
