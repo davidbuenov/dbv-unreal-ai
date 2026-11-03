@@ -13,7 +13,7 @@ import { permissionRefusal } from '../../src/ai/aiApp.js';
 const FILES = { 'Source/Demo/DemoActor.h': 'UCLASS()\nclass ADemoActor : public AActor\n{\n\tGENERATED_BODY()\n};\n' };
 const readText = async (path) => FILES[path] ?? null;
 // La regla real vive en Rust (`code_policy.rs`); aquí basta con que la conversación la consulte.
-const checkPath = vi.fn(async (path) => (path.startsWith('Source/') ? null : `${path}: only Source/** (C++ and *.Build.cs), Content/Python/** (.py) and Config/*.ini of the project can be changed`));
+const checkPath = vi.fn(async (path) => (path.startsWith('Source/') ? null : `${path}: only Source/** (C++ and *.Build.cs), Content/Python/** (.py), Config/*.ini and the *.md files at the project root can be changed`));
 
 describe('Cambios de código del proyecto', () => {
   it('una ruta que no deja la regla de la app no entra en la propuesta y la IA recibe el motivo @spec REQ-22', async () => {

@@ -70,6 +70,8 @@ export const unrealUndoTurn = async (endpoint, count, expectedCurrent) => {
 export const appMcpCommand = (port, project = null) => call('app_mcp_command', { port, project });
 /** Imagen (base64) o documento que el usuario eligió para adjuntar a la conversación (REQ-32). */
 export const aiReadAttachment = (path) => call('ai_read_attachment', { path });
+/** Guarda en disco una imagen pegada del portapapeles (`Ctrl+V`) y devuelve `{kind: 'image', path, name, mime, base64}` (REQ-68). */
+export const aiSaveClipboardImage = (mime, data, name = null) => call('ai_save_clipboard_image', { mime, data, name });
 /** Diagnóstico sin secretos para una incidencia (RNF-08). */
 export const appDiagnostics = () => call('app_diagnostics');
 

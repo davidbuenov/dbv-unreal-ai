@@ -174,6 +174,27 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
       send();
     }
   });
+  // Pegar imágenes desde el portapapeles (`Ctrl+V`) y arrastrar y soltar en la conversación (REQ-68).
+  input.addEventListener('paste', (event) => {
+    if (!callbacks.onPasteFiles) return;
+    const fromItems = [...(event.clipboardData?.items ?? [])].filter((item) => item.kind === 'file').map((item) => item.getAsFile()).filter(Boolean);
+    const rawFiles = fromItems.length ? fromItems : [...(event.clipboardData?.files ?? [])];
+    const images = rawFiles.filter((file) => /^image\/(png|jpe?g|webp)$/i.test(file.type));
+    if (!images.length) return;
+    event.preventDefault();
+    callbacks.onPasteFiles(images);
+  });
+  host.addEventListener('dragover', (event) => {
+    if (!callbacks.onPasteFiles) return;
+    if ([...(event.dataTransfer?.types ?? [])].includes('Files')) event.preventDefault();
+  });
+  host.addEventListener('drop', (event) => {
+    if (!callbacks.onPasteFiles) return;
+    const dropped = [...(event.dataTransfer?.files ?? [])];
+    if (!dropped.length) return;
+    event.preventDefault();
+    callbacks.onPasteFiles(dropped);
+  });
 
   function scrollToEnd() {
     messages.scrollTop = messages.scrollHeight;
@@ -272,8 +293,14 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
     },
     setAttachments(list, onRemove) {
       attachments.replaceChildren(...list.map((item) => {
-        const chip = el('span', 'ai-chip', item.label);
-        chip.append(button('×', () => onRemove(item), 'ai-chip__remove', t('ai.chipRemove')));
+        const chip = el('span', 'ai-chip');
+        if (item.kind === 'image' && item.base64 && item.mime) {
+          const thumb = el('img', 'ai-chip__thumb');
+          thumb.src = `data:${item.mime};base64,${item.base64}`;
+          thumb.alt = item.name || '';
+          chip.append(thumb);
+        }
+        chip.append(el('span', '', item.label), button('×', () => onRemove(item), 'ai-chip__remove', t('ai.chipRemove')));
         return chip;
       }));
     },

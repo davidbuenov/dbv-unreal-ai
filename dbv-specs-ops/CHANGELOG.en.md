@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Paste images from the clipboard (`Ctrl+V`), drag and drop, and thumbnail preview in the conversation (REQ-68):** pasting a screenshot or image (`PNG`, `JPG`, `WebP`) into the conversation text box or dropping files onto the panel saves it to disk (`ai_save_clipboard_image`, ≤ 10 MB) and attaches it with both its `base64` data (for vision-capable models and agents) and its real file path on disk (so Tripo or World Labs tools can use it). Attached image chips now display a visual thumbnail.
+- **Standard DBV header banner across all own and AI-generated files (REQ-69):** all repository and C++ plugin files carry the standard 6-line header banner (`DBV Unreal AI`, copyright by David Bueno Vallejo and David Bueno Carmona, MIT License and `dbv-specs-ops`), and the Unreal domain prompt instructs the AI and agents to include that same header in every new file they create (`Source/**`, `Content/Python/**`, `docs/**/*.md` and root `*.md`).
+- **Resuming orphaned World Labs jobs (REQ-70):** if the app or an agent's `--mcp` closes while a World Labs world generation (`generate_world` or `export_world_mesh`) is running, polling resumes with the World Labs API key and downloads the completed world (`.spz` + `.glb`) into the library, just like Tripo jobs.
+
+### Changed
+
+- **The AI can also change the `.md` files at the project root and under `docs/**` (REQ-22):** besides `Source/**`, `Content/Python/**` and `Config/*.ini`, the conversation and agents accept changes to `README.md`, `CHANGELOG.md`, any other `*.md` at the root of the Unreal project and `*.md` files under `docs/**`, with the same reviewable diff. `.md` files in other subfolders are still refused, and the AI knows the new rule beforehand.
+
+### Fixed
+
+- **ACP session isolation per conversation, real default model resolution and per-conversation token counter (REQ-67):** (1) creating, switching or deleting a conversation stops the active ACP session and opens a fresh `session/new` so a new conversation never inherits prior context or burns tokens from previous conversations; (2) `ensureSession` preserves `images: true` across all turns of the ACP session, not only the first one; (3) generic model identifiers (`"claude"`, `"default"`, empty) explicitly resolve to the concrete default model shown in the UI (`claude-sonnet-5-5`, etc.) in both `ANTHROPIC_MODEL` and `session/set_config_option`, preventing silent fallback to `opus` from `~/.claude/settings.json`; (4) the bottom token counter tracks only the active conversation's input/output tokens and resets on new conversations; (5) `files.rs` skips `Plugins/` when scanning documents.
+
 ## [0.3.0] - 2026-11-01
 
 Version v0.3.0: the AI changes the project's code (only in `Source/`, `Content/Python/` and `Config/*.ini`) and the app compiles the C++ with Live Coding or UBT; guided recipes with a final check in the editor; offline Unreal guides; Simplified Chinese; own GPU Gaussian Splatting with view-dependent colour; World Labs worlds placed at their real scale and also generated from an agent; Convai and level zones; "Improve with AI" in Generate; and fewer approvals and much less context with agents.

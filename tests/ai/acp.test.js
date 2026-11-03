@@ -83,10 +83,6 @@ describe('funciones puras', () => {
 });
 
 describe('sesión con un agente simulado', () => {
-  /**
-   * «Mejorar con IA» con un agente: otra sesión, sin MCP ni punto de restauración, solo su texto; lo que pida se
-   * deniega sin preguntar y la conversación no recibe nada. @spec REQ-66
-   */
   it('una consulta suelta va en otra sesión, sin herramientas, y devuelve solo su texto', async () => {
     const { backend, session, updates } = setup();
     await session.ensureSession({ id: 'agy' });
@@ -131,12 +127,25 @@ describe('sesión con un agente simulado', () => {
     expect(backend.sent.find((m) => m.method === 'session/new').params).toEqual({ cwd: 'D:/libro', mcpServers: [] });
   });
 
-  it('no ofrece ningún servidor MCP (el agente usa sus propias herramientas)', async () => {
+  it('no ofrece ningún servidor MCP (el agente usa sus propias herramientas) y conserva images en turnos sucesivos', async () => {
     const { backend, session } = setup();
     backend.mcpServerSpec = async () => ({ ok: true, value: { name: 'dbv' } });
-    await session.ensureSession({ id: 'claude' });
+    await session.ensureSession({ id: 'claude' }, 'conv-1');
     expect(backend.sent.find((m) => m.method === 'session/new').params.mcpServers).toEqual([]);
-    expect((await session.ensureSession({ id: 'claude' })).fresh).toBe(false);
+    const secondTurn = await session.ensureSession({ id: 'claude' }, 'conv-1');
+    expect(secondTurn).toMatchObject({ fresh: false, images: true });
+  });
+
+  it('cambiar de conversación reinicia la sesión ACP para no arrastrar el contexto anterior', async () => {
+    const { backend, session } = setup();
+    const first = await session.ensureSession({ id: 'claude', model: 'claude', reasoningEffort: 'medium' }, 'conv-1');
+    expect(first).toMatchObject({ fresh: true, images: true });
+    expect(backend.sent.find((m) => m.method === 'session/set_config_option' && m.params.configId === 'model')?.params.value).toBe('claude-sonnet-5-5');
+    backend.acpStop.mockClear();
+    const second = await session.ensureSession({ id: 'claude', model: 'claude', reasoningEffort: 'medium' }, 'conv-2');
+    expect(second).toMatchObject({ fresh: true, images: true });
+    expect(backend.acpStop).toHaveBeenCalledTimes(1);
+    expect(backend.sent.filter((m) => m.method === 'session/new')).toHaveLength(2);
   });
 
   it('un turno toma punto de restauración y devuelve los cambios en disco', async () => {

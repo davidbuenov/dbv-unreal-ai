@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.3.0** publicada (2026-11-01, Minor desde la 0.2.4): REQ-50..REQ-66 y S45–S75; rama `v0.3.0` fusionada en `master`, tag `v0.3.0` y Release automática de GitHub.
-* **Última decisión técnica**: REQ-22 reutiliza `propose_changes` con la regla de rutas en Rust y compila en modo mixto (Live Coding solo con `.cpp`; si no, editor cerrado y UBT); las recetas se publican como Agent Skills desde Python (sin C++); para el plugin propio sigue sin usarse Live Coding (cerrar el editor y compilar con UBT).
-* **Próximo paso**: comprobar que el workflow de Release de la v0.3.0 terminó con los binarios de las tres plataformas; después, elegir el alcance de la v0.3.1/v0.4.0 (reanudar trabajos huérfanos de World Labs, canales de distribución).
+* **Estado actual**: **v0.3.1** lista para `/ship` (2026-11-03, Patch sobre v0.3.0): `/spec` v1.9, `/plan` v0.3.1, `/build` (S76–S79: REQ-67..REQ-70 y REQ-22 `docs/**`) y `/test` completados (235 tests Rust + 5 ignorados, 369 tests Vitest en 43 suites, `dbv-lint --changed` 0 errores, `sync-ai --check` 0 diferencias).
+* **Última decisión técnica**: aislamiento por `conversationId` en `acpSession.js` + `aiApp.js` (REQ-67), resolución explícita de modelo por defecto (`claude-sonnet-4-6`), pegado desde portapapeles (`Ctrl+V` / drag & drop) con ruta en disco mediante `ai_save_clipboard_image` (REQ-68), cabecera estándar DBV de 6 líneas en código y prompt de Unreal (REQ-69), y reanudación de trabajos huérfanos de World Labs con `resume_orphans_by_service` (REQ-70).
+* **Próximo paso**: `/code-simplify` o `/ship` v0.3.1 cuando el usuario lo indique.
 
 ## Checklist de Tareas
 
@@ -175,6 +175,20 @@
   - [x] S74 · Documentación, `/test` y `/code-simplify` de la ampliación (2026-11-01) — `docs/IA*.md` con las novedades de la v0.3.0 (código, recetas, guías, «Mejorar con IA», chino); README ES/EN con el bloque v0.3.0. `/test`: Rust 228, Vitest 354, Python 47, `dbv-lint` sin errores, banco e2e entero en verde (con recetas y guías en el simulador y la carga de la IA blindada ante `null`). `/code-simplify`: (1) `Build.bat` se lanzaba con consola visible → `CREATE_NO_WINDOW`; (2) la regla de rutas en `ai_write_file` bloqueaba «Deshacer» → fuera; (3) un `index_guides.json` con `../` podía hacer leer ficheros de fuera → solo rutas dentro de su carpeta (+1 test). Evals con un modelo real: pendientes (sin modelo disponible).
 - [x] **`/ship`** v0.3.0 (2026-11-01) — Minor elegida por el usuario; tests (Rust 233, Vitest 366, Python 47, lint, clippy, e2e) en verde; CHANGELOG ES/EN publicado con los enlaces de comparación al día; `releases/v0.3.0*.md`; `walkthrough.md`; README ES/EN, web (`docs/index.html`) y `docs/IA*.md`; versión 0.3.0 en `package.json`, `Cargo.toml` y `tauri.conf.json`; merge en `master`, tag y push (pedido por el usuario).
 
+## v0.3.1 — Aislamiento de sesiones ACP, imágenes desde portapapeles, cabecera DBV, `.md` en `docs/**` y huérfanos de World Labs (REQ-67..REQ-70, REQ-22)
+
+- [x] **`/spec` v1.9 y `/plan` v0.3.1** (2026-11-03) — `SPECIFICATIONS.md` §3.14 (`REQ-67`..`REQ-70` y ampliación de `REQ-22` a `docs/**/*.md`), Architect Review y `CHANGELOG.md` / `CHANGELOG.en.md` en `[Unreleased]`.
+- [x] **S76 · Aislamiento de sesiones ACP, modelo por defecto, tokens por conversación, visión persistente y `.md` en `docs/**`** (`REQ-67`, `REQ-22`):
+  - `acpSession.js` + `aiApp.js`: cada conversación aísla su sesión ACP (`ensureSession(spec, conversationId)` y `resetConversationSession()` al crear, cambiar o borrar conversación); si se reabre una conversación con mensajes previos en una sesión ACP nueva, se incluye su historial acotado (`historyMessages`). Además, `ensureSession` conserva `images` y `agentInfo` en los turnos `fresh: false`.
+  - `connectWizard.js` + `acpSession.js` + `acp.rs` + `aiApp.js`: `DEFAULT_AGENT_MODELS` y `resolveAgentModel` resuelven `"claude"`/`"default"` a `"claude-sonnet-4-6"` (y equivalentes por agente) al conectar, al configurar `ANTHROPIC_MODEL` y en `session/set_config_option`.
+  - `aiApp.js`: el contador de tokens (`current.usage`) se guarda y pinta por conversación (`renderConversationUsage`).
+  - `src-tauri/src/ai/files.rs`: `is_skipped_dir` ignora `Plugins` en `dbv-unreal-ai`.
+  - `code_policy.rs` + `unrealTools.js`: acepta `*.md` en la raíz y bajo `docs/**` (`Docs/**`).
+- [x] **S77 · Pegado de imágenes desde portapapeles (`Ctrl+V`), arrastrar y soltar y miniatura en el chip** (`REQ-68`) — comando `ai_save_clipboard_image` en `src-tauri/src/ai/attachments.rs` (guarda en `%TEMP%/dbv-unreal-ai-clipboard/`, máx. 10 MB, con `path` y `base64`), `pasteAttachments` en `src/app/app.js`, manejadores `paste` y `dragover`/`drop` en `src/ai/chatPanel.js`, y miniatura `<img class="ai-chip__thumb">` en los chips de imagen.
+- [x] **S78 · Cabecera estándar DBV de 6 líneas en código y ficheros nuevos** (`REQ-69`) — añadida en `src-tauri/src/main.rs` y los 14 ficheros `.h`/`.cpp` de `unreal-plugin/DBVUnrealAICpp/`, e instrucción en `unrealPrompt` (`src/unreal/unrealTools.js`) con `Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona` por defecto.
+- [x] **S79 · Reanudación de trabajos huérfanos de World Labs** (`REQ-70`) — `resume_orphans_by_service` y `finish_worldlabs_task` en `src-tauri/src/generation/jobs.rs`, conectados en `src-tauri/src/generation/commands.rs` y `src-tauri/src/mcp_server.rs`.
+- [x] **`/test` v0.3.1** (2026-11-03) — Rust 235 pasados (0 fallos, 0 warnings), Vitest 369 pasados (43 suites), `dbv-lint --changed` 0 errores (85 requisitos con ID, 83 con test), `sync-ai.mjs --check` 0 diferencias.
+
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
 - [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).
@@ -186,6 +200,16 @@
 
 
 - [ ] **Idioma chino (`zh-CN`)** — aplazado por el usuario el 2026-10-26 (la comunidad de Tripo en China es grande; dbv-md-reader añadió coreano). Al retomarlo: un tercer idioma en `i18n.js` y en los dos `translations.js` (~900 textos), selector y detección de `zh-*`; `LANGUAGE` de `context.js` y `agentPreamble` (hoy `lang === 'es' ? … : 'Answer in English.'`: un tercer idioma caería en inglés); los errores del backend en Rust están en español; `README.zh-CN.md` e `IA.zh-CN.md`; revisión por una persona nativa; investigar el acceso desde China (proveedores como DeepSeek o Qwen, y si Tripo tiene allí otra plataforma).
+
+## Por revisar (prioridad muy baja) — plugin oficial de Epic para Claude Code
+*Comparado el 2026-11-01 con `EpicGames/unreal-engine-skills-for-claude-code-plugin` v3.1.2 (skills `unreal-mcp`, `unreal-skill`, `create-toolset` y un hook `SessionStart`). Casi todo ya lo cubre la app. Solo se abordan si mejoran lo que tenemos; si no, se descartan.*
+
+- [ ] **Choque si el usuario tiene el plugin instalado** (sin comprobar en vivo): ver si el adaptador ACP de Claude carga los plugins del usuario. Si los carga, su hook pide `ModelContextProtocol.GenerateClientConfig ClaudeCode` cuando no hay `.mcp.json` (justo el acceso directo que avisa REQ-52) y su skill recomienda `LiveCodingToolset.CompileLiveCoding` (va contra la regla de no usar Live Coding). Detectarlo es posible: `enabledPlugins` → `unreal-engine-skills-for-claude-code@claude-plugins-official`.
+- [ ] **Proxy de Epic (`unreal_mcp_proxy`, en `Engine/Plugins/Experimental/ModelContextProtocol/Extras/Proxy`):** cambia la entrada HTTP de `.mcp.json` por una STDIO `unreal-mcp-proxy` y guarda la original en `_upstreamEntry`. `duplicates.rs` busca la URL en el texto, así que seguramente lo detecta, pero no hay test para ese caso (REQ-52).
+- [ ] **Datos de la instancia en `initialize`:** los motores recientes devuelven `_meta["com.epicgames.unrealengine/instance"]` (`processId`, `projectDirectory`, `engineVersion`…). Serviría para confirmar que el editor que contesta en el puerto es el del proyecto cuando hay varios abiertos (REQ-07). Nuestro fixture de `initialize` es de la 5.8.2 y no lo trae.
+- [ ] **`AIAssistantToolset.GetDockedContext`:** toolset que no tenemos en los fixtures (pestaña de Claude Code acoplada en un editor de assets). Solo vigilar.
+- [ ] **Convenciones de Epic para toolsets:** recomiendan tipos y structs reales y lanzar errores en vez de devolver JSON en un `FString` con `success`/`error` (como hacen `DBVUnrealAICppToolset.h` y `toolset.py`). Cambiarlo rompería el contrato común Python/C++ (R-02b): solo como referencia.
+- [ ] **Detalles menores:** descripciones de herramientas más cortas; Agent Skills sin nombres de herramientas concretas; patrón de tests `BEGIN_DEFINE_SPEC`; tests sin editor abierto para CI con `UnrealEditor-Cmd <proyecto>.uproject -ExecCmds="Automation RunTests <filtro>;quit" -Unattended -NullRHI`.
 
 ## Deuda Técnica
 *Mejoras detectadas fuera del foco de la tarea actual, para abordarlas después.*
@@ -206,11 +230,11 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-11-01, `/ship` v0.3.0 hecho: merge de `v0.3.0` en `master`, tag `v0.3.0` y push a `origin` (pedido por el usuario). Rust 233, Vitest 366, Python 47, `dbv-lint`, clippy y banco e2e en verde.
+> **Last update / Última actualización:** 2026-11-03, ciclo completo `/spec` → `/plan` → `/build` (S76–S79) → `/test` de **v0.3.1** terminado (`REQ-67`..`REQ-70` y ampliación de `REQ-22` a `docs/**`). Rust 235 pasados (+5 ignorados, 0 warnings), Vitest 369 pasados (43 suites), `dbv-lint --changed` 0 errores, `sync-ai.mjs --check` 0 diferencias.
 
-> **Exact point / Punto exacto:** v0.3.0 publicada. La Release de GitHub la crea el workflow `release.yml` al subir el tag (binarios de Windows, macOS y Linux y las notas ES/EN de `dbv-specs-ops/releases/`).
+> **Exact point / Punto exacto:** v0.3.1 implementada y verificada en tests unitarios e integración; lista para `/code-simplify` o `/ship` v0.3.1.
 
-> **Pending / Pendiente:** (1) comprobar que la Release terminó y tiene los 7 binarios; (2) reanudar un trabajo huérfano de World Labs (si la app se cierra a mitad, el mundo no se descarga); (3) revisión nativa del chino y evals con un modelo real; (4) canales de distribución (Homebrew, Microsoft Store, Uptodown) y actualizaciones.
+> **Pending / Pendiente:** (1) ejecutar `/code-simplify` o `/ship` v0.3.1 cuando el usuario lo indique; (2) revisión nativa del chino y evals con un modelo real; (3) canales de distribución (Homebrew, Microsoft Store, Uptodown) y actualizaciones.
 
 > **Pruebas del usuario (2026-11-01, tarde):** 1) «Mejorar con IA» con un agente obligaba a copiar la respuesta → ahora vuelve sola al campo (`ask` devuelve el texto final del agente); 2) no encontraba «📋 Recetas» (estaba abajo, junto a «Recordar») → también en la conversación vacía, y el banco e2e comprueba que se ve; 3) Conocimiento no decía de dónde salen las guías → explicación y enlace a dbv-mcp-server (los pasos en esa app, más adelante); 4) chino, bien; 5) Live Coding ya probado; 7) World Labs desde un agente: tope y clave de Tripo → cada servicio con su clave, gasto y tope (Ajustes → World Labs, 2.000 por defecto); Rust +1, Vitest +3. Deuda: reanudar un trabajo huérfano de World Labs (hoy se libera sin reanudar). 8) seguía «No API key found» y el agente pedía `tripo_balance` → el cliente de World Labs no seguía la API real (cabecera `WLT-Api-Key`, `world_prompt`, `operation_id`, `remaining_credits`, `asset_type`); nueva `worldlabs_balance` (solo lectura), saldo de World Labs en Ajustes y en Generar, y el asistente integrado ya lanza `generate_world`/`export_world_mesh`. Rust +3, Vitest +2; probado por el usuario: saldo de World Labs visible. 9) «Mejorar con IA» con un agente seguía llevando a la conversación → ahora es una sesión ACP aparte del mismo agente (`acpSession.askAside`, sin MCP ni ficheros, se cancela a los 120 s) y el texto vuelve al campo sin salir de Generar; si el agente está ocupado, lo dice (REQ-66, Vitest +2). 10) la tarjeta de un mundo decía «Enviado a Tripo» y se quedaba en 0 % → World Labs no da porcentaje (solo `IN_PROGRESS`, ~5 min según su doc): tiempo transcurrido y barra estimada (Vitest +2). Mundo real generado desde Generar en 309 s. 11) el aviso «Un agente vería el editor dos veces» salía solo por el `CLAUDE.md` de Convai y no decía qué hacer → solo avisa por una configuración MCP al editor, con botón «Mostrar el fichero» y el paso concreto; el preámbulo traduce `list_toolsets` → `unreal_*` (REQ-52, Vitest +1). Siguiente: `/ship` v0.3.0. 6) con un agente, cada consulta del MCP pedía permiso → la app concede sola las de solo lectura (REQ-12, `src/unreal/agentPermissions.js`, Vitest +4, Rust +1).
 

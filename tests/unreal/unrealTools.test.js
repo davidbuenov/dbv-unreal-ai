@@ -204,12 +204,29 @@ describe('formato y prompt', () => {
     expect(formatResult({ text: 'boom', isError: true, value: null })).toBe('error: boom');
   });
 
-  it('el prompt pide usar /Game/DBV y validar el Python @spec REQ-19, REQ-26', () => {
+  it('el prompt pide usar /Game/DBV, validar el Python y poner la cabecera estándar DBV en los ficheros nuevos @spec REQ-19, REQ-26, REQ-69', async () => {
     const prompt = unrealPrompt({ projectName: 'DBVMCPFirst', engineVersion: '5.8.2' });
     expect(prompt).toMatch(/DBVMCPFirst/);
     expect(prompt).toMatch(/\/Game\/DBV/);
     expect(prompt).toMatch(/unreal_describe_python_api/);
     expect(prompt).toMatch(/EditorActorSubsystem\)\.get_all_level_actors\(\)/);
+    expect(prompt).toContain('Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona');
+    expect(prompt).toContain('Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops');
+    expect(prompt).toContain('docs/**/*.md');
+
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const walk = (dir) =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) return entry.name === 'vendor' || entry.name === 'target' ? [] : walk(full);
+        return /\.(js|rs|py|cpp|h)$/.test(entry.name) ? [full] : [];
+      });
+    const missing = ['src', 'src-tauri/src', 'tests', 'unreal-plugin'].flatMap(walk).filter((file) => {
+      const head = fs.readFileSync(file, 'utf8').split(/\r?\n/).slice(0, 8).join('\n');
+      return !head.includes('=====') || (!head.includes('David Bueno Vallejo') && !head.includes('GENERADO por scripts/sync-ai.mjs')) || !head.includes('dbv-specs-ops');
+    });
+    expect(missing).toEqual([]);
   });
 });
 

@@ -233,6 +233,8 @@ pub fn run() {
             #[cfg(desktop)]
             ai::attachments::ai_read_attachment,
             #[cfg(desktop)]
+            ai::attachments::ai_save_clipboard_image,
+            #[cfg(desktop)]
             ai::files::ai_list_files,
             #[cfg(desktop)]
             ai::files::ai_read_file,

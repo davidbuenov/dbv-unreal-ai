@@ -323,18 +323,29 @@ pub fn start_jobs(context: &JobContext, operation: &'static Operation, params: &
     ids
 }
 
-/// Reanuda los trabajos huérfanos (ver `JobBoard::claim_orphans`): sigue esperando su tarea y la descarga a la
-/// biblioteca como si nada. Devuelve sus ids. Lo llaman la ventana (al consultar los trabajos) y el `--mcp`.
+/// Reanuda los trabajos huérfanos de Tripo o World Labs con la clave del contexto. @spec REQ-27, REQ-70
 pub fn resume_orphans(context: &JobContext) -> Vec<String> {
+    let keys = HashMap::from([("tripo".to_string(), context.key.clone()), ("worldlabs".to_string(), context.key.clone())]);
+    resume_orphans_by_service(context, &keys)
+}
+
+/// Reanuda los trabajos huérfanos (ver `JobBoard::claim_orphans`) usando la clave correspondiente a cada servicio
+/// (`tripo` o `worldlabs`). Devuelve sus ids. Lo llaman la ventana y el `--mcp`. @spec REQ-27, REQ-70
+pub fn resume_orphans_by_service(context: &JobContext, keys: &HashMap<String, String>) -> Vec<String> {
     let mut ids = Vec::new();
     for mut record in context.board.claim_orphans() {
-        // Solo se sabe reanudar una tarea de Tripo: una de World Labs no se sondea con el cliente de Tripo.
-        let Some(operation) = catalog::find(&record.kind).filter(|op| super::service_of(op.category) == "tripo") else {
+        let Some(operation) = catalog::find(&record.kind) else {
             context.board.release(&record.id);
             continue;
         };
+        let service = super::service_of(operation.category);
+        let Some(key) = keys.get(service).filter(|k| !k.trim().is_empty()).cloned() else {
+            context.board.release(&record.id);
+            continue;
+        };
+        let service_label = super::service_name(service);
         let task_id = record.task_id.clone().unwrap_or_default();
-        record.note(&format!("reanudado por {}: el proceso anterior se detuvo y la tarea {task_id} sigue en Tripo", context.source));
+        record.note(&format!("reanudado por {}: el proceso anterior se detuvo y la tarea {task_id} sigue en {service_label}", context.source));
         record.updated_at = now_secs();
         publish(context, &record);
         let cancel = Arc::new(AtomicBool::new(false));
@@ -344,14 +355,23 @@ pub fn resume_orphans(context: &JobContext) -> Vec<String> {
         ids.push(record.id.clone());
         // El cuerpo guardado es el que se envió (fuentes ya resueltas): sirve tal cual para la entrada de la biblioteca.
         let request = OperationRequest { operation, params: record.request.clone(), name: record.name.clone(), parent: record.parent.clone() };
-        let context = context.clone();
+        let mut job_ctx = context.clone();
+        job_ctx.key = key;
         std::thread::spawn(move || {
-            let body = request.params.clone();
-            let client = match &context.base_url {
-                Some(base) => TripoClient::with_base_url(&context.key, base),
-                None => TripoClient::new(&context.key),
-            };
-            drive(&context, record, &cancel, |mut report| finish_task(&client, &request, body, task_id, &context.library, &cancel, context.polling, &mut report));
+            if service == "worldlabs" {
+                let client = match &job_ctx.base_url {
+                    Some(base) => super::worldlabs::WorldLabsClient::with_base_url(&job_ctx.key, base),
+                    None => super::worldlabs::WorldLabsClient::new(&job_ctx.key),
+                };
+                drive(&job_ctx, record, &cancel, |mut report| finish_worldlabs_task(&client, &job_ctx, &request, task_id, &cancel, &mut report));
+            } else {
+                let body = request.params.clone();
+                let client = match &job_ctx.base_url {
+                    Some(base) => TripoClient::with_base_url(&job_ctx.key, base),
+                    None => TripoClient::new(&job_ctx.key),
+                };
+                drive(&job_ctx, record, &cancel, |mut report| finish_task(&client, &request, body, task_id, &job_ctx.library, &cancel, job_ctx.polling, &mut report));
+            }
         });
     }
     ids
@@ -379,8 +399,7 @@ fn run_worldlabs_operation(context: &JobContext, request: &OperationRequest, can
     report(JobEvent::Request { endpoint: request.operation.endpoint, body: &request.params });
     report(JobEvent::Stage("submitted", None));
 
-    let started = std::time::Instant::now();
-    let outcome = match request.operation.name {
+    let op_id = match request.operation.name {
         "generate_world" => {
             let prompt = request.params.get("prompt").and_then(Value::as_str).unwrap_or("");
             let model = request.params.get("model").and_then(Value::as_str);
@@ -392,29 +411,51 @@ fn run_worldlabs_operation(context: &JobContext, request: &OperationRequest, can
                     (base64::engine::general_purpose::STANDARD.encode(&bytes), extension)
                 })
             });
+            client.generate_world(prompt, model, image.as_ref().map(|(data, ext)| (data.as_str(), ext.as_str())), Some(&request.name))?
+        }
+        "export_world_mesh" => {
+            let world_id = request.params.get("world_id").or_else(|| request.params.get("id")).and_then(Value::as_str).unwrap_or_default();
+            client.export_mesh(world_id)?
+        }
+        other => return Err(UnrealError::NotFound(format!("operación de World Labs no implementada: {other}"))),
+    };
+    report(JobEvent::Task(&op_id));
+    report(JobEvent::Stage("running", None));
+    finish_worldlabs_task(&client, context, request, op_id, cancel, report)
+}
 
-            let op_id = client.generate_world(prompt, model, image.as_ref().map(|(data, ext)| (data.as_str(), ext.as_str())), Some(&request.name))?;
-            report(JobEvent::Task(&op_id));
-            report(JobEvent::Stage("running", None));
+/// Espera a que termine una operación de World Labs (`generate_world` o `export_world_mesh`) y descarga el mundo. @spec REQ-18, REQ-70
+fn finish_worldlabs_task(
+    client: &super::worldlabs::WorldLabsClient,
+    context: &JobContext,
+    request: &OperationRequest,
+    op_id: String,
+    cancel: &AtomicBool,
+    report: &mut impl FnMut(JobEvent),
+) -> Result<Outcome, UnrealError> {
+    let started = std::time::Instant::now();
+    let op_world_id = loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(UnrealError::Protocol("cancelado por el usuario".into()));
+        }
+        if started.elapsed() > context.polling.max_wait {
+            return Err(UnrealError::Timeout(format!("la operación {op_id} no terminó a tiempo")));
+        }
+        let op = client.operation(&op_id)?;
+        if op.done {
+            if let Some(err) = op.error {
+                return Err(UnrealError::Protocol(format!("World Labs falló: {err}")));
+            }
+            break op.world_id;
+        }
+        report(JobEvent::Stage("running", op.progress));
+        std::thread::sleep(context.polling.interval);
+    };
 
-            let world_id = loop {
-                if cancel.load(Ordering::Relaxed) {
-                    return Err(UnrealError::Protocol("cancelado por el usuario".into()));
-                }
-                if started.elapsed() > context.polling.max_wait {
-                    return Err(UnrealError::Timeout(format!("la operación {op_id} no terminó a tiempo")));
-                }
-                let op = client.operation(&op_id)?;
-                if op.done {
-                    if let Some(err) = op.error {
-                        return Err(UnrealError::Protocol(format!("World Labs falló: {err}")));
-                    }
-                    break op.world_id.ok_or_else(|| UnrealError::Protocol("World Labs terminó sin world_id".into()))?;
-                }
-                report(JobEvent::Stage("running", op.progress));
-                std::thread::sleep(context.polling.interval);
-            };
-
+    let outcome = match request.operation.name {
+        "generate_world" => {
+            let world_id = op_world_id.ok_or_else(|| UnrealError::Protocol("World Labs terminó sin world_id".into()))?;
+            let prompt = request.params.get("prompt").and_then(Value::as_str).unwrap_or("");
             report(JobEvent::Stage("downloading", None));
             let world_json = client.world(&world_id)?;
 
@@ -435,34 +476,16 @@ fn run_worldlabs_operation(context: &JobContext, request: &OperationRequest, can
             Outcome { entry: Some(entry), output: world_json, task_id: op_id }
         }
         "export_world_mesh" => {
-            let world_id = request.params.get("world_id")
+            let world_id = request
+                .params
+                .get("world_id")
                 .or_else(|| request.params.get("id"))
                 .and_then(Value::as_str)
+                .map(str::to_string)
+                .or(op_world_id)
                 .unwrap_or_default();
-            let op_id = client.export_mesh(world_id)?;
-            report(JobEvent::Task(&op_id));
-            report(JobEvent::Stage("running", None));
-
-            loop {
-                if cancel.load(Ordering::Relaxed) {
-                    return Err(UnrealError::Protocol("cancelado por el usuario".into()));
-                }
-                if started.elapsed() > context.polling.max_wait {
-                    return Err(UnrealError::Timeout(format!("la exportación {op_id} no terminó a tiempo")));
-                }
-                let op = client.operation(&op_id)?;
-                if op.done {
-                    if let Some(err) = op.error {
-                        return Err(UnrealError::Protocol(format!("World Labs falló: {err}")));
-                    }
-                    break;
-                }
-                report(JobEvent::Stage("running", op.progress));
-                std::thread::sleep(context.polling.interval);
-            }
-
             report(JobEvent::Stage("downloading", None));
-            let world_json = client.world(world_id)?;
+            let world_json = client.world(&world_id)?;
             Outcome { entry: None, output: world_json, task_id: op_id }
         }
         other => return Err(UnrealError::NotFound(format!("operación de World Labs no implementada: {other}"))),
@@ -651,6 +674,48 @@ mod tests {
         assert!(!board.claim_path("huerfano").exists(), "al terminar suelta la reclamación");
     }
 
+    /// @spec REQ-70
+    #[test]
+    fn un_huerfano_de_worldlabs_se_reanuda_y_descarga_el_mundo_a_la_biblioteca() {
+        use crate::unreal::mcp_client::tests::{fake_server, http};
+        let (cdn, _cdn) = fake_server(vec![http("200 OK", "", "NGSP-splat-bytes")]);
+        let splat_url = cdn.replace("/mcp", "/w.spz");
+        let world_body = format!(r#"{{"id":"w-99","assets":{{"splats":{{"spz_urls":{{"full_res":"{splat_url}"}}}}}}}}"#);
+        let (api, _api) = fake_server(vec![
+            http("200 OK", "", r#"{"operation_id":"op-99","done":true,"response":{"world_id":"w-99"}}"#),
+            http("200 OK", "", &world_body),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let board = JobBoard::new(dir.path());
+        let mut orphan = record("mundo-huerfano", "running", true, 1);
+        orphan.kind = "generate_world".into();
+        orphan.task_id = Some("op-99".into());
+        orphan.request = serde_json::json!({ "prompt": "bosque", "model": "marble-1.1" });
+        orphan.updated_at = now_secs() - STALE_SECS - 5;
+        board.write(&orphan).unwrap();
+        let context = JobContext {
+            board: board.clone(),
+            library: Library::new(dir.path().join("library")),
+            key: "wl-key".into(),
+            base_url: Some(api.trim_end_matches("/mcp").to_string()),
+            polling: Polling { interval: std::time::Duration::from_millis(1), max_wait: std::time::Duration::from_secs(5) },
+            cancels: Cancels::default(),
+            hook: Arc::new(|_| {}),
+            source: "app".into(),
+        };
+        let keys = HashMap::from([("worldlabs".to_string(), "wl-key".to_string())]);
+        assert_eq!(resume_orphans_by_service(&context, &keys), vec!["mundo-huerfano".to_string()]);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while board.get("mundo-huerfano").is_some_and(|r| r.is_active()) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let done = board.get("mundo-huerfano").unwrap();
+        assert_eq!(done.stage, "done", "{:?}", done.log);
+        assert!(done.log.iter().any(|l| l.contains("World Labs")));
+        let entry = entry_of(&context.library, &done).unwrap();
+        assert_eq!(entry.kind, "world");
+    }
+
     /// @spec REQ-29
     #[test]
     fn las_variantes_se_llaman_pirata_pirata_2_pirata_3() {
@@ -667,3 +732,4 @@ mod tests {
         assert!(path.starts_with(dir.path().join("jobs")));
     }
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             

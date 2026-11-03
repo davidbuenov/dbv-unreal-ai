@@ -1,3 +1,10 @@
+// =============================================================================
+// DBV Unreal AI — Punto de entrada del binario (ventana Tauri y servidor --mcp)
+// Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
+// Licensed under the MIT License. See LICENSE for details.
+// Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+// =============================================================================
+
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 

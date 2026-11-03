@@ -8,13 +8,14 @@
 // Lo que se protege: un modelo con visión recibe la imagen; uno sin visión, solo su nombre y su ruta (un modelo
 // local sin visión falla si le llegan imágenes). En los dos casos la IA conoce la ruta para usarla con Tripo.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { canSeeImages, userMessage } from '../../src/ai/aiApp.js';
+import { createChatPanel } from '../../src/ai/chatPanel.js';
 
 const IMAGE = { kind: 'image', path: 'C:/refs/barco.png', name: 'barco.png', mime: 'image/png', base64: 'iVBORw==' };
 const PROVIDERS = [{ provider: 'anthropic', cloud: true }, { provider: 'ollama', cloud: false }];
 
-describe('imágenes adjuntas (REQ-32)', () => {
+describe('imágenes adjuntas (REQ-32, REQ-68)', () => {
   /** @spec REQ-32 */
   it('decide quién ve imágenes: lo que diga la conexión y, si no dice nada, solo los modelos de nube', () => {
     expect(canSeeImages({ provider: 'ollama', supportsImages: true }, PROVIDERS)).toBe(true);
@@ -33,5 +34,29 @@ describe('imágenes adjuntas (REQ-32)', () => {
     expect(blind.images).toBeUndefined();
     expect(blind.content).toContain('You cannot see it');
     expect(userMessage('Hola', [], true)).toEqual({ role: 'user', content: 'Hola' });
+  });
+
+  /** @spec REQ-68 */
+  it('pegar una imagen en el cuadro de texto (Ctrl+V) la adjunta y pinta su miniatura', () => {
+    const host = document.createElement('div');
+    const onPasteFiles = vi.fn();
+    const panel = createChatPanel({
+      host,
+      renderMarkdown: (el, text) => { el.textContent = text; },
+      callbacks: { onPasteFiles, onSend: vi.fn(), onStop: vi.fn() },
+    });
+    const fakeFile = new File(['png-bytes'], 'captura.png', { type: 'image/png' });
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => fakeFile }], files: [fakeFile] },
+    });
+    panel.input.dispatchEvent(pasteEvent);
+    expect(pasteEvent.defaultPrevented).toBe(true);
+    expect(onPasteFiles).toHaveBeenCalledWith([fakeFile]);
+
+    panel.setAttachments([{ ...IMAGE, label: '🖼 barco.png' }], vi.fn());
+    const thumb = host.querySelector('.ai-chip__thumb');
+    expect(thumb).not.toBeNull();
+    expect(thumb.getAttribute('src')).toBe('data:image/png;base64,iVBORw==');
   });
 });

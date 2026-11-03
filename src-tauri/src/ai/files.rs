@@ -48,8 +48,8 @@ pub fn is_markdown(path: &Path) -> bool {
 
 /// Carpetas que no se recorren: ocultas (`.git`, `.obsidian`…) y de dependencias.
 pub fn is_skipped_dir(name: &str) -> bool {
-    // Unreal: carpetas de binarios, cachés y assets (`.uasset`) que no tienen texto que leer y pesan mucho.
-    name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "Intermediate" | "DerivedDataCache" | "Binaries" | "Saved" | "Content")
+    // Unreal: carpetas de binarios, cachés, plugins de terceros y assets (`.uasset`) que no tienen texto del proyecto que leer y pesan mucho.
+    name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "Intermediate" | "DerivedDataCache" | "Binaries" | "Saved" | "Content" | "Plugins")
 }
 
 /// Normaliza una ruta relativa del frontend: barras `/`, sin vacíos ni `.`.
@@ -344,6 +344,8 @@ mod tests {
     #[test]
     fn lista_solo_documentos_de_texto_sin_carpetas_ocultas_ni_dependencias() {
         let dir = sample();
+        std::fs::create_dir(dir.path().join("Plugins")).unwrap();
+        std::fs::write(dir.path().join("Plugins").join("Convai.cpp"), "// plugin").unwrap();
         assert_eq!(list_documents(&dir.path().canonicalize().unwrap()), vec!["sub/dos.md".to_string(), "uno.md".to_string()]);
     }
 

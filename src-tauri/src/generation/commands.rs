@@ -18,7 +18,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use super::jobs::{entry_of, resume_orphans, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
+use super::jobs::{entry_of, resume_orphans_by_service, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
 use super::tripo::{Balance, TripoClient};
 use super::{key_account, settings_path, tools, within_budget, Polling, Progress, SERVICES};
 use crate::ai::secrets::KeyStorage;
@@ -332,12 +332,13 @@ fn progress_of(app: &AppHandle, record: &JobRecord) -> Progress {
     Progress { job_id: record.id.clone(), stage: record.stage.clone(), progress: record.progress, entry, error: record.error.clone() }
 }
 
-/// Trabajos de la sesión, también los lanzados por un agente, con su consola. De paso reanuda los huérfanos: un
-/// agente que cerró su sesión con una tarea en marcha no pierde lo que ya se cobró. @spec REQ-27
+/// Trabajos de la sesión, también los lanzados por un agente, con su consola. De paso reanuda los huérfanos de
+/// Tripo y de World Labs: un proceso que se cerró con una tarea en marcha no pierde lo que ya se cobró. @spec REQ-27, REQ-70
 #[tauri::command]
 pub fn generation_jobs(app: AppHandle, ai: State<'_, AiState>, state: State<'_, GenerationState>) -> Result<Vec<JobRecord>, UnrealError> {
-    if let Some(key) = ai.secrets.get(&key_account("tripo")) {
-        resume_orphans(&job_context(&app, &state, key)?);
+    let keys: HashMap<String, String> = SERVICES.iter().filter_map(|s| ai.secrets.get(&key_account(s)).map(|k| (s.to_string(), k))).collect();
+    if !keys.is_empty() {
+        resume_orphans_by_service(&job_context(&app, &state, String::new())?, &keys);
     }
     let since = state.session_start.load(Ordering::Relaxed);
     Ok(board(&app)?.list().into_iter().filter(|r| r.started_at >= since || r.is_active()).take(30).collect())

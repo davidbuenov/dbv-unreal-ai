@@ -91,6 +91,7 @@ const customInvoke = `((cmd, args) => {
     return { text: '{}', isError: false, value: {} };
   }
   if (cmd === 'ai_read_attachment') return { kind: 'image', path: 'C:/refs/barco.png', name: 'barco.png', mime: 'image/png', base64: 'iVBORw==', bytes: 4 };
+  if (cmd === 'ai_save_clipboard_image') return { kind: 'image', path: 'C:/refs/portapapeles.png', name: 'portapapeles.png', mime: args.mime || 'image/png', base64: args.data || 'iVBORw==', bytes: 4 };
   if (cmd !== 'ai_chat') return undefined;
   window.__chat.push(args);
   const n = window.__chat.length;

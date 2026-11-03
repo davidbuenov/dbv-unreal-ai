@@ -90,9 +90,22 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
   let spec = null;
   let sessionId = null;
   let root = null;
+  let conversationId = null;
+  let agentInfo = null;
+  let images = false;
   let listening = null;
   /** Sesiones de consulta suelta abiertas: id → recoge su texto. */
   const asides = new Map();
+
+  function effectiveModelOf(targetSpec) {
+    const raw = targetSpec?.model;
+    if (!raw) return '';
+    if (targetSpec.id === 'claude' && (raw === 'claude' || raw === 'claude-sonnet' || raw === 'default')) {
+      return 'claude-sonnet-5-5';
+    }
+    if (raw === targetSpec.id || raw === 'antigravity' || raw === 'agy') return '';
+    return raw;
+  }
 
   async function respond(id, result, error = null) {
     await backend.acpRespond(id, result ?? null, error);
@@ -138,11 +151,23 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
     await listening;
   }
 
-  /** Arranca el agente y abre una sesión en el proyecto (si no lo estaba ya). */
-  async function ensureSession(nextSpec) {
+  /** Arranca el agente y abre una sesión en el proyecto (si no lo estaba ya para esta conversación). */
+  async function ensureSession(nextSpec, nextConversationId = null) {
     await ensureListener();
     const currentRoot = getRoot();
-    if (sessionId && spec && spec.id === nextSpec.id && spec.model === nextSpec.model && spec.reasoningEffort === nextSpec.reasoningEffort && spec.command === nextSpec.command && root === currentRoot) return { fresh: false };
+    const targetConversationId = nextConversationId ?? conversationId;
+    if (
+      sessionId &&
+      spec &&
+      spec.id === nextSpec.id &&
+      spec.model === nextSpec.model &&
+      spec.reasoningEffort === nextSpec.reasoningEffort &&
+      spec.command === nextSpec.command &&
+      root === currentRoot &&
+      conversationId === targetConversationId
+    ) {
+      return { fresh: false, agentInfo, images };
+    }
     await backend.acpStop();
     const started = await backend.acpStart(nextSpec, currentRoot);
     if (!started.ok) throw Object.assign(new Error(started.error.message), { kind: started.error.kind });
@@ -168,22 +193,28 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
     if (!session.ok) throw Object.assign(new Error(session.error.message), { kind: session.error.kind === 'badRequest' ? 'auth' : session.error.kind });
     spec = nextSpec;
     root = currentRoot;
+    conversationId = targetConversationId;
     sessionId = session.value.sessionId;
-    if (nextSpec.model && nextSpec.model !== nextSpec.id && nextSpec.model !== 'antigravity' && nextSpec.model !== 'agy') {
+    agentInfo = init.value?.agentInfo ?? null;
+    images = Boolean(init.value?.agentCapabilities?.promptCapabilities?.image);
+    const cleanModel = effectiveModelOf(nextSpec);
+    if (cleanModel) {
       await backend.acpRequest('session/set_config_option', {
         sessionId,
         configId: 'model',
-        value: nextSpec.model,
+        value: cleanModel,
       });
     }
     if (nextSpec.reasoningEffort && nextSpec.reasoningEffort !== 'off') {
+      const options = Array.isArray(session.value?.configOptions) ? session.value.configOptions : [];
+      const effortConfigId = options.find((o) => o.id === 'effort' || o.id === 'reasoning_effort' || o.category === 'thought_level')?.id ?? 'effort';
       await backend.acpRequest('session/set_config_option', {
         sessionId,
-        configId: 'effort',
+        configId: effortConfigId,
         value: nextSpec.reasoningEffort,
       });
     }
-    return { fresh: true, agentInfo: init.value?.agentInfo ?? null, images: Boolean(init.value?.agentCapabilities?.promptCapabilities?.image) };
+    return { fresh: true, agentInfo, images };
   }
 
   /**
@@ -200,14 +231,14 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
   /**
    * Una pregunta suelta, fuera de la conversación: otra sesión del mismo agente (ya arrancado con
    * `ensureSession`), sin servidores MCP, sin punto de restauración y sin panel. Devuelve el texto del agente.
-   * @spec REQ-66
    */
   async function askAside(text, timeoutMs = ASIDE_TIMEOUT_MS) {
     const opened = await backend.acpRequest('session/new', { cwd: root, mcpServers: [] });
     if (!opened.ok) throw Object.assign(new Error(opened.error.message), { kind: opened.error.kind });
     const asideId = opened.value.sessionId;
-    if (spec?.model && spec.model !== spec.id && spec.model !== 'antigravity' && spec.model !== 'agy') {
-      await backend.acpRequest('session/set_config_option', { sessionId: asideId, configId: 'model', value: spec.model });
+    const cleanModel = effectiveModelOf(spec);
+    if (cleanModel) {
+      await backend.acpRequest('session/set_config_option', { sessionId: asideId, configId: 'model', value: cleanModel });
     }
     let reply = '';
     asides.set(asideId, (update) => {
@@ -238,6 +269,9 @@ export function createAcpSession({ backend, getRoot, readText, askPermission, st
     stop: async () => {
       sessionId = null;
       spec = null;
+      conversationId = null;
+      agentInfo = null;
+      images = false;
       await backend.acpStop();
     },
     get sessionId() {

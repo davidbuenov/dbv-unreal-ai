@@ -51,6 +51,16 @@ const DEFAULT_AGENT_LABELS = {
   copilot: 'Claude Sonnet 5.5',
 };
 
+/** Modelo concreto por defecto de cada agente CLI cuando la conexión aún guarda el id genérico. */
+export const DEFAULT_AGENT_MODELS = {
+  antigravity: 'gemini-4-argon',
+  agy: 'gemini-4-argon',
+  claude: 'claude-sonnet-5-5',
+  codex: 'gpt-6-luna',
+  gemini: 'gemini-4-argon',
+  copilot: 'claude-sonnet-5-5',
+};
+
 const KNOWN_MODEL_LABELS = {
   'gemini-4-argon': 'Gemini 4 Argon',
   'gemini-3.8-flash': 'Gemini 3.8 Flash',
@@ -119,13 +129,26 @@ export function normalizeAgentModels(rawList, fallbackId = 'default') {
 
 function isGenericOrCorruptedModel(modelId, agentKey) {
   if (!modelId) return true;
-  if (modelId === agentKey || ['antigravity', 'agy', 'claude', 'codex', 'gemini', 'copilot', 'claude-sonnet'].includes(modelId)) {
+  if (modelId === agentKey || ['antigravity', 'agy', 'claude', 'codex', 'gemini', 'copilot', 'claude-sonnet', 'default'].includes(modelId)) {
     return true;
   }
   if (modelId.includes('|') || modelId.includes('**') || modelId.length > 64) {
     return true;
   }
   return false;
+}
+
+/**
+ * Resuelve el identificador de modelo real que se debe pasar al agente ACP:
+ * si la conexión tiene un id genérico (`"claude"`, `"codex"`…), usa el modelo
+ * por defecto que muestra la interfaz (`DEFAULT_AGENT_MODELS`).
+ */
+export function resolveAgentModel(agentKey, rawModel) {
+  let result = rawModel;
+  if (isGenericOrCorruptedModel(rawModel, agentKey)) {
+    result = DEFAULT_AGENT_MODELS[agentKey] || rawModel || agentKey;
+  }
+  return result;
 }
 
 /**

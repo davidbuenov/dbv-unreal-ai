@@ -11,6 +11,20 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+### Added
+
+- **Pegar imágenes desde el portapapeles (`Ctrl+V`), arrastrar y soltar, y miniatura en la conversación (REQ-68):** pegar una captura o imagen (`PNG`, `JPG`, `WebP`) en el cuadro de texto de la conversación o arrastrar ficheros sobre el panel la guarda en disco (`ai_save_clipboard_image`, ≤ 10 MB) y la adjunta con su `base64` (para los modelos y agentes con visión) y su ruta real en disco (para poder usarla con Tripo o World Labs). Las fichas de imágenes adjuntas muestran ahora su miniatura visual.
+- **Cabecera estándar DBV en todos los ficheros propios y en los generados por la IA (REQ-69):** todos los ficheros del repositorio y del plugin C++ llevan el bloque de cabecera estándar de 6 líneas (`DBV Unreal AI`, copyright de David Bueno Vallejo y David Bueno Carmona, licencia MIT y `dbv-specs-ops`), y el prompt de dominio de Unreal instruye a la IA y a los agentes para incluir esa misma cabecera en todo fichero nuevo (`Source/**`, `Content/Python/**`, `docs/**/*.md` y `*.md` de la raíz).
+- **Reanudación de trabajos huérfanos de World Labs (REQ-70):** si la aplicación o el `--mcp` de un agente se cierran con una generación de mundo (`generate_world` o `export_world_mesh`) en marcha, al consultar los trabajos se reanuda el sondeo con la clave de World Labs y se descarga el mundo (`.spz` + `.glb`) a la biblioteca, igual que con Tripo.
+
+### Changed
+
+- **La IA también puede cambiar los `.md` de la raíz del proyecto y de `docs/**` (REQ-22):** además de `Source/**`, `Content/Python/**` y `Config/*.ini`, la conversación y los agentes aceptan cambios en `README.md`, `CHANGELOG.md`, cualquier otro `*.md` de la raíz del proyecto de Unreal y los `*.md` bajo `docs/**`, con el mismo diff revisable. Los `.md` de otras subcarpetas siguen rechazándose, y la IA conoce la regla nueva de antemano.
+
+### Fixed
+
+- **Aislamiento de sesiones ACP por conversación, modelo por defecto real y contador de tokens por conversación (REQ-67):** (1) crear una conversación nueva, cambiar de conversación o borrarla cierra la sesión ACP activa y abre un `session/new` limpio para que una conversación nueva nunca arrastre el contexto ni consuma tokens del historial de otra conversación; (2) `ensureSession` conserva `images: true` en todos los turnos de la sesión ACP, no solo en el primero; (3) los identificadores genéricos de modelo (`"claude"`, `"default"`, vacío) se resuelven explícitamente al modelo concreto que muestra la interfaz (`claude-sonnet-5-5`, etc.) tanto en `ANTHROPIC_MODEL` como en `session/set_config_option`, evitando caer silenciosamente en `opus` de `~/.claude/settings.json`; (4) el contador de tokens de la barra inferior muestra únicamente los tokens enviados y recibidos de la conversación activa y se limpia al crear una nueva; (5) `files.rs` excluye `Plugins/` del escaneo de documentos.
+
 ## [0.3.0] - 2026-11-01
 
 Versión v0.3.0: la IA cambia el código del proyecto (solo en `Source/`, `Content/Python/` y `Config/*.ini`) y la app compila el C++ con Live Coding o con UBT; recetas guiadas con comprobación final en el editor; guías de Unreal sin red; chino simplificado; Gaussian Splatting propio por GPU con color según el ángulo; mundos de World Labs colocados a su escala real y generados también desde un agente; Convai y zonas del nivel; «Mejorar con IA» en Generar; y menos permisos y mucho menos contexto con los agentes.

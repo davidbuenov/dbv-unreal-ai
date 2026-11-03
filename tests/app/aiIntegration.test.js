@@ -11,6 +11,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHelpModal } from '../../src/app/helpModal.js';
+import { createAiApp } from '../../src/ai/aiApp.js';
 import { createAcpSession } from '../../src/ai/acpSession.js';
 import { createConnectWizard } from '../../src/ai/connectWizard.js';
 import { registerTranslations } from '../../src/ai/i18nBridge.js';
@@ -116,5 +117,85 @@ describe('«Conectar una IA» con los agentes por suscripción @spec REQ-09, REQ
     await vi.waitFor(() => expect(agentItem(host, 'Antigravity')?.querySelector('.ai-agent-gear')).toBeTruthy());
     agentItem(host, 'Antigravity').querySelector('.ai-agent-gear').click();
     await vi.waitFor(() => expect(backend.aiListAgentModels).toHaveBeenCalledWith('antigravity'));
+  });
+});
+
+describe('aislamiento de conversaciones, contadores por conversación y modelo por defecto @spec REQ-09, REQ-11, REQ-32, REQ-67', () => {
+  /** @spec REQ-09, REQ-11, REQ-32, REQ-67 */
+  it('al crear una conversación nueva reinicia la sesión ACP, resuelve claude-sonnet-5-5 y lleva el contador de tokens por conversación', async () => {
+    document.body.innerHTML = '<div id="panel"></div><div id="connect"></div>';
+    let sessionSeq = 0;
+    const sent = [];
+    const startedSpecs = [];
+    const backend = {
+      on: vi.fn(async () => () => {}),
+      aiProviders: vi.fn(async () => ({ ok: true, value: [] })),
+      aiProjectStateLoad: vi.fn(async () => ({
+        ok: true,
+        value: {
+          version: 1,
+          conversations: [{ id: 'conv-old', title: 'Anterior', createdAt: 1, entries: [], usage: { input: 3429404, output: 559778 } }],
+          activeId: 'conv-old',
+          consents: ['acp:claude'],
+          usage: { input: 3429404, output: 559778 },
+        },
+      })),
+      aiProjectStateSave: vi.fn(async () => ({ ok: true })),
+      aiListFiles: vi.fn(async () => ({ ok: true, value: [] })),
+      acpStop: vi.fn(async () => ({ ok: true })),
+      acpStart: vi.fn(async (spec) => {
+        startedSpecs.push(spec);
+        return { ok: true };
+      }),
+      acpSnapshot: vi.fn(async () => ({ ok: true, value: 0 })),
+      acpChanges: vi.fn(async () => ({ ok: true, value: [] })),
+      acpRequest: vi.fn(async (method, params) => {
+        sent.push({ method, params });
+        if (method === 'initialize') {
+          return { ok: true, value: { agentInfo: { name: 'claude' }, agentCapabilities: { promptCapabilities: { image: true } } } };
+        }
+        if (method === 'session/new') {
+          sessionSeq += 1;
+          return { ok: true, value: { sessionId: `s-${sessionSeq}` } };
+        }
+        if (method === 'session/prompt') {
+          return { ok: true, value: { stopReason: 'end_turn', usage: { inputTokens: 120, outputTokens: 45 } } };
+        }
+        return { ok: true, value: {} };
+      }),
+    };
+    const app = createAiApp({
+      backend,
+      host: {
+        elements: { panel: document.getElementById('panel'), connectBody: document.getElementById('connect') },
+        renderMarkdown: (el, text) => { el.textContent = text; },
+        toast: vi.fn(),
+        confirm: vi.fn(async () => 'send'),
+        showPanel: vi.fn(),
+        getFolderName: () => 'Demo',
+        getActive: () => null,
+      },
+      initialFile: {
+        showAi: true,
+        active: 'c-claude',
+        connections: [{ id: 'c-claude', name: 'Claude Code', provider: 'agent', baseUrl: 'acp:claude', model: 'claude' }],
+      },
+    });
+    await app.onRootChanged('D:/Demo');
+    await app.ask('Primera pregunta');
+    expect(startedSpecs[0]).toMatchObject({ id: 'claude', model: 'claude-sonnet-5-5', reasoningEffort: 'medium' });
+
+    // Al pulsar «Nueva conversación» se limpia el contador de tokens y se cierra la sesión ACP anterior.
+    const newBtn = [...document.querySelectorAll('#panel .ai-panel__header button')].find((b) => b.textContent === '＋');
+    newBtn.click();
+    const usageEl = document.querySelector('#panel .ai-panel__usage:not(.ai-panel__speed)');
+    expect(usageEl.textContent).toBe('');
+
+    await app.ask('Segunda pregunta en conversación limpia');
+    expect(startedSpecs).toHaveLength(2);
+    expect(sent.filter((m) => m.method === 'session/new')).toHaveLength(2);
+    expect(usageEl.textContent).toContain('120');
+    expect(usageEl.textContent).toContain('45');
+    expect(usageEl.textContent).not.toContain('3429404');
   });
 });

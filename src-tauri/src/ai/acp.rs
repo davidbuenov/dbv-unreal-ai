@@ -96,11 +96,7 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
         other => return Err(AiError::Config(format!("agente desconocido: {other}"))),
     };
 
-    let clean_model = spec
-        .model
-        .as_deref()
-        .map(str::trim)
-        .filter(|m| !m.is_empty() && *m != spec.id && *m != "antigravity" && *m != "agy");
+    let clean_model = resolve_clean_model(spec);
 
     match spec.id.as_str() {
         "claude" => {
@@ -123,14 +119,21 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
     Ok((program, prefix))
 }
 
+fn resolve_clean_model(spec: &AgentSpec) -> Option<&str> {
+    let raw = spec.model.as_deref().map(str::trim).filter(|m| !m.is_empty())?;
+    if spec.id == "claude" && matches!(raw, "claude" | "claude-sonnet" | "default") {
+        return Some("claude-sonnet-5-5");
+    }
+    if raw == spec.id || raw == "antigravity" || raw == "agy" {
+        return None;
+    }
+    Some(raw)
+}
+
 /// Variables de entorno adicionales para configurar el modelo y esfuerzo al lanzar el agente ACP.
 pub fn agent_env(spec: &AgentSpec) -> Vec<(String, String)> {
     let mut envs = Vec::new();
-    let clean_model = spec
-        .model
-        .as_deref()
-        .map(str::trim)
-        .filter(|m| !m.is_empty() && *m != spec.id && *m != "antigravity" && *m != "agy");
+    let clean_model = resolve_clean_model(spec);
     let clean_effort = spec
         .reasoning_effort
         .as_deref()
@@ -617,6 +620,12 @@ mod tests {
             reasoning_effort: Some("high".into()),
         };
         assert_eq!(agent_env(&claude_spec), vec![("ANTHROPIC_MODEL".to_string(), "claude-sonnet-5-5".to_string())]);
+        let claude_generic_spec = AgentSpec {
+            id: "claude".into(),
+            model: Some("claude".into()),
+            reasoning_effort: Some("medium".into()),
+        };
+        assert_eq!(agent_env(&claude_generic_spec), vec![("ANTHROPIC_MODEL".to_string(), "claude-sonnet-5-5".to_string())]);
     }
 
     /// Agente falso en Node (`tests/fixtures/fake-acp-agent.mjs`): responde a

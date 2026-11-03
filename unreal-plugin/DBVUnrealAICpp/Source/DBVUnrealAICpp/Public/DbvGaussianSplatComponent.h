@@ -1,6 +1,9 @@
-// Copyright (c) 2026 David Bueno Vallejo & David Bueno Carmona. All rights reserved.
-// Licensed under the MIT License. See LICENSE in the project root for license information.
-// Developed using dbv-specs-ops methodology.
+// =============================================================================
+// DBV Unreal AI — Componente de escena de 3D Gaussian Splatting
+// Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
+// Licensed under the MIT License. See LICENSE for details.
+// Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+// =============================================================================
 
 #pragma once
 

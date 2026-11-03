@@ -10,8 +10,8 @@
 // Una sola definición, que se aplica donde la IA propone o escribe: la propuesta de la conversación
 // (`applyChange` con `checkPath`), el permiso de un agente (`permissionRefusal`) y su escritura (`stageWrite`). No
 // en la escritura a disco (`ai_write_file`): ahí también pasa «Deshacer», que tiene que poder devolver un fichero a
-// como estaba aunque un agente lo hubiese tocado por su cuenta. Solo texto del proyecto: `Source/**` (C++ y `*.Build.cs`), `Content/Python/**` y
-// `Config/*.ini`. Nunca `.uasset`/`.umap`, nada fuera del proyecto ni en `Plugins/` (los de la app la mantiene ella;
+// como estaba aunque un agente lo hubiese tocado por su cuenta. Solo texto del proyecto: `Source/**` (C++ y `*.Build.cs`), `Content/Python/**`,
+// `Config/*.ini`, `docs/**/*.md` y los `.md` de la raíz (README, CHANGELOG…). Nunca `.uasset`/`.umap`, nada fuera del proyecto ni en `Plugins/` (los de la app la mantiene ella;
 // los del usuario quedan fuera por decisión suya, 2026-11-01). Los mensajes van en inglés: los lee el modelo.
 
 /// Plugins que instala y actualiza la app en el proyecto.
@@ -19,7 +19,7 @@ pub const APP_PLUGINS: [&str; 2] = ["DBVUnrealAI", "DBVUnrealAICpp"];
 
 const SOURCE_EXTENSIONS: [&str; 6] = ["h", "hpp", "cpp", "c", "inl", "cs"];
 
-const ALLOWED: &str = "only Source/** (C++ and *.Build.cs), Content/Python/** (.py) and Config/*.ini of the project can be changed";
+const ALLOWED: &str = "only Source/** (C++ and *.Build.cs), Content/Python/** (.py), Config/*.ini, docs/**/*.md and the *.md files at the project root can be changed";
 
 /// Ruta relativa con `/`, sin `./` delante.
 fn normalized(relative: &str) -> String {
@@ -47,7 +47,8 @@ pub fn code_path_problem(relative: &str) -> Option<String> {
         "source" => parts.len() > 1 && SOURCE_EXTENSIONS.contains(&extension.as_str()),
         "content" => parts.len() > 2 && lower[1] == "python" && extension == "py",
         "config" => parts.len() == 2 && extension == "ini",
-        _ => false,
+        "docs" => parts.len() > 1 && extension == "md",
+        _ => parts.len() == 1 && extension == "md",
     };
     let app_plugin = lower[0] == "plugins" && parts.len() > 1 && APP_PLUGINS.iter().any(|p| p.eq_ignore_ascii_case(parts[1]));
     let result = if app_plugin {
@@ -76,6 +77,11 @@ mod tests {
             "./Content/Python/tools/spawn.py",
             "Config/DefaultEngine.ini",
             "source/demo/x.CPP",
+            "README.md",
+            "CHANGELOG.en.md",
+            "./Notas.MD",
+            "docs/arquitectura.md",
+            "Docs/guia/instalacion.MD",
         ] {
             assert_eq!(code_path_problem(path), None, "{path}");
         }
@@ -96,6 +102,10 @@ mod tests {
             ("Plugins/MiPlugin/Source/MiPlugin/A.cpp", "only Source/**"),
             ("Config/Windows/WindowsEngine.ini", "only Source/**"),
             ("Content/Python/readme.md", "only Source/**"),
+            ("docs/script.py", "only Source/**"),
+            ("README.txt", "only Source/**"),
+            (".github/README.md", "hidden"),
+            (".notas.md", "hidden"),
             ("Demo.uproject", "only Source/**"),
             ("Source/.vs/x.h", "hidden"),
             ("Source", "only Source/**"),

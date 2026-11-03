@@ -523,6 +523,31 @@ export function start() {
         for (const failed of read.filter((r) => !r.ok)) toast(failed.error.message, 'error');
         return read.filter((r) => r.ok).map((r) => r.value);
       },
+      // Imágenes pegadas desde el portapapeles (`Ctrl+V`) o arrastradas al panel (REQ-68).
+      pasteAttachments: async (files) => {
+        const results = [];
+        for (const file of files ?? []) {
+          if (/^image\/(png|jpe?g|webp)$/i.test(file.type)) {
+            const b64 = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const raw = String(reader.result ?? '');
+                const cut = raw.indexOf(';base64,');
+                resolve(cut >= 0 ? raw.slice(cut + 8) : raw);
+              };
+              reader.onerror = () => resolve('');
+              reader.readAsDataURL(file);
+            });
+            const saved = await api.aiSaveClipboardImage(file.type, b64, file.name || null);
+            if (saved.ok) results.push(saved.value);
+            else toast(saved.error.message, 'error');
+          } else if (typeof file.text === 'function') {
+            const content = await file.text().catch(() => '');
+            if (content) results.push({ kind: 'text', path: file.name || 'documento.txt', name: file.name || 'documento.txt', content: content.slice(0, 262144), truncated: content.length > 262144 });
+          }
+        }
+        return results;
+      },
       // Un agente genera en su propio proceso (`--mcp`): sus trabajos aparecen en la conversación (REQ-27).
       onTurnStart: ({ panel, agent, isBusy }) => agent && chatJobs.follow(panel, isBusy),
       mcpServers: async () => {
