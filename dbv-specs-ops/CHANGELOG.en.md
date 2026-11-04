@@ -13,9 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Sound effects (SFX) and audio generation & search (REQ-71):** new "Sounds" tab in *Generate* with support for three providers: open-weights local microservice `dbv-audio-service` (`http://127.0.0.1:8765`, running Stable Audio Open 1.0 with zero cloud cost), ElevenLabs Text-to-SFX via API, and Freesound (searching and downloading free CC0/CC-BY real clips). Generated or downloaded audio is stored in the library (`kind: "sound"`) with an integrated player.
+- **Audio asset import into Unreal Engine ("Send to Unreal" for Audio, REQ-72):** direct import of `.wav` files into `/Game/DBV/Audio/` as `USoundWave` (or looping `SoundCue`) assets, and MCP tool `unreal_import_sound` allowing AI agents to bind audio to actor components or 3D world events.
+- **Real-time multimodal vision ("Capture Viewport" for AI, REQ-73):** new "📷 Capture Viewport" button in the chat box taking an instant snapshot of the editor via `CaptureViewport`, attaching it as a thumbnail and forwarding it to vision-capable models and agents to analyze the scene.
+- **Configurable Copyright authorship with immutable DBV Unreal AI attribution (REQ-74):** enables setting the project's copyright holder in Project Settings, injecting their attribution into new AI-generated files while preserving the underlying attribution to `DBV Unreal AI` and `Built with dbv-specs-ops`.
+- **Editor MCP port auto-detection and resilience (REQ-75):** automatically probes ports `8000..8005` if the configured port fails or returns 404, syncing directly with the active MCP port without requiring manual `.ini` adjustments.
+
+## [0.3.1] - 2026-11-03
+
+Version v0.3.1: each conversation with an agent has its own session, its real model and its token counter; images can be pasted (`Ctrl+V`) and dropped into the conversation; the AI also edits the `.md` files at the root and under `docs/**`; every file carries the standard DBV header; and World Labs worlds left half-done are resumed when the app is reopened.
+
+### Added
+
 - **Paste images from the clipboard (`Ctrl+V`), drag and drop, and thumbnail preview in the conversation (REQ-68):** pasting a screenshot or image (`PNG`, `JPG`, `WebP`) into the conversation text box or dropping files onto the panel saves it to disk (`ai_save_clipboard_image`, ≤ 10 MB) and attaches it with both its `base64` data (for vision-capable models and agents) and its real file path on disk (so Tripo or World Labs tools can use it). Attached image chips now display a visual thumbnail.
 - **Standard DBV header banner across all own and AI-generated files (REQ-69):** all repository and C++ plugin files carry the standard 6-line header banner (`DBV Unreal AI`, copyright by David Bueno Vallejo and David Bueno Carmona, MIT License and `dbv-specs-ops`), and the Unreal domain prompt instructs the AI and agents to include that same header in every new file they create (`Source/**`, `Content/Python/**`, `docs/**/*.md` and root `*.md`).
-- **Resuming orphaned World Labs jobs (REQ-70):** if the app or an agent's `--mcp` closes while a World Labs world generation (`generate_world` or `export_world_mesh`) is running, polling resumes with the World Labs API key and downloads the completed world (`.spz` + `.glb`) into the library, just like Tripo jobs.
+- **Resuming orphaned World Labs jobs (REQ-70):** if the app or an agent's `--mcp` closes while a World Labs world generation (`generate_world` or `export_world_mesh`) is running, polling resumes with the World Labs API key and downloads the completed world (`.spz` + `.glb`) into the library, just like Tripo jobs. If there is no World Labs key yet, the job is left "running" and resumes as soon as you add one.
 
 ### Changed
 
@@ -24,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - **ACP session isolation per conversation, real default model resolution and per-conversation token counter (REQ-67):** (1) creating, switching or deleting a conversation stops the active ACP session and opens a fresh `session/new` so a new conversation never inherits prior context or burns tokens from previous conversations; (2) `ensureSession` preserves `images: true` across all turns of the ACP session, not only the first one; (3) generic model identifiers (`"claude"`, `"default"`, empty) explicitly resolve to the concrete default model shown in the UI (`claude-sonnet-5-5`, etc.) in both `ANTHROPIC_MODEL` and `session/set_config_option`, preventing silent fallback to `opus` from `~/.claude/settings.json`; (4) the bottom token counter tracks only the active conversation's input/output tokens and resets on new conversations; (5) `files.rs` skips `Plugins/` when scanning documents.
+- **[Critical, `/code-simplify` review] Dragging and dropping files onto the conversation did not work on Windows (REQ-68):** Tauri's native drag and drop (`dragDropEnabled`, on by default) kept the files and the panel's HTML5 `drop` never fired. The window now disables it, and the app discards files dropped outside the panel so the WebView does not navigate to them.
+- **[Important, `/code-simplify` review]** A binary file dropped onto the conversation (a `.gif`, an `.fbx`, a `.uasset`) was attached as an unreadable "text document". It is now refused with a warning, as the 📎 button already did.
+- **[Important, `/code-simplify` review]** `resume_orphans(context)` is removed: only the tests used it, and it handed the Tripo key to World Labs too. `resume_orphans(context, keys)` remains, with each service's own key (`service_keys`), the name REQ-70 uses.
+
+### Known issues
+
+- **[Important] REQ-69:** the domain prompt asks the AI to put a header with the app authors' copyright and the MIT License on new files in the **user's** project. It meets the specification, but in an app distributed to third parties (Microsoft Store) it is worth deciding whether that header should carry the user's own name and licence.
 
 ## [0.3.0] - 2026-11-01
 
@@ -231,7 +250,8 @@ First release: connection to Unreal 5.8 through MCP, project preparation, conver
 - **[Important]** A job id could clash between the window and an agent's `--mcp` if both launched in the same millisecond; it now carries the process id.
 - Review nits (3): early `return`s outside guard clauses in `tools::build`, `resolve_source` and `uploadable`.
 
-[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.2...v0.2.3

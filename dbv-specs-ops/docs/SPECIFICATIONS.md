@@ -384,8 +384,48 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - **Ficheros generados por la IA en el proyecto del usuario (REQ-22):** el prompt de dominio (`unrealPrompt` en `unrealTools.js`) instruye a la IA y a los agentes para que todo fichero nuevo que creen en el proyecto de Unreal (`Source/**` en C++/C#, `Content/Python/**` en Python, y `*.md` en la raíz o en `docs/**`) comience con esa misma cabecera de 6 líneas adaptada al comentario del lenguaje (`//` en C++/C#, `#` en Python, `<!-- -->` en Markdown), usando por defecto `Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona`.
   *Aceptación:* un test comprueba que ningún fichero `.js`, `.rs`, `.py`, `.cpp` ni `.h` propio (fuera de `vendor/` y `target/`) carece del bloque de cabecera estándar, y que `unrealPrompt` contiene la instrucción y la plantilla de cabecera con el copyright por defecto.
 - [ ] **REQ-70 · Reanudación de trabajos huérfanos de World Labs al arrancar (amplía REQ-18, REQ-27):**
-  - Si la app o un subproceso `--mcp` se cierra mientras un trabajo de World Labs (`service == "worldlabs"`, `provider == "worldlabs"`) está en curso (`running` con `task_id` / `operation_id`), al arrancar la app (`resume_orphans` en `src-tauri/src/generation/jobs.rs`) se reanuda el sondeo de la operación contra la API de World Labs usando la clave guardada de World Labs y, al completarse, se descargan el splat `.spz`, la malla de colisión `.glb` y la miniatura a la biblioteca, igual que ya se hace con Tripo. Si no hay clave de World Labs disponible, se marca como fallido explicando el motivo.
+  - Si la app o un subproceso `--mcp` se cierra mientras un trabajo de World Labs (`service == "worldlabs"`, `provider == "worldlabs"`) está en curso (`running` con `task_id` / `operation_id`), al arrancar la app (`resume_orphans(context, keys)` en `src-tauri/src/generation/jobs.rs`) se reanuda el sondeo de la operación contra la API de World Labs usando la clave guardada de World Labs y, al completarse, se descargan el splat `.spz`, la malla de colisión `.glb` y la miniatura a la biblioteca, igual que ya se hace con Tripo. Si no hay clave de World Labs disponible, el trabajo se suelta sin tocarlo y sigue «en curso»: la tarea ya está cobrada y se reanuda en cuanto hay una clave (decidido con el usuario al cerrar `/code-simplify`, 2026-11-03).
   *Aceptación:* un fichero de trabajo huérfano de World Labs con `task_id` y un servidor World Labs simulado es reanudado por `resume_orphans`, descarga sus ficheros a la biblioteca y pasa a `succeeded`.
+
+### 3.15. Novedades de la v0.4.0 (Audio & Efectos de Sonido, Visión en Vivo, Autodetección de Puertos y Cabecera de Autoría)
+
+- [ ] **REQ-71 · Generación y búsqueda de efectos de sonido (SFX) y audio:**
+  - **Proveedores de audio admitidos:**
+    1. **Local (`dbv-audio-service`):** integración con el microservicio local de pesos abiertos en `http://127.0.0.1:8765` (ejecutando Stable Audio Open 1.0 sin consumir cuota de nube). La app detecta si el endpoint `GET /health` responde `ready` y muestra el estado en Ajustes.
+    2. **ElevenLabs Text-to-SFX:** generación de efectos de sonido a partir de texto vía API (`POST /v1/text-to-sound-effects`), con soporte de duración (0.5 a 30s) y parámetro `loop`.
+    3. **Freesound API:** búsqueda y descarga de clips de sonido reales de la base de datos abierta con licencias Creative Commons (CC0, CC-BY) mediante API Token.
+  - **Pestaña «Sonidos» en la vista Generar:** campo de prompt, selector de duración, conmutador de bucle (`loop`), selección de proveedor activo, y reproductor de audio integrado con preescucha antes de importar.
+  - **Catálogo de biblioteca (`kind: "sound"`):** guarda los archivos descargados o generados como `.wav` / `.ogg` en la biblioteca del usuario (`dirs::document_dir()/DBV Unreal AI/Library/`), con forma de onda visual o control de reproducción directa, fecha, prompt y duración.
+  *Aceptación:* generar un sonido desde la interfaz o por API simulada guarda el `.wav` en la biblioteca, crea su tarjeta en la pestaña «Sonidos» con reproductor HTML5 funcional y registra el trabajo completado.
+
+- [ ] **REQ-72 · Importación de audio a Unreal Engine («Enviar a Unreal» de Audio):**
+  - **Importación nativa:** «Enviar a Unreal» desde la tarjeta de un sonido de la biblioteca o desde la conversación copia el archivo `.wav` a la carpeta del proyecto y lo importa mediante el subsistema de assets de Unreal como un asset `USoundWave` (o `SoundCue` si se solicita con bucle) en `/Game/DBV/Audio/<nombre>`.
+  - **Herramienta MCP para agentes e IA (`unreal_import_sound`):** permite a los agentes y a la conversación colocar o asociar sonidos importados a componentes `AudioComponent` de actores de la escena o reproducirlos en localizaciones 3D (`PlaySoundAtLocation`).
+  *Aceptación:* llamar a «Enviar a Unreal» con un fichero `.wav` de la biblioteca lo importa en `/Game/DBV/Audio/` sin errores de importación y el asset aparece en el Outliner/Content Browser.
+
+- [ ] **REQ-73 · Visión multimodal en tiempo real («Capturar viewport» para la IA):**
+  - **Botón en la interfaz de conversación:** en la barra de entrada de mensajes de la IA, se añade el botón **«📷 Capturar viewport»**.
+  - **Flujo de captura:** solicita al editor la captura inmediata del viewport mediante `CaptureViewport` (del plugin de Epic), recibe el PNG, lo guarda en el almacén temporal de adjuntos y lo coloca automáticamente como chip de imagen en la caja de texto.
+  - **Consumo multimodal:** el modelo activo (Claude 3.7/3.5, GPT-4o, Gemini 2.0/3, etc.) o agente ACP recibe la imagen en su bloque de contenido para razonar sobre la iluminación, composición, anomalías de geometría o colocación de actores en la escena.
+  *Aceptación:* pulsar «Capturar viewport» con el editor conectado añade una miniatura de la imagen actual del viewport al panel de adjuntos; al enviar el prompt, el modelo recibe la imagen codificada y responde comentando elementos visuales de la captura.
+
+- [ ] **REQ-74 · Autoría de Copyright personalizable conservando el pie de DBV Unreal AI (refina REQ-69):**
+  - **Configuración de Autoría:** en **Ajustes → Proyecto**, se permite configurar el nombre o entidad del titular del proyecto (por defecto toma el nombre del usuario o el del proyecto de Unreal).
+  - **Estructura fija de 6 líneas de la cabecera:** todo fichero nuevo propuesto por la IA (`Source/**`, `Content/Python/**`, `*.md` y `docs/**/*.md`) mantendrá estrictamente la estructura estándar, donde la línea de Copyright combina o refleja al autor configurado pero **preserva de forma inmutable la atribución de origen y motor**:
+    ```text
+    // =============================================================================
+    // <NombreProyecto> — <Descripción breve del fichero>
+    // Copyright (c) 2026 <AutorConfigurado>
+    // Generated with DBV Unreal AI · https://github.com/davidbuenov/dbv-unreal-ai
+    // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+    // =============================================================================
+    ```
+  *Aceptación:* si el usuario define en Ajustes «MiEmpresa Games», la IA genera los ficheros con `Copyright (c) 2026 MiEmpresa Games` pero manteniendo intactas las menciones a `DBV Unreal AI` y `Built with dbv-specs-ops`.
+
+- [ ] **REQ-75 · Autodetección y resiliencia del puerto MCP del editor:**
+  - Si el puerto MCP configurado en el `.ini` (o propuesto por defecto) devuelve error de conexión o `404 route_handler_not_found`, la app sondea automáticamente los puertos estándar (`8000..8005`) para localizar dónde está respondiendo realmente el servidor MCP de Unreal Editor (`/mcp` devolviendo `initialize` OK).
+  - Al detectar el puerto activo, sincroniza la conexión en memoria y actualiza la vista sin exigir al usuario modificar a mano los archivos `.ini` en `Saved/Config/`.
+  *Aceptación:* si Unreal está escuchando en el puerto 8000 pero el `.ini` tenía 8001, pulsar «Conectar» detecta el 8000, actualiza el endpoint y establece la conexión con éxito en lugar de abortar con 404.
 
 ## 🏗️ 4. Propuesta de Solución Técnica (Resumen)
 

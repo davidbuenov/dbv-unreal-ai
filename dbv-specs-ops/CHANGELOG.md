@@ -13,9 +13,21 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
+- **Generación y búsqueda de efectos de sonido (SFX) y audio (REQ-71):** pestaña «Sonidos» en *Generar* con soporte para tres proveedores: microservicio local de pesos abiertos `dbv-audio-service` (`http://127.0.0.1:8765`, con Stable Audio Open 1.0 sin coste de cuota), ElevenLabs Text-to-SFX vía API y Freesound (búsqueda y descarga de clips reales libres CC0/CC-BY). Los audios generados o descargados se guardan en la biblioteca (`kind: "sound"`) con reproductor integrado.
+- **Importación de audio a Unreal Engine («Enviar a Unreal» de Audio, REQ-72):** importación directa de archivos `.wav` a `/Game/DBV/Audio/` como assets `USoundWave` (o `SoundCue` con bucle), y herramienta MCP `unreal_import_sound` para asociar audio a componentes de actores o eventos del nivel.
+- **Visión multimodal en tiempo real («Capturar viewport» para la IA, REQ-73):** nuevo botón «📷 Capturar viewport» en la caja de conversación que toma una captura inmediata del editor mediante `CaptureViewport`, la adjunta como miniatura y la envía a los modelos o agentes con visión para analizar la escena.
+- **Autoría de Copyright personalizable conservando el pie de DBV Unreal AI (REQ-74):** permite configurar el titular de los derechos en Ajustes del Proyecto, inyectando su autoría en los nuevos ficheros creados por la IA pero preservando de forma fija la atribución a `DBV Unreal AI` y `Built with dbv-specs-ops`.
+- **Autodetección y resiliencia del puerto MCP del editor (REQ-75):** si el puerto guardado en la configuración da error o 404, la app sondea automáticamente el rango `8000..8005` para sincronizarse con el puerto real en el que Unreal ha levantado el servidor MCP.
+
+## [0.3.1] - 2026-11-03
+
+Versión v0.3.1: cada conversación con un agente tiene su propia sesión, su modelo real y su contador de tokens; se pueden pegar (`Ctrl+V`) y soltar imágenes en la conversación; la IA también edita los `.md` de la raíz y de `docs/**`; todos los ficheros llevan la cabecera estándar de DBV; y los mundos de World Labs que se quedan a medias se reanudan al volver a abrir la app.
+
+### Added
+
 - **Pegar imágenes desde el portapapeles (`Ctrl+V`), arrastrar y soltar, y miniatura en la conversación (REQ-68):** pegar una captura o imagen (`PNG`, `JPG`, `WebP`) en el cuadro de texto de la conversación o arrastrar ficheros sobre el panel la guarda en disco (`ai_save_clipboard_image`, ≤ 10 MB) y la adjunta con su `base64` (para los modelos y agentes con visión) y su ruta real en disco (para poder usarla con Tripo o World Labs). Las fichas de imágenes adjuntas muestran ahora su miniatura visual.
 - **Cabecera estándar DBV en todos los ficheros propios y en los generados por la IA (REQ-69):** todos los ficheros del repositorio y del plugin C++ llevan el bloque de cabecera estándar de 6 líneas (`DBV Unreal AI`, copyright de David Bueno Vallejo y David Bueno Carmona, licencia MIT y `dbv-specs-ops`), y el prompt de dominio de Unreal instruye a la IA y a los agentes para incluir esa misma cabecera en todo fichero nuevo (`Source/**`, `Content/Python/**`, `docs/**/*.md` y `*.md` de la raíz).
-- **Reanudación de trabajos huérfanos de World Labs (REQ-70):** si la aplicación o el `--mcp` de un agente se cierran con una generación de mundo (`generate_world` o `export_world_mesh`) en marcha, al consultar los trabajos se reanuda el sondeo con la clave de World Labs y se descarga el mundo (`.spz` + `.glb`) a la biblioteca, igual que con Tripo.
+- **Reanudación de trabajos huérfanos de World Labs (REQ-70):** si la aplicación o el `--mcp` de un agente se cierran con una generación de mundo (`generate_world` o `export_world_mesh`) en marcha, al consultar los trabajos se reanuda el sondeo con la clave de World Labs y se descarga el mundo (`.spz` + `.glb`) a la biblioteca, igual que con Tripo. Si todavía no hay clave de World Labs, el trabajo se deja «en curso» y se reanuda en cuanto la pongas.
 
 ### Changed
 
@@ -24,6 +36,13 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 ### Fixed
 
 - **Aislamiento de sesiones ACP por conversación, modelo por defecto real y contador de tokens por conversación (REQ-67):** (1) crear una conversación nueva, cambiar de conversación o borrarla cierra la sesión ACP activa y abre un `session/new` limpio para que una conversación nueva nunca arrastre el contexto ni consuma tokens del historial de otra conversación; (2) `ensureSession` conserva `images: true` en todos los turnos de la sesión ACP, no solo en el primero; (3) los identificadores genéricos de modelo (`"claude"`, `"default"`, vacío) se resuelven explícitamente al modelo concreto que muestra la interfaz (`claude-sonnet-5-5`, etc.) tanto en `ANTHROPIC_MODEL` como en `session/set_config_option`, evitando caer silenciosamente en `opus` de `~/.claude/settings.json`; (4) el contador de tokens de la barra inferior muestra únicamente los tokens enviados y recibidos de la conversación activa y se limpia al crear una nueva; (5) `files.rs` excluye `Plugins/` del escaneo de documentos.
+- **[Crítico, revisión de `/code-simplify`] Arrastrar y soltar ficheros sobre la conversación no funcionaba en Windows (REQ-68):** el arrastre nativo de Tauri (`dragDropEnabled`, activo por defecto) se quedaba los ficheros y el `drop` HTML5 del panel nunca llegaba. La ventana lo desactiva y la app descarta los ficheros soltados fuera del panel para que el WebView no navegue hasta ellos.
+- **[Importante, revisión de `/code-simplify`]** Un fichero binario soltado en la conversación (un `.gif`, un `.fbx`, un `.uasset`) se adjuntaba como «documento de texto» ilegible. Ahora se rechaza con un aviso, igual que ya hacía el 📎.
+- **[Importante, revisión de `/code-simplify`]** Se elimina `resume_orphans(context)`, que solo usaban los tests y que pasaba la clave de Tripo también a World Labs; queda `resume_orphans(context, keys)` con la clave de cada servicio (`service_keys`), el nombre que usa REQ-70.
+
+### Conocido (sin resolver)
+
+- **[Importante] REQ-69:** el prompt de dominio pide a la IA que ponga en los ficheros nuevos del proyecto **del usuario** la cabecera con el copyright de los autores de la app y la licencia MIT. Cumple la especificación, pero en una app distribuida a terceros (Microsoft Store) conviene decidir si esa cabecera debe llevar el nombre y la licencia del propio usuario.
 
 ## [0.3.0] - 2026-11-01
 
@@ -231,7 +250,8 @@ Primera versión: conexión con Unreal 5.8 por MCP, preparación del proyecto, c
 - **[Importante]** El id de un trabajo podía coincidir entre la ventana y el `--mcp` de un agente si lanzaban en el mismo milisegundo; ahora lleva el id del proceso.
 - Nits de la revisión (3): `return` tempranos fuera de las guardas en `tools::build`, `resolve_source` y `uploadable`.
 
-[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...HEAD
+[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.2...v0.2.3
