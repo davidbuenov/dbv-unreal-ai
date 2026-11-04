@@ -139,9 +139,11 @@ describe('Biblioteca (REQ-16, REQ-30)', () => {
     const tabAll = byText(host, 'Todos');
     const tabObjects = byText(host, 'Objetos');
     const tabWorlds = byText(host, 'Escenarios');
+    const tabSounds = byText(host, 'Sonidos');
     expect(tabAll).toBeTruthy();
     expect(tabObjects).toBeTruthy();
     expect(tabWorlds).toBeTruthy();
+    expect(tabSounds).toBeTruthy();
 
     const btnImportFiles = byText(host, 'Importar…');
     const btnImportUrl = byText(host, 'Importar URL…');

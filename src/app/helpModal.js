@@ -75,3 +75,8 @@ export function createHelpModal(modalElement, contentElement) {
 
   return { open, close };
 }
+
+/** Dispara el evento global para abrir el Centro de Ayuda en la pestaña indicada. */
+export function openHelp(tab) {
+  document.dispatchEvent(new CustomEvent('dbv-open-help', { detail: { tab } }));
+}

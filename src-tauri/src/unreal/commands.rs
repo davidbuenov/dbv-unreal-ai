@@ -208,7 +208,7 @@ pub fn with_session<T>(state: &UnrealState, url: &str, work: impl Fn(&McpSession
 }
 
 /// Dónde está el servidor MCP de un editor. Solo puerto y ruta: el host es siempre `127.0.0.1`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Endpoint {
     pub port: u16,
@@ -222,16 +222,82 @@ impl Endpoint {
     }
 }
 
-/// Conecta y devuelve los toolsets disponibles. @spec REQ-02
+/// Respuesta de conexión con los toolsets y el endpoint activo detectado. @spec REQ-75
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectResponse {
+    pub toolsets: Vec<ToolsetSummary>,
+    pub endpoint: Endpoint,
+}
+
+/// Ajustes persistentes del proyecto (autoría, etc.). @spec REQ-74
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSettings {
+    #[serde(default)]
+    pub copyright_holder: Option<String>,
+}
+
+/// Lee los ajustes del proyecto desde el directorio de configuración. @spec REQ-74
 #[tauri::command]
-pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Vec<ToolsetSummary>, UnrealError> {
-    let url = endpoint.url();
+pub fn unreal_get_project_settings(app: AppHandle) -> Result<ProjectSettings, UnrealError> {
+    let path = config_dir(&app)?.join("project-settings.json");
+    if path.is_file() {
+        let content = std::fs::read_to_string(&path).map_err(|e| io_error(&path, &e))?;
+        serde_json::from_str(&content).map_err(|e| UnrealError::Format(e.to_string()))
+    } else {
+        Ok(ProjectSettings::default())
+    }
+}
+
+/// Guarda los ajustes del proyecto en el directorio de configuración. @spec REQ-74
+#[tauri::command]
+pub fn unreal_set_project_settings(app: AppHandle, settings: ProjectSettings) -> Result<(), UnrealError> {
+    let dir = config_dir(&app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| io_error(&dir, &e))?;
+    let path = dir.join("project-settings.json");
+    let content = serde_json::to_string_pretty(&settings).map_err(|e| UnrealError::Format(e.to_string()))?;
+    std::fs::write(&path, content).map_err(|e| io_error(&path, &e))?;
+    Ok(())
+}
+
+/// Conecta y devuelve los toolsets disponibles, con sondeo de resiliencia en puertos 8000..8005. @spec REQ-02, REQ-75
+#[tauri::command]
+pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<ConnectResponse, UnrealError> {
+    let initial_endpoint = endpoint.clone();
     blocking(move || {
         let state = app.state::<UnrealState>();
-        let session = session_for(&state, &url, true)?;
-        let listed = session.list_toolsets();
-        crate::logging::info(&format!("connect {url}: {}", listed.as_ref().map(|t| format!("{} toolsets", t.len())).unwrap_or_else(|e| e.to_string())));
-        listed
+        let initial_url = initial_endpoint.url();
+        let initial_res = session_for(&state, &initial_url, true).and_then(|s| s.list_toolsets().map(|t| (t, initial_endpoint.clone())));
+
+        let (toolsets, active_endpoint) = match initial_res {
+            Ok(pair) => pair,
+            Err(first_err) => {
+                crate::logging::info(&format!("connect failed on {}: {}; probing ports 8000..=8005", initial_url, first_err));
+                let mut found = None;
+                for p in 8000..=8005 {
+                    if p == initial_endpoint.port {
+                        continue;
+                    }
+                    let probe_endpoint = Endpoint { port: p, path: initial_endpoint.path.clone() };
+                    let probe_url = probe_endpoint.url();
+                    if let Ok(sess) = McpSession::connect(&probe_url) {
+                        if let Ok(toolsets) = sess.list_toolsets() {
+                            if let Ok(mut sessions) = state.sessions.lock() {
+                                sessions.insert(probe_url.clone(), sess);
+                            }
+                            crate::logging::info(&format!("auto-detected active MCP server on port {p} ({probe_url})"));
+                            found = Some((toolsets, probe_endpoint));
+                            break;
+                        }
+                    }
+                }
+                found.ok_or(first_err)?
+            }
+        };
+
+        crate::logging::info(&format!("connect {}: {} toolsets", active_endpoint.url(), toolsets.len()));
+        Ok(ConnectResponse { toolsets, endpoint: active_endpoint })
     })
     .await
 }
@@ -392,5 +458,18 @@ mod tests {
         let endpoint = Endpoint { port: 8100, path: None };
         assert_eq!(endpoint.url(), "http://127.0.0.1:8100/mcp");
         assert_eq!(Endpoint { port: 1, path: Some("x".into()) }.url(), "http://127.0.0.1:1/x");
+    }
+
+    /// Guarda y lee ajustes de proyecto de forma persistente. @spec REQ-74
+    #[test]
+    fn guarda_y_recupera_ajustes_de_proyecto() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("project-settings.json");
+        let initial = ProjectSettings { copyright_holder: Some("David Bueno Vallejo".into()) };
+        let content = serde_json::to_string_pretty(&initial).unwrap();
+        std::fs::write(&path, content).unwrap();
+
+        let read_back: ProjectSettings = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(read_back.copyright_holder.as_deref(), Some("David Bueno Vallejo"));
     }
 }

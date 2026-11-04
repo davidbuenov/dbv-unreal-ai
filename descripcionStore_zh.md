@@ -38,11 +38,13 @@ DBV Unreal AI 是一款面向 Unreal Engine 5.8 的原生 AI 助手：轻量、�
 
 ## 此版本的新增功能 / What's new in this version
 
-v0.3.1：
-• 与智能体的每个对话都相互独立：新对话不会沿用其他对话的上下文，也不会消耗其额度，并且使用你所选的模型。
-• 可将图片和文本文档粘贴（Ctrl+V）或拖入对话：会显示缩略图，AI 能看到它们，并可配合 Tripo 使用。
-• AI 也可以修改项目 docs 文件夹中的 README 和 .md 文件，始终以供你审阅的更改形式提出。
-• 中途中断的 World Labs 世界会在重新打开应用时继续生成并下载。
+v0.4.0：
+• 声音特效 (SFX) 生成与搜索：「生成」中新增「声音」选项卡，支持本地微服务 (Stable Audio Open 1.0)、ElevenLabs 和交互式 Freesound 音频库，具备音频直接试听和按需添加至资源库功能。
+• 原生导入音频至 Unreal Engine（音频的「发送至 Unreal」）：直接导入为 USoundWave / SoundCue 资产，并提供 MCP 工具供智能体将音频绑定至场景 Actor。
+• 实时多模态视觉：对话框新增「📷 截取视口」按钮，支持多模态模型即时查看并分析当前编辑器画面。
+• 可配置的版权归属：在「项目设置」中自定义作者版权，同时固定保留 DBV Unreal AI 和 dbv-specs-ops 的来源署名。
+• 具有弹性的 Unreal Engine MCP 端口自动探测：连接时自动扫描 8000..8005 端口。
+• 扩展的帮助中心：新增 Tripo、World Labs 和声音专属帮助选项卡，支持一键直达。
 
 ---
 

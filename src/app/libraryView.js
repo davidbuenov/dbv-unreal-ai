@@ -19,8 +19,8 @@ import { button, el } from './dom.js';
 import { confirmAndLaunch } from './generateView.js';
 import { generateThumbnailForEntry, openPreview, viewableFile } from '../generation/preview.js';
 
-/** Extensiones que se pueden importar (`library::MODEL_EXTENSIONS`, `SPLAT_EXTENSIONS`, imágenes y manifiestos World Labs). */
-export const IMPORT_EXTENSIONS = ['glb', 'gltf', 'fbx', 'obj', 'usdz', 'spz', 'ply', 'png', 'jpg', 'jpeg', 'webp', 'json'];
+/** Extensiones que se pueden importar (`library::MODEL_EXTENSIONS`, `SPLAT_EXTENSIONS`, imágenes, audio y manifiestos World Labs). */
+export const IMPORT_EXTENSIONS = ['glb', 'gltf', 'fbx', 'obj', 'usdz', 'spz', 'ply', 'png', 'jpg', 'jpeg', 'webp', 'json', 'wav', 'mp3', 'ogg'];
 
 /** Animaciones que se pueden elegir de una vez (límite de Tripo por tarea). */
 export const MAX_ANIMATIONS = 5;
@@ -38,6 +38,8 @@ export function filterEntriesByTab(entries, tab) {
     filtered = entries.filter((e) => ['model', 'rig', 'animation', 'image'].includes(e.kind));
   } else if (tab === 'worlds') {
     filtered = entries.filter((e) => e.kind === 'world' || e.kind === 'splat');
+  } else if (tab === 'sounds') {
+    filtered = entries.filter((e) => e.kind === 'sound');
   }
   return filtered;
 }
@@ -82,7 +84,7 @@ async function pumpThumbnailQueue() {
 
 /** Miniatura de un asset (la que trajo el proveedor, o una imagen del propio asset), o su icono. */
 export async function assetThumbnail(entry, className = 'asset-thumb') {
-  const icon = { rig: '🦴', animation: '💃', image: '🖼', world: '🏝️', splat: '🏝️' }[entry.kind] ?? '◆';
+  const icon = { rig: '🦴', animation: '💃', image: '🖼', world: '🏝️', splat: '🏝️', sound: '🎵' }[entry.kind] ?? '◆';
   const box = el('div', { className, text: icon, style: 'position: relative;' });
   const image = entry.thumbnail ?? (entry.kind === 'image' ? entry.files?.[0] : null);
   if (image) {
@@ -231,8 +233,19 @@ export function createLibraryView(host, deps) {
     const date = new Date(entry.createdAt * 1000).toLocaleDateString();
     const parent = entry.parent ? entries.find((e) => e.id === entry.parent) : null;
     const kind = t(`lib.kind.${entry.kind}`) === `lib.kind.${entry.kind}` ? entry.kind : t(`lib.kind.${entry.kind}`);
-    const canSend = ['model', 'rig', 'animation'].includes(entry.kind);
+    const canSend = ['model', 'rig', 'animation', 'sound'].includes(entry.kind);
     const hasPreview = viewableFile(entry) || entry.thumbnail;
+
+    let audioPlayer = null;
+    if (entry.kind === 'sound' && entry.files?.[0]) {
+      const soundPath = await api.libraryFilePath(entry.id, entry.files[0]);
+      if (soundPath.ok && soundPath.value && window.__TAURI__?.core) {
+        audioPlayer = el('audio', {
+          attrs: { controls: '', src: window.__TAURI__.core.convertFileSrc(soundPath.value), preload: 'metadata' },
+          style: 'width: 100%; margin-top: 6px; height: 32px;',
+        });
+      }
+    }
 
     const thumb = await assetThumbnail(entry);
     if (hasPreview) {
@@ -258,6 +271,7 @@ export function createLibraryView(host, deps) {
         el('div', { className: 'asset-name', text: entry.name }),
         el('div', { className: 'asset-meta', text: `${kind} · ${entry.provider} · ${date}${entry.credits ? ` · ${t('lib.credits', { n: String(entry.credits) })}` : ''}` }),
         parent ? el('div', { className: 'asset-meta', text: t('lib.from', { name: parent.name }) }) : null,
+        audioPlayer,
         statusLine,
       ),
       el(
@@ -385,6 +399,7 @@ export function createLibraryView(host, deps) {
       allBtn.setAttribute('aria-pressed', String(currentTab === 'all'));
       objectsBtn.setAttribute('aria-pressed', String(currentTab === 'objects'));
       worldsBtn.setAttribute('aria-pressed', String(currentTab === 'worlds'));
+      soundsBtn.setAttribute('aria-pressed', String(currentTab === 'sounds'));
     };
     const switchTab = (tab) => {
       currentTab = tab;
@@ -394,7 +409,8 @@ export function createLibraryView(host, deps) {
     const allBtn = button(t('lib.tabAll'), () => switchTab('all'), 'segmented-btn', { 'aria-pressed': String(currentTab === 'all') });
     const objectsBtn = button(t('lib.tabObjects'), () => switchTab('objects'), 'segmented-btn', { 'aria-pressed': String(currentTab === 'objects') });
     const worldsBtn = button(t('lib.tabWorlds'), () => switchTab('worlds'), 'segmented-btn', { 'aria-pressed': String(currentTab === 'worlds') });
-    return el('div', { className: 'segmented' }, allBtn, objectsBtn, worldsBtn);
+    const soundsBtn = button(t('lib.tabSounds'), () => switchTab('sounds'), 'segmented-btn', { 'aria-pressed': String(currentTab === 'sounds') });
+    return el('div', { className: 'segmented' }, allBtn, objectsBtn, worldsBtn, soundsBtn);
   }
 
   async function paint() {
@@ -402,7 +418,7 @@ export function createLibraryView(host, deps) {
     const shown = filterEntries(tabEntries, search.value);
     grid.replaceChildren(...(await Promise.all(shown.map(card))));
     if (!shown.length) {
-      const emptyKey = currentTab === 'objects' ? 'lib.emptyObjects' : currentTab === 'worlds' ? 'lib.emptyWorlds' : 'lib.empty';
+      const emptyKey = currentTab === 'objects' ? 'lib.emptyObjects' : currentTab === 'worlds' ? 'lib.emptyWorlds' : currentTab === 'sounds' ? 'lib.emptySounds' : 'lib.empty';
       grid.replaceChildren(el('p', { className: 'empty', text: t(emptyKey) }));
     }
   }

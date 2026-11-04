@@ -17,7 +17,7 @@ import tauriConfig from '../../src-tauri/tauri.conf.json';
 const IMAGE = { kind: 'image', path: 'C:/refs/barco.png', name: 'barco.png', mime: 'image/png', base64: 'iVBORw==' };
 const PROVIDERS = [{ provider: 'anthropic', cloud: true }, { provider: 'ollama', cloud: false }];
 
-describe('imágenes adjuntas (REQ-32, REQ-68)', () => {
+describe('imágenes adjuntas (REQ-32, REQ-68, REQ-73)', () => {
   /** @spec REQ-32 */
   it('decide quién ve imágenes: lo que diga la conexión y, si no dice nada, solo los modelos de nube', () => {
     expect(canSeeImages({ provider: 'ollama', supportsImages: true }, PROVIDERS)).toBe(true);
@@ -92,5 +92,21 @@ describe('imágenes adjuntas (REQ-32, REQ-68)', () => {
     expect(attached[1].content).toBe('Un puerto pirata');
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toContain('anim.gif');
+  });
+
+  /** @spec REQ-73 */
+  it('el botón de capturar viewport de Unreal se muestra y llama a onCaptureViewport', () => {
+    const host = document.createElement('div');
+    const onCaptureViewport = vi.fn();
+    createChatPanel({
+      host,
+      renderMarkdown: vi.fn(),
+      callbacks: { onCaptureViewport, onSend: vi.fn(), onStop: vi.fn() },
+    });
+    const btn = host.querySelector('.ai-panel__capture-viewport');
+    expect(btn).not.toBeNull();
+    expect(btn.classList.contains('hidden')).toBe(false);
+    btn.click();
+    expect(onCaptureViewport).toHaveBeenCalledTimes(1);
   });
 });

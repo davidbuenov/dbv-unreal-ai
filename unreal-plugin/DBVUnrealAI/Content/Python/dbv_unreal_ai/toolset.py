@@ -103,6 +103,21 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
 
     @toolset_registry.tool_call
     @staticmethod
+    def import_sound(source_file: str, folder_path: str = "/Game/DBV/Audio", asset_name: str = "") -> str:
+        """Import a sound or audio effect file (.wav, .mp3, .ogg) into Unreal as a USoundWave asset.
+
+        Args:
+            source_file: Absolute path of the audio file on disk.
+            folder_path: Content Browser folder under /Game/ (created if missing).
+            asset_name: Asset name; a numeric suffix is added if it already exists. Empty to use the file name.
+
+        Returns:
+            JSON with success, imported (asset paths), primary (the main SoundWave asset path), kind (sound).
+        """
+        return editor.import_sound(source_file, folder_path, asset_name)
+
+    @toolset_registry.tool_call
+    @staticmethod
     def place_asset(asset_path: str, distance: float = 300.0, folder: str = "DBV/Generated") -> str:
         """Spawn an asset in the open level in front of the editor camera, inside a World Outliner folder (undoable).
 

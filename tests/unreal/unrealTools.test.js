@@ -228,6 +228,14 @@ describe('formato y prompt', () => {
     });
     expect(missing).toEqual([]);
   });
+
+  it('permite autoría personalizada en Copyright manteniendo de forma inmutable la atribución DBV @spec REQ-74', async () => {
+    const prompt = unrealPrompt({ projectName: 'SuperGame', engineVersion: '5.8.4', copyrightHolder: 'MiEmpresa Games' });
+    expect(prompt).toContain('// SuperGame — <Short file title / description>');
+    expect(prompt).toContain('// Copyright (c) 2026 MiEmpresa Games');
+    expect(prompt).toContain('// Generated with DBV Unreal AI · https://github.com/davidbuenov/dbv-unreal-ai');
+    expect(prompt).toContain('// Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops');
+  });
 });
 
 describe('contexto del proyecto y del editor (REQ-13)', () => {

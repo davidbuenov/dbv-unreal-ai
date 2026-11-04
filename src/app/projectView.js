@@ -83,15 +83,17 @@ export function createProjectView(host, deps) {
     deps.state.setConnection({ projectPath: project.path, projectName: project.name, engineVersion: project.engineAssociation, endpoint, status: 'connecting', toolsets: 0 });
     const result = await api.unrealConnect(endpoint);
     if (result.ok) {
-      const identity = await editorIdentity(endpoint, result.value);
+      const toolsets = Array.isArray(result.value) ? result.value : (result.value.toolsets ?? []);
+      const actualEndpoint = Array.isArray(result.value) ? endpoint : (result.value.endpoint ?? endpoint);
+      const identity = await editorIdentity(actualEndpoint, toolsets);
       if (identity?.project_name && project.name && identity.project_name.toLowerCase() !== project.name.toLowerCase()) {
         deps.state.setConnection({ status: 'offline' }, true);
-        deps.toast(t('unreal.identityMismatch', { port: String(mcp.port), found: identity.project_name, expected: project.name }), 'error');
+        deps.toast(t('unreal.identityMismatch', { port: String(actualEndpoint.port), found: identity.project_name, expected: project.name }), 'error');
         return;
       }
       // Con Convai en el editor, la conversación recibe sus reglas (REQ-56).
-      deps.state.setConnection({ status: 'online', toolsets: result.value.length, convai: hasConvaiToolsets(result.value) }, true);
-      deps.toast(t('project.connected', { n: String(result.value.length) }));
+      deps.state.setConnection({ status: 'online', endpoint: actualEndpoint, toolsets: toolsets.length, convai: hasConvaiToolsets(toolsets) }, true);
+      deps.toast(t('project.connected', { n: String(toolsets.length) }));
       await api.unrealRememberProject(project.path);
     } else {
       deps.state.setConnection({ status: readiness?.ready === false ? 'prep' : 'offline' }, true);

@@ -6,6 +6,7 @@
     { "name": "spz en mayúsculas", "kind": "model", "files": ["ISLA.SPZ"], "expected": { "plan": "splat", "file": "ISLA.SPZ", "collider": null } },
     { "name": "modelo de Tripo", "kind": "model", "files": ["model.glb", "thumbnail.png"], "expected": { "plan": "model", "file": "model.glb", "collider": null } },
     { "name": "mundo sin splat, solo la malla", "kind": "world", "files": ["collider.glb"], "expected": { "plan": "model", "file": "collider.glb", "collider": null } },
+    { "name": "efecto de sonido", "kind": "sound", "files": ["sound.wav"], "expected": { "plan": "sound", "file": "sound.wav", "collider": null } },
     { "name": "imagen", "kind": "image", "files": ["ref.png"], "expected": { "plan": "nothing", "file": null, "collider": null } }
   ]
 }

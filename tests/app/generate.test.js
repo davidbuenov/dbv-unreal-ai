@@ -47,7 +47,7 @@ async function renderView(deps = {}) {
 describe('Generar', () => {
   it('cada pestaña lleva el logo del servicio con el que genera @spec REQ-65', async () => {
     const host = await renderView();
-    const logos = [...host.querySelectorAll('[data-mode]')].map((tab) => tab.querySelector('.brand-logo img'));
+    const logos = [...host.querySelectorAll('[data-mode]')].map((tab) => tab.querySelector('.brand-logo img')).filter(Boolean);
     expect(logos.map((img) => img.getAttribute('alt'))).toEqual(['Tripo', 'Tripo', 'World Labs']);
     for (const img of logos) expect(existsSync(resolve('src', img.getAttribute('src')))).toBe(true);
     // El texto de la pestaña sigue ahí, junto al logo.
@@ -179,5 +179,162 @@ describe('Mejorar el prompt', () => {
 
     expect(await improvePrompt(null, 'tripo', 'x')).toEqual({ kind: 'none' });
     expect(await improvePrompt({ ...model, complete: async () => null }, 'tripo', 'x')).toEqual({ kind: 'empty' });
+  });
+
+  it('los botones de ayuda en las pestañas de Generar abren la sección correspondiente', async () => {
+    const host = await renderView();
+    const opened = [];
+    document.addEventListener('dbv-open-help', (e) => opened.push(e.detail.tab));
+
+    const findButton = (text) => [...host.querySelectorAll('button')].find((b) => b.textContent.includes(text));
+
+    findButton('Ayuda de Tripo')?.click();
+    host.querySelector('[data-mode="world"]').click();
+    findButton('Ayuda de World Labs')?.click();
+    host.querySelector('[data-mode="sound"]').click();
+    findButton('Ayuda de Sonidos')?.click();
+
+    expect(opened).toEqual(['tripo', 'worldlabs', 'audio']);
+  });
+
+  it('permite buscar en Freesound, previsualizar audio en lista y añadir sonidos a la biblioteca @spec REQ-71', async () => {
+    let savedSoundPayload = null;
+    let searchedQuery = null;
+    window.__TAURI__.core.invoke = vi.fn(async (command, payload) => {
+      invoked.push(command);
+      if (command === 'generation_status') return { spent: 0, budget: 300, hasKey: { tripo: true, worldlabs: true, freesound: true, elevenlabs: true } };
+      if (command === 'generation_jobs') return [];
+      if (command === 'generation_balance') return { balance: 100, frozen: 0 };
+      if (command === 'generation_prepare') return { total: 1580 };
+      if (command === 'generation_check_local_audio') return { ready: true, device: 'CUDA' };
+      if (command === 'generation_search_freesound') {
+        searchedQuery = payload.query;
+        return [
+          {
+            id: 101,
+            name: 'grua-movimiento.wav',
+            tags: ['crane', 'heavy', 'metal'],
+            duration: 4.5,
+            previewUrl: 'https://freesound.org/previews/101.mp3',
+            downloadUrl: null,
+          },
+          {
+            id: 102,
+            name: 'grua-motor.wav',
+            tags: ['engine', 'motor'],
+            duration: 8.2,
+            previewUrl: 'https://freesound.org/previews/102.mp3',
+            downloadUrl: null,
+          },
+        ];
+      }
+      if (command === 'generation_save_sound_url') {
+        savedSoundPayload = payload;
+        return { id: 'snd-101', name: payload.name };
+      }
+      return null;
+    });
+
+    const host = await renderView();
+    host.querySelector('[data-mode="sound"]').click();
+
+    const providerSelect = host.querySelector('select[aria-label="Proveedor"]');
+    const nameInput = host.querySelector('input[aria-label="Nombre corto"]');
+    const promptInput = host.querySelector('textarea[aria-label="Descripción del sonido"]');
+    const startButton = host.querySelector('.btn-primary');
+
+    expect(startButton.textContent).toBe('Generar…');
+
+    // Cambiar a freesound
+    providerSelect.value = 'freesound';
+    providerSelect.dispatchEvent(new Event('change'));
+
+    expect(startButton.textContent).toBe('Buscar en Freesound');
+
+    promptInput.value = 'movimiento de grua';
+    nameInput.value = 'sonidogrua1';
+
+    // Buscar
+    startButton.click();
+
+    await vi.waitFor(() => expect(searchedQuery).toBe('movimiento de grua'));
+
+    const resultsList = host.querySelector('.sound-results-list');
+    expect(resultsList.classList.contains('hidden')).toBe(false);
+
+    await vi.waitFor(() => expect(host.querySelectorAll('.sound-item-card').length).toBe(2));
+
+    const cards = host.querySelectorAll('.sound-item-card');
+    const firstCard = cards[0];
+    expect(firstCard.querySelector('.sound-item-title').textContent).toBe('grua-movimiento.wav');
+    expect(firstCard.querySelector('.sound-item-player').getAttribute('src')).toBe('https://freesound.org/previews/101.mp3');
+
+    // Añadir el primer sonido a la biblioteca
+    const addBtn = firstCard.querySelector('button');
+    expect(addBtn.textContent).toBe('+ Añadir a la biblioteca');
+
+    addBtn.click();
+
+    await vi.waitFor(() => expect(savedSoundPayload).not.toBeNull());
+    await vi.waitFor(() => expect(addBtn.textContent).toBe('✓ Añadido'));
+
+    expect(savedSoundPayload).toEqual(
+      expect.objectContaining({
+        url: 'https://freesound.org/previews/101.mp3',
+        name: 'sonidogrua1',
+        prompt: 'movimiento de grua',
+        duration: 4.5,
+      }),
+    );
+  });
+
+  it('permite generar sonido con ElevenLabs pasando duración, loop y nombre personalizado @spec REQ-71', async () => {
+    let generatedPayload = null;
+    window.__TAURI__.core.invoke = vi.fn(async (command, payload) => {
+      invoked.push(command);
+      if (command === 'generation_status') return { spent: 0, budget: 300, hasKey: { tripo: true, worldlabs: true, freesound: true, elevenlabs: true } };
+      if (command === 'generation_jobs') return [];
+      if (command === 'generation_balance') return { balance: 100, frozen: 0 };
+      if (command === 'generation_prepare') return { total: 1580 };
+      if (command === 'generation_generate_sound') {
+        generatedPayload = payload;
+        return { id: 'snd-el-1', name: payload.name || 'sonido' };
+      }
+      return null;
+    });
+
+    const host = await renderView();
+    host.querySelector('[data-mode="sound"]').click();
+
+    const providerSelect = host.querySelector('select[aria-label="Proveedor"]');
+    providerSelect.value = 'elevenlabs';
+    providerSelect.dispatchEvent(new Event('change'));
+
+    const nameInput = host.querySelector('input[aria-label="Nombre corto"]');
+    const promptInput = host.querySelector('textarea[aria-label="Descripción del sonido"]');
+    const durationInput = host.querySelector('input[aria-label="Duración (segundos)"]');
+    const loopInput = host.querySelector('input[aria-label="En bucle (loop)"]');
+    const startButton = host.querySelector('.btn-primary');
+
+    expect(startButton.textContent).toBe('Generar…');
+
+    promptInput.value = 'sonido de movimiento de una grua';
+    nameInput.value = 'sonidogrua_eleven';
+    durationInput.value = '7';
+    loopInput.checked = true;
+
+    startButton.click();
+
+    await vi.waitFor(() => expect(generatedPayload).not.toBeNull());
+
+    expect(generatedPayload).toEqual(
+      expect.objectContaining({
+        provider: 'elevenlabs',
+        prompt: 'sonido de movimiento de una grua',
+        name: 'sonidogrua_eleven',
+        duration: 7,
+        loop: true,
+      }),
+    );
   });
 });

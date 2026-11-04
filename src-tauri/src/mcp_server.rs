@@ -206,6 +206,12 @@ pub fn tool_specs() -> Vec<Value> {
             json!(["path"]),
         ),
         tool(
+            "unreal_import_sound",
+            "Import an audio or sound effect file (.wav, .mp3, .ogg) into Unreal under /Game/DBV/Audio as a USoundWave asset.",
+            json!({ "path": { "type": "string", "description": "Absolute path to the audio file on disk." }, "asset_name": { "type": "string", "description": "Optional asset name." } }),
+            json!(["path"]),
+        ),
+        tool(
             "library_send_to_unreal",
             "Import a library asset into the Unreal project under /Game/DBV/Generated and place it in front of the editor camera. For 3D models it imports the mesh; for World Labs scenarios it imports the collider mesh (Static Mesh with collision) for ground and physics.",
             json!({ "id": { "type": "string" }, "place": { "type": "boolean" } }),
@@ -403,6 +409,13 @@ impl McpServer {
                 format!("Imported as {} (\"{}\", {}: {})", entry.id, entry.name, entry.kind, entry.files.join(", "))
             }
             "library_send_to_unreal" => self.send_to_unreal(&text(args, "id"), args.get("place").and_then(Value::as_bool).unwrap_or(true))?,
+            "unreal_import_sound" => {
+                let path = text(args, "path");
+                let asset_name = text(args, "asset_name");
+                let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+                let res = self.editor(|s| s.call_toolset_tool(&dbv, "import_sound", json!({ "source_file": path, "folder_path": "/Game/DBV/Audio", "asset_name": asset_name }), std::time::Duration::from_secs(60))).map_err(err)?;
+                res.value.map(|v| v.to_string()).unwrap_or(res.text)
+            }
             "generation_jobs" => self.jobs(args)?,
             // REQ-22: el agente edita con sus herramientas; aquí solo se compila (con su permiso, que pone el cliente).
             crate::unreal::compile::MCP_TOOL => {
@@ -503,9 +516,31 @@ impl McpServer {
         let result = match crate::library::send_plan(&entry) {
             crate::library::SendPlan::Splat { splat, collider } => self.send_splat(&entry, &dbv, &name, &splat, collider.as_deref(), place),
             crate::library::SendPlan::Model { model } => self.send_model(&entry, &dbv, &name, &model, place),
-            crate::library::SendPlan::Nothing => Err("the asset has no model (.glb, .gltf, .fbx, .obj) or Gaussian Splat (.spz, .ply) file".to_string()),
+            crate::library::SendPlan::Sound { sound } => self.send_sound(&entry, &dbv, &name, &sound),
+            crate::library::SendPlan::Nothing => Err("the asset has no model (.glb, .gltf, .fbx, .obj), audio (.wav) or Gaussian Splat (.spz, .ply) file".to_string()),
         };
         result
+    }
+
+    /// Importa un sonido a /Game/DBV/Audio como USoundWave. @spec REQ-72
+    fn send_sound(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, sound: &str) -> Result<String, String> {
+        let sound_path = self.config.library.file_path(&entry.id, sound).map_err(|e| e.to_string())?;
+        let args = json!({
+            "source_file": sound_path.to_string_lossy(),
+            "folder_path": "/Game/DBV/Audio",
+            "asset_name": name,
+        });
+        let imported = self.editor(|s| s.call_toolset_tool(dbv, "import_sound", args.clone(), std::time::Duration::from_secs(60))).map_err(|e| e.to_string())?;
+        let report = imported.value.clone().unwrap_or(Value::Null);
+        if imported.is_error || report.get("success") != Some(&json!(true)) {
+            Err(format!("the sound was not imported: {}", format(&imported)))
+        } else {
+            let primary = report.get("primary").and_then(Value::as_str).unwrap_or(name);
+            if let Some(dir) = &self.config.project_dir {
+                let _ = self.config.library.record_sent(&entry.id, &dir.to_string_lossy(), primary);
+            }
+            Ok(format!("Sound imported as USoundWave at {primary}"))
+        }
     }
 
     /// Espera para cargar un Gaussian Splat: un .ply de 3DGS pasa con facilidad de 2 GB. @spec REQ-54

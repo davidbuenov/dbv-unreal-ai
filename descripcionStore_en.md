@@ -38,11 +38,13 @@ Key Features:
 
 ## What's new in this version
 
-v0.3.1:
-• Each conversation with an agent is independent: a new conversation no longer carries over another one's context or spends its quota, and the model you pick is the one used.
-• Paste (Ctrl+V) or drag images and text documents into the conversation: they show a thumbnail, the AI sees them and can use them with Tripo.
-• The AI also edits the README and the .md files in your project's docs folder, always as changes you review.
-• World Labs worlds left half-done are resumed when you reopen the app.
+v0.4.0:
+• Sound effects (SFX) generation and search: new Sounds tab in Generate supporting local microservice (Stable Audio Open 1.0), ElevenLabs Text-to-SFX, and interactive Freesound catalog with audio preview and selective library addition.
+• Native audio import into Unreal Engine ("Send to Unreal" for Audio) as USoundWave / SoundCue assets and MCP tool to bind audio to actors and 3D events.
+• Real-time multimodal vision: new "📷 Capture Viewport" button in chat allowing vision-capable models to inspect and analyze the live editor scene.
+• Configurable Copyright authorship in Project Settings preserving immutable attribution to DBV Unreal AI and dbv-specs-ops.
+• Resilient Unreal Engine MCP port auto-detection: automatic probing of ports 8000..8005 on connection.
+• Expanded Help Center with dedicated tabs for Tripo, World Labs, and Sounds with contextual direct access.
 
 ---
 

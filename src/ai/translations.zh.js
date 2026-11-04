@@ -124,6 +124,7 @@ export const ZH_AI = {
   'ai.inline.mark.fences': '代码块',
   'ai.inline.mark.images': '图片',
   'ai.attachFiles': '附加参考图片或文档',
+  'ai.captureViewportHint': '截取编辑器视口并作为图像附加',
   'ai.remember': '记住',
   'ai.recipes': '配方',
   'ai.recipesShow': '查看引导式配方',

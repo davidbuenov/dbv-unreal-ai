@@ -273,6 +273,10 @@ pub fn run() {
             #[cfg(desktop)]
             unreal::commands::unreal_connect,
             #[cfg(desktop)]
+            unreal::commands::unreal_get_project_settings,
+            #[cfg(desktop)]
+            unreal::commands::unreal_set_project_settings,
+            #[cfg(desktop)]
             unreal::commands::unreal_list_toolsets,
             #[cfg(desktop)]
             unreal::commands::unreal_describe_toolset,
@@ -316,6 +320,14 @@ pub fn run() {
             generation::commands::generation_presets,
             #[cfg(desktop)]
             generation::commands::generation_allow_reference,
+            #[cfg(desktop)]
+            generation::commands::generation_check_local_audio,
+            #[cfg(desktop)]
+            generation::commands::generation_generate_sound,
+            #[cfg(desktop)]
+            generation::commands::generation_search_freesound,
+            #[cfg(desktop)]
+            generation::commands::generation_save_sound_url,
             #[cfg(desktop)]
             generation::commands::library_save_thumbnail,
             #[cfg(desktop)]

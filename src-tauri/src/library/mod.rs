@@ -932,18 +932,22 @@ pub fn is_library(path: &Path) -> bool {
 pub enum SendPlan {
     Splat { splat: String, collider: Option<String> },
     Model { model: String },
+    Sound { sound: String },
     Nothing,
 }
 
-/// Elige qué enviar de una entrada. @spec REQ-54
+/// Elige qué enviar de una entrada. @spec REQ-54, REQ-72
 pub fn send_plan(entry: &LibraryEntry) -> SendPlan {
     let with_ext = |exts: &[&str]| entry.files.iter().find(|f| f.rsplit_once('.').is_some_and(|(_, e)| exts.iter().any(|x| e.eq_ignore_ascii_case(x)))).cloned();
     let splat = with_ext(&["spz", "ply"]);
     let model = with_ext(&["glb", "gltf", "fbx", "obj"]);
+    let sound = with_ext(&["wav", "mp3", "ogg"]);
     let is_world = entry.kind == "world" || splat.is_some();
-    match (is_world, splat, model) {
-        (true, Some(splat), collider) => SendPlan::Splat { splat, collider },
-        (_, _, Some(model)) => SendPlan::Model { model },
+    let is_sound = entry.kind == "sound" || sound.is_some();
+    match (is_world, is_sound, splat, model, sound) {
+        (true, _, Some(splat), collider, _) => SendPlan::Splat { splat, collider },
+        (_, _, _, Some(model), _) => SendPlan::Model { model },
+        (_, true, _, _, Some(sound)) => SendPlan::Sound { sound },
         _ => SendPlan::Nothing,
     }
 }
@@ -1256,6 +1260,7 @@ mod tests {
             let want = match expected["plan"].as_str().unwrap() {
                 "splat" => SendPlan::Splat { splat: expected["file"].as_str().unwrap().into(), collider: expected["collider"].as_str().map(str::to_string) },
                 "model" => SendPlan::Model { model: expected["file"].as_str().unwrap().into() },
+                "sound" => SendPlan::Sound { sound: expected["file"].as_str().unwrap().into() },
                 _ => SendPlan::Nothing,
             };
             assert_eq!(send_plan(&item), want, "{}", case["name"]);

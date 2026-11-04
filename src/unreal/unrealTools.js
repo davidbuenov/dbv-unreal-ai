@@ -143,7 +143,7 @@ const valueOf = (result) => (result.value !== undefined && result.value !== null
  */
 export function createUnrealTools(deps) {
   const permissions = deps.permissions ?? createPermissionMemory();
-  const onAction = deps.onAction ?? (() => {});
+  const onAction = deps.onAction ?? (() => { });
   const now = deps.now ?? (() => Date.now());
   let toolsets = null;
   let pythonFixes = 0;
@@ -385,9 +385,9 @@ export function convaiPrompt() {
   ].join(' ');
 }
 
-export function unrealPrompt({ projectName = '', engineVersion = '', agent = false, convai = false } = {}) {
+export function unrealPrompt({ projectName = '', engineVersion = '', agent = false, convai = false, copyrightHolder = '' } = {}) {
   const how = agent
-    ? 'You act on the Unreal Editor through the tools of the `dbv-unreal-ai` MCP server: unreal_list_toolsets, unreal_describe_toolset, unreal_call_tool, unreal_run_python, unreal_scene_summary, unreal_describe_python_api, unreal_capture_viewport (look at the viewport to check your work), library_list, library_rename, library_import, library_send_to_unreal, generate_3d_model, image_to_3d_model, rig_model, animate_model, tripo_run, tripo_operations, tripo_balance, generate_world, export_world_mesh, worldlabs_balance (World Labs credits are a separate account from Tripo), generation_jobs, level_zones_propose and level_zones_list (named places of the level), compile_project_code (compile the project C++ after you changed it), recipes_list and recipe_check (guided recipes for common tasks, with a final check in the editor), search_unreal_guides (offline Unreal guides with their URL, if the user set them up). Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits. Your working folder is the Unreal project: you can read its Python, C++ and .ini files. Use only these tools for Unreal: if you also see another MCP server for the editor (for example unreal-mcp, from the project .mcp.json), do not use it — it skips the app check of the Python and the user approvals. If the project instructions (for example in CLAUDE.md or AGENTS.md) mention list_toolsets, describe_toolset or calling a toolset, do it with unreal_list_toolsets, unreal_describe_toolset and unreal_call_tool.'
+    ? 'You act on the Unreal Editor through the tools of the `dbv-unreal-ai` MCP server: unreal_list_toolsets, unreal_describe_toolset, unreal_call_tool, unreal_run_python, unreal_scene_summary, unreal_describe_python_api, unreal_capture_viewport (look at the viewport to check your work), unreal_import_sound (import sound effects as USoundWave in /Game/DBV/Audio), library_list, library_rename, library_import, library_send_to_unreal, generate_3d_model, image_to_3d_model, rig_model, animate_model, tripo_run, tripo_operations, tripo_balance, generate_world, export_world_mesh, worldlabs_balance (World Labs credits are a separate account from Tripo), generation_jobs, level_zones_propose and level_zones_list (named places of the level), compile_project_code (compile the project C++ after you changed it), recipes_list and recipe_check (guided recipes for common tasks, with a final check in the editor), search_unreal_guides (offline Unreal guides with their URL, if the user set them up). Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits. Your working folder is the Unreal project: you can read its Python, C++ and .ini files. Use only these tools for Unreal: if you also see another MCP server for the editor (for example unreal-mcp, from the project .mcp.json), do not use it — it skips the app check of the Python and the user approvals. If the project instructions (for example in CLAUDE.md or AGENTS.md) mention list_toolsets, describe_toolset or calling a toolset, do it with unreal_list_toolsets, unreal_describe_toolset and unreal_call_tool.'
     : 'You act on the editor through tools. Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits.';
   const approval = agent
     ? 'The app asks the user to approve every action that modifies the project. Tripo tools cost credits: call them first without confirm_cost to get the exact price, tell the user, and call again with confirm_cost=true only if they accept. If the user denies an action, do not insist.'
@@ -397,6 +397,18 @@ export function unrealPrompt({ projectName = '', engineVersion = '', agent = fal
     'Tripo can do much more than generate: image_to_3d_model (from a reference image), rig_model (skeleton; the default rig supports 101 animations including dances), animate_model (up to 5 animations per call on a rig), and tripo_run for any other operation (convert to FBX/USDZ, retopology, texture, segmentation, multiview, text_to_image…; see tripo_operations). Every result goes to the app library with a short name in the user\'s language and a link to its source asset. While Tripo works the user sees the progress in the app; if a call returns running jobs, keep waiting with generation_jobs.';
   const worldlabs =
     'The app library also contains World Labs scenarios (kind "world"): generate them with generate_world (or export high-res meshes with export_world_mesh). Each scenario provides both a photorealistic visual 3D Gaussian Splat (.spz/.ply) and a 3D physical collider mesh (.glb for ground and collision). Check library assets with library_list. When sent to Unreal with library_send_to_unreal, the collider mesh is imported as a Static Mesh for physics.';
+
+  const author = copyrightHolder?.trim() || 'David Bueno Vallejo and David Bueno Carmona';
+  const projectTitle = projectName ? projectName : 'DBV Unreal AI';
+  const headerInstruction = [
+    'Every new file you create in Source/**, Content/Python/**, docs/**/*.md or root *.md must start with the standard 6-line DBV header banner adapted to the file comment syntax (`//` in C++/C#, `#` in Python, `<!-- -->` in .md):',
+    '// =============================================================================',
+    `// ${projectTitle} — <Short file title / description>`,
+    `// Copyright (c) 2026 ${author}`,
+    '// Generated with DBV Unreal AI · https://github.com/davidbuenov/dbv-unreal-ai',
+    '// Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops',
+    '// =============================================================================',
+  ].join('\n');
   return [
     `You are the Unreal Engine assistant inside DBV Unreal AI, a desktop app connected to the Unreal Editor${projectName ? ` with the project "${projectName}"` : ''}${engineVersion ? ` (Unreal Engine ${engineVersion})` : ''}.`,
     how,
@@ -406,7 +418,7 @@ export function unrealPrompt({ projectName = '', engineVersion = '', agent = fal
     'Put every asset you create under /Game/DBV/<AssetType> (create the folder if needed), never loose in /Game; group related actors in a World Outliner folder under "DBV".',
     // REQ-22, REQ-69: la misma regla que aplica `code_policy.rs`, más la cabecera estándar DBV en todo fichero nuevo.
     'You can change only these project files: Source/** (C++ and *.Build.cs), Content/Python/** (.py), Config/*.ini, docs/**/*.md and the *.md files at the project root (README.md, CHANGELOG.md…). Never .uasset or .umap (change assets with the editor tools) and never anything under Plugins/ (the DBVUnrealAI plugins are installed and updated by the app). The user reviews every change as a diff before it is written; other paths are refused.',
-    'Every new file you create in Source/**, Content/Python/**, docs/**/*.md or root *.md must start with the standard 6-line DBV header banner adapted to the file comment syntax (`//` in C++/C#, `#` in Python, `<!-- -->` in .md):\n// =============================================================================\n// DBV Unreal AI — <Short file title / description>\n// Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona\n// Licensed under the MIT License. See LICENSE for details.\n// Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops\n// =============================================================================',
+    headerInstruction,
     tripo,
     worldlabs,
     approval,

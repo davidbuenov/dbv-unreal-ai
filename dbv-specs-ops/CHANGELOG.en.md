@@ -11,13 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
+Version v0.4.0: sound effects (SFX) generation and search with local microservice (Stable Audio Open 1.0), ElevenLabs, and interactive Freesound catalog with audio preview and selective addition; native Unreal Engine audio import (`USoundWave` / `SoundCue`) with MCP tool; real-time vision with "📷 Capture Viewport" for multimodal models; configurable Copyright authorship preserving immutable DBV attribution; and resilient Unreal Engine MCP port auto-detection.
+
 ### Added
 
-- **Sound effects (SFX) and audio generation & search (REQ-71):** new "Sounds" tab in *Generate* with support for three providers: open-weights local microservice `dbv-audio-service` (`http://127.0.0.1:8765`, running Stable Audio Open 1.0 with zero cloud cost), ElevenLabs Text-to-SFX via API, and Freesound (searching and downloading free CC0/CC-BY real clips). Generated or downloaded audio is stored in the library (`kind: "sound"`) with an integrated player.
+- **Sound effects (SFX) and audio generation & search (REQ-71):** new "Sounds" tab in *Generate* with support for three providers: open-weights local microservice `dbv-audio-service` (`http://127.0.0.1:8765`, running Stable Audio Open 1.0 with zero cloud cost), ElevenLabs Text-to-SFX via official API (`/v1/sound-generation`), and Freesound (interactive catalog search with matching results, integrated HTML5 audio preview, and selective library addition). Generated or downloaded audio is stored in the library (`kind: "sound"`) with an integrated player.
 - **Audio asset import into Unreal Engine ("Send to Unreal" for Audio, REQ-72):** direct import of `.wav` files into `/Game/DBV/Audio/` as `USoundWave` (or looping `SoundCue`) assets, and MCP tool `unreal_import_sound` allowing AI agents to bind audio to actor components or 3D world events.
 - **Real-time multimodal vision ("Capture Viewport" for AI, REQ-73):** new "📷 Capture Viewport" button in the chat box taking an instant snapshot of the editor via `CaptureViewport`, attaching it as a thumbnail and forwarding it to vision-capable models and agents to analyze the scene.
 - **Configurable Copyright authorship with immutable DBV Unreal AI attribution (REQ-74):** enables setting the project's copyright holder in Project Settings, injecting their attribution into new AI-generated files while preserving the underlying attribution to `DBV Unreal AI` and `Built with dbv-specs-ops`.
 - **Editor MCP port auto-detection and resilience (REQ-75):** automatically probes ports `8000..8005` if the configured port fails or returns 404, syncing directly with the active MCP port without requiring manual `.ini` adjustments.
+- **Expanded Help Center and contextual direct access:** new help tabs for Tripo 3D, World Labs, and Audio & SFX (in Spanish, English, and Chinese) accessible directly via contextual buttons from each section in *Generate* (Text/Image, World, Sounds) and *Settings* (Tripo, World Labs, Audio, and Convai).
 
 ## [0.3.1] - 2026-11-03
 
@@ -250,7 +255,8 @@ First release: connection to Unreal 5.8 through MCP, project preparation, conver
 - **[Important]** A job id could clash between the window and an agent's `--mcp` if both launched in the same millisecond; it now carries the process id.
 - Review nits (3): early `return`s outside guard clauses in `tools::build`, `resolve_source` and `uploadable`.
 
-[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.3...v0.2.4

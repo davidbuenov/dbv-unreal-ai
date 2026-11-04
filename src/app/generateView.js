@@ -18,6 +18,7 @@ import * as api from './backend.js';
 import { brandLogo } from './brandHeader.js';
 import { serviceOf, withSessionCap } from '../generation/generationTools.js';
 import { baseName, button, el } from './dom.js';
+import { openHelp } from './helpModal.js';
 
 /** Tarjeta de coste común a la vista y a la herramienta de la IA. `true` si el usuario acepta. */
 export async function confirmCost(confirm, request) {
@@ -144,7 +145,7 @@ export function createGenerateView(host, deps) {
         const { tool, args } = formArgs({ ...values(), name: name.value.trim() || '—' });
         const ready = mode === 'image' ? Boolean(image) : Boolean((mode === 'world' ? worldPrompt.value : prompt.value).trim());
         const prepared = ready ? await api.generationPrepare(tool, args) : null;
-        estimate.textContent = prepared?.ok ? t('gen.estimate', { cost: String(prepared.value.total), spent: String(withSessionCap(prepared.value, status.value).spent) }) : '';
+        estimate.textContent = prepared?.ok && prepared.value?.total != null ? t('gen.estimate', { cost: String(prepared.value.total), spent: String(withSessionCap(prepared.value, status.value).spent) }) : '';
       }, 250);
     }
     for (const input of [prompt, worldPrompt, name, variants, faces, lowPoly, quality, worldModel]) input.addEventListener('input', refreshEstimate);
@@ -204,11 +205,21 @@ export function createGenerateView(host, deps) {
       return el('div', { className: 'row' }, improve, undo);
     }
 
-    const textPane = el('div', { className: 'stack' }, el('label', {}, t('gen.prompt'), prompt), improveControls(prompt, 'tripo'), el('div', { className: 'row' }, el('label', {}, t('gen.faceLimit'), faces), el('label', { className: 'row' }, lowPoly, t('gen.lowPoly'))));
+    const textPane = el(
+      'div',
+      { className: 'stack' },
+      el('div', { className: 'row', style: 'justify-content: flex-end;' }, button(`📖 ${t('gen.helpTripo')}`, () => openHelp('tripo'), 'btn-ghost button--compact')),
+      el('label', {}, t('gen.prompt'), prompt),
+      improveControls(prompt, 'tripo'),
+      el('div', { className: 'row' }, el('label', {}, t('gen.faceLimit'), faces), el('label', { className: 'row' }, lowPoly, t('gen.lowPoly'))),
+    );
     const worldPane = el(
       'div',
       { className: 'stack hidden' },
-      el('p', { className: 'hint', text: t('gen.worldHint') }),
+      el('div', { className: 'row', style: 'justify-content: space-between; align-items: center;' },
+        el('p', { className: 'hint', text: t('gen.worldHint') }),
+        button(`📖 ${t('gen.helpWorldLabs')}`, () => openHelp('worldlabs'), 'btn-ghost button--compact'),
+      ),
       el('label', {}, t('gen.prompt'), worldPrompt),
       improveControls(worldPrompt, 'worldlabs'),
       el('div', { className: 'row' }, el('label', {}, t('gen.worldModel'), worldModel)),
@@ -216,7 +227,10 @@ export function createGenerateView(host, deps) {
     const imagePane = el(
       'div',
       { className: 'stack hidden' },
-      el('p', { className: 'hint', text: t('gen.imageHint') }),
+      el('div', { className: 'row', style: 'justify-content: space-between; align-items: center;' },
+        el('p', { className: 'hint', text: t('gen.imageHint') }),
+        button(`📖 ${t('gen.helpTripo')}`, () => openHelp('tripo'), 'btn-ghost button--compact'),
+      ),
       el(
         'div',
         { className: 'row' },
@@ -235,6 +249,124 @@ export function createGenerateView(host, deps) {
       imageThumb,
     );
 
+    const soundPrompt = el('textarea', { attrs: { rows: '3', placeholder: t('gen.soundPromptPlaceholder'), 'aria-label': t('gen.soundPrompt') } });
+    const soundProvider = el('select', { attrs: { 'aria-label': t('gen.soundProvider') } },
+      el('option', { text: t('gen.soundProvider.local'), attrs: { value: 'local' } }),
+      el('option', { text: t('gen.soundProvider.elevenlabs'), attrs: { value: 'elevenlabs' } }),
+      el('option', { text: t('gen.soundProvider.freesound'), attrs: { value: 'freesound' } }),
+    );
+    const soundDuration = el('input', { attrs: { type: 'number', min: '1', max: '30', step: '0.5', value: '5', 'aria-label': t('gen.soundDuration') } });
+    const soundLoop = el('input', { attrs: { type: 'checkbox', 'aria-label': t('gen.soundLoop') } });
+    const soundLocalStatus = el('p', { className: 'hint', text: '' });
+    const soundResultsContainer = el('div', { className: 'sound-results-list hidden' });
+
+    function stopAllAudio() {
+      soundResultsContainer.querySelectorAll('audio').forEach((audio) => {
+        if (!audio.paused) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      });
+    }
+
+    function renderSoundResults(items, query) {
+      stopAllAudio();
+      soundResultsContainer.innerHTML = '';
+      if (!items || items.length === 0) {
+        soundResultsContainer.appendChild(el('p', { className: 'hint', text: t('gen.soundNoResults') }));
+        return;
+      }
+
+      const header = el('div', { className: 'row', style: 'justify-content: space-between; align-items: center; margin-bottom: 4px;' },
+        el('strong', { text: t('gen.soundResultsTitle', { count: String(items.length) }), style: 'font-size: 13px;' }),
+      );
+      soundResultsContainer.appendChild(header);
+
+      for (const item of items) {
+        const itemTitle = el('span', { className: 'sound-item-title', text: item.name, attrs: { title: item.name } });
+        const metaDuration = el('span', { text: `⏱️ ${Number(item.duration || 0).toFixed(1)}s` });
+        const tagsText = (item.tags || []).slice(0, 4).join(', ');
+        const metaTags = tagsText ? el('span', { className: 'sound-item-tags', text: tagsText }) : null;
+        const meta = el('div', { className: 'sound-item-meta' }, metaDuration, metaTags);
+        const info = el('div', { className: 'sound-item-info' }, itemTitle, meta);
+
+        let player = null;
+        if (item.previewUrl) {
+          player = el('audio', {
+            className: 'sound-item-player',
+            attrs: { controls: '', preload: 'none', src: item.previewUrl },
+          });
+          player.addEventListener('play', () => {
+            soundResultsContainer.querySelectorAll('audio').forEach((other) => {
+              if (other !== player && !other.paused) other.pause();
+            });
+          });
+        }
+
+        const addBtn = button(`+ ${t('gen.soundAdd')}`, async () => {
+          addBtn.disabled = true;
+          addBtn.textContent = '...';
+          const targetName = name.value.trim() || item.name;
+          const res = await api.generationSaveSoundUrl({
+            url: item.previewUrl || item.downloadUrl,
+            name: targetName,
+            prompt: query,
+            duration: item.duration,
+          });
+          if (res.ok) {
+            addBtn.textContent = t('gen.soundAdded');
+            addBtn.className = 'btn-ghost button--compact';
+            deps.toast(t('gen.soundGenerated'), 'info');
+            if (name.value.trim()) name.value = '';
+          } else {
+            addBtn.disabled = false;
+            addBtn.textContent = `+ ${t('gen.soundAdd')}`;
+            deps.toast(res.error?.message || 'Error al guardar sonido', 'error');
+          }
+        }, 'btn-primary button--compact');
+
+        const actions = el('div', { className: 'sound-item-actions' }, addBtn);
+        const card = el('div', { className: 'sound-item-card' }, info, player, actions);
+        soundResultsContainer.appendChild(card);
+      }
+    }
+
+    soundPrompt.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && soundProvider.value === 'freesound') {
+        e.preventDefault();
+        start.click();
+      }
+    });
+
+    soundProvider.addEventListener('change', () => {
+      soundDuration.closest('label').classList.toggle('hidden', soundProvider.value === 'freesound');
+      soundLoop.closest('label').classList.toggle('hidden', soundProvider.value === 'freesound');
+      if (soundProvider.value !== 'freesound') {
+        stopAllAudio();
+        soundResultsContainer.classList.add('hidden');
+      } else if (soundResultsContainer.children.length > 0) {
+        soundResultsContainer.classList.remove('hidden');
+      }
+      updateServiceState();
+    });
+
+    const soundPane = el(
+      'div',
+      { className: 'stack hidden' },
+      el('div', { className: 'row', style: 'justify-content: space-between; align-items: center;' },
+        el('p', { className: 'hint', text: t('gen.soundHint') }),
+        button(`📖 ${t('gen.helpAudio')}`, () => openHelp('audio'), 'btn-ghost button--compact'),
+      ),
+      el('div', { className: 'row' },
+        el('label', {}, t('gen.soundProvider'), soundProvider),
+        el('label', {}, t('gen.soundDuration'), soundDuration),
+        el('label', { className: 'row' }, soundLoop, t('gen.soundLoop')),
+      ),
+      el('label', {}, t('gen.soundPrompt'), soundPrompt),
+      soundLocalStatus,
+      soundResultsContainer,
+    );
+
     const variantsLabel = el('label', {}, t('gen.variants'), variants);
     const qualityLabel = el('label', {}, t('gen.textureQuality'), quality);
 
@@ -242,6 +374,51 @@ export function createGenerateView(host, deps) {
       t('gen.start'),
       async () => {
         let ids = null;
+        if (mode === 'sound') {
+          const textVal = soundPrompt.value.trim();
+          if (!textVal) {
+            soundPrompt.focus();
+            return null;
+          }
+          if (soundProvider.value === 'freesound') {
+            start.disabled = true;
+            start.textContent = t('gen.soundSearching');
+            soundResultsContainer.innerHTML = '';
+            soundResultsContainer.classList.remove('hidden');
+            try {
+              const res = await api.generationSearchFreesound(textVal, 15);
+              if (res.ok) {
+                renderSoundResults(res.value || [], textVal);
+              } else {
+                deps.toast(res.error?.message || 'Error en búsqueda', 'error');
+              }
+            } finally {
+              updateServiceState();
+            }
+            return null;
+          }
+          start.disabled = true;
+          start.textContent = t('gen.soundGenerating');
+          try {
+            const res = await api.generationGenerateSound({
+              provider: soundProvider.value,
+              prompt: textVal,
+              name: name.value.trim() || null,
+              duration: Number(soundDuration.value) || 5,
+              loop: soundLoop.checked,
+            });
+            if (res.ok) {
+              deps.toast(t('gen.soundGenerated'), 'info');
+              soundPrompt.value = '';
+              deps.openLibrary?.();
+            } else {
+              deps.toast(res.error.message, 'error');
+            }
+          } finally {
+            updateServiceState();
+          }
+          return null;
+        }
         const textVal = mode === 'world' ? worldPrompt.value.trim() : prompt.value.trim();
         if ((mode === 'text' || mode === 'world') && !textVal) {
           (mode === 'world' ? worldPrompt : prompt).focus();
@@ -262,6 +439,41 @@ export function createGenerateView(host, deps) {
     );
 
     function updateServiceState() {
+      if (mode === 'sound') {
+        const prov = soundProvider.value;
+        start.disabled = false;
+        start.textContent = prov === 'freesound' ? t('gen.soundSearch') : t('gen.start');
+        keyWarning.classList.add('hidden');
+        balance.textContent = '';
+        soundLocalStatus.classList.toggle('hidden', prov !== 'local');
+        if (prov === 'elevenlabs') {
+          const has = Boolean(status.ok && status.value.hasKey?.elevenlabs);
+          start.disabled = !has;
+          if (!has) {
+            keyWarning.textContent = t('settings.elevenlabs');
+            keyWarning.classList.remove('hidden');
+          }
+        } else if (prov === 'freesound') {
+          const has = Boolean(status.ok && status.value.hasKey?.freesound);
+          start.disabled = !has;
+          if (!has) {
+            keyWarning.textContent = t('settings.freesound');
+            keyWarning.classList.remove('hidden');
+          }
+        } else if (prov === 'local') {
+          api.generationCheckLocalAudio().then((st) => {
+            if (st?.ready) {
+              soundLocalStatus.textContent = t('gen.soundLocalReady', { device: st.device || 'GPU' });
+              soundLocalStatus.className = 'hint check-ok';
+            } else {
+              soundLocalStatus.textContent = t('gen.soundLocalOffline');
+              soundLocalStatus.className = 'hint check-fail';
+            }
+          });
+        }
+        return;
+      }
+      start.textContent = t('gen.start');
       const service = mode === 'world' ? 'worldlabs' : 'tripo';
       const has = Boolean(status.ok && status.value.hasKey?.[service]);
       start.disabled = !has;
@@ -285,7 +497,7 @@ export function createGenerateView(host, deps) {
     }
 
     // REQ-65: cada pestaña dice con qué servicio se genera.
-    const tabs = ['text', 'image', 'world'].map((key) =>
+    const tabs = ['text', 'image', 'world', 'sound'].map((key) =>
       el('button', {
         className: 'segmented-btn segmented-btn--brand',
         attrs: { type: 'button', 'aria-pressed': String(key === mode), 'data-mode': key },
@@ -296,13 +508,15 @@ export function createGenerateView(host, deps) {
             textPane.classList.toggle('hidden', mode !== 'text');
             imagePane.classList.toggle('hidden', mode !== 'image');
             worldPane.classList.toggle('hidden', mode !== 'world');
-            variantsLabel.classList.toggle('hidden', mode === 'world');
-            qualityLabel.classList.toggle('hidden', mode === 'world');
+            soundPane.classList.toggle('hidden', mode !== 'sound');
+            if (mode !== 'sound') stopAllAudio();
+            variantsLabel.classList.toggle('hidden', mode === 'world' || mode === 'sound');
+            qualityLabel.classList.toggle('hidden', mode === 'world' || mode === 'sound');
             updateServiceState();
             refreshEstimate();
           },
         },
-      }, el('span', { text: t(`gen.mode.${key}`) }), brandLogo(key === 'world' ? 'worldlabs' : 'tripo', true)),
+      }, el('span', { text: t(`gen.mode.${key}`) }), key === 'sound' ? el('span', { className: 'brand-logo brand-logo--small', text: '🎵', style: 'display:inline-flex;align-items:center;justify-content:center;' }) : brandLogo(key === 'world' ? 'worldlabs' : 'tripo', true)),
     );
 
     updateServiceState();
@@ -317,6 +531,7 @@ export function createGenerateView(host, deps) {
         textPane,
         imagePane,
         worldPane,
+        soundPane,
         el('div', { className: 'row' }, el('label', {}, t('gen.name'), el('div', { className: 'row' }, name, button(t('gen.suggestName'), suggest, 'btn-ghost'))), variantsLabel, qualityLabel),
         el('div', { className: 'row' }, start, estimate),
       ),

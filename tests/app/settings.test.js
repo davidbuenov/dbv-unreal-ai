@@ -106,7 +106,7 @@ describe('Ajustes', () => {
     const view = createSettingsView(host, { toast: vi.fn(), openConnect: vi.fn(), state: { connection: null } });
     await view.render();
     const tabs = [...host.querySelectorAll('[data-settings-tab]')].map((b) => b.textContent);
-    expect(tabs).toEqual(['Inteligencia artificial', 'Tripo', 'World Labs', 'Convai', 'Biblioteca', 'Conocimiento', 'Agentes (MCP)', 'Diagnóstico']);
+    expect(tabs).toEqual(['Inteligencia artificial', 'Tripo', 'World Labs', 'Convai', 'Biblioteca', 'Conocimiento', 'Agentes (MCP)', 'Proyecto', 'Audio', 'Diagnóstico']);
     const visible = () => [...host.querySelectorAll('[data-settings-panel]')].filter((p) => !p.classList.contains('hidden')).map((p) => p.dataset.settingsPanel);
     expect(visible()).toEqual(['ai']);
     buttonWithText(host, 'Convai').click();
@@ -166,5 +166,33 @@ describe('Ajustes', () => {
     document.addEventListener('dbv-open-help', (e) => opened(e.detail.tab), { once: true });
     buttonWithText(card, 'Tutorial: qué necesitas y cómo se usa').click();
     expect(opened).toHaveBeenCalledWith('convai');
+  });
+
+  it('permite guardar el titular de copyright en Ajustes del Proyecto @spec REQ-74', async () => {
+    const host = document.createElement('div');
+    const toast = vi.fn();
+    await createSettingsView(host, { toast, openConnect: vi.fn(), state: { connection: null } }).render();
+    const panel = host.querySelector('[data-settings-panel="project"]');
+    expect(panel).not.toBeNull();
+    const input = panel.querySelector('input[aria-label="Titular de Copyright del proyecto"]');
+    expect(input).not.toBeNull();
+    input.value = 'MiEmpresa Games';
+    buttonWithText(panel, 'Guardar').click();
+    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'unreal_set_project_settings')).toBe(true));
+    expect(invoked.find(([c]) => c === 'unreal_set_project_settings')[1]).toEqual({ settings: { copyrightHolder: 'MiEmpresa Games' } });
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledWith('Ajustes del proyecto guardados'));
+  });
+
+  it('los botones de ayuda en las pestañas de Ajustes abren su sección de ayuda correspondiente', async () => {
+    const host = document.createElement('div');
+    await createSettingsView(host, { toast: vi.fn(), openConnect: vi.fn(), state: { connection: null } }).render();
+    const opened = [];
+    document.addEventListener('dbv-open-help', (e) => opened.push(e.detail.tab));
+
+    buttonWithText(host.querySelector('[data-settings-panel="audio"]'), '📖 Guía y ayuda de Sonidos y SFX').click();
+    buttonWithText(host.querySelector('[data-settings-panel="tripo"]'), '📖 Guía y ayuda de Tripo').click();
+    buttonWithText(host.querySelector('[data-settings-panel="worldlabs"]'), '📖 Guía y ayuda de World Labs').click();
+
+    expect(opened).toEqual(['audio', 'tripo', 'worldlabs']);
   });
 });

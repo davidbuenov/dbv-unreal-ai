@@ -46,6 +46,11 @@ def import_model(source_file: str, folder_path: str, asset_name: str) -> str:
     return editor.import_model(_text(source_file), _text(folder_path), _text(asset_name))
 
 
+def import_sound(source_file: str, folder_path: str, asset_name: str) -> str:
+    """Ver ``editor.import_sound``."""
+    return editor.import_sound(_text(source_file), _text(folder_path), _text(asset_name))
+
+
 def place_asset(asset_path: str, distance: str, folder: str) -> str:
     """Ver ``editor.place_asset``."""
     return editor.place_asset(_text(asset_path), float(_text(distance) or "300"), _text(folder))

@@ -225,6 +225,14 @@ export function createAiApp(deps) {
       onAttachSection: () => attachSection(),
       onAttachFiles: host.pickAttachments ? () => attachExternal() : undefined,
       onPasteFiles: host.pasteAttachments ? (pasted) => attachPasted(pasted) : undefined,
+      // Capturar viewport de Unreal y adjuntarlo como miniatura a la conversación (REQ-73):
+      onCaptureViewport: host.captureViewportAttachment ? async () => {
+        const attachment = await host.captureViewportAttachment();
+        if (attachment) {
+          currentAttachments().push(attachment);
+          renderConversationAttachments();
+        }
+      } : undefined,
       // La petición la escribe el host (sabe si hay memoria del proyecto y en qué idioma): REQ-35.
       onRemember: host.rememberRequest ? () => ask(host.rememberRequest(getLanguage())) : undefined,
       // Menú de recetas del host (en DBV Unreal AI, REQ-23): una tarjeta en la conversación.

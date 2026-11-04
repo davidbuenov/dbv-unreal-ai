@@ -11,13 +11,18 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
+Versión v0.4.0: generación y búsqueda de efectos de sonido (SFX) con microservicio local (Stable Audio Open 1.0), ElevenLabs y catálogo interactivo de Freesound con preescucha y selección; importación nativa de audio a Unreal Engine (`USoundWave` / `SoundCue`) con herramienta MCP; visión en vivo con «📷 Capturar viewport» para modelos multimodales; configuración de autoría de Copyright preservando la atribución inmutable de DBV; y autodetección resiliente del puerto MCP de Unreal Engine.
+
 ### Added
 
-- **Generación y búsqueda de efectos de sonido (SFX) y audio (REQ-71):** pestaña «Sonidos» en *Generar* con soporte para tres proveedores: microservicio local de pesos abiertos `dbv-audio-service` (`http://127.0.0.1:8765`, con Stable Audio Open 1.0 sin coste de cuota), ElevenLabs Text-to-SFX vía API y Freesound (búsqueda y descarga de clips reales libres CC0/CC-BY). Los audios generados o descargados se guardan en la biblioteca (`kind: "sound"`) con reproductor integrado.
+- **Generación y búsqueda de efectos de sonido (SFX) y audio (REQ-71):** pestaña «Sonidos» en *Generar* con soporte para tres proveedores: microservicio local de pesos abiertos `dbv-audio-service` (`http://127.0.0.1:8765`, con Stable Audio Open 1.0 sin coste de cuota), ElevenLabs Text-to-SFX vía API oficial (`/v1/sound-generation`) y Freesound (búsqueda interactiva con listado de resultados coincidentes, preescucha nativa HTML5 y descarga selectiva hacia la biblioteca). Los audios generados o descargados se guardan en la biblioteca (`kind: "sound"`) con reproductor integrado.
 - **Importación de audio a Unreal Engine («Enviar a Unreal» de Audio, REQ-72):** importación directa de archivos `.wav` a `/Game/DBV/Audio/` como assets `USoundWave` (o `SoundCue` con bucle), y herramienta MCP `unreal_import_sound` para asociar audio a componentes de actores o eventos del nivel.
 - **Visión multimodal en tiempo real («Capturar viewport» para la IA, REQ-73):** nuevo botón «📷 Capturar viewport» en la caja de conversación que toma una captura inmediata del editor mediante `CaptureViewport`, la adjunta como miniatura y la envía a los modelos o agentes con visión para analizar la escena.
 - **Autoría de Copyright personalizable conservando el pie de DBV Unreal AI (REQ-74):** permite configurar el titular de los derechos en Ajustes del Proyecto, inyectando su autoría en los nuevos ficheros creados por la IA pero preservando de forma fija la atribución a `DBV Unreal AI` y `Built with dbv-specs-ops`.
 - **Autodetección y resiliencia del puerto MCP del editor (REQ-75):** si el puerto guardado en la configuración da error o 404, la app sondea automáticamente el rango `8000..8005` para sincronizarse con el puerto real en el que Unreal ha levantado el servidor MCP.
+- **Centro de Ayuda ampliado y accesos contextuales directos:** nuevas pestañas de ayuda para Tripo 3D, World Labs y Audio & SFX (en español, inglés y chino) accesibles directamente con botones contextuales desde cada apartado en *Generar* (Texto/Imagen, Mundo, Sonidos) y *Ajustes* (Tripo, World Labs, Audio y Convai).
 
 ## [0.3.1] - 2026-11-03
 
@@ -250,7 +255,8 @@ Primera versión: conexión con Unreal 5.8 por MCP, preparación del proyecto, c
 - **[Importante]** El id de un trabajo podía coincidir entre la ventana y el `--mcp` de un agente si lanzaban en el mismo milisegundo; ahora lleva el id del proceso.
 - Nits de la revisión (3): `return` tempranos fuera de las guardas en `tools::build`, `resolve_source` y `uploadable`.
 
-[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...HEAD
+[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.3...v0.2.4

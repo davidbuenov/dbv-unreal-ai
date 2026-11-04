@@ -547,6 +547,194 @@ pub fn generation_allow_reference(app: AppHandle, path: String) -> Result<(), Un
     app.asset_protocol_scope().allow_file(&file).map_err(|error| UnrealError::Io(error.to_string()))
 }
 
+/// Comprueba si el microservicio de audio local está activo. @spec REQ-71
+#[tauri::command]
+pub fn generation_check_local_audio(url: Option<String>) -> super::audio::LocalAudioStatus {
+    super::audio::check_local_service(url.as_deref())
+}
+
+/// Genera un efecto de sonido (local o ElevenLabs) o busca en Freesound y lo guarda en la biblioteca. @spec REQ-71
+#[tauri::command]
+pub async fn generation_generate_sound(
+    app: AppHandle,
+    provider: String,
+    prompt: String,
+    name: Option<String>,
+    duration: Option<f32>,
+    r#loop: Option<bool>,
+    local_url: Option<String>,
+) -> Result<crate::library::LibraryEntry, UnrealError> {
+    let dur = duration.unwrap_or(5.0);
+    let lib = library(&app)?;
+
+    let (bytes, source) = match provider.as_str() {
+        "local" => {
+            let audio_bytes = super::audio::generate_local_sound(local_url.as_deref(), &prompt, dur, 50)?;
+            (audio_bytes, "local")
+        }
+        "elevenlabs" => {
+            let key = app
+                .state::<AiState>()
+                .secrets
+                .get(&key_account("elevenlabs"))
+                .ok_or_else(|| UnrealError::Io("no hay clave guardada para ElevenLabs en Ajustes".into()))?;
+            let audio_bytes = super::audio::generate_elevenlabs_sfx(&key, &prompt, Some(dur), r#loop.unwrap_or(false))?;
+            (audio_bytes, "elevenlabs")
+        }
+        "freesound" => {
+            let token = app
+                .state::<AiState>()
+                .secrets
+                .get(&key_account("freesound"))
+                .ok_or_else(|| UnrealError::Io("no hay token guardado para Freesound en Ajustes".into()))?;
+            let items = super::audio::search_freesound(&token, &prompt, 5)?;
+            let first = items.into_iter().next().ok_or_else(|| UnrealError::NotFound("no se encontraron sonidos en Freesound para esa búsqueda".into()))?;
+            let download_url = first.preview_url.or(first.download_url).ok_or_else(|| UnrealError::NotFound("el sonido no tiene URL de descarga disponible".into()))?;
+            let agent = ureq::Agent::config_builder()
+                .timeout_global(Some(std::time::Duration::from_secs(30)))
+                .build()
+                .new_agent();
+            let mut res = agent.get(&download_url).call().map_err(|e| UnrealError::Io(format!("error descargando audio de Freesound: {e}")))?;
+            let mut audio_bytes = Vec::new();
+            std::io::Read::read_to_end(&mut res.body_mut().as_reader(), &mut audio_bytes).map_err(|e| UnrealError::Io(format!("error leyendo bytes descargados de Freesound: {e}")))?;
+            (audio_bytes, "freesound")
+        }
+        other => return Err(UnrealError::NotFound(format!("proveedor de audio desconocido: {other}"))),
+    };
+
+    let ext = if bytes.starts_with(b"RIFF") {
+        "wav"
+    } else if bytes.starts_with(b"ID3") || bytes.starts_with(&[0xff, 0xfb]) || bytes.starts_with(&[0xff, 0xf3]) || bytes.starts_with(&[0xff, 0xf2]) {
+        "mp3"
+    } else if bytes.starts_with(b"OggS") {
+        "ogg"
+    } else {
+        "wav"
+    };
+
+    let default_name = format!("sound_{}", crate::library::now_secs());
+    let entry_name = name.filter(|n| !n.trim().is_empty()).unwrap_or(default_name);
+    let (id, dir) = lib.new_entry_dir(&entry_name)?;
+    let sound_filename = format!("sound.{ext}");
+    let final_sound = dir.join(&sound_filename);
+    std::fs::write(&final_sound, &bytes).map_err(|e| io_error(&final_sound, &e))?;
+
+    let entry = crate::library::LibraryEntry {
+        id: id.clone(),
+        name: entry_name,
+        provider: source.to_string(),
+        kind: "sound".to_string(),
+        prompt: prompt.clone(),
+        parameters: serde_json::json!({
+            "duration": dur,
+            "source": source,
+            "loop": r#loop.unwrap_or(false)
+        }),
+        task_id: String::new(),
+        created_at: crate::library::now_secs(),
+        credits: None,
+        files: vec![sound_filename],
+        thumbnail: None,
+        sent_to: Vec::new(),
+        parent: None,
+        output: serde_json::Value::Null,
+    };
+
+    lib.add(entry.clone())?;
+    Ok(entry)
+}
+
+/// Busca efectos de sonido en Freesound. @spec REQ-71
+#[tauri::command]
+pub async fn generation_search_freesound(
+    app: AppHandle,
+    query: String,
+    page_size: Option<usize>,
+) -> Result<Vec<super::audio::FreesoundItem>, UnrealError> {
+    let token = app
+        .state::<AiState>()
+        .secrets
+        .get(&key_account("freesound"))
+        .unwrap_or_default();
+    if token.is_empty() {
+        return Err(UnrealError::NotFound("no hay token guardado para Freesound en Ajustes".to_string()));
+    }
+    super::audio::search_freesound(&token, &query, page_size.unwrap_or(15))
+}
+
+/// Guarda un sonido descargado desde una URL (p.ej. preview o descarga de Freesound) directamente en la biblioteca. @spec REQ-71
+#[tauri::command]
+pub async fn generation_save_sound_url(
+    app: AppHandle,
+    url: String,
+    name: String,
+    prompt: Option<String>,
+    duration: Option<f32>,
+) -> Result<crate::library::LibraryEntry, UnrealError> {
+    let lib = library(&app)?;
+    let dur = duration.unwrap_or(0.0);
+
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(30)))
+        .build()
+        .new_agent();
+
+    let mut res = agent
+        .get(&url)
+        .call()
+        .map_err(|e| UnrealError::Io(format!("error descargando audio: {e}")))?;
+
+    let mut audio_bytes = Vec::new();
+    std::io::Read::read_to_end(&mut res.body_mut().as_reader(), &mut audio_bytes)
+        .map_err(|e| UnrealError::Io(format!("error leyendo bytes de audio: {e}")))?;
+
+    let ext = if audio_bytes.starts_with(b"RIFF") {
+        "wav"
+    } else if audio_bytes.starts_with(b"ID3")
+        || audio_bytes.starts_with(&[0xff, 0xfb])
+        || audio_bytes.starts_with(&[0xff, 0xf3])
+        || audio_bytes.starts_with(&[0xff, 0xf2])
+    {
+        "mp3"
+    } else if audio_bytes.starts_with(b"OggS") {
+        "ogg"
+    } else {
+        "mp3"
+    };
+
+    let default_name = format!("sound_{}", crate::library::now_secs());
+    let entry_name = if name.trim().is_empty() { default_name } else { name };
+    let (id, dir) = lib.new_entry_dir(&entry_name)?;
+    let sound_filename = format!("sound.{ext}");
+    let final_sound = dir.join(&sound_filename);
+    std::fs::write(&final_sound, &audio_bytes).map_err(|e| io_error(&final_sound, &e))?;
+
+    let p = prompt.unwrap_or_default();
+    let entry = crate::library::LibraryEntry {
+        id: id.clone(),
+        name: entry_name,
+        provider: "freesound".to_string(),
+        kind: "sound".to_string(),
+        prompt: p,
+        parameters: serde_json::json!({
+            "duration": dur,
+            "source": "freesound",
+            "url": url,
+        }),
+        task_id: String::new(),
+        created_at: crate::library::now_secs(),
+        credits: None,
+        files: vec![sound_filename],
+        thumbnail: None,
+        sent_to: Vec::new(),
+        parent: None,
+        output: serde_json::Value::Null,
+    };
+
+    lib.add(entry.clone())?;
+    Ok(entry)
+}
+
 /// Miniatura hecha por el visor 3D para un asset que no la traía (los importados). @spec REQ-31
 #[tauri::command]
 pub fn library_save_thumbnail(app: AppHandle, id: String, png: Vec<u8>) -> Result<crate::library::LibraryEntry, UnrealError> {

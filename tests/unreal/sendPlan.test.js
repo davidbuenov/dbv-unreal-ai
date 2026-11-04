@@ -40,6 +40,8 @@ describe('Qué se envía a Unreal (REQ-54, D25)', () => {
       const { plan, file, collider } = testCase.expected;
       if (plan === 'nothing') {
         expect(result).toEqual({ ok: false, error: 'noModelFile' });
+      } else if (plan === 'sound') {
+        expect(fake.calls[0]).toMatchObject({ tool: 'import_sound', args: { source_file: `/lib/${file}`, folder_path: '/Game/DBV/Audio' } });
       } else if (plan === 'splat') {
         expect(fake.calls[0]).toMatchObject({ tool: 'load_gaussian_splat', args: { source_file: `/lib/${file}` } });
         const imported = fake.calls.find((c) => c.tool === 'import_model');

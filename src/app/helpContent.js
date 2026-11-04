@@ -41,6 +41,47 @@ const convai = (s) => `
           <ul>${s.issues.map((item) => `<li>${item}</li>`).join('')}</ul>
         </div>`;
 
+/** Plantilla de la pestaña de Tripo. */
+const tripo = (s) => `
+        <div class="help-section">
+          <h4>${s.title}</h4>
+          <p>${s.intro}</p>
+          <div class="help-box">
+            <strong>${s.needTitle}</strong>
+            <ol>${s.needs.map((item) => `<li>${item}</li>`).join('')}</ol>
+          </div>
+          <h4>${s.stepsTitle}</h4>
+          <ol>${s.steps.map((item) => `<li>${item}</li>`).join('')}</ol>
+        </div>`;
+
+/** Plantilla de la pestaña de World Labs. */
+const worldlabs = (s) => `
+        <div class="help-section">
+          <h4>${s.title}</h4>
+          <p>${s.intro}</p>
+          <div class="help-box">
+            <strong>${s.needTitle}</strong>
+            <ol>${s.needs.map((item) => `<li>${item}</li>`).join('')}</ol>
+          </div>
+          <h4>${s.stepsTitle}</h4>
+          <ol>${s.steps.map((item) => `<li>${item}</li>`).join('')}</ol>
+        </div>`;
+
+/** Plantilla de la pestaña de Audio y Sonidos (REQ-71). */
+const audio = (s) => `
+        <div class="help-section">
+          <h4>${s.title}</h4>
+          <p>${s.intro}</p>
+          <div class="help-box">
+            <strong>${s.needTitle}</strong>
+            <ol>${s.needs.map((item) => `<li>${item}</li>`).join('')}</ol>
+          </div>
+          <h4>${s.providersTitle}</h4>
+          <ul>${s.providers.map((item) => `<li>${item}</li>`).join('')}</ul>
+          <h4>${s.stepsTitle}</h4>
+          <ol>${s.steps.map((item) => `<li>${item}</li>`).join('')}</ol>
+        </div>`;
+
 /** Plantilla de la pestaña de atajos. */
 const shortcuts = (s) => `
         <div class="help-section">
@@ -73,6 +114,8 @@ const links = (s) => `
             <div>🎨 <a href="https://www.tripo3d.ai" ${LINK}>Tripo 3D Studio</a></div>
             <div>🌍 <a href="https://www.worldlabs.ai" ${LINK}>World Labs (Marble)</a></div>
             <div>🗣️ <a href="https://convai.com" ${LINK}>Convai (Playground)</a></div>
+            <div>🔊 <a href="https://elevenlabs.io/app/developers/api-keys" ${LINK}>ElevenLabs (API Keys)</a></div>
+            <div>🎵 <a href="https://freesound.org/apiv2/apply" ${LINK}>Freesound (API Credentials)</a></div>
           </div>
         </div>
       `;
@@ -112,6 +155,62 @@ const TEXTS = {
         'Las acciones de Convai <strong>guardan Blueprints</strong>: «Deshacer este turno» puede no revertirlas. Ten el proyecto en control de versiones.',
       ],
     },
+    tripo: {
+      title: 'Modelos 3D con Tripo',
+      intro: 'Genera mallas poligonales optimizadas a partir de descripciones de texto o imágenes de referencia con la API de Tripo Studio v3.',
+      needTitle: 'Qué necesitas',
+      needs: [
+        'Una cuenta en <strong>tripo3d.ai</strong> con créditos disponibles.',
+        'Tu <strong>API Key</strong> configurada en <em>Ajustes → Tripo</em>. La app comprueba el saldo y respeta tu tope de presupuesto.',
+      ],
+      stepsTitle: 'Flujo de trabajo',
+      steps: [
+        'En la vista <em>Generar</em> (pestaña «Texto» o «Imagen»), describe el modelo o adjunta una imagen y pulsa <strong>Comenzar</strong>.',
+        'La tarjeta de coste te muestra la estimación de créditos antes de lanzar el trabajo.',
+        'El modelo terminado se guarda en la <em>Biblioteca</em> como archivo GLB.',
+        'Desde la biblioteca puedes aplicar <strong>Rigging automático</strong>, vincular animaciones compatibles o pulsar <strong>«Enviar a Unreal»</strong> para importarlo como StaticMesh o SkeletalMesh en <span class="mono">/Game/DBV/Models/</span>.',
+      ],
+    },
+    worldlabs: {
+      title: 'Mundos y Escenarios con World Labs',
+      intro: 'Genera entornos 3D fotorrealistas completos mediante la tecnología Marble de World Labs a partir de un texto o imagen panorámica.',
+      needTitle: 'Qué necesitas',
+      needs: [
+        'Una cuenta en <strong>worldlabs.ai</strong> con acceso a la API Marble.',
+        'Tu <strong>API Key</strong> configurada en <em>Ajustes → World Labs</em>.',
+        'El proyecto de Unreal preparado con la app: incluye el componente C++ nativo por GPU <span class="mono">UDbvGaussianSplatComponent</span>.',
+      ],
+      stepsTitle: 'Flujo de trabajo',
+      steps: [
+        'En la vista <em>Generar</em> (pestaña «Mundo»), escribe la descripción del escenario y pulsa <strong>Comenzar</strong>.',
+        'La generación suele tardar unos 5 minutos. Si cierras la app, el trabajo se reanuda automáticamente al volver a abrirla sin perder el mundo generado.',
+        'El resultado contiene un archivo de Gaussian Splatting (<span class="mono">.spz</span>) para el fotorrealismo y una malla de colisión simplificada (<span class="mono">.glb</span>) para las físicas.',
+        'Pulsa <strong>«Enviar a Unreal»</strong> en la biblioteca para colocar en el nivel el actor de splats y su colisionador físico perfectamente sincronizados.',
+      ],
+    },
+    audio: {
+      title: 'Sonidos y Efectos de Sonido (SFX)',
+      intro: 'Genera efectos sonoros o busca grabaciones de audio y música para ambientar tu juego, listos para importarse como assets USoundWave en Unreal Engine.',
+      needTitle: 'Tres proveedores y cómo configurarlos',
+      needs: [
+        '<strong>Local (dbv-audio-service):</strong> 100% gratuito, privado y sin cuota de nube. Ejecuta el microservicio en local con el modelo Stable Audio Open 1.0 en <span class="mono">http://127.0.0.1:8765</span> aprovechando tu GPU.',
+        '<strong>ElevenLabs SFX:</strong> Efectos de sonido realistas de altísima calidad vía API en la nube. Consigue tu clave en <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a> y pégala en <em>Ajustes → Audio</em>.',
+        '<strong>Freesound:</strong> Búsqueda y descarga directa de sonidos y grabaciones reales (licencias libres CC0 y CC-BY). Crea una cuenta gratuita en Freesound, solicita tus credenciales en <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Freesound - API credentials</a> (obtendrás un <em>Client secret / Api key</em>) y pégala como token en <em>Ajustes → Audio</em>.',
+      ],
+      providersTitle: 'Duración y bucles',
+      providers: [
+        'Tanto con el servicio local como con ElevenLabs puedes elegir la duración exacta (de 0.5 a 30 segundos).',
+        'La opción <strong>Bucle continuo</strong> genera el sonido de manera que el inicio y el final encajen perfectamente (ideal para motores, viento o lluvia).',
+      ],
+      stepsTitle: 'Flujo de trabajo',
+      steps: [
+        'En la vista <em>Generar</em>, entra en la pestaña <strong>Sonidos</strong> (🎵).',
+        'Selecciona el proveedor deseado, escribe lo que quieres escuchar (ej. <em>«pasos en grava mojada»</em>) y pulsa <strong>Comenzar</strong>.',
+        'El audio se descarga en tu <em>Biblioteca</em> con un reproductor integrado para preescucha inmediata.',
+        'Pulsa <strong>«Enviar a Unreal»</strong> para importarlo a <span class="mono">/Game/DBV/Audio/</span> como asset <span class="mono">USoundWave</span> (o <span class="mono">SoundCue</span> si tiene bucle).',
+        'Los agentes de IA también pueden usar la herramienta <span class="mono">unreal_import_sound</span> para asociar sonidos a componentes de actores o eventos del nivel.',
+      ],
+    },
     shortcuts: { title: 'Atajos de Teclado Globales', shortcut: 'Atajo', action: 'Acción', help: 'Abrir este Centro de Ayuda', shift: 'Ctrl+Mayús+I', chat: 'Abrir / alternar panel de Conversación', esc: 'Cerrar cualquier ventana modal activa', save: 'Guardar en vistas de edición' },
     links: { title: 'Enlaces y Documentación Oficial', intro: 'Accede a los recursos y guías detalladas:', repo: 'Repositorio oficial en GitHub' },
   },
@@ -147,6 +246,62 @@ const TEXTS = {
         '<strong>An agent sees the editor twice:</strong> the Convai "Set Up AI Coding" assistant (or Unreal) can write a <span class="mono">.mcp.json</span> that connects agents directly to the editor. The <em>Project</em> view warns about it: delete the entry ending in <span class="mono">/mcp</span> in that file. The instructions Convai leaves in <span class="mono">CLAUDE.md</span> do no harm and you can keep them.',
         '<strong>Re-assembling the MetaHuman</strong> regenerates its Blueprint and deletes the Convai setup: repeat step 2.',
         'Convai actions <strong>save Blueprints</strong>: "Undo this turn" may not revert them. Keep the project under version control.',
+      ],
+    },
+    tripo: {
+      title: '3D Models with Tripo',
+      intro: 'Generate optimized polygonal meshes (PBR, low-poly or quad topologies) from text prompts or reference images using Tripo Studio v3.',
+      needTitle: 'What you need',
+      needs: [
+        'An account at <strong>tripo3d.ai</strong> with available credits.',
+        'Your <strong>API Key</strong> configured in <em>Settings → Tripo</em>. The app tracks balance and honors your budget cap.',
+      ],
+      stepsTitle: 'Workflow',
+      steps: [
+        'In the <em>Generate</em> view ("Text" or "Image" tab), describe the model or attach an image and click <strong>Start</strong>.',
+        'The cost card shows you the estimated credits before launching the job.',
+        'The completed model is saved to your <em>Library</em> as a GLB file.',
+        'From the library you can apply <strong>Auto Rigging</strong>, link compatible animations, or click <strong>«Send to Unreal»</strong> to import as StaticMesh or SkeletalMesh into <span class="mono">/Game/DBV/Models/</span>.',
+      ],
+    },
+    worldlabs: {
+      title: 'Worlds and Environments with World Labs',
+      intro: 'Generate complete photorealistic 3D environments using World Labs Marble technology from a prompt or panoramic image.',
+      needTitle: 'What you need',
+      needs: [
+        'An account at <strong>worldlabs.ai</strong> with Marble API access.',
+        'Your <strong>API Key</strong> configured in <em>Settings → World Labs</em>.',
+        'The Unreal project prepared with the app: includes the native GPU C++ component <span class="mono">UDbvGaussianSplatComponent</span>.',
+      ],
+      stepsTitle: 'Workflow',
+      steps: [
+        'In the <em>Generate</em> view ("World" tab), write the environment description and click <strong>Start</strong>.',
+        'Generation usually takes around 5 minutes. If you close the app, the job automatically resumes when reopening without losing the generated world.',
+        'The result contains a Gaussian Splatting file (<span class="mono">.spz</span>) for photorealism and a simplified collision mesh (<span class="mono">.glb</span>) for physics.',
+        'Click <strong>«Send to Unreal»</strong> in the library to place the splat actor and physical collider perfectly synchronized into the level.',
+      ],
+    },
+    audio: {
+      title: 'Sound Effects (SFX) and Audio',
+      intro: 'Generate sound effects or search real audio recordings to bring your game to life, ready to import as USoundWave assets in Unreal Engine.',
+      needTitle: 'Three providers and how to configure them',
+      needs: [
+        '<strong>Local (dbv-audio-service):</strong> 100% free, private with zero cloud cost. Runs Stable Audio Open 1.0 locally at <span class="mono">http://127.0.0.1:8765</span> using your local GPU.',
+        '<strong>ElevenLabs SFX:</strong> Ultra high-quality realistic AI sound effects. Get your API Key at <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a> and paste it into <em>Settings → Audio</em>.',
+        '<strong>Freesound:</strong> Search and download real-world sounds (CC0 and CC-BY licenses). Create a free account at Freesound, request credentials at <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Freesound - API credentials</a> (you get a <em>Client secret / Api key</em>), and paste it as token into <em>Settings → Audio</em>.',
+      ],
+      providersTitle: 'Duration and loops',
+      providers: [
+        'Both local service and ElevenLabs let you choose the exact duration (from 0.5 to 30 seconds).',
+        'The <strong>Seamless loop</strong> option generates the sound so start and end blend seamlessly (ideal for engines, wind or rain).',
+      ],
+      stepsTitle: 'Workflow',
+      steps: [
+        'In the <em>Generate</em> view, navigate to the <strong>Sounds</strong> tab (🎵).',
+        'Select the provider, type what you want to hear (e.g. <em>"footsteps on wet gravel"</em>) and click <strong>Start</strong>.',
+        'The audio is downloaded into your <em>Library</em> with a built-in player for instant preview.',
+        'Click <strong>«Send to Unreal»</strong> to import into <span class="mono">/Game/DBV/Audio/</span> as a <span class="mono">USoundWave</span> asset (or <span class="mono">SoundCue</span> if looped).',
+        'AI agents can also invoke the <span class="mono">unreal_import_sound</span> tool to attach sounds to actor components or level events.',
       ],
     },
     shortcuts: { title: 'Global Keyboard Shortcuts', shortcut: 'Shortcut', action: 'Action', help: 'Open this Help Center', shift: 'Ctrl+Shift+I', chat: 'Open / toggle Conversation panel', esc: 'Close any active modal dialog', save: 'Save in edit views' },
@@ -186,6 +341,62 @@ const TEXTS = {
         'Convai 的操作会<strong>保存蓝图</strong>：«撤销本轮» 可能无法还原。请把项目放在版本控制中。',
       ],
     },
+    tripo: {
+      title: '使用 Tripo 的 3D 模型',
+      intro: '使用 Tripo Studio v3 API 根据文本提示或参考图像生成优化的多边形网格（PBR、低多边形或四边形拓扑）。',
+      needTitle: '你需要',
+      needs: [
+        '在 <strong>tripo3d.ai</strong> 注册并拥有可用积分的账户。',
+        '在<em>设置 → Tripo</em> 中配置你的 <strong>API 密钥</strong>。应用会检查余额并遵守你的预算上限。',
+      ],
+      stepsTitle: '工作流程',
+      steps: [
+        '在<em>生成</em>视图（「文本」或「图像」标签页）中，描述模型或附加图像，然后点击<strong>开始</strong>。',
+        '费用卡片会在启动任务前显示预估积分。',
+        '完成的模型会以 GLB 文件形式保存在<em>库</em>中。',
+        '在库中可以应用<strong>自动骨骼绑定</strong>、关联兼容动画，或点击<strong>«发送至 Unreal»</strong>将其作为 StaticMesh 或 SkeletalMesh 导入到 <span class="mono">/Game/DBV/Models/</span>。',
+      ],
+    },
+    worldlabs: {
+      title: '使用 World Labs 的世界与环境',
+      intro: '使用 World Labs Marble 技术，根据文本或全景图像生成完整逼真的 3D 场景。',
+      needTitle: '你需要',
+      needs: [
+        '在 <strong>worldlabs.ai</strong> 注册并拥有 Marble API 访问权限的账户。',
+        '在<em>设置 → World Labs</em> 中配置你的 <strong>API 密钥</strong>。',
+        '使用本应用准备好的 Unreal 项目：包含原生 GPU C++ 组件 <span class="mono">UDbvGaussianSplatComponent</span>。',
+      ],
+      stepsTitle: '工作流程',
+      steps: [
+        '在<em>生成</em>视图（「世界」标签页）中，输入场景描述并点击<strong>开始</strong>。',
+        '生成通常需要约 5 分钟。如果关闭应用，重新打开时会自动继续轮询，不会丢失生成的世界。',
+        '结果包含用于照片级写实的 Gaussian Splatting 文件（<span class="mono">.spz</span>）以及用于物理的简化碰撞网格（<span class="mono">.glb</span>）。',
+        '在库中点击<strong>«发送至 Unreal»</strong>，即可将 Splat Actor 和碰撞体完全同步放置在关卡中。',
+      ],
+    },
+    audio: {
+      title: '音频与音效 (SFX)',
+      intro: '生成音效或搜索真实录音以营造游戏氛围，可直接作为 USoundWave 资源导入 Unreal Engine。',
+      needTitle: '三种提供商及配置方法',
+      needs: [
+        '<strong>本地 (dbv-audio-service)：</strong>100% 免费、私密且无需云端费用。在 <span class="mono">http://127.0.0.1:8765</span> 本地运行 Stable Audio Open 1.0，利用本地 GPU。',
+        '<strong>ElevenLabs SFX：</strong>逼真的高质量 AI 音效。在 <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a> 获取 API 密钥并粘贴至<em>设置 → 音频</em>。',
+        '<strong>Freesound：</strong>搜索并下载真实录音（CC0 和 CC-BY 许可）。在 Freesound 注册免费账户，于 <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Freesound - API credentials</a> 申请凭证（获取 <em>Client secret / Api key</em>），并作为令牌粘贴至<em>设置 → 音频</em>。',
+      ],
+      providersTitle: '时长与循环',
+      providers: [
+        '本地服务和 ElevenLabs 均可选择精确时长（0.5 至 30 秒）。',
+        '<strong>无缝循环</strong>选项能让音频首尾完美衔接（非常适合引擎声、风声或雨声）。',
+      ],
+      stepsTitle: '工作流程',
+      steps: [
+        '在<em>生成</em>视图中，进入<strong>声音</strong>标签页 (🎵)。',
+        '选择提供商，输入你想听到的声音描述（例如 <em>«潮湿砾石上的脚步声»</em>），然后点击<strong>开始</strong>。',
+        '音频下载至你的<em>库</em>中，配有内置播放器供即时试听。',
+        '点击<strong>«发送至 Unreal»</strong>，将其作为 <span class="mono">USoundWave</span> 资源（如果是循环则为 <span class="mono">SoundCue</span>）导入到 <span class="mono">/Game/DBV/Audio/</span>。',
+        'AI 智能体也可以调用 <span class="mono">unreal_import_sound</span> 工具将声音关联到 Actor 组件或关卡事件。',
+      ],
+    },
     shortcuts: { title: '全局快捷键', shortcut: '快捷键', action: '操作', help: '打开此帮助中心', shift: 'Ctrl+Shift+I', chat: '打开 / 切换对话面板', esc: '关闭当前的模态窗口', save: '在编辑视图中保存' },
     links: { title: '链接和官方文档', intro: '访问资源和详细指南：', repo: 'GitHub 官方仓库' },
   },
@@ -202,6 +413,9 @@ export function helpTab(tab, lang) {
   const pages = {
     ue: () => ue(s.ue),
     ai: () => `<p class="hint">${s.loading}</p>`,
+    tripo: () => tripo(s.tripo),
+    worldlabs: () => worldlabs(s.worldlabs),
+    audio: () => audio(s.audio),
     convai: () => convai(s.convai),
     shortcuts: () => shortcuts(s.shortcuts),
     links: () => links(s.links),
@@ -210,4 +424,4 @@ export function helpTab(tab, lang) {
 }
 
 /** Pestañas que existen. */
-export const HELP_TABS = ['ue', 'ai', 'convai', 'shortcuts', 'links'];
+export const HELP_TABS = ['ue', 'ai', 'tripo', 'worldlabs', 'audio', 'convai', 'shortcuts', 'links'];

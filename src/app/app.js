@@ -567,6 +567,25 @@ export function start() {
       },
       // Imágenes pegadas desde el portapapeles (`Ctrl+V`) o arrastradas al panel (REQ-68).
       pasteAttachments: (files) => pastedAttachments(files, { saveImage: api.aiSaveClipboardImage, onError: (message) => toast(message, 'error') }),
+      // Capturar viewport de Unreal Engine y adjuntarlo como imagen (REQ-73).
+      captureViewportAttachment: async () => {
+        if (state.connection?.status !== 'online') {
+          toast(t('unreal.pill.offline'), 'error');
+          return null;
+        }
+        const captured = await api.unrealCaptureViewport(state.connection.endpoint, false, 'high');
+        if (!captured.ok) {
+          toast(captured.error.message, 'error');
+          return null;
+        }
+        const mime = captured.value.mime || 'image/png';
+        const saved = await api.aiSaveClipboardImage(mime, captured.value.base64, `viewport_${Date.now()}.png`);
+        if (!saved.ok) {
+          toast(saved.error.message, 'error');
+          return null;
+        }
+        return saved.value;
+      },
       // Un agente genera en su propio proceso (`--mcp`): sus trabajos aparecen en la conversación (REQ-27).
       onTurnStart: ({ panel, agent, isBusy }) => agent && chatJobs.follow(panel, isBusy),
       mcpServers: async () => {

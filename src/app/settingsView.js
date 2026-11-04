@@ -16,12 +16,13 @@ import * as api from './backend.js';
 import { button, el } from './dom.js';
 import { convaiSettingsCard } from './convaiSettings.js';
 import { brandHeader } from './brandHeader.js';
+import { openHelp } from './helpModal.js';
 
 /** Repositorio con las herramientas que descargan y preparan las guías de Unreal (REQ-25). */
 export const KNOWLEDGE_REPO = 'https://github.com/davidbuenov/dbv-mcp-server';
 
-/** Pestañas de Ajustes, en orden (REQ-60). */
-export const SETTINGS_TABS = ['ai', 'tripo', 'worldlabs', 'convai', 'library', 'knowledge', 'mcp', 'diagnostics'];
+/** Pestañas de Ajustes, en orden (REQ-60, REQ-74). */
+export const SETTINGS_TABS = ['ai', 'tripo', 'worldlabs', 'convai', 'library', 'knowledge', 'mcp', 'project', 'audio', 'diagnostics'];
 
 /** Configuración MCP para pegar en un cliente (Claude Code `.mcp.json`, Cursor…). */
 export function mcpClientConfig(command) {
@@ -90,7 +91,27 @@ export function createSettingsView(host, deps) {
     const budget = el('input', { attrs: { type: 'number', min: '0', step: '10', value: String(status.ok ? status.value.budget : 300), 'aria-label': t('settings.budget') } });
     const worldlabsBudget = el('input', { attrs: { type: 'number', min: '0', step: '10', value: String(status.ok ? status.value.budgetByService?.worldlabs ?? 2000 : 2000), 'aria-label': t('settings.worldlabsBudget') } });
     const port = deps.state.connection?.endpoint?.port ?? 8000;
-    const [command, location] = await Promise.all([api.appMcpCommand(port, deps.state.connection?.projectPath ?? null), api.libraryLocation()]);
+    const [command, location, projectSettingsRes] = await Promise.all([
+      api.appMcpCommand(port, deps.state.connection?.projectPath ?? null),
+      api.libraryLocation(),
+      api.unrealGetProjectSettings ? api.unrealGetProjectSettings() : Promise.resolve({ ok: true, value: {} }),
+    ]);
+    const projectSettings = projectSettingsRes?.ok && projectSettingsRes.value ? projectSettingsRes.value : {};
+    const copyright = el('input', { attrs: { type: 'text', value: projectSettings.copyrightHolder ?? '', placeholder: t('settings.projectCopyrightPlaceholder'), 'aria-label': t('settings.projectCopyright') } });
+    const localAudioStatus = el('p', { className: 'hint', text: '' });
+    const checkAudioBtn = button(t('gen.soundLocalCheck'), async () => {
+      checkAudioBtn.disabled = true;
+      localAudioStatus.textContent = t('gen.soundGenerating');
+      const st = await api.generationCheckLocalAudio();
+      checkAudioBtn.disabled = false;
+      if (st?.ready) {
+        localAudioStatus.textContent = t('gen.soundLocalReady', { device: st.device || 'GPU' });
+        localAudioStatus.className = 'hint check-ok';
+      } else {
+        localAudioStatus.textContent = t('gen.soundLocalOffline');
+        localAudioStatus.className = 'hint check-fail';
+      }
+    }, 'btn-ghost');
     const hasKey = status.ok && status.value.hasKey?.tripo;
     const balance = el('p', { className: 'hint' });
     if (hasKey) api.generationBalance().then((result) => (balance.textContent = result.ok && result.value ? t('gen.balance', { balance: String(result.value.balance), frozen: String(result.value.frozen) }) : (result.error?.message ?? '')));
@@ -106,25 +127,25 @@ export function createSettingsView(host, deps) {
     }
     const libraryCard = location.ok && location.value
       ? el(
+        'div',
+        { className: 'card stack' },
+        el('h3', { text: t('settings.library') }),
+        el('p', { className: 'hint', text: t('settings.libraryHint') }),
+        el('p', { className: 'mono', text: location.value.current }),
+        // REQ-53: la biblioteca pasó a Documentos; lo que había en la ubicación antigua se copió y se conserva.
+        location.value.migrated ? el('p', { className: 'hint', text: t('settings.libraryMigrated', { n: String(location.value.migrated) }) }) : null,
+        el('label', { className: 'row' }, copyExisting, t('settings.libraryCopy')),
+        el(
           'div',
-          { className: 'card stack' },
-          el('h3', { text: t('settings.library') }),
-          el('p', { className: 'hint', text: t('settings.libraryHint') }),
-          el('p', { className: 'mono', text: location.value.current }),
-          // REQ-53: la biblioteca pasó a Documentos; lo que había en la ubicación antigua se copió y se conserva.
-          location.value.migrated ? el('p', { className: 'hint', text: t('settings.libraryMigrated', { n: String(location.value.migrated) }) }) : null,
-          el('label', { className: 'row' }, copyExisting, t('settings.libraryCopy')),
-          el(
-            'div',
-            { className: 'row' },
-            button(t('settings.libraryChange'), async () => {
-              const folder = await window.__TAURI__.dialog.open({ directory: true, defaultPath: location.value.current });
-              return folder ? moveLibrary(String(folder)) : null;
-            }),
-            location.value.isDefault ? null : button(t('settings.libraryDefault'), () => moveLibrary(null), 'btn-ghost'),
-            button(t('lib.reveal'), () => window.__TAURI__.opener.revealItemInDir(location.value.current), 'btn-ghost'),
-          ),
-        )
+          { className: 'row' },
+          button(t('settings.libraryChange'), async () => {
+            const folder = await window.__TAURI__.dialog.open({ directory: true, defaultPath: location.value.current });
+            return folder ? moveLibrary(String(folder)) : null;
+          }),
+          location.value.isDefault ? null : button(t('settings.libraryDefault'), () => moveLibrary(null), 'btn-ghost'),
+          button(t('lib.reveal'), () => window.__TAURI__.opener.revealItemInDir(location.value.current), 'btn-ghost'),
+        ),
+      )
       : null;
     const convai = await convaiSettingsCard({ toast: deps.toast });
     // REQ-25: la copia local de las guías de Unreal (formato de MCPCLiente); la app no descarga nada de Epic.
@@ -161,12 +182,43 @@ export function createSettingsView(host, deps) {
       ),
     );
     const panels = {
-      ai: el('div', { className: 'card stack' }, el('h3', { text: t('settings.ai') }), el('div', { className: 'row' }, button(t('settings.aiConnect'), deps.openConnect, 'btn-primary'))),
+      ai: el('div', { className: 'card stack' }, el('h3', { text: t('settings.ai') }), el('div', { className: 'row' }, button(t('settings.aiConnect'), deps.openConnect, 'btn-primary'), button(`📖 ${t('settings.helpAi')}`, () => openHelp('ai'), 'btn-ghost'))),
+      project: el(
+        'div',
+        { className: 'card stack' },
+        el('h3', { text: t('settings.project') }),
+        el('p', { className: 'hint', text: t('settings.projectCopyrightHint') }),
+        el('label', {}, t('settings.projectCopyright'), copyright),
+        el('div', { className: 'row' }, button(t('settings.save'), async () => {
+          const holder = copyright.value.trim() || null;
+          const saved = await api.unrealSetProjectSettings({ copyrightHolder: holder });
+          if (!saved.ok) return deps.toast(saved.error.message, 'error');
+          deps.toast(t('settings.projectSaved'));
+        }, 'btn-primary')),
+      ),
+      audio: el(
+        'div',
+        { className: 'card stack' },
+        el('h3', { text: t('settings.audio') }),
+        el(
+          'div',
+          { className: 'row' },
+          button(`📖 ${t('settings.helpAudio')}`, () => openHelp('audio'), 'btn-ghost'),
+          button('ElevenLabs API Keys ↗', () => window.__TAURI__?.opener?.openUrl?.('https://elevenlabs.io/app/developers/api-keys'), 'btn-ghost button--compact'),
+          button('Freesound API ↗', () => window.__TAURI__?.opener?.openUrl?.('https://freesound.org/apiv2/apply'), 'btn-ghost button--compact'),
+        ),
+        el('p', { className: 'hint', text: t('settings.audioHint') }),
+        ...keyControls('elevenlabs', status.ok && status.value.hasKey?.elevenlabs),
+        ...keyControls('freesound', status.ok && status.value.hasKey?.freesound),
+        el('div', { className: 'row', style: 'margin-top: 12px;' }, checkAudioBtn),
+        localAudioStatus,
+      ),
       tripo: el(
         'div',
         { className: 'card stack' },
         brandHeader('Tripo', 'tripo'),
         balance,
+        el('div', { className: 'row' }, button(`📖 ${t('settings.helpTripo')}`, () => openHelp('tripo'), 'btn-ghost')),
         ...keyControls('tripo', hasKey),
         el('label', {}, t('settings.budget'), budget),
         el('div', { className: 'row' }, button(t('settings.save'), async () => {
@@ -180,6 +232,7 @@ export function createSettingsView(host, deps) {
         { className: 'card stack' },
         brandHeader('World Labs', 'worldlabs'),
         worldlabsBalance,
+        el('div', { className: 'row' }, button(`📖 ${t('settings.helpWorldLabs')}`, () => openHelp('worldlabs'), 'btn-ghost')),
         el('p', { className: 'hint', text: t('settings.worldlabsHint') }),
         ...keyControls('worldlabs', status.ok && status.value.hasKey?.worldlabs),
         // Su propio tope: los créditos de World Labs no son los de Tripo (REQ-18, RNF-04).

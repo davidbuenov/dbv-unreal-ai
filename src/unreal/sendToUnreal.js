@@ -58,7 +58,9 @@ export async function sendToUnreal(deps, entry, { project, place = true, folder 
   const dbv = listed.ok ? listed.value.find((t) => isDbvToolset(t.name))?.name : null;
   const splatFile = entry.files?.find((f) => /\.(spz|ply)$/i.test(f));
   const modelFile = entry.files?.find((f) => /\.(glb|gltf|fbx|obj)$/i.test(f));
+  const soundFile = entry.files?.find((f) => /\.(wav|mp3|ogg)$/i.test(f));
   const isWorld = entry.kind === 'world' || Boolean(splatFile);
+  const isSound = entry.kind === 'sound' || Boolean(soundFile);
 
   let outcome;
   if (!listed.ok) {
@@ -112,6 +114,20 @@ export async function sendToUnreal(deps, entry, { project, place = true, folder 
           ...(colliderPath ? { colliderPath } : {}),
           ...(world ? { world } : {}),
         };
+      }
+    }
+  } else if (!isWorld && isSound && soundFile) {
+    const soundPath = await backend.libraryFilePath(entry.id, soundFile);
+    if (!soundPath.ok) {
+      outcome = { ok: false, error: soundPath.error.message };
+    } else {
+      const imported = await backend.callTool(dbv, 'import_sound', { source_file: soundPath.value, folder_path: '/Game/DBV/Audio', asset_name: assetName(entry.name) }, 120);
+      const report = imported.ok ? parse(imported.value) : null;
+      if (!imported.ok || !report?.success || !report.primary) {
+        outcome = { ok: false, error: imported.ok ? (report?.error ?? imported.value.text) : imported.error.message };
+      } else {
+        await backend.libraryRecordSent(entry.id, project, report.primary);
+        outcome = { ok: true, assetPath: report.primary, actor: null, kind: 'sound', animations: [], playing: null };
       }
     }
   } else if (!modelFile) {

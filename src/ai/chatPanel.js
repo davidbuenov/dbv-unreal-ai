@@ -104,12 +104,15 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   // «Recetas» (REQ-23 de DBV Unreal AI): solo si el host las tiene.
   const recipes = button(`📋 ${t('ai.recipes')}`, () => callbacks.onRecipes?.(), 'button button--compact button--ghost ai-panel__recipes', t('ai.recipesHint'));
   if (!callbacks.onRecipes) recipes.classList.add('hidden');
+  // «Capturar viewport» (@spec REQ-73): solo si el host puede capturar el editor.
+  const captureViewport = button('📷', () => callbacks.onCaptureViewport?.(), 'button button--compact button--ghost ai-panel__capture-viewport', t('ai.captureViewportHint'));
+  if (!callbacks.onCaptureViewport) captureViewport.classList.add('hidden');
   const attachments = el('span', 'ai-panel__attachments');
   const usage = el('span', 'ai-panel__usage');
   const speed = el('span', 'ai-panel__usage ai-panel__speed');
   const stopButton = button(t('ai.stop'), () => callbacks.onStop(), 'button button--compact hidden');
   const sendButton = button(t('ai.send'), () => send(), 'button button--primary button--compact');
-  composerActions.append(attachFiles, attachSection, remember, recipes, attachments, speed, usage, stopButton, sendButton);
+  composerActions.append(attachFiles, captureViewport, attachSection, remember, recipes, attachments, speed, usage, stopButton, sendButton);
   composer.append(mentionList, input, composerActions);
   host.append(header, destination, warning, contextBar, messages, composer);
 

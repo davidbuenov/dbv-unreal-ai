@@ -18,6 +18,7 @@ pub mod jobs;
 pub mod tools;
 pub mod tripo;
 pub mod worldlabs;
+pub mod audio;
 
 
 use std::collections::HashMap;
@@ -38,7 +39,7 @@ pub fn key_account(service: &str) -> String {
 }
 
 /// Servicios de generación que conoce la app.
-pub const SERVICES: [&str; 2] = ["tripo", "worldlabs"];
+pub const SERVICES: [&str; 4] = ["tripo", "worldlabs", "elevenlabs", "freesound"];
 
 /// La clave de cada servicio que la tenga, leída con `key_of` (del llavero en la ventana, de la configuración en el
 /// `--mcp`): con ella se reanuda cada trabajo huérfano en su servicio (`jobs::resume_orphans`). @spec REQ-70

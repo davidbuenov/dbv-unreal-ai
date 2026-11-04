@@ -22,7 +22,7 @@ import unreal
 from dbv_unreal_ai import analysis
 
 #: Versión del contrato de herramientas (la app la compara con la que trae).
-TOOLSET_VERSION = "0.3.2"
+TOOLSET_VERSION = "0.4.0"
 
 
 def _json(value: Any) -> str:
@@ -124,6 +124,37 @@ def import_model(source_file: str, folder_path: str = "/Game/DBV/Generated", ass
         "kind": "skeletal" if kinds["skeletal"] else "static" if kinds["static"] else "other",
         "skeleton": (kinds["skeleton"] or [None])[0],
         "animations": kinds["animation"],
+    }
+    if not paths:
+        result["error"] = "the import produced no assets (unsupported or invalid file)"
+    return _json(result)
+
+
+def import_sound(source_file: str, folder_path: str = "/Game/DBV/Audio", asset_name: str = "") -> str:
+    """Importa un fichero de sonido (.wav, .mp3, .ogg) a Unreal como USoundWave. @spec REQ-72"""
+    if not os.path.isfile(source_file):
+        return _json({"success": False, "error": f"file not found: {source_file}"})
+    if not folder_path.startswith("/Game/"):
+        return _json({"success": False, "error": "folder_path must be under /Game/"})
+    if not unreal.EditorAssetLibrary.does_directory_exist(folder_path):
+        unreal.EditorAssetLibrary.make_directory(folder_path)
+    base = asset_name.strip() or os.path.splitext(os.path.basename(source_file))[0]
+    name = _unique_name(folder_path, base)
+    task = unreal.AssetImportTask()
+    task.filename = source_file
+    task.destination_path = folder_path
+    task.destination_name = name
+    task.replace_existing = False
+    task.automated = True
+    task.save = True
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    paths = [str(p) for p in task.get_editor_property("imported_object_paths")]
+    primary = paths[0] if paths else None
+    result = {
+        "success": bool(paths),
+        "imported": paths,
+        "primary": primary,
+        "kind": "sound",
     }
     if not paths:
         result["error"] = "the import produced no assets (unsupported or invalid file)"

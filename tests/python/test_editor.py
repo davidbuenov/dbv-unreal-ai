@@ -241,6 +241,16 @@ class ImportModelTests(unittest.TestCase):
         self.assertFalse(report["success"])
         self.assertIn("no assets", report["error"])
 
+    def test_import_sound_crea_asset_de_audio(self) -> None:
+        """@spec REQ-72"""
+        sound_asset = "/Game/DBV/Audio/Explosion"
+        ASSETS[sound_asset] = object()
+        IMPORTED.append(sound_asset)
+        res = json.loads(editor.import_sound(self.file.name, "/Game/DBV/Audio", "Explosion"))
+        self.assertTrue(res["success"])
+        self.assertEqual(res["primary"], sound_asset)
+        self.assertEqual(res["kind"], "sound")
+
 
 class PlayAnimationTests(unittest.TestCase):
     """Reproducir una animación en el viewport del editor."""

@@ -322,18 +322,18 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
 | D50 | **Autoría configurable con huella inmutable (REQ-74):** Se añade un campo de texto en Ajustes → Proyecto: *«Titular de Copyright»* (`project_copyright`), guardado en `app_config_dir()`. En `unrealPrompt` (`unrealTools.js`), la cabecera se genera con ese autor en la línea de Copyright, pero manteniendo de forma inmutable las líneas 4 y 5 de atribución a `DBV Unreal AI` y `dbv-specs-ops`. | Respetar la propiedad intelectual del usuario sin perder la atribución del software libre y su herramienta de desarrollo. |
 | D51 | **Autodetección del puerto MCP (REQ-75):** Al conectar (`unrealConnect`), si el puerto configurado en el `.ini` falla o devuelve 404, el backend sondea en paralelo los puertos `8000..8005`. Si encuentra un servidor MCP que responde a `initialize`, se actualiza el endpoint y se conecta automáticamente sin error. | Previene errores 404 por desincronización entre el puerto guardado y el puerto dinámico asignado por Unreal Engine al arrancar. |
 
-### Rebanadas de implementación (Slices S80..S84)
+### Rebanadas de implementación (Slices S80..S84) — Completadas
 
-1. **S80 · Generación de audio y catálogo de biblioteca (REQ-71):**
+1. **[Completada] S80 · Generación de audio y catálogo de biblioteca (REQ-71):**
    - Backend Rust: módulo `src-tauri/src/generation/audio.rs`, comandos Tauri `generation_generate_sound`, `generation_search_freesound`, `generation_check_local_audio`.
    - Frontend: Pestaña «Sonidos» en *Generar* (`generateView.js`) con selector de proveedor (Local / ElevenLabs / Freesound), prompt, duración y bucle. Pestaña «Sonidos» en *Biblioteca* (`libraryView.js`) con reproductor integrado.
-2. **S81 · «Enviar a Unreal» de Audio y herramienta MCP (REQ-72):**
+2. **[Completada] S81 · «Enviar a Unreal» de Audio y herramienta MCP (REQ-72):**
    - Script Python en toolset DBV para importación de audio (`USoundWave` / `SoundCue`).
    - Herramienta MCP `unreal_import_sound` en `mcp_server.rs` y botón en `libraryView.js`.
-3. **S82 · Visión multimodal en vivo: «Capturar viewport» (REQ-73):**
+3. **[Completada] S82 · Visión multimodal en vivo: «Capturar viewport» (REQ-73):**
    - Botón `📷 Capturar viewport` en `src/ai/chatPanel.js` conectado con `unrealCaptureViewport` y el sistema de adjuntos con miniatura.
-4. **S83 · Autoría de Copyright configurable con huella inmutable (REQ-74):**
+4. **[Completada] S83 · Autoría de Copyright configurable con huella inmutable (REQ-74):**
    - Ajustes de proyecto (`settingsView.js`) con campo `projectCopyright`. Inyección en `unrealPrompt` manteniendo la huella DBV de 6 líneas.
-5. **S84 · Autodetección y resiliencia de puertos MCP (REQ-75):**
+5. **[Completada] S84 · Autodetección y resiliencia de puertos MCP (REQ-75):**
    - Sondeo en `mcp_client.rs` / `commands.rs` en el rango `8000..8005` al fallar el puerto del `.ini`.
 

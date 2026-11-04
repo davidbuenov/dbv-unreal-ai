@@ -20,6 +20,8 @@ export const unrealRecentProjects = () => call('unreal_recent_projects');
 export const unrealRememberProject = (path) => call('unreal_remember_project', { path });
 export const unrealOpenProject = (path) => call('unreal_open_project', { path });
 export const unrealConnect = (endpoint) => call('unreal_connect', { endpoint });
+export const unrealGetProjectSettings = () => call('unreal_get_project_settings');
+export const unrealSetProjectSettings = (settings) => call('unreal_set_project_settings', { settings });
 export const unrealListToolsets = (endpoint) => call('unreal_list_toolsets', { endpoint });
 export const unrealDescribeToolset = (endpoint, toolset) => call('unreal_describe_toolset', { endpoint, toolset });
 /** Por qué la IA no puede cambiar ese fichero del proyecto, o `null` (REQ-22). */
@@ -85,6 +87,10 @@ export const generationToolSpecs = () => call('generation_tool_specs');
 /** Qué hará una herramienta y cuánto cuesta, sin gastar (tarjeta de coste). */
 export const generationPrepare = (tool, args) => call('generation_prepare', { tool, args });
 export const generationLaunch = (tool, args) => call('generation_launch', { tool, args, confirmCost: true });
+export const generationCheckLocalAudio = (url = null) => call('generation_check_local_audio', { url });
+export const generationGenerateSound = ({ provider, prompt, name = null, duration = 5, loop = false, localUrl = null }) => call('generation_generate_sound', { provider, prompt, name, duration, loop, localUrl });
+export const generationSearchFreesound = (query, pageSize = 15) => call('generation_search_freesound', { query, pageSize });
+export const generationSaveSoundUrl = ({ url, name, prompt = null, duration = null }) => call('generation_save_sound_url', { url, name, prompt, duration });
 export const generationOperations = (operation) => call('generation_operations', { operation: operation || null });
 export const generationBalance = () => call('generation_balance');
 export const generationWorldLabsBalance = () => call('generation_worldlabs_balance');

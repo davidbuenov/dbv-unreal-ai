@@ -361,6 +361,16 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 
 .card > .segmented { align-self: flex-start; }
 
+/* ─── Lista de resultados de sonido (Freesound) ─────────────────────── */
+.sound-results-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; margin-top: 10px; padding-right: 4px; }
+.sound-item-card { background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sound-item-info { display: flex; flex-direction: column; gap: 4px; flex: 1 1 220px; min-width: 0; }
+.sound-item-title { font-weight: 600; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sound-item-meta { font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sound-item-tags { color: var(--text-muted); font-size: 11px; }
+.sound-item-player { flex: 1 1 180px; max-width: 260px; height: 32px; outline: none; }
+.sound-item-actions { display: flex; align-items: center; gap: 8px; }
+
 /* Logo de la Unreal Dev Community Málaga */
 .app-logo { display: block; margin-right: -4px; }
 .about-logo { display: block; margin: 0 auto 8px; }
