@@ -309,9 +309,31 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
 13. **S73 · Chino (REQ-64):** diccionarios, ayuda por idioma, detección y test de paridad.
 14. **S74 · Documentación y cierre:** `docs/IA*.md`, ayuda de splats y CHANGELOG ES/EN; después, `/test` y `/code-simplify` de la ampliación.
 
-### Verificación
+## 11. Plan de implementación — DBV Unreal AI v0.4.0 (Audio & SFX, Visión, Autoría y Puertos)
 
-- **Tests automáticos:** Automation (C++), Rust, Vitest, Python, e2e y `dbv-lint`.
-- **Pruebas en vivo con el usuario:** S61 (la puerta), S67, S68 y S70.
-- **Rendimiento:** `stat GPU` sobre la iglesia.
-- **Pendiente:** las evals con un modelo real, hasta que haya uno disponible.
+### Decisiones de arquitectura v0.4.0
+
+| # | Decisión | Motivo |
+|---|---|---|
+| D46 | **Generación de audio desacoplada (REQ-71):** En Rust (`src-tauri/src/generation/audio.rs`), un cliente unificado `AudioClient` gestiona los tres proveedores: (1) Local (`http://127.0.0.1:8765`), (2) ElevenLabs (`/v1/text-to-sound-effects`), (3) Freesound (`/apiv2/search/text/`). El audio generado/descargado se guarda como fichero `.wav` en la biblioteca del usuario. | Mantiene la aplicación ligera (~15 MB) y libre del peso de PyTorch (~4 GB), permitiendo que quien tenga GPU use `dbv-audio-service` en local y quien no use la nube. |
+| D47 | **Biblioteca y visor de audio (`kind: "sound"`, REQ-71):** Los assets de sonido se almacenan en `library/` con extensión `.wav`. En el frontend (`src/app/libraryView.js`), la tarjeta muestra miniatura 🎵, duración, prompt de origen y un reproductor de audio HTML5 `<audio controls>` para preescucha instantánea. | Experiencia de usuario coherente con los modelos 3D y mundos de la biblioteca. |
+| D48 | **Importación de Audio a Unreal (REQ-72):** (1) En la UI, el botón «Enviar a Unreal» de una tarjeta de sonido copia el `.wav` a `Content/DBV/Audio/` y llama al método nativo de importación de assets del motor (`unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(...)`); (2) Para los agentes, se expone la herramienta MCP `unreal_import_sound`. | Integración directa con el motor para que los efectos de sonido estén listos para usarse en Sound Waves o Sound Cues. |
+| D49 | **Visión multimodal en la conversación (REQ-73):** Se añade el botón `📷 Capturar viewport` junto a la caja de entrada de chat (`chatPanel.js`). Llama al comando existente `unreal_capture_viewport`, el backend guarda la imagen como adjunto clipboard/temporal (`ai_save_clipboard_image`) y se inyecta en la lista de `attachments`. Al enviar el mensaje, viaja tanto a modelos locales/cloud con visión como a agentes ACP. | Resuelve la deuda de `REQ-13` aprovechando el pipeline multimodal consolidado en `REQ-68`. |
+| D50 | **Autoría configurable con huella inmutable (REQ-74):** Se añade un campo de texto en Ajustes → Proyecto: *«Titular de Copyright»* (`project_copyright`), guardado en `app_config_dir()`. En `unrealPrompt` (`unrealTools.js`), la cabecera se genera con ese autor en la línea de Copyright, pero manteniendo de forma inmutable las líneas 4 y 5 de atribución a `DBV Unreal AI` y `dbv-specs-ops`. | Respetar la propiedad intelectual del usuario sin perder la atribución del software libre y su herramienta de desarrollo. |
+| D51 | **Autodetección del puerto MCP (REQ-75):** Al conectar (`unrealConnect`), si el puerto configurado en el `.ini` falla o devuelve 404, el backend sondea en paralelo los puertos `8000..8005`. Si encuentra un servidor MCP que responde a `initialize`, se actualiza el endpoint y se conecta automáticamente sin error. | Previene errores 404 por desincronización entre el puerto guardado y el puerto dinámico asignado por Unreal Engine al arrancar. |
+
+### Rebanadas de implementación (Slices S80..S84)
+
+1. **S80 · Generación de audio y catálogo de biblioteca (REQ-71):**
+   - Backend Rust: módulo `src-tauri/src/generation/audio.rs`, comandos Tauri `generation_generate_sound`, `generation_search_freesound`, `generation_check_local_audio`.
+   - Frontend: Pestaña «Sonidos» en *Generar* (`generateView.js`) con selector de proveedor (Local / ElevenLabs / Freesound), prompt, duración y bucle. Pestaña «Sonidos» en *Biblioteca* (`libraryView.js`) con reproductor integrado.
+2. **S81 · «Enviar a Unreal» de Audio y herramienta MCP (REQ-72):**
+   - Script Python en toolset DBV para importación de audio (`USoundWave` / `SoundCue`).
+   - Herramienta MCP `unreal_import_sound` en `mcp_server.rs` y botón en `libraryView.js`.
+3. **S82 · Visión multimodal en vivo: «Capturar viewport» (REQ-73):**
+   - Botón `📷 Capturar viewport` en `src/ai/chatPanel.js` conectado con `unrealCaptureViewport` y el sistema de adjuntos con miniatura.
+4. **S83 · Autoría de Copyright configurable con huella inmutable (REQ-74):**
+   - Ajustes de proyecto (`settingsView.js`) con campo `projectCopyright`. Inyección en `unrealPrompt` manteniendo la huella DBV de 6 líneas.
+5. **S84 · Autodetección y resiliencia de puertos MCP (REQ-75):**
+   - Sondeo en `mcp_client.rs` / `commands.rs` en el rango `8000..8005` al fallar el puerto del `.ini`.
+

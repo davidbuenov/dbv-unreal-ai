@@ -25,6 +25,7 @@ Características principales:
 • Previsualización interactiva en 3D con Three.js e iluminación de estudio
 • Preparación automática de proyectos de Unreal Engine con copias de seguridad reversibles
 • Inspección y captura del viewport en vivo para comprensión contextual visual
+• Pega (Ctrl+V) o arrastra imágenes y documentos a la conversación, con miniatura, para que la IA los vea y los use con Tripo
 • Deshacer seguro de turnos y acciones con un solo clic en Unreal Engine
 • Sistema de Memoria y Plan del Proyecto independiente y versionable en disco
 • Detección automática de múltiples instancias y proyectos de Unreal Engine en paralelo
@@ -37,14 +38,11 @@ Características principales:
 
 ## Novedades de esta versión
 
-v0.3.0:
-• La IA edita el código C++ del proyecto (siempre como cambios que revisas) y la app compila: Live Coding o, si hace falta, cierra el editor, compila y lo vuelve a abrir.
-• Recetas guiadas: nivel de prueba, personaje animado, caminar por un mundo de World Labs y MetaHuman con Convai, con comprobación final en el editor.
-• Guías de Unreal sin conexión: la IA busca en tu copia local y cita la URL de cada fragmento.
-• Gaussian Splatting propio por GPU, con color según el ángulo: escenas de 10 millones de splats sin parpadeos.
-• Mundos de World Labs a su escala real y caminables, con su propia clave, tope y saldo.
-• «Mejorar con IA» en Generar: una idea corta se convierte en una descripción completa.
-• Chino simplificado, personajes de Convai, zonas del nivel, y menos permisos y menos consumo con los agentes.
+v0.3.1:
+• Cada conversación con un agente es independiente: una conversación nueva no arrastra el contexto ni gasta la cuota de otra, y se usa el modelo que eliges.
+• Pega (Ctrl+V) o arrastra imágenes y documentos de texto a la conversación: salen con miniatura, la IA los ve y puede usarlos con Tripo.
+• La IA también edita el README y los .md de la carpeta docs de tu proyecto, siempre como cambios que revisas.
+• Los mundos de World Labs que quedan a medias se reanudan al volver a abrir la app.
 
 ---
 
@@ -66,7 +64,7 @@ v0.3.0:
 14. Atajos globales: F1, Ctrl+Mayús+I, Esc, Ctrl+S
 15. 100% privado y local por defecto
 16. Interfaz en español, inglés y chino simplificado
-17. Sin telemetría oculta ni recopilación de datos
+17. Pegar o arrastrar imágenes y documentos a la conversación
 18. Código abierto bajo licencia MIT
 19. La IA edita y compila el código C++ del proyecto
 20. Recetas guiadas y guías de Unreal sin conexión
@@ -102,3 +100,4 @@ Las funciones de Inteligencia Artificial son 100% opcionales y están desactivad
 - Los agentes por suscripción (Claude Code, Codex, Gemini CLI, Google Antigravity, GitHub Copilot CLI) son programas aparte que el usuario instala y en los que inicia sesión por su cuenta; la app solo los lanza, con la carpeta del proyecto como directorio de trabajo, cuando el usuario conecta uno. Si un agente pide iniciar sesión, puede abrir el navegador del sistema para que el usuario entre en ese servicio.
 - Cuando la IA cambia el código C++ del proyecto y el usuario acepta el cambio, la app compila con las herramientas de Unreal instaladas por el usuario (Live Coding a través del editor, o Unreal Build Tool con el editor cerrado) y vuelve a abrir el editor. Solo se compila el proyecto que el usuario tiene abierto.
 - La app guarda su biblioteca de assets en Documentos\DBV Unreal AI\Library y un registro local rotativo, sin claves ni datos personales.
+- Las imágenes que el usuario pega (Ctrl+V) o arrastra a la conversación se guardan en la carpeta temporal del sistema (como máximo las 20 últimas) para que la IA pueda usarlas por su ruta; solo llegan a una IA en la nube si el usuario ha conectado una y envía el mensaje.

@@ -295,10 +295,19 @@ export function createAiApp(deps) {
     dropOneShotAttachments();
   }
 
+  /** Texto del contador de tokens de una conversación; vacío si aún no ha gastado nada. @spec REQ-67 */
+  const usageText = (u) => (u && (u.input || u.output) ? t('ai.usage').replace('{input}', String(u.input)).replace('{output}', String(u.output)) : '');
+
   function renderConversationUsage(current) {
-    const u = current?.usage;
-    panel.setUsage(u && (u.input || u.output) ? t('ai.usage').replace('{input}', String(u.input)).replace('{output}', String(u.output)) : '');
+    panel.setUsage(usageText(current?.usage));
     panel.setSpeed('');
+  }
+
+  /** Suma los tokens de un turno a su conversación (no al proyecto) y repinta el contador. @spec REQ-67 */
+  function addUsage(current, input, output) {
+    if (!input && !output) return;
+    current.usage = { input: (current.usage?.input ?? 0) + input, output: (current.usage?.output ?? 0) + output };
+    panel.setUsage(usageText(current.usage));
   }
 
   function renderConversation() {
@@ -718,10 +727,7 @@ export function createAiApp(deps) {
       if (result.outcome === 'maxSteps') panel.addNote(t('ai.maxSteps'), 'error');
       if (result.outcome === 'cancelled') panel.addNote(t('ai.stopped'));
       if (proposal.files.size) showProposal(proposal, check);
-      if (result.usage.input || result.usage.output) {
-        current.usage = { input: (current.usage?.input ?? 0) + result.usage.input, output: (current.usage?.output ?? 0) + result.usage.output };
-        panel.setUsage(t('ai.usage').replace('{input}', String(current.usage.input)).replace('{output}', String(current.usage.output)));
-      }
+      addUsage(current, result.usage.input, result.usage.output);
     } finally {
       busy = false;
       cancel = null;
@@ -948,10 +954,7 @@ export function createAiApp(deps) {
       bubble.finish();
       finalText = bubble.text?.() ?? '';
       const usage = turn.result.value?.usage;
-      if (usage && (usage.inputTokens || usage.outputTokens)) {
-        current.usage = { input: (current.usage?.input ?? 0) + (usage.inputTokens ?? 0), output: (current.usage?.output ?? 0) + (usage.outputTokens ?? 0) };
-        panel.setUsage(t('ai.usage').replace('{input}', String(current.usage.input)).replace('{output}', String(current.usage.output)));
-      }
+      addUsage(current, usage?.inputTokens ?? 0, usage?.outputTokens ?? 0);
       if (agentTurn.proposal.files.size) showProposal(agentTurn.proposal, makeChecker());
       if (turn.changes.length) panel.addNode(createChangesCard(turn.changes, { undo: undoDiskChange, open: (relative) => host.openDocument(relative) }));
       if (turn.result.value?.stopReason === 'cancelled') panel.addNote(t('ai.stopped'));

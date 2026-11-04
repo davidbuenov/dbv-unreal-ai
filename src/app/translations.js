@@ -388,6 +388,7 @@ export const APP_TRANSLATIONS = {
     'worldlabs.model11': 'Marble 1.1 (completo · 1580 créditos)',
     'worldlabs.model10Draft': 'Marble 1.0 Draft (borrador · 230 créditos)',
     'worldlabs.generating': 'Generando mundo con World Labs…',
+    'chat.dropNotText': '{name} no es una imagen PNG, JPG o WebP ni un documento de texto',
   },
   en: {
     'unreal.pill.offline': 'No editor',
@@ -766,5 +767,6 @@ export const APP_TRANSLATIONS = {
     'worldlabs.model11': 'Marble 1.1 (full · 1580 credits)',
     'worldlabs.model10Draft': 'Marble 1.0 Draft (draft · 230 credits)',
     'worldlabs.generating': 'Generating world with World Labs…',
+    'chat.dropNotText': '{name} is not a PNG, JPG or WebP image nor a text document',
   },
 };

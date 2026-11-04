@@ -29,10 +29,10 @@ use serde_json::{json, Value};
 
 use crate::ai::secrets::Secrets;
 use crate::generation::commands::GenerationSettings;
-use crate::generation::jobs::{describe, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
+use crate::generation::jobs::{describe, resume_orphans, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
 use crate::generation::tripo::TripoClient;
 use crate::generation::worldlabs::WorldLabsClient;
-use crate::generation::{key_account, tools, within_budget, Polling};
+use crate::generation::{key_account, service_keys, tools, within_budget, Polling};
 use crate::project_memory::tools as memory_tools;
 use crate::library::{now_secs, Library};
 use crate::unreal::discovery;
@@ -697,12 +697,9 @@ impl McpServer {
 
     fn jobs(&mut self, args: &Value) -> Result<String, String> {
         // Un trabajo cuyo proceso murió (otra sesión del agente) se reanuda: su tarea sigue en Tripo o World Labs (REQ-27, REQ-70).
-        let keys: std::collections::HashMap<String, String> = crate::generation::SERVICES
-            .iter()
-            .filter_map(|s| (self.config.key)(s).map(|k| (s.to_string(), k)))
-            .collect();
+        let keys = service_keys(|service| (self.config.key)(service));
         if !keys.is_empty() {
-            crate::generation::jobs::resume_orphans_by_service(&self.job_context(String::new()), &keys);
+            resume_orphans(&self.job_context(String::new()), &keys);
         }
         let wait = Duration::from_secs(args.get("wait_seconds").and_then(Value::as_u64).unwrap_or(0).min(self.config.max_wait.as_secs()));
         let since = self.board.session_start(self.started_at);

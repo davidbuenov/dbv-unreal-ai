@@ -39,6 +39,48 @@ import { APP_TRANSLATIONS } from './translations.js';
 
 registerTranslations(APP_TRANSLATIONS);
 
+/** Imágenes que se pueden pegar o soltar en la conversación: las que admite `ai_save_clipboard_image` (REQ-68). */
+const PASTABLE_IMAGE = /^image\/(png|jpe?g|webp)$/i;
+/** Tope de un documento soltado: el mismo que `MAX_TEXT_BYTES` de `attachments.rs`. */
+const MAX_DROPPED_TEXT = 256 * 1024;
+
+/** Contenido en base64 (sin el prefijo `data:…;base64,`) de un fichero pegado o soltado; `''` si no se pudo leer. */
+function readBase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = String(reader.result ?? '');
+      const cut = raw.indexOf(';base64,');
+      resolve(cut >= 0 ? raw.slice(cut + 8) : raw);
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Adjuntos de los ficheros pegados (`Ctrl+V`) o soltados en la conversación: cada imagen se guarda en disco con
+ * `saveImage` (para que tenga ruta real y Tripo pueda usarla) y cada documento de texto se lee aquí. Un binario que no
+ * es una imagen admitida se descarta avisando con `onError`. @spec REQ-68
+ */
+export async function pastedAttachments(files, { saveImage, onError }) {
+  const results = [];
+  for (const file of files ?? []) {
+    if (PASTABLE_IMAGE.test(file.type)) {
+      const saved = await saveImage(file.type, await readBase64(file), file.name || null);
+      if (saved.ok) results.push(saved.value);
+      else onError(saved.error.message);
+    } else if (typeof file.text === 'function') {
+      const content = await file.text().catch(() => '');
+      const name = file.name || 'documento.txt';
+      // Un cero en el primer bloque es un binario (un .gif, un .uasset): lo mismo que rechaza `read_attachment`.
+      if (content.slice(0, 8192).includes('\0')) onError(t('chat.dropNotText', { name }));
+      else if (content) results.push({ kind: 'text', path: name, name, content: content.slice(0, MAX_DROPPED_TEXT), truncated: content.length > MAX_DROPPED_TEXT });
+    }
+  }
+  return results;
+}
+
 /** Texto de la píldora de conexión con Unreal. */
 export function pillState(connection) {
   const vars = { project: connection?.projectName ?? '', version: connection?.engineVersion ?? '', port: String(connection?.endpoint?.port ?? '') };
@@ -524,30 +566,7 @@ export function start() {
         return read.filter((r) => r.ok).map((r) => r.value);
       },
       // Imágenes pegadas desde el portapapeles (`Ctrl+V`) o arrastradas al panel (REQ-68).
-      pasteAttachments: async (files) => {
-        const results = [];
-        for (const file of files ?? []) {
-          if (/^image\/(png|jpe?g|webp)$/i.test(file.type)) {
-            const b64 = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const raw = String(reader.result ?? '');
-                const cut = raw.indexOf(';base64,');
-                resolve(cut >= 0 ? raw.slice(cut + 8) : raw);
-              };
-              reader.onerror = () => resolve('');
-              reader.readAsDataURL(file);
-            });
-            const saved = await api.aiSaveClipboardImage(file.type, b64, file.name || null);
-            if (saved.ok) results.push(saved.value);
-            else toast(saved.error.message, 'error');
-          } else if (typeof file.text === 'function') {
-            const content = await file.text().catch(() => '');
-            if (content) results.push({ kind: 'text', path: file.name || 'documento.txt', name: file.name || 'documento.txt', content: content.slice(0, 262144), truncated: content.length > 262144 });
-          }
-        }
-        return results;
-      },
+      pasteAttachments: (files) => pastedAttachments(files, { saveImage: api.aiSaveClipboardImage, onError: (message) => toast(message, 'error') }),
       // Un agente genera en su propio proceso (`--mcp`): sus trabajos aparecen en la conversación (REQ-27).
       onTurnStart: ({ panel, agent, isBusy }) => agent && chatJobs.follow(panel, isBusy),
       mcpServers: async () => {
@@ -594,6 +613,11 @@ export function start() {
       })
       .catch(() => {});
   }
+
+  // Con `dragDropEnabled: false` (necesario en Windows para el arrastre HTML5 del panel, REQ-68), un fichero soltado
+  // fuera del panel haría navegar al WebView hasta él: aquí se descarta.
+  window.addEventListener('dragover', (event) => event.preventDefault());
+  window.addEventListener('drop', (event) => event.preventDefault());
 
   $('#ai-connect-close').addEventListener('click', () => $('#ai-connect-modal').classList.add('hidden'));
   $('#ai-connect-backdrop').addEventListener('click', () => $('#ai-connect-modal').classList.add('hidden'));

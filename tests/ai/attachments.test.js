@@ -11,6 +11,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { canSeeImages, userMessage } from '../../src/ai/aiApp.js';
 import { createChatPanel } from '../../src/ai/chatPanel.js';
+import { pastedAttachments } from '../../src/app/app.js';
+import tauriConfig from '../../src-tauri/tauri.conf.json';
 
 const IMAGE = { kind: 'image', path: 'C:/refs/barco.png', name: 'barco.png', mime: 'image/png', base64: 'iVBORw==' };
 const PROVIDERS = [{ provider: 'anthropic', cloud: true }, { provider: 'ollama', cloud: false }];
@@ -58,5 +60,37 @@ describe('imágenes adjuntas (REQ-32, REQ-68)', () => {
     const thumb = host.querySelector('.ai-chip__thumb');
     expect(thumb).not.toBeNull();
     expect(thumb.getAttribute('src')).toBe('data:image/png;base64,iVBORw==');
+  });
+
+  /** @spec REQ-68 */
+  it('soltar ficheros sobre el panel los adjunta igual que pegarlos', () => {
+    // En Windows, el arrastre nativo de Tauri se queda los ficheros y el `drop` HTML5 del panel nunca llega.
+    expect(tauriConfig.app.windows[0].dragDropEnabled).toBe(false);
+    const host = document.createElement('div');
+    const onPasteFiles = vi.fn();
+    createChatPanel({ host, renderMarkdown: vi.fn(), callbacks: { onPasteFiles, onSend: vi.fn(), onStop: vi.fn() } });
+    const dropped = new File(['# Nivel'], 'brief.md', { type: 'text/markdown' });
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [dropped], types: ['Files'] } });
+    host.dispatchEvent(drop);
+    expect(drop.defaultPrevented).toBe(true);
+    expect(onPasteFiles).toHaveBeenCalledWith([dropped]);
+  });
+
+  /** @spec REQ-68 */
+  it('de lo pegado o soltado, la imagen se guarda en disco, el texto se lee y un binario se rechaza', async () => {
+    const saveImage = vi.fn(async (mime, data, name) => ({ ok: true, value: { kind: 'image', path: `C:/tmp/${name}`, name, mime, base64: data } }));
+    const onError = vi.fn();
+    const files = [
+      new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'captura.png', { type: 'image/png' }),
+      new File(['Un puerto pirata'], 'brief.md', { type: 'text/markdown' }),
+      new File([new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00])], 'anim.gif', { type: 'image/gif' }),
+    ];
+    const attached = await pastedAttachments(files, { saveImage, onError });
+    expect(saveImage).toHaveBeenCalledWith('image/png', 'iVBORw==', 'captura.png');
+    expect(attached.map((a) => [a.kind, a.name])).toEqual([['image', 'captura.png'], ['text', 'brief.md']]);
+    expect(attached[1].content).toBe('Un puerto pirata');
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toContain('anim.gif');
   });
 });

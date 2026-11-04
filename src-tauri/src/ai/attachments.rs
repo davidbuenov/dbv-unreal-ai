@@ -15,6 +15,7 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use serde::Serialize;
 
@@ -50,25 +51,6 @@ pub enum Attachment {
     },
 }
 
-/// Base64 estándar (RFC 4648, con relleno). Sin dependencias para un solo uso.
-pub fn base64(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let n = (u32::from(chunk[0]) << 16)
-            | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
-            | u32::from(*chunk.get(2).unwrap_or(&0));
-        for (i, shift) in [18, 12, 6, 0].into_iter().enumerate() {
-            out.push(if i <= chunk.len() {
-                ALPHABET[((n >> shift) & 63) as usize] as char
-            } else {
-                '='
-            });
-        }
-    }
-    out
-}
-
 fn mime_of(ext: &str) -> Option<&'static str> {
     match ext {
         "png" => Some("image/png"),
@@ -100,7 +82,7 @@ pub fn read_attachment(path: &Path) -> Result<Attachment, AiError> {
             path: shown,
             name,
             mime: mime.into(),
-            base64: base64(&bytes),
+            base64: BASE64.encode(&bytes),
             bytes: meta.len(),
         }
     } else {
@@ -132,12 +114,10 @@ fn ext_of_mime(mime: &str) -> Option<&'static str> {
     }
 }
 
-fn sanitize_stem(name: Option<&str>, ext: &str) -> String {
+/// Nombre de fichero seguro (sin extensión, solo `[A-Za-z0-9_-]`, ≤ 32) a partir del que trae el portapapeles.
+fn sanitize_stem(name: Option<&str>) -> String {
     let raw = name.unwrap_or("portapapeles").trim();
-    let without_ext = raw
-        .strip_suffix(&format!(".{ext}"))
-        .or_else(|| raw.rsplit_once('.').map(|(s, _)| s))
-        .unwrap_or(raw);
+    let without_ext = raw.rsplit_once('.').map_or(raw, |(stem, _)| stem);
     let clean: String = without_ext
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
@@ -150,6 +130,7 @@ fn sanitize_stem(name: Option<&str>, ext: &str) -> String {
     }
 }
 
+/// Deja en `dir` solo las `MAX_CLIPBOARD_FILES` imágenes pegadas más recientes.
 fn prune_clipboard_dir(dir: &Path) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -157,19 +138,10 @@ fn prune_clipboard_dir(dir: &Path) {
     let mut files: Vec<(std::time::SystemTime, std::path::PathBuf)> = entries
         .flatten()
         .filter_map(|e| {
-            let meta = e.metadata().ok()?;
-            if !meta.is_file() {
-                return None;
-            }
-            Some((
-                meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH),
-                e.path(),
-            ))
+            let meta = e.metadata().ok().filter(std::fs::Metadata::is_file)?;
+            Some((meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH), e.path()))
         })
         .collect();
-    if files.len() <= MAX_CLIPBOARD_FILES {
-        return;
-    }
     files.sort_by_key(|(modified, _)| *modified);
     let remove_count = files.len().saturating_sub(MAX_CLIPBOARD_FILES);
     for (_, old) in files.into_iter().take(remove_count) {
@@ -191,7 +163,7 @@ pub fn save_clipboard_image(
         .split_once(";base64,")
         .map(|(_, b)| b)
         .unwrap_or_else(|| base64_data.trim());
-    let bytes = base64::engine::general_purpose::STANDARD
+    let bytes = BASE64
         .decode(clean_b64)
         .map_err(|e| AiError::Config(format!("imagen en base64 no válida: {e}")))?;
     if bytes.is_empty() {
@@ -210,7 +182,7 @@ pub fn save_clipboard_image(
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let seq = CLIPBOARD_SEQ.fetch_add(1, Ordering::Relaxed);
-    let stem = sanitize_stem(name, ext);
+    let stem = sanitize_stem(name);
     let file_path = dir.join(format!("{stem}-{millis}-{seq}.{ext}"));
     std::fs::write(&file_path, &bytes)
         .map_err(|e| AiError::Config(format!("{}: {e}", file_path.display())))?;
@@ -259,17 +231,6 @@ pub async fn ai_save_clipboard_image(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// @spec REQ-32
-    #[test]
-    fn codifica_base64_como_el_estandar() {
-        assert_eq!(base64(b""), "");
-        assert_eq!(base64(b"f"), "Zg==");
-        assert_eq!(base64(b"fo"), "Zm8=");
-        assert_eq!(base64(b"foo"), "Zm9v");
-        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
-        assert_eq!(base64(&[0xff, 0xfe, 0x00]), "//4A");
-    }
 
     /// @spec REQ-32
     #[test]
@@ -335,5 +296,18 @@ mod tests {
         }
         assert!(save_clipboard_image(dir.path(), "application/pdf", "iVBORw==", None).is_err());
         assert!(save_clipboard_image(dir.path(), "image/png", "", None).is_err());
+    }
+
+    /// @spec REQ-68
+    #[test]
+    fn la_carpeta_del_portapapeles_no_pasa_de_su_tope() {
+        let dir = tempfile::tempdir().unwrap();
+        for i in 0..MAX_CLIPBOARD_FILES + 5 {
+            std::fs::write(dir.path().join(format!("vieja-{i}.png")), [0x89]).unwrap();
+        }
+        save_clipboard_image(dir.path(), "image/png", "iVBORw==", Some("nueva.png")).unwrap();
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), MAX_CLIPBOARD_FILES);
+        assert_eq!(sanitize_stem(Some("../../etc/pas swd.png")), "etcpasswd");
+        assert_eq!(sanitize_stem(Some(".png")), "portapapeles");
     }
 }

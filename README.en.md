@@ -5,9 +5,9 @@
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
 
 [![Website](https://img.shields.io/badge/Website-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/en/)
-[![Releases v0.3.0](https://img.shields.io/badge/Releases-v0.3.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.3.1](https://img.shields.io/badge/Releases-v0.3.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
-[![status](https://img.shields.io/badge/status-stable_%7C_v0.3.0-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.3.0)
+[![status](https://img.shields.io/badge/status-stable_%7C_v0.3.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.3.1)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -145,6 +145,14 @@ These channels are not available yet; they will arrive in an upcoming version. I
 <a name="status"></a>
 
 ## 🚧 Status
+
+**v0.3.1** (2026-11-03). What's new:
+
+- **Each conversation with an agent, isolated (REQ-67):** creating, switching or deleting a conversation opens a clean agent session, so a new conversation no longer carries over another one's context or spends its quota. The model you see selected is the one actually used (an agent could previously fall back to the one in its global settings) and the token counter belongs to each conversation;
+- **Paste and drop images (REQ-68):** `Ctrl+V` with a screenshot, or drag images and text documents into the conversation; they show a thumbnail, the AI sees them (if the model has vision) and can use them with Tripo;
+- **The AI also edits `.md` files (REQ-22):** `README.md` and the other `.md` files at the root of the Unreal project, and those under `docs/**`, with the same diff you review before anything is written;
+- **Standard DBV header (REQ-69):** every file of the app and the C++ plugin carries it, and the AI adds it to the new files it creates in your project;
+- **World Labs worlds are not lost (REQ-70):** if you close the app with a world half-done, it resumes and downloads when you open it again.
 
 **v0.3.0** (2026-11-01). What's new:
 

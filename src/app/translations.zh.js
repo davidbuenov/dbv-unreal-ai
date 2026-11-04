@@ -387,4 +387,5 @@ export const ZH_APP = {
   'worldlabs.model11': 'Marble 1.1（完整 · 1580 积分）',
   'worldlabs.model10Draft': 'Marble 1.0 Draft（草稿 · 230 积分）',
   'worldlabs.generating': '正在用 World Labs 生成世界…',
+  'chat.dropNotText': '{name} 不是 PNG、JPG 或 WebP 图片，也不是文本文档',
 };

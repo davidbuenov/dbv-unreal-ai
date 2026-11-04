@@ -20,6 +20,7 @@ pub mod tripo;
 pub mod worldlabs;
 
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -38,6 +39,12 @@ pub fn key_account(service: &str) -> String {
 
 /// Servicios de generación que conoce la app.
 pub const SERVICES: [&str; 2] = ["tripo", "worldlabs"];
+
+/// La clave de cada servicio que la tenga, leída con `key_of` (del llavero en la ventana, de la configuración en el
+/// `--mcp`): con ella se reanuda cada trabajo huérfano en su servicio (`jobs::resume_orphans`). @spec REQ-70
+pub fn service_keys(key_of: impl Fn(&str) -> Option<String>) -> HashMap<String, String> {
+    SERVICES.iter().filter_map(|service| key_of(service).map(|key| (service.to_string(), key))).collect()
+}
 
 /// Progreso de un trabajo, tal como lo recibe la interfaz (evento `generation-progress`).
 #[derive(Debug, Clone, PartialEq, Serialize)]

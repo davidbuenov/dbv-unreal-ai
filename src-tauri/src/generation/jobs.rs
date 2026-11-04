@@ -23,6 +23,7 @@ use serde_json::Value;
 
 use super::catalog::{self, Operation};
 use super::tripo::TripoClient;
+use super::worldlabs::WorldLabsClient;
 use super::{finish_task, run_operation, JobEvent, OperationRequest, Outcome, Polling};
 use crate::library::{now_secs, Library, LibraryEntry};
 use crate::unreal::{io_error, UnrealError};
@@ -251,13 +252,31 @@ pub struct JobContext {
     pub board: JobBoard,
     pub library: Library,
     pub key: String,
-    /// URL de Tripo (cambia en los tests).
+    /// URL de Tripo o World Labs (cambia en los tests).
     pub base_url: Option<String>,
     pub polling: Polling,
     pub cancels: Cancels,
     pub hook: Hook,
     /// `app` o `agent`.
     pub source: String,
+}
+
+impl JobContext {
+    /// Cliente de Tripo con la clave del contexto (y la URL de los tests, si la hay).
+    fn tripo_client(&self) -> TripoClient {
+        match &self.base_url {
+            Some(base) => TripoClient::with_base_url(&self.key, base),
+            None => TripoClient::new(&self.key),
+        }
+    }
+
+    /// Cliente de World Labs con la clave del contexto (y la URL de los tests, si la hay).
+    fn worldlabs_client(&self) -> WorldLabsClient {
+        match &self.base_url {
+            Some(base) => WorldLabsClient::with_base_url(&self.key, base),
+            None => WorldLabsClient::new(&self.key),
+        }
+    }
 }
 
 /// Nombre de la variante `index` (0 = el original): «Pirata», «Pirata 2», «Pirata 3».
@@ -323,15 +342,10 @@ pub fn start_jobs(context: &JobContext, operation: &'static Operation, params: &
     ids
 }
 
-/// Reanuda los trabajos huérfanos de Tripo o World Labs con la clave del contexto. @spec REQ-27, REQ-70
-pub fn resume_orphans(context: &JobContext) -> Vec<String> {
-    let keys = HashMap::from([("tripo".to_string(), context.key.clone()), ("worldlabs".to_string(), context.key.clone())]);
-    resume_orphans_by_service(context, &keys)
-}
-
-/// Reanuda los trabajos huérfanos (ver `JobBoard::claim_orphans`) usando la clave correspondiente a cada servicio
-/// (`tripo` o `worldlabs`). Devuelve sus ids. Lo llaman la ventana y el `--mcp`. @spec REQ-27, REQ-70
-pub fn resume_orphans_by_service(context: &JobContext, keys: &HashMap<String, String>) -> Vec<String> {
+/// Reanuda los trabajos huérfanos (ver `JobBoard::claim_orphans`) con la clave de su servicio en `keys` (ver
+/// `service_keys`): sigue esperando su tarea y la descarga a la biblioteca como si nada. Uno sin clave se suelta y
+/// espera a que la haya. Devuelve sus ids. Lo llaman la ventana y el `--mcp`. @spec REQ-27, REQ-70
+pub fn resume_orphans(context: &JobContext, keys: &HashMap<String, String>) -> Vec<String> {
     let mut ids = Vec::new();
     for mut record in context.board.claim_orphans() {
         let Some(operation) = catalog::find(&record.kind) else {
@@ -359,17 +373,11 @@ pub fn resume_orphans_by_service(context: &JobContext, keys: &HashMap<String, St
         job_ctx.key = key;
         std::thread::spawn(move || {
             if service == "worldlabs" {
-                let client = match &job_ctx.base_url {
-                    Some(base) => super::worldlabs::WorldLabsClient::with_base_url(&job_ctx.key, base),
-                    None => super::worldlabs::WorldLabsClient::new(&job_ctx.key),
-                };
+                let client = job_ctx.worldlabs_client();
                 drive(&job_ctx, record, &cancel, |mut report| finish_worldlabs_task(&client, &job_ctx, &request, task_id, &cancel, &mut report));
             } else {
                 let body = request.params.clone();
-                let client = match &job_ctx.base_url {
-                    Some(base) => TripoClient::with_base_url(&job_ctx.key, base),
-                    None => TripoClient::new(&job_ctx.key),
-                };
+                let client = job_ctx.tripo_client();
                 drive(&job_ctx, record, &cancel, |mut report| finish_task(&client, &request, body, task_id, &job_ctx.library, &cancel, job_ctx.polling, &mut report));
             }
         });
@@ -382,19 +390,13 @@ fn run_job(context: &JobContext, record: JobRecord, request: &OperationRequest, 
     if request.operation.category == "worldlabs" {
         drive(context, record, cancel, |mut report| run_worldlabs_operation(context, request, cancel, &mut report));
     } else {
-        let client = match &context.base_url {
-            Some(base) => TripoClient::with_base_url(&context.key, base),
-            None => TripoClient::new(&context.key),
-        };
+        let client = context.tripo_client();
         drive(context, record, cancel, |mut report| run_operation(&client, request, &context.library, cancel, context.polling, &mut report));
     }
 }
 
 fn run_worldlabs_operation(context: &JobContext, request: &OperationRequest, cancel: &AtomicBool, report: &mut impl FnMut(JobEvent)) -> Result<Outcome, UnrealError> {
-    let client = match &context.base_url {
-        Some(base) => super::worldlabs::WorldLabsClient::with_base_url(&context.key, base),
-        None => super::worldlabs::WorldLabsClient::new(&context.key),
-    };
+    let client = context.worldlabs_client();
 
     report(JobEvent::Request { endpoint: request.operation.endpoint, body: &request.params });
     report(JobEvent::Stage("submitted", None));
@@ -426,7 +428,7 @@ fn run_worldlabs_operation(context: &JobContext, request: &OperationRequest, can
 
 /// Espera a que termine una operación de World Labs (`generate_world` o `export_world_mesh`) y descarga el mundo. @spec REQ-18, REQ-70
 fn finish_worldlabs_task(
-    client: &super::worldlabs::WorldLabsClient,
+    client: &WorldLabsClient,
     context: &JobContext,
     request: &OperationRequest,
     op_id: String,
@@ -659,8 +661,9 @@ mod tests {
             hook: Arc::new(|_| {}),
             source: "app".into(),
         };
-        assert_eq!(resume_orphans(&context), vec!["huerfano".to_string()], "sin tarea creada no hay nada que reanudar");
-        assert!(resume_orphans(&context).is_empty(), "ya reclamado: otro proceso no lo reanuda dos veces");
+        let keys = HashMap::from([("tripo".to_string(), "k".to_string())]);
+        assert_eq!(resume_orphans(&context, &keys), vec!["huerfano".to_string()], "sin tarea creada no hay nada que reanudar");
+        assert!(resume_orphans(&context, &keys).is_empty(), "ya reclamado: otro proceso no lo reanuda dos veces");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while board.get("huerfano").is_some_and(|r| r.is_active()) && std::time::Instant::now() < deadline {
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -704,7 +707,7 @@ mod tests {
             source: "app".into(),
         };
         let keys = HashMap::from([("worldlabs".to_string(), "wl-key".to_string())]);
-        assert_eq!(resume_orphans_by_service(&context, &keys), vec!["mundo-huerfano".to_string()]);
+        assert_eq!(resume_orphans(&context, &keys), vec!["mundo-huerfano".to_string()]);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while board.get("mundo-huerfano").is_some_and(|r| r.is_active()) && std::time::Instant::now() < deadline {
             std::thread::sleep(std::time::Duration::from_millis(10));

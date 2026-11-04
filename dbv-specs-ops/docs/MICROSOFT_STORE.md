@@ -1,8 +1,8 @@
 # 🏬 Publicación en Microsoft Store: DBV Unreal AI
 
-> **Estado:** 📦 Paquete de la `v0.3.0` generado y listo para subir a Partner Center (§6).  
-> **Versión base:** `v0.3.0`  
-> **Última revisión:** 2026-11-01  
+> **Estado:** 📦 Paquete de la `v0.3.1` generado y listo para subir a Partner Center (§7).  
+> **Versión base:** `v0.3.1`  
+> **Última revisión:** 2026-11-03  
 
 Documento operativo: checklist accionable para empaquetar y publicar **DBV Unreal AI** en la **Microsoft Store** mediante paquetes MSIX auto-firmados por la tienda, siguiendo las lecciones y estándares de `MARKETPLACE_PUBLISHING.md`.
 
@@ -121,3 +121,27 @@ Identidad en `bundle.config.json`:
 3. **Notas para la certificación:** las de `descripcionStore_en.md`, que ahora explican la compilación con las herramientas de Unreal y la biblioteca en Documentos.
 4. **Enviar a certificación.**
 
+---
+
+## 7. Envío de la v0.3.1 (2026-11-03)
+
+**Paquete generado** con `npm run tauri:windows:build`:
+
+| Fichero | Uso |
+| --- | --- |
+| `src-tauri/target/msix/dbv-unreal-ai_0.3.1.0.msixbundle` | **El que se sube** a Partner Center (Paquetes) |
+| `src-tauri/target/msix/dbv-unreal-ai_0.3.1.0_x64.msix` | El paquete x64 que va dentro del bundle |
+
+**Comprobado antes de subir** (ver el resultado real en el resumen de `/ship`):
+
+- `Identity`: `Name="davidbuenov.DBVUnrealAI"`, `Publisher="CN=13EE2A5D-F49E-48C9-8873-941069B15D63"`, `Version="0.3.1.0"`, `x64`.
+- Capacidades `runFullTrust` e `internetClient` y alias `dbv-unreal-ai.exe`, como en la 0.3.0. La 0.3.1 no declara capacidades nuevas: las imágenes pegadas se escriben en la carpeta temporal del usuario (`%TEMP%\dbv-unreal-ai-clipboard`, hasta 20 ficheros).
+- Assets sin rectángulos de relleno (`python scripts/generate-store-assets.py`: entre 471 y 998 colores).
+- Tests: Rust 235, Vitest 371, Python y banco e2e en verde, clippy limpio.
+- **Sin probar en la ventana real del MSIX:** (1) arrastrar y soltar ficheros sobre la conversación (la 0.3.1 desactiva `dragDropEnabled` de Tauri para que llegue el `drop` HTML5); (2) pegar una imagen con `Ctrl+V` y comprobar que se guarda en la carpeta temporal y que Tripo puede usarla (el MSIX virtualiza algunas escrituras en `AppData`; ver REJECTED-06). Conviene probar las dos con el MSIX instalado antes de enviar.
+
+**Pasos en Partner Center:**
+1. **Paquetes:** subir `dbv-unreal-ai_0.3.1.0.msixbundle` y retirar del envío el de la 0.3.0.
+2. **Fichas de Store:** actualizar *Novedades de esta versión* en español (`descripcionStore_es.md`), inglés (`descripcionStore_en.md`) y chino simplificado (`descripcionStore_zh.md`), y la característica 17 y la viñeta de pegar imágenes. Las capturas no cambian.
+3. **Notas para la certificación:** las de `descripcionStore_en.md`, que ahora explican también dónde se guardan las imágenes pegadas.
+4. **Enviar a certificación.**

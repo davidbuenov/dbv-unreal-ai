@@ -25,6 +25,7 @@ Key Features:
 • Interactive 3D asset preview powered by Three.js with studio lighting
 • Automatic, reversible Unreal Engine project preparation with one-click backups
 • Live viewport inspection and capture for visual context awareness
+• Paste (Ctrl+V) or drag images and documents into the conversation, with a thumbnail, so the AI can see them and use them with Tripo
 • Safe, one-click turn and transaction undo directly within Unreal Engine
 • Persistent, disk-versioned Project Memory and Task Planning system
 • Automatic detection of multiple Unreal Engine instances and parallel projects
@@ -37,14 +38,11 @@ Key Features:
 
 ## What's new in this version
 
-v0.3.0:
-• The AI edits the project's C++ code (always as changes you review) and the app compiles it: Live Coding or, when needed, it closes the editor, compiles and reopens it.
-• Guided recipes: test level, animated character, walking through a World Labs world and a MetaHuman with Convai, with a final check in the editor.
-• Offline Unreal guides: the AI searches your local copy and cites the URL of each fragment.
-• Own GPU Gaussian Splatting with view-dependent colour: 10-million-splat scenes with no flicker.
-• World Labs worlds at their real scale and walkable, with their own key, cap and balance.
-• "Improve with AI" in Generate: a short idea becomes a full description.
-• Simplified Chinese, Convai characters, level zones, and fewer approvals and less usage with agents.
+v0.3.1:
+• Each conversation with an agent is independent: a new conversation no longer carries over another one's context or spends its quota, and the model you pick is the one used.
+• Paste (Ctrl+V) or drag images and text documents into the conversation: they show a thumbnail, the AI sees them and can use them with Tripo.
+• The AI also edits the README and the .md files in your project's docs folder, always as changes you review.
+• World Labs worlds left half-done are resumed when you reopen the app.
 
 ---
 
@@ -66,7 +64,7 @@ v0.3.0:
 14. Global keyboard shortcuts: F1, Ctrl+Shift+I, Esc, Ctrl+S
 15. 100% private and local by default
 16. Interface in English, Spanish and Simplified Chinese
-17. Zero hidden telemetry or background tracking
+17. Paste or drag images and documents into the conversation
 18. Open source under the MIT License
 19. The AI edits and compiles the project's C++ code
 20. Guided recipes and offline Unreal guides
@@ -102,3 +100,4 @@ Artificial Intelligence features are 100% optional and disabled by default:
 - Subscription agents (Claude Code, Codex, Gemini CLI, Google Antigravity, GitHub Copilot CLI) are separate programs the user installs and signs in to on their own; the app only launches them, with the project folder as working directory, when the user connects one. If an agent asks to sign in, it may open the system browser for the user to log in to that service.
 - When the AI changes the project's C++ code and the user accepts the change, the app compiles it with the Unreal tools the user installed (Live Coding through the editor, or Unreal Build Tool with the editor closed) and reopens the editor. Only the project the user has open is compiled.
 - The app keeps its asset library in Documents\DBV Unreal AI\Library and a local rotating log, with no keys or personal data.
+- Images the user pastes (Ctrl+V) or drags into the conversation are saved in the system temporary folder (the last 20 at most) so the AI can use them by path; they only reach a cloud AI if the user has connected one and sends the message.

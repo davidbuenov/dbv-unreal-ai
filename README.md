@@ -5,9 +5,9 @@
 **🇪🇸 Español · [🇬🇧 English](./README.en.md)**
 
 [![Sitio Web](https://img.shields.io/badge/Sitio_Web-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/)
-[![Releases v0.3.0](https://img.shields.io/badge/Releases-v0.3.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.3.1](https://img.shields.io/badge/Releases-v0.3.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
-[![status](https://img.shields.io/badge/status-estable_%7C_v0.3.0-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.3.0)
+[![status](https://img.shields.io/badge/status-estable_%7C_v0.3.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.3.1)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -145,6 +145,14 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 <a name="status"></a>
 
 ## 🚧 Estado
+
+**v0.3.1** (2026-11-03). Lo nuevo:
+
+- **Cada conversación con un agente, aislada (REQ-67):** crear, cambiar o borrar una conversación abre una sesión limpia del agente, así que una conversación nueva ya no arrastra el contexto de otra ni gasta su cuota. El modelo que ves seleccionado es el que se usa de verdad (antes un agente podía caer en el de su configuración global) y el contador de tokens es de cada conversación;
+- **Pegar y soltar imágenes (REQ-68):** `Ctrl+V` con una captura, o arrastrar imágenes y documentos de texto a la conversación; salen con su miniatura y la IA las ve (si el modelo tiene visión) y puede usarlas con Tripo;
+- **La IA también edita los `.md` (REQ-22):** el `README.md` y demás `.md` de la raíz del proyecto de Unreal y los de `docs/**`, con el mismo diff que revisas antes de escribir;
+- **Cabecera estándar de DBV (REQ-69):** todos los ficheros de la app y del plugin C++ la llevan, y la IA la pone en los ficheros nuevos que cree en tu proyecto;
+- **Los mundos de World Labs no se pierden (REQ-70):** si cierras la app con un mundo a medias, se reanuda y se descarga al volver a abrirla.
 
 **v0.3.0** (2026-11-01). Lo nuevo:
 
