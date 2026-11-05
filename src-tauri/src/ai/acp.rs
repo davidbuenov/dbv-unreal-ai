@@ -132,6 +132,11 @@ fn resolve_clean_model(spec: &AgentSpec) -> Option<&str> {
 
 /// Variables de entorno adicionales para configurar el modelo y esfuerzo al lanzar el agente ACP.
 pub fn agent_env(spec: &AgentSpec) -> Vec<(String, String)> {
+    agent_env_with_bin(spec, which("claude").as_deref())
+}
+
+/// Variables de entorno adicionales permitiendo inyectar la ruta al binario de Claude para tests deterministas.
+pub fn agent_env_with_bin(spec: &AgentSpec, claude_bin: Option<&Path>) -> Vec<(String, String)> {
     let mut envs = Vec::new();
     let clean_model = resolve_clean_model(spec);
     let clean_effort = spec
@@ -142,6 +147,9 @@ pub fn agent_env(spec: &AgentSpec) -> Vec<(String, String)> {
 
     match spec.id.as_str() {
         "claude" => {
+            if let Some(bin) = claude_bin {
+                envs.push(("CLAUDE_CODE_EXECUTABLE".into(), bin.to_string_lossy().to_string()));
+            }
             if let Some(model) = clean_model {
                 envs.push(("ANTHROPIC_MODEL".into(), model.into()));
             }
@@ -352,7 +360,18 @@ fn send_request(running: &Running, method: &str, params: Value) -> Result<onesho
 async fn await_response(receiver: oneshot::Receiver<Result<Value, Value>>) -> Result<Value, AiError> {
     match receiver.await {
         Ok(Ok(value)) => Ok(value),
-        Ok(Err(error)) => Err(AiError::BadRequest(error["message"].as_str().map(str::to_string).unwrap_or_else(|| error.to_string()))),
+        Ok(Err(error)) => {
+            let detail = error.get("data")
+                .and_then(|d| d.get("details"))
+                .and_then(Value::as_str);
+            let msg = match (error["message"].as_str(), detail) {
+                (Some(m), Some(d)) => format!("{m}: {d}"),
+                (Some(m), None) => m.to_string(),
+                (None, Some(d)) => d.to_string(),
+                (None, None) => error.to_string(),
+            };
+            Err(AiError::BadRequest(msg))
+        }
         Err(_) => Err(AiError::Network("el agente se cerró".into())),
     }
 }
@@ -619,13 +638,26 @@ mod tests {
             model: Some("claude-sonnet-5-5".into()),
             reasoning_effort: Some("high".into()),
         };
-        assert_eq!(agent_env(&claude_spec), vec![("ANTHROPIC_MODEL".to_string(), "claude-sonnet-5-5".to_string())]);
+        assert_eq!(
+            agent_env_with_bin(&claude_spec, None),
+            vec![("ANTHROPIC_MODEL".to_string(), "claude-sonnet-5-5".to_string())]
+        );
+        assert_eq!(
+            agent_env_with_bin(&claude_spec, Some(Path::new("C:\\bin\\claude.exe"))),
+            vec![
+                ("CLAUDE_CODE_EXECUTABLE".to_string(), "C:\\bin\\claude.exe".to_string()),
+                ("ANTHROPIC_MODEL".to_string(), "claude-sonnet-5-5".to_string())
+            ]
+        );
         let claude_generic_spec = AgentSpec {
             id: "claude".into(),
             model: Some("claude".into()),
             reasoning_effort: Some("medium".into()),
         };
-        assert_eq!(agent_env(&claude_generic_spec), vec![("ANTHROPIC_MODEL".to_string(), "claude-sonnet-5-5".to_string())]);
+        assert_eq!(
+            agent_env_with_bin(&claude_generic_spec, None),
+            vec![("ANTHROPIC_MODEL".to_string(), "claude-sonnet-5-5".to_string())]
+        );
     }
 
     /// Agente falso en Node (`tests/fixtures/fake-acp-agent.mjs`): responde a
