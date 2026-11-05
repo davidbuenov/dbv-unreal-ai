@@ -20,6 +20,10 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - **Trazabilidad en la biblioteca:** almacenamiento de `negative_prompt`, `steps`, `cfg_scale` y `seed` dentro de `LibraryEntry.parameters`.
   - **Adaptación contextual:** visibilidad inteligente del panel de síntesis avanzado, mostrándose únicamente cuando el proveedor activo es Local (`dbv-audio-service`).
 
+### Fixed
+
+- **Resiliencia de conexión con Claude Code en Windows:** el adaptador oficial ACP (`@agentclientprotocol/claude-agent-acp`) descargado por `npx` fallaba en Windows con un error interno (`Claude native binary not found for win32-x64`) tras actualizarse los paquetes del ecosistema de Anthropic sin incluir los binarios opcionales en caché; la app ahora inyecta automáticamente la variable de entorno `CLAUDE_CODE_EXECUTABLE` resolviendo la ruta del binario `claude.exe` del sistema, y propaga el detalle descriptivo del error en lugar de un genérico "Internal error".
+
 ## [0.4.0] - 2026-11-04
 
 Versión v0.4.0: generación y búsqueda de efectos de sonido (SFX) con microservicio local (Stable Audio Open 1.0), ElevenLabs y catálogo interactivo de Freesound con preescucha y selección; importación nativa de audio a Unreal Engine (`USoundWave` / `SoundCue`) con herramienta MCP; visión en vivo con «📷 Capturar viewport» para modelos multimodales; configuración de autoría de Copyright preservando la atribución inmutable de DBV; y autodetección resiliente del puerto MCP de Unreal Engine.
