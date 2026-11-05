@@ -337,4 +337,92 @@ describe('Mejorar el prompt', () => {
       }),
     );
   });
+
+  it('al pulsar un preset de juego autorellena prompt, prompt negativo, duration, steps y cfg @spec REQ-76', async () => {
+    const host = await renderView();
+    host.querySelector('[data-mode="sound"]').click();
+
+    const laserChip = host.querySelector('button[data-preset="laser"]');
+    expect(laserChip).not.toBeNull();
+    laserChip.click();
+
+    const promptInput = host.querySelector('textarea[aria-label="Descripción del sonido"]');
+    const negPromptInput = host.querySelector('input[aria-label="Prompt negativo (sonidos a evitar)"]');
+    const durationInput = host.querySelector('input[aria-label="Duración (segundos)"]');
+    const stepsInput = host.querySelector('input[aria-label="Pasos de difusión (Steps)"]');
+    const cfgInput = host.querySelector('input[aria-label="Escala CFG (Ajuste al prompt)"]');
+
+    expect(promptInput.value).toContain('Close-up sci-fi plasma rifle');
+    expect(negPromptInput.value).toContain('music, melody, vocals');
+    expect(durationInput.value).toBe('2.5');
+    expect(stepsInput.value).toBe('45');
+    expect(cfgInput.value).toBe('8');
+  });
+
+  it('permite generar sonido local pasando parámetros de síntesis completos a Rust @spec REQ-76', async () => {
+    let generatedPayload = null;
+    window.__TAURI__.core.invoke = vi.fn(async (command, payload) => {
+      invoked.push(command);
+      if (command === 'generation_status') return { spent: 0, budget: 300, hasKey: {} };
+      if (command === 'generation_jobs') return [];
+      if (command === 'generation_check_local_audio') return { ready: true, status: 'ready', device: 'cuda:0' };
+      if (command === 'generation_generate_sound') {
+        generatedPayload = payload;
+        return { id: 'snd-loc-1', name: payload.name || 'laser' };
+      }
+      return null;
+    });
+
+    const host = await renderView();
+    host.querySelector('[data-mode="sound"]').click();
+
+    const providerSelect = host.querySelector('select[aria-label="Proveedor"]');
+    providerSelect.value = 'local';
+    providerSelect.dispatchEvent(new Event('change'));
+
+    // Cargar preset de espada
+    const swordChip = host.querySelector('button[data-preset="sword"]');
+    swordChip.click();
+
+    const seedInput = host.querySelector('input[aria-label="Semilla (Seed)"]');
+    seedInput.value = '98765';
+
+    const startButton = host.querySelector('.btn-primary');
+    startButton.click();
+
+    await vi.waitFor(() => expect(generatedPayload).not.toBeNull());
+
+    expect(generatedPayload).toEqual(
+      expect.objectContaining({
+        provider: 'local',
+        prompt: expect.stringContaining('sharp steel sword'),
+        negativePrompt: expect.stringContaining('music, vocals'),
+        duration: 3,
+        steps: 50,
+        cfgScale: 7,
+        seed: 98765,
+      }),
+    );
+  });
+
+  it('oculta el panel de síntesis específico de local al cambiar de proveedor @spec REQ-76', async () => {
+    const host = await renderView();
+    host.querySelector('[data-mode="sound"]').click();
+
+    const providerSelect = host.querySelector('select[aria-label="Proveedor"]');
+    const localPanel = host.querySelector('button[data-preset="laser"]').closest('.stack');
+    expect(localPanel.classList.contains('hidden')).toBe(false);
+
+    providerSelect.value = 'elevenlabs';
+    providerSelect.dispatchEvent(new Event('change'));
+    expect(localPanel.classList.contains('hidden')).toBe(true);
+
+    providerSelect.value = 'freesound';
+    providerSelect.dispatchEvent(new Event('change'));
+    expect(localPanel.classList.contains('hidden')).toBe(true);
+
+    providerSelect.value = 'local';
+    providerSelect.dispatchEvent(new Event('change'));
+    expect(localPanel.classList.contains('hidden')).toBe(false);
+  });
 });

@@ -255,10 +255,153 @@ export function createGenerateView(host, deps) {
       el('option', { text: t('gen.soundProvider.elevenlabs'), attrs: { value: 'elevenlabs' } }),
       el('option', { text: t('gen.soundProvider.freesound'), attrs: { value: 'freesound' } }),
     );
-    const soundDuration = el('input', { attrs: { type: 'number', min: '1', max: '30', step: '0.5', value: '5', 'aria-label': t('gen.soundDuration') } });
+    const soundDuration = el('input', { attrs: { type: 'number', min: '0.5', max: '30', step: '0.5', value: '5', 'aria-label': t('gen.soundDuration') } });
+    const soundDurationSlider = el('input', { attrs: { type: 'range', min: '0.5', max: '30', step: '0.5', value: '5', 'aria-hidden': 'true' } });
+    soundDurationSlider.addEventListener('input', () => { soundDuration.value = soundDurationSlider.value; });
+    soundDuration.addEventListener('input', () => { soundDurationSlider.value = soundDuration.value; });
+    const soundDurationRow = el('div', { className: 'sound-slider-row' }, soundDurationSlider, soundDuration);
+
     const soundLoop = el('input', { attrs: { type: 'checkbox', 'aria-label': t('gen.soundLoop') } });
     const soundLocalStatus = el('p', { className: 'hint', text: '' });
     const soundResultsContainer = el('div', { className: 'sound-results-list hidden' });
+
+    // ─── Síntesis de Audio Local (REQ-76) ──────────────────────────────
+    const soundNegPrompt = el('input', {
+      attrs: {
+        type: 'text',
+        placeholder: t('gen.soundNegPromptPlaceholder'),
+        'aria-label': t('gen.soundNegPrompt'),
+        maxlength: '300',
+      },
+    });
+
+    const soundSteps = el('input', { attrs: { type: 'number', min: '10', max: '100', step: '1', value: '50', 'aria-label': t('gen.soundSteps') } });
+    const soundStepsSlider = el('input', { attrs: { type: 'range', min: '10', max: '100', step: '1', value: '50', 'aria-hidden': 'true' } });
+    soundStepsSlider.addEventListener('input', () => { soundSteps.value = soundStepsSlider.value; });
+    soundSteps.addEventListener('input', () => { soundStepsSlider.value = soundSteps.value; });
+    const soundStepsRow = el('div', { className: 'sound-slider-row' }, soundStepsSlider, soundSteps);
+
+    const soundCfg = el('input', { attrs: { type: 'number', min: '1', max: '15', step: '0.5', value: '7.0', 'aria-label': t('gen.soundCfg') } });
+    const soundCfgSlider = el('input', { attrs: { type: 'range', min: '1', max: '15', step: '0.5', value: '7.0', 'aria-hidden': 'true' } });
+    soundCfgSlider.addEventListener('input', () => { soundCfg.value = soundCfgSlider.value; });
+    soundCfg.addEventListener('input', () => { soundCfgSlider.value = soundCfg.value; });
+    const soundCfgRow = el('div', { className: 'sound-slider-row' }, soundCfgSlider, soundCfg);
+
+    const soundSeed = el('input', { attrs: { type: 'number', placeholder: t('gen.soundSeedPlaceholder'), 'aria-label': t('gen.soundSeed') } });
+    const randomSeedBtn = button(t('gen.soundSeedRandom'), () => {
+      soundSeed.value = String(Math.floor(Math.random() * 2147483647));
+    }, 'btn-ghost button--compact');
+    const soundSeedRow = el('div', { className: 'row' }, soundSeed, randomSeedBtn);
+
+    const PRESETS = [
+      {
+        id: 'laser',
+        label: t('gen.soundPresetLaser'),
+        prompt: 'Close-up sci-fi plasma rifle single shot, rapid high-pitched energy charge followed by punchy laser blast, dry studio Foley',
+        neg: 'music, melody, vocals, background noise, muffled',
+        duration: 2.5,
+        steps: 45,
+        cfg: 8.0,
+      },
+      {
+        id: 'door',
+        label: t('gen.soundPresetDoor'),
+        prompt: 'Massive industrial airlock blast door unsealing, pressurized pneumatic steam hiss and heavy metallic locking thud',
+        neg: 'music, melody, vocals, static',
+        duration: 5.0,
+        steps: 50,
+        cfg: 7.5,
+      },
+      {
+        id: 'thunder',
+        label: t('gen.soundPresetThunder'),
+        prompt: 'Sharp close lightning strike crack followed immediately by deep rolling thunder rumble and long echoing decay',
+        neg: 'music, vocals, speech',
+        duration: 6.0,
+        steps: 50,
+        cfg: 7.0,
+      },
+      {
+        id: 'retro',
+        label: t('gen.soundPresetRetro'),
+        prompt: 'Retro 8-bit arcade power-up jump sound effect followed by bright chiptune coin chime, clean isolated synth',
+        neg: 'background noise, reverb, distortion, vocals',
+        duration: 2.0,
+        steps: 35,
+        cfg: 7.5,
+      },
+      {
+        id: 'sword',
+        label: t('gen.soundPresetSword'),
+        prompt: 'Close-up Foley recording of a sharp steel sword unsheathing followed by a heavy metallic parry clang and ringing resonance',
+        neg: 'music, vocals, background noise, muffled',
+        duration: 3.0,
+        steps: 50,
+        cfg: 7.0,
+      },
+    ];
+
+    const presetChips = PRESETS.map((p) => {
+      const chip = el('button', {
+        className: 'sound-chip sound-chip--preset',
+        attrs: { type: 'button', 'data-preset': p.id },
+        text: p.label,
+      });
+      chip.addEventListener('click', () => {
+        soundPrompt.value = p.prompt;
+        soundNegPrompt.value = p.neg;
+        soundDuration.value = String(p.duration);
+        soundDurationSlider.value = String(p.duration);
+        soundSteps.value = String(p.steps);
+        soundStepsSlider.value = String(p.steps);
+        soundCfg.value = String(p.cfg);
+        soundCfgSlider.value = String(p.cfg);
+      });
+      return chip;
+    });
+
+    const presetsRow = el('div', { className: 'sound-chips-row' },
+      el('span', { className: 'hint', style: 'margin-right: 4px; font-weight: 500;', text: `${t('gen.soundPresetsLabel')}:` }),
+      ...presetChips,
+    );
+
+    const NEG_FILTERS = [
+      { label: t('gen.soundNegChipNoMusic'), value: 'music, melody, singing, vocals, speech, beat, rhythm' },
+      { label: t('gen.soundNegChipNoNoise'), value: 'low quality, background noise, static, hiss, muffled, distortion, clipping' },
+      { label: t('gen.soundNegChipDry'), value: 'reverb, echo, hall, cavernous, wet, music, background noise' },
+      { label: t('gen.soundNegChipClear'), value: '' },
+    ];
+
+    const negChips = NEG_FILTERS.map((f) => {
+      const chip = el('button', {
+        className: 'sound-chip sound-chip--neg',
+        attrs: { type: 'button' },
+        text: f.label,
+      });
+      chip.addEventListener('click', () => {
+        if (!f.value) {
+          soundNegPrompt.value = '';
+        } else if (!soundNegPrompt.value.trim()) {
+          soundNegPrompt.value = f.value;
+        } else if (!soundNegPrompt.value.includes(f.value)) {
+          soundNegPrompt.value = `${soundNegPrompt.value.trim()}, ${f.value}`;
+        }
+      });
+      return chip;
+    });
+
+    const negChipsRow = el('div', { className: 'sound-chips-row' }, ...negChips);
+
+    const soundLocalParamsContainer = el('div', { className: 'stack' },
+      presetsRow,
+      el('label', {}, t('gen.soundNegPrompt'), soundNegPrompt),
+      negChipsRow,
+      el('div', { className: 'sound-params-grid' },
+        el('label', {}, t('gen.soundSteps'), soundStepsRow, el('span', { className: 'sound-param-hint', text: t('gen.soundStepsHint') })),
+        el('label', {}, t('gen.soundCfg'), soundCfgRow, el('span', { className: 'sound-param-hint', text: t('gen.soundCfgHint') })),
+        el('label', {}, t('gen.soundSeed'), soundSeedRow),
+      ),
+    );
 
     function stopAllAudio() {
       soundResultsContainer.querySelectorAll('audio').forEach((audio) => {
@@ -339,8 +482,9 @@ export function createGenerateView(host, deps) {
     });
 
     soundProvider.addEventListener('change', () => {
-      soundDuration.closest('label').classList.toggle('hidden', soundProvider.value === 'freesound');
+      soundDurationRow.closest('label').classList.toggle('hidden', soundProvider.value === 'freesound');
       soundLoop.closest('label').classList.toggle('hidden', soundProvider.value === 'freesound');
+      soundLocalParamsContainer.classList.toggle('hidden', soundProvider.value !== 'local');
       if (soundProvider.value !== 'freesound') {
         stopAllAudio();
         soundResultsContainer.classList.add('hidden');
@@ -357,11 +501,12 @@ export function createGenerateView(host, deps) {
         el('p', { className: 'hint', text: t('gen.soundHint') }),
         button(`📖 ${t('gen.helpAudio')}`, () => openHelp('audio'), 'btn-ghost button--compact'),
       ),
-      el('div', { className: 'row' },
+      el('div', { className: 'row', style: 'align-items: flex-end;' },
         el('label', {}, t('gen.soundProvider'), soundProvider),
-        el('label', {}, t('gen.soundDuration'), soundDuration),
+        el('label', { style: 'flex: 1;' }, t('gen.soundDuration'), soundDurationRow),
         el('label', { className: 'row' }, soundLoop, t('gen.soundLoop')),
       ),
+      soundLocalParamsContainer,
       el('label', {}, t('gen.soundPrompt'), soundPrompt),
       soundLocalStatus,
       soundResultsContainer,
@@ -406,6 +551,10 @@ export function createGenerateView(host, deps) {
               name: name.value.trim() || null,
               duration: Number(soundDuration.value) || 5,
               loop: soundLoop.checked,
+              negativePrompt: soundProvider.value === 'local' ? (soundNegPrompt.value.trim() || null) : null,
+              steps: soundProvider.value === 'local' ? (Number(soundSteps.value) || 50) : null,
+              cfgScale: soundProvider.value === 'local' ? (Number(soundCfg.value) || 7.0) : null,
+              seed: soundProvider.value === 'local' && soundSeed.value.trim() ? Number(soundSeed.value) : null,
             });
             if (res.ok) {
               deps.toast(t('gen.soundGenerated'), 'info');
@@ -446,6 +595,7 @@ export function createGenerateView(host, deps) {
         keyWarning.classList.add('hidden');
         balance.textContent = '';
         soundLocalStatus.classList.toggle('hidden', prov !== 'local');
+        soundLocalParamsContainer.classList.toggle('hidden', prov !== 'local');
         if (prov === 'elevenlabs') {
           const has = Boolean(status.ok && status.value.hasKey?.elevenlabs);
           start.disabled = !has;

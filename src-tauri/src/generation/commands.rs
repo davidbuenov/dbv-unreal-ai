@@ -553,8 +553,9 @@ pub fn generation_check_local_audio(url: Option<String>) -> super::audio::LocalA
     super::audio::check_local_service(url.as_deref())
 }
 
-/// Genera un efecto de sonido (local o ElevenLabs) o busca en Freesound y lo guarda en la biblioteca. @spec REQ-71
+/// Genera un efecto de sonido (local o ElevenLabs) o busca en Freesound y lo guarda en la biblioteca. @spec REQ-71, REQ-76
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn generation_generate_sound(
     app: AppHandle,
     provider: String,
@@ -563,13 +564,25 @@ pub async fn generation_generate_sound(
     duration: Option<f32>,
     r#loop: Option<bool>,
     local_url: Option<String>,
+    negative_prompt: Option<String>,
+    steps: Option<u32>,
+    cfg_scale: Option<f32>,
+    seed: Option<u64>,
 ) -> Result<crate::library::LibraryEntry, UnrealError> {
     let dur = duration.unwrap_or(5.0);
     let lib = library(&app)?;
 
     let (bytes, source) = match provider.as_str() {
         "local" => {
-            let audio_bytes = super::audio::generate_local_sound(local_url.as_deref(), &prompt, dur, 50)?;
+            let audio_bytes = super::audio::generate_local_sound(
+                local_url.as_deref(),
+                &prompt,
+                negative_prompt.as_deref(),
+                dur,
+                steps,
+                cfg_scale,
+                seed,
+            )?;
             (audio_bytes, "local")
         }
         "elevenlabs" => {
@@ -628,7 +641,11 @@ pub async fn generation_generate_sound(
         parameters: serde_json::json!({
             "duration": dur,
             "source": source,
-            "loop": r#loop.unwrap_or(false)
+            "loop": r#loop.unwrap_or(false),
+            "negative_prompt": negative_prompt,
+            "steps": steps,
+            "cfg_scale": cfg_scale,
+            "seed": seed,
         }),
         task_id: String::new(),
         created_at: crate::library::now_secs(),

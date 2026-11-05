@@ -234,6 +234,19 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 - **Guías sin red (REQ-25):** en Ajustes, una pestaña nueva **Conocimiento** (después de Biblioteca; REQ-60 pasa a ocho pestañas), con el estado del índice («sin construir» o «n páginas, fecha»), «Construir índice» con su explicación de qué se descarga y de dónde, y «Borrar índice».
 - **Chino (REQ-64):** el selector de idioma ofrece «中文»; con una fuente del sistema para CJK en la pila de `--font-sans` (`"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC"`), sin incrustar fuentes.
 
+### Decisiones de diseño v0.4.1 (2026-11-05)
+
+- **Panel interactivo de Parámetros de Síntesis de Audio (REQ-76):**
+  - En la pestaña «Sonidos (SFX)» de la vista Generar, al seleccionar el proveedor Local (`dbv-audio-service`):
+    - **Fila de chips rápidos de juego (Quick Presets):** píldoras interactivas compactas arriba del prompt (`🔫 Laser`, `🚪 Puerta`, `⚡ Trueno`, `🕹️ Retro`, `⚔️ Espada`) que rellenan de un clic tanto el prompt descriptivo como los valores óptimos de duración, steps y escala CFG.
+    - **Campo de Prompt Negativo con filtros de exclusión:** caja de texto con placeholder guiado y botones chip rápidos (`🚫 Sin música`, `🔇 Sin ruido`, `🏜️ Seco / Para Unreal`, `✖ Limpiar`) para configurar acústicas puras sin necesidad de escribir términos técnicos en inglés a mano.
+    - **Controles de Síntesis en paralelo:**
+      - **Duración:** barra deslizante (slider) + campo numérico sincronizados con pistas contextuales según el rango temporal.
+      - **Pasos (Steps):** slider + campo numérico (10–100) con guía de calidad.
+      - **Escala CFG:** slider + campo numérico (1.0–15.0, paso 0.5) con guía de adherencia al prompt.
+      - **Semilla (Seed):** campo numérico con botón secundario `🎲 Aleatorio`.
+    - **Adaptación contextual:** al cambiar al proveedor ElevenLabs o Freesound, todos los controles específicos de difusión local se ocultan automáticamente, restaurando la interfaz mínima y adecuada a cada proveedor.
+
 ---
 
 ## ✨ Movimiento e Interacción

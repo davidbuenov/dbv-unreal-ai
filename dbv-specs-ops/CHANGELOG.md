@@ -11,6 +11,15 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+### Added
+
+- **Panel completo de parámetros de síntesis y presets para audio local (REQ-76):**
+  - **Presets de 1 clic para videojuegos:** chips rápidos (`🔫 Laser Blaster`, `🚪 Puerta Hidráulica`, `⚡ Trueno y Tormenta`, `🕹️ Retro 8-bit`, `⚔️ Espada y Metal`) que configuran en bloque el prompt descriptivo, prompt negativo, duración, pasos de difusión y escala CFG.
+  - **Prompt negativo con filtros acústicos inmediatos:** campo de texto con chips de 1 clic para excluir música y voces (`🚫 Sin música ni voz`), ruido y distorsión (`🔇 Sin ruido ni distorsión`), y modo seco (`🏜️ Seco / Para Unreal`) que desactiva reverberación para que la acústica 3D la procese Unreal Engine.
+  - **Sliders sincronizados de síntesis:** controles para duración (0.5..30s), pasos de difusión (`steps`: 10..100) y escala de guía (`cfg_scale`: 1.0..15.0), más selector de semilla aleatoria determinista (`seed`).
+  - **Trazabilidad en la biblioteca:** almacenamiento de `negative_prompt`, `steps`, `cfg_scale` y `seed` dentro de `LibraryEntry.parameters`.
+  - **Adaptación contextual:** visibilidad inteligente del panel de síntesis avanzado, mostrándose únicamente cuando el proveedor activo es Local (`dbv-audio-service`).
+
 ## [0.4.0] - 2026-11-04
 
 Versión v0.4.0: generación y búsqueda de efectos de sonido (SFX) con microservicio local (Stable Audio Open 1.0), ElevenLabs y catálogo interactivo de Freesound con preescucha y selección; importación nativa de audio a Unreal Engine (`USoundWave` / `SoundCue`) con herramienta MCP; visión en vivo con «📷 Capturar viewport» para modelos multimodales; configuración de autoría de Copyright preservando la atribución inmutable de DBV; y autodetección resiliente del puerto MCP de Unreal Engine.

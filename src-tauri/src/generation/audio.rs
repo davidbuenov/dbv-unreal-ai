@@ -55,12 +55,39 @@ pub fn check_local_service(base_url: Option<&str>) -> LocalAudioStatus {
     }
 }
 
-/// Genera un efecto de sonido usando el microservicio local (`dbv-audio-service`).
+/// Construye el cuerpo JSON para enviar al microservicio local de audio (`dbv-audio-service`). @spec REQ-71, REQ-76
+pub fn build_local_generate_payload(
+    prompt: &str,
+    negative_prompt: Option<&str>,
+    duration: f32,
+    steps: Option<u32>,
+    cfg_scale: Option<f32>,
+    seed: Option<u64>,
+) -> Value {
+    let mut body = json!({
+        "prompt": prompt,
+        "negative_prompt": negative_prompt.unwrap_or(""),
+        "duration": duration,
+        "steps": steps.unwrap_or(50),
+        "cfg_scale": cfg_scale.unwrap_or(7.0),
+    });
+
+    if let Some(s) = seed {
+        body["seed"] = json!(s);
+    }
+
+    body
+}
+
+/// Genera un efecto de sonido usando el microservicio local (`dbv-audio-service`). @spec REQ-71, REQ-76
 pub fn generate_local_sound(
     base_url: Option<&str>,
     prompt: &str,
+    negative_prompt: Option<&str>,
     duration: f32,
-    steps: u32,
+    steps: Option<u32>,
+    cfg_scale: Option<f32>,
+    seed: Option<u64>,
 ) -> Result<Vec<u8>, UnrealError> {
     let url = format!("{}/v1/generate", base_url.unwrap_or(DEFAULT_LOCAL_AUDIO_URL).trim_end_matches('/'));
     let agent = ureq::Agent::config_builder()
@@ -68,11 +95,7 @@ pub fn generate_local_sound(
         .build()
         .new_agent();
 
-    let body = json!({
-        "prompt": prompt,
-        "duration": duration,
-        "steps": steps
-    });
+    let body = build_local_generate_payload(prompt, negative_prompt, duration, steps, cfg_scale, seed);
 
     let mut res = agent
         .post(&url)
@@ -277,5 +300,45 @@ mod tests {
         assert_eq!(entry.name, "laser_blast.wav");
         assert!(temp.path().join("laser_blast.wav").exists());
         assert_eq!(entry.parameters["duration"], 2.5);
+    }
+
+    /// @spec REQ-76
+    #[test]
+    fn build_local_generate_payload_con_parametros_completos() {
+        let payload = build_local_generate_payload(
+            "laser plasma rifle",
+            Some("music, melody, vocals"),
+            2.5,
+            Some(45),
+            Some(8.0),
+            Some(12345),
+        );
+
+        assert_eq!(payload["prompt"], "laser plasma rifle");
+        assert_eq!(payload["negative_prompt"], "music, melody, vocals");
+        assert_eq!(payload["duration"], 2.5);
+        assert_eq!(payload["steps"], 45);
+        assert_eq!(payload["cfg_scale"], 8.0);
+        assert_eq!(payload["seed"], 12345);
+    }
+
+    /// @spec REQ-76
+    #[test]
+    fn build_local_generate_payload_con_valores_por_defecto() {
+        let payload = build_local_generate_payload(
+            "thunder lightning",
+            None,
+            5.0,
+            None,
+            None,
+            None,
+        );
+
+        assert_eq!(payload["prompt"], "thunder lightning");
+        assert_eq!(payload["negative_prompt"], "");
+        assert_eq!(payload["duration"], 5.0);
+        assert_eq!(payload["steps"], 50);
+        assert_eq!(payload["cfg_scale"], 7.0);
+        assert!(payload.get("seed").is_none());
     }
 }

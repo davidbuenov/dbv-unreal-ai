@@ -1,23 +1,16 @@
 ---
-# Frontmatter de la fase vigente: ampliación de la v0.3.0 (§10). Los anteriores se conservan en el historial de git.
+# Frontmatter de la fase vigente: v0.4.1 (Control Acústico Avanzado y Panel de Síntesis para Audio Local — REQ-76).
 dependencies:
-  - Rama v0.3.0 (commit 5dbcec6) con REQ-50..REQ-60 construidos y probados
-  - UE 5.8.4 con D3D12 SM6; motor del Launcher (precompilado) para compilar el plugin C++ con UBT
-  - APIs públicas del motor: FSceneViewExtensionBase + SubscribeToPostProcessingPass (SceneViewExtension.h), SortGPUBuffers (Engine/Public/GPUSort.h), shaders globales de plugin (AddShaderSourceDirectoryMapping)
-  - Plugins experimentales de Epic LiveCodingToolset (CompileLiveCoding) y AutomationTestToolset (RunTestsByFilter), y UAgentSkill de ToolsetRegistry
-  - Base de guías local en formato MCPCLiente (index_guides.json + guides/*.md) para REQ-25
+  - Base de código consolidada en v0.4.0 (commit 6d8a07a) con REQ-71..REQ-75 en verde
+  - Microservicio local dbv-audio-service v0.2.0 (FastAPI en http://127.0.0.1:8765) con soporte de negative_prompt, steps, cfg_scale y seed
+  - Tauri v2 en Rust + Vanilla JS sin bundler, con i18n (es, en, zh)
 risks:
-  - "R-28: APIs internas del renderizador cambian entre versiones → un solo módulo de render, solo puntos de extensión públicos, captura de referencia por versión"
-  - "R-29: un splat enorme agota la VRAM → presupuesto: primero se quitan los SH, después se seleccionan los más visibles; el informe lo dice"
-  - "R-30: la IA edita código del proyecto → solo texto dentro del proyecto, diff revisado por fichero, copia y Revertir, dos reintentos"
-  - "R-31: Live Coding no aplica todo → se detecta el caso y se ofrece compilar con el editor cerrado"
-  - "R-32 (nuevo): ordenar 10 M de claves por fotograma y por vista es caro → solo los visibles, claves de 32 bits, una ordenación por vista y nube; se mide en S67"
-  - "R-15: guías de Epic → se leen de una carpeta local del usuario; descargarlas queda tras P-13 (decisión del usuario)"
+  - "R-33: Discrepancia de tipos o claves JSON entre Rust y dbv-audio-service -> Rust modela explícitamente el payload con serde_json::json! respetando el esquema GenerateRequest de FastAPI"
+  - "R-34: Sobrecarga visual en la pestaña Sonidos por el exceso de controles -> Visibilidad condicional según el proveedor activo; chips de presets de 1 clic que rellenan en bloque"
 rollback_strategy: >
-  Un commit por slice en la rama v0.3.0; se revierte el slice que falle. El render por GPU se construye detrás de
-  la puerta del spike S61: si el spike no cumple, se vuelve al render por CPU mejorado (lector de más de 2 GB y
-  selección de los más visibles, ya escritos) y REQ-61/REQ-62 pasan a otra versión con el motivo en la Rejection
-  Memory. REQ-18/22/23/25/64 son independientes entre sí y del render: cada uno se puede retirar sin tocar los demás.
+  Un commit por slice (S85 para el contrato en Rust y S86 para el frontend/i18n). Si algún slice falla,
+  se revierte individualmente. Los parámetros son 100% opcionales, por lo que una reversión preserva
+  la compatibilidad básica de v0.4.0 sin alterar el catálogo de la biblioteca.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -336,4 +329,39 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
    - Ajustes de proyecto (`settingsView.js`) con campo `projectCopyright`. Inyección en `unrealPrompt` manteniendo la huella DBV de 6 líneas.
 5. **[Completada] S84 · Autodetección y resiliencia de puertos MCP (REQ-75):**
    - Sondeo en `mcp_client.rs` / `commands.rs` en el rango `8000..8005` al fallar el puerto del `.ini`.
+
+## 12. Plan de implementación — DBV Unreal AI v0.4.1 (Control Acústico Avanzado y Panel de Síntesis para Audio Local)
+
+> **Modo:** Orquestador (afecta a contratos IPC en Rust, vista de generación en JS, diccionarios de i18n y suites de test en dos entornos).
+
+### Decisiones de arquitectura v0.4.1
+
+| # | Decisión | Motivo |
+|---|---|---|
+| D52 | **Contrato desacoplado y tolerante para `dbv-audio-service` (REQ-76):** En `src-tauri/src/generation/audio.rs`, la función `generate_local_sound` acepta opcionalmente `negative_prompt: Option<&str>`, `steps: Option<u32>`, `cfg_scale: Option<f32>`, y `seed: Option<u64>`. Si no se proporcionan, se usan los valores por defecto del microservicio (`""`, `50`, `7.0`, `None`). El comando Tauri `generation_generate_sound` recibe estos argumentos y los persiste en `LibraryEntry.parameters` para permitir reproducibilidad y trazabilidad. | Permite control fino de la difusión acústica sin romper retrocompatibilidad ni exigir campos obligatorios cuando el usuario solo escribe un prompt simple. |
+| D53 | **Panel de síntesis interactivo con chips de 1 clic (REQ-76):** En `src/app/generateView.js`, la pestaña «Sonidos (SFX)» se dota de un panel de síntesis específico para el proveedor Local (`dbv-audio-service`). Incluye 5 presets rápidos para videojuegos (`Laser`, `Puerta`, `Trueno`, `Retro`, `Espada`), chips de filtros negativos inmediatos (`Sin música`, `Sin ruido`, `Seco para Unreal`), sliders interactivos sincronizados con inputs numéricos para `duration`, `steps` y `cfg_scale`, y semilla con botón aleatorio `🎲`. Al alternar a `elevenlabs` o `freesound`, estos controles se ocultan dinámicamente. | Acelera radicalmente la creación de efectos sonoros para Unreal Engine minimizando la fricción y evitando que el desarrollador tenga que memorizar comandos o valores técnicos en inglés. |
+
+### Rebanadas de implementación (Slices S85 y S86)
+
+1. **S85 · Contrato ampliado de audio local en Rust (`REQ-76`):**
+   - En `src-tauri/src/generation/audio.rs`:
+     - Modificar `generate_local_sound` para aceptar `negative_prompt: Option<&str>`, `steps: Option<u32>`, `cfg_scale: Option<f32>`, `seed: Option<u64>`.
+     - Construir el payload JSON respetando `GenerateRequest` de `dbv-audio-service` (`prompt`, `negative_prompt`, `duration`, `steps`, `cfg_scale`, `seed`).
+   - En `src-tauri/src/generation/commands.rs`:
+     - Actualizar `generation_generate_sound` con los nuevos parámetros opcionales.
+     - Registrar `negative_prompt`, `steps`, `cfg_scale` y `seed` dentro de `LibraryEntry.parameters`.
+   - Tests unitarios en Rust (`cargo test`) verificando la serialización, llamadas con valores personalizados y valores por defecto.
+
+2. **S86 · Panel interactivo de Síntesis en `generateView.js` con presets e i18n (`REQ-76`):**
+   - En `src/app/backend.js`:
+     - Actualizar `generationGenerateSound` para propagar `negativePrompt`, `steps`, `cfgScale`, `seed`.
+   - En `src/app/generateView.js`:
+     - Crear el contenedor del panel de síntesis local:
+       - Fila de Quick Presets para videojuegos (5 chips: Laser, Puerta, Trueno, Retro, Espada).
+       - Campo de texto para `negative_prompt` con fila de chips de filtros acústicos (`Sin música`, `Sin ruido`, `Seco para Unreal`, `Limpiar`).
+       - Sliders sincronizados bidireccionalmente con inputs numéricos para `duration` (0.5..30s), `steps` (10..100) y `cfg_scale` (1.0..15.0).
+       - Campo numérico para `seed` con botón secundario `🎲 Aleatorio`.
+     - Lógica en `updateServiceState` para alternar la visibilidad del panel de síntesis (visible solo si proveedor es `local`).
+   - Cadenas de traducción en `es.json`, `en.json`, `zh.json` (o sus homólogos).
+   - Tests de Vitest (`npm test`) verificando la reactividad del formulario y la llamada al backend.
 

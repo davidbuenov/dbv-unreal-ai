@@ -88,7 +88,7 @@ export const generationToolSpecs = () => call('generation_tool_specs');
 export const generationPrepare = (tool, args) => call('generation_prepare', { tool, args });
 export const generationLaunch = (tool, args) => call('generation_launch', { tool, args, confirmCost: true });
 export const generationCheckLocalAudio = (url = null) => call('generation_check_local_audio', { url });
-export const generationGenerateSound = ({ provider, prompt, name = null, duration = 5, loop = false, localUrl = null }) => call('generation_generate_sound', { provider, prompt, name, duration, loop, localUrl });
+export const generationGenerateSound = ({ provider, prompt, name = null, duration = 5, loop = false, localUrl = null, negativePrompt = null, steps = null, cfgScale = null, seed = null }) => call('generation_generate_sound', { provider, prompt, name, duration, loop, localUrl, negativePrompt, steps, cfgScale, seed });
 export const generationSearchFreesound = (query, pageSize = 15) => call('generation_search_freesound', { query, pageSize });
 export const generationSaveSoundUrl = ({ url, name, prompt = null, duration = null }) => call('generation_save_sound_url', { url, name, prompt, duration });
 export const generationOperations = (operation) => call('generation_operations', { operation: operation || null });

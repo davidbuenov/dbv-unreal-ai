@@ -1,8 +1,8 @@
 # 📋 Especificaciones: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` (Especificación)
-> **Estado:** Validado para `/plan` v0.3.1 (v1.9: aislamiento de conversaciones ACP, modelo por defecto real y contador de tokens por conversación —REQ-67—, pegado de imágenes desde el portapapeles `Ctrl+V` / arrastrar y soltar con miniatura —REQ-68—, cabecera estándar DBV en todos los ficheros propios y generados por la IA —REQ-69—, reanudación de trabajos huérfanos de World Labs —REQ-70— y edición de `.md` en la raíz y `docs/**` —REQ-22—; v1.8: logos en Generar y «Mejorar con IA» —REQ-65, REQ-66—, decisiones del usuario sobre REQ-22 y REQ-23 y cielo de World Labs descartado; v1.7: ampliación de la v0.3.0 con splats por GPU con armónicos esféricos, splats grandes, chino y adelanto de REQ-18, REQ-22, REQ-23 y REQ-25 —§3.13, REQ-61..REQ-64—)
-> **Última Revisión:** 2026-11-03
+> **Estado:** Validado para `/plan` v0.4.1 (v1.11: parámetros avanzados y prompt negativo para audio local —REQ-76— amplía REQ-71; v1.10: novedades v0.4.0 —REQ-71..REQ-75—; v1.9: aislamiento de conversaciones ACP, modelo por defecto real y contador de tokens por conversación —REQ-67—, pegado de imágenes desde el portapapeles `Ctrl+V` / arrastrar y soltar con miniatura —REQ-68—, cabecera estándar DBV en todos los ficheros propios y generados por la IA —REQ-69—, reanudación de trabajos huérfanos de World Labs —REQ-70— y edición de `.md` en la raíz y `docs/**` —REQ-22—)
+> **Última Revisión:** 2026-11-05
 
 ---
 
@@ -426,6 +426,35 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - Si el puerto MCP configurado en el `.ini` (o propuesto por defecto) devuelve error de conexión o `404 route_handler_not_found`, la app sondea automáticamente los puertos estándar (`8000..8005`) para localizar dónde está respondiendo realmente el servidor MCP de Unreal Editor (`/mcp` devolviendo `initialize` OK).
   - Al detectar el puerto activo, sincroniza la conexión en memoria y actualiza la vista sin exigir al usuario modificar a mano los archivos `.ini` en `Saved/Config/`.
   *Aceptación:* si Unreal está escuchando en el puerto 8000 pero el `.ini` tenía 8001, pulsar «Conectar» detecta el 8000, actualiza el endpoint y establece la conexión con éxito en lugar de abortar con 404.
+
+### 3.16. Novedades de la v0.4.1 (Control Acústico Avanzado y Panel Completo de Síntesis para Audio Local)
+
+- [ ] **REQ-76 · Panel completo de parámetros de síntesis y presets para audio local (amplía REQ-71):**
+  - **Chips de presets rápidos para videojuegos:**
+    - Botones de 1 clic en la interfaz de Generar (pestaña «Sonidos (SFX)») al seleccionar el proveedor Local que configuran simultáneamente el prompt descriptivo, el prompt negativo acústico, la duración, los pasos y la escala CFG idóneos para arquetipos típicos de videojuegos:
+      1. 🔫 *Laser Blaster* (Sci-Fi, alta energía, seco).
+      2. 🚪 *Puerta Hidráulica* (Mecánico/Industrial, presión neumática e impacto metálico).
+      3. ⚡ *Trueno y Tormenta* (Ambiente/Naturaleza, rotura aguda y cola grave resonante).
+      4. 🕹️ *Retro 8-bit* (Chiptune / Arcade, onda pura limpia y alegre).
+      5. ⚔️ *Espada y Metal* (Foley medieval, desenvaine y choque resonante).
+  - **Prompt Negativo (`negative_prompt`) con chips de exclusión acústica:**
+    - Campo de texto secundario para excluir elementos sonoros indeseados durante la difusión (hasta 300 caracteres).
+    - Chips rápidos para autocompletar o combinar filtros acústicos frecuentes:
+      - 🚫 *Sin música ni voces* (`music, melody, singing, vocals, speech, beat, rhythm`).
+      - 🔇 *Sin ruido ni distorsión* (`low quality, background noise, static, hiss, muffled, distortion, clipping`).
+      - 🏜️ *Seco / Sin Reverb* (`reverb, echo, hall, cavernous, wet, music, background noise`) — óptimo para Unreal Engine, permitiendo que la atenuación y reverb espacial las calcule el motor de audio en 3D.
+      - ✖ *Limpiar*.
+  - **Controles interactivos de síntesis de difusión:**
+    - Panel de parámetros de síntesis visible cuando el proveedor es Local:
+      - **Duración (`duration`):** slider sincronizado con entrada numérica (0.5s a 30.0s, paso 0.5s, por defecto 5.0s) con pistas acústicas de uso (disparos/UI vs mecanismos vs ambientes).
+      - **Pasos de difusión (`steps`):** slider sincronizado con entrada numérica (10 a 100, por defecto 50) con guía de fidelidad (25–35 rápido, 40–50 óptimo, 60–80 alta definición).
+      - **Escala de guía (`cfg_scale`):** slider sincronizado con entrada numérica (1.0 a 15.0, paso 0.5, por defecto 7.0) con guía de fidelidad al texto (4.5–6.0 orgánico, 6.5–8.0 punto dulce, >11 saturación).
+      - **Semilla (`seed`):** campo numérico con botón «🎲 Aleatorio» para alternar entre generación determinista (reproducible) o estocástica.
+  - **Persistencia en la biblioteca y metadatos:**
+    - `LibraryEntry.parameters` almacena `negative_prompt`, `steps`, `cfg_scale` y `seed`, permitiendo clonar o variar el sonido en cualquier momento desde la biblioteca.
+  - **Retrocompatibilidad y resiliencia:**
+    - Si el usuario no introduce prompt negativo ni altera los parámetros, la petición envía los valores por defecto estándar sin modificar el funcionamiento de ElevenLabs o Freesound.
+  *Aceptación:* pulsar un preset de juego rellena automáticamente todos los campos; modificar sliders sincroniza sus valores; la llamada IPC y el payload HTTP a `http://127.0.0.1:8765/v1/generate` transmiten `negative_prompt`, `duration`, `steps`, `cfg_scale` y `seed`; y el audio guardado en la biblioteca preserva todos estos parámetros en su entrada. Al cambiar de proveedor a ElevenLabs o Freesound, el panel de parámetros de síntesis local se oculta automáticamente.
 
 ## 🏗️ 4. Propuesta de Solución Técnica (Resumen)
 

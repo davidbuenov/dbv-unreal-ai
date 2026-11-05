@@ -205,6 +205,16 @@
 - [x] **`/code-simplify` v0.4.0** (2026-11-04) — revisión de endpoints de audio (corrección a `POST /v1/sound-generation` de ElevenLabs), preescucha interactiva en lista para Freesound, control de solapamiento de audio, accesibilidad con `aria-label` y validación de tipos y errores sin warnings.
 - [x] **`/ship` v0.4.0** (2026-11-04, Minor) — versión 0.4.0 en `package.json`, `Cargo.toml` y `tauri.conf.json`; CHANGELOG ES/EN publicado como `[0.4.0]` con sus enlaces de comparación; notas de release `v0.4.0.md` y `v0.4.0.en.md`; README ES/EN y `walkthrough.md` actualizados. Tag propuesto: `v0.4.0`.
 
+## v0.4.1 — Control Acústico Avanzado y Prompts Negativos para Audio Local
+
+- [x] **`/spec` v0.4.1** (2026-11-05) — definición de `REQ-76` (panel completo de parámetros de síntesis, chips de presets para videojuegos, prompt negativo con filtros de exclusión acústica, sliders sincronizados de duration, steps, cfg_scale y seed para `dbv-audio-service`) en `SPECIFICATIONS.md` y `DESIGN.md`.
+- [x] **`/plan` v0.4.1** (2026-11-05) — decisiones de arquitectura (D52, D53), Adversarial Architect Review y desglose de tareas S85–S86 en `implementation_plan.md`.
+- [x] **S85 · Contrato ampliado de audio local en Rust** (`REQ-76`) — actualización de `generate_local_sound` y `generation_generate_sound` con `negative_prompt`, `steps`, `cfg_scale` y `seed`.
+- [x] **S86 · Panel interactivo de Síntesis en Generar Sonidos con presets e i18n** (`REQ-76`) — chips de presets de videojuegos, chips de prompt negativo, sliders sincronizados de parámetros en `generateView.js`, llamada ampliada en `backend.js` y textos en `es.json`, `en.json`, `zh.json`.
+- [ ] **`/test` v0.4.1** — verificación de tests en Rust (serialización y llamadas) y Vitest, `dbv-lint`.
+- [ ] **`/code-simplify` v0.4.1** — revisión de ergonomía y robustez.
+- [ ] **`/ship` v0.4.1** — bump a 0.4.1, notas de release, changelog, MSIX.
+
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
 - [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).
@@ -246,10 +256,10 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-11-04, ciclo completo `/spec` → `/plan` → `/build` (S80–S84) → `/test` → `/code-simplify` → `/ship` de **v0.4.0** cerrado (`REQ-71`..`REQ-75`). Rust 238 pasados (+5 ignorados, clippy limpio con 0 warnings), Vitest 381 pasados (43 suites), Python 48 pasados, `npm run test:all` en verde, `dbv-lint --changed` 0 errores (90 requisitos con ID, 88 con test).
+> **Last update / Última actualización:** 2026-11-05, fases **`/spec`**, **`/plan`** y **`/build`** (S85, S86) de **v0.4.1** completadas con éxito para `REQ-76` (panel completo de parámetros de síntesis, presets rápidos de videojuegos, prompt negativo acústico, sliders sincronizados de duración/steps/cfg_scale y semilla determinista para `dbv-audio-service`).
 
-> **Exact point / Punto exacto:** v0.4.0 entregada con éxito. Versión 0.4.0 establecida en los manifiestos, CHANGELOG ES/EN publicado, notas de release generadas y walkthrough actualizado.
+> **Exact point / Punto exacto:** Implementación de S85 y S86 finalizada y verificada en verde: Rust 240 pasados (0 fallos, 5 ignorados, clippy 0 warnings), Vitest 384 pasados en 43 suites (0 fallos), Python 48 pasados (0 fallos), `dbv-lint.py` limpio (91 requisitos con ID, 89 con test).
 
-> **Pending / Pendiente:** (1) Commit y tag `v0.4.0` en git; (2) desarrollo en sesión separada de `dbv-audio-service` en `D:\Programacion\github-davidbuenov\dbv-audio-service`.
+> **Pending / Pendiente:** Prueba manual interactiva por parte del usuario en la interfaz en vivo de `dbv-unreal-ai` contra `dbv-audio-service` ejecutándose en `http://127.0.0.1:8765`.
 
-> **Next step / Próximo paso:** Crear commit y tag `v0.4.0`, o pasar a la sesión de `dbv-audio-service`.
+> **Next step / Próximo paso:** Tras la verificación por parte del usuario, proceder con las fases `/code-simplify` y `/ship` de la versión v0.4.1.
