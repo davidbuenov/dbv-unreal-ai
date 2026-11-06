@@ -102,7 +102,8 @@ export function createSettingsView(host, deps) {
     const checkAudioBtn = button(t('gen.soundLocalCheck'), async () => {
       checkAudioBtn.disabled = true;
       localAudioStatus.textContent = t('gen.soundGenerating');
-      const st = await api.generationCheckLocalAudio();
+      const res = await api.generationCheckLocalAudio();
+      const st = res?.value;
       checkAudioBtn.disabled = false;
       if (st?.ready) {
         localAudioStatus.textContent = t('gen.soundLocalReady', { device: st.device || 'GPU' });

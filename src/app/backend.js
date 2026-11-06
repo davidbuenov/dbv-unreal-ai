@@ -94,6 +94,7 @@ export const generationSaveSoundUrl = ({ url, name, prompt = null, duration = nu
 export const generationOperations = (operation) => call('generation_operations', { operation: operation || null });
 export const generationBalance = () => call('generation_balance');
 export const generationWorldLabsBalance = () => call('generation_worldlabs_balance');
+export const generationElevenlabsBalance = () => call('generation_elevenlabs_balance');
 export const generationSuggestName = (prompt) => call('generation_suggest_name', { prompt });
 export const generationPresets = () => call('generation_presets');
 /** Trabajos de la sesión (también los de un agente), con su consola. */

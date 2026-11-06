@@ -90,6 +90,8 @@ export function formArgs({ mode, prompt, image, name, variants, faceLimit, lowPo
 export function createGenerateView(host, deps) {
   const cards = new Map();
   const jobsList = el('div', { className: 'stack job-list' });
+  const balanceCache = new Map();
+  let activeUpdateServiceState = null;
   const watcher = createJobWatcher({
     list: api.generationJobs,
     onRecord(record) {
@@ -100,7 +102,12 @@ export function createGenerateView(host, deps) {
         cards.set(record.id, card);
         jobsList.prepend(card.node);
       }
-      if (record.stage === 'done') deps.onSpent();
+      if (record.stage === 'done') {
+        deps.onSpent();
+        balanceCache.delete('tripo');
+        balanceCache.delete('worldlabs');
+        activeUpdateServiceState?.(true);
+      }
     },
   });
 
@@ -262,7 +269,7 @@ export function createGenerateView(host, deps) {
     const soundDurationRow = el('div', { className: 'sound-slider-row' }, soundDurationSlider, soundDuration);
 
     const soundLoop = el('input', { attrs: { type: 'checkbox', 'aria-label': t('gen.soundLoop') } });
-    const soundLocalStatus = el('p', { className: 'hint', text: '' });
+    const soundLocalStatus = el('p', { className: 'hint sound-local-status', text: '' });
     const soundResultsContainer = el('div', { className: 'sound-results-list hidden' });
 
     // ─── Síntesis de Audio Local (REQ-76) ──────────────────────────────
@@ -559,12 +566,15 @@ export function createGenerateView(host, deps) {
             if (res.ok) {
               deps.toast(t('gen.soundGenerated'), 'info');
               soundPrompt.value = '';
+              if (soundProvider.value === 'elevenlabs') {
+                balanceCache.delete('elevenlabs');
+              }
               deps.openLibrary?.();
             } else {
               deps.toast(res.error.message, 'error');
             }
           } finally {
-            updateServiceState();
+            updateServiceState(true);
           }
           return null;
         }
@@ -579,6 +589,8 @@ export function createGenerateView(host, deps) {
           ids = await confirmAndLaunch(deps, tool, args);
           if (ids) {
             deps.onSpent();
+            balanceCache.delete(mode === 'world' ? 'worldlabs' : 'tripo');
+            updateServiceState(true);
             watcher.poke();
           }
         }
@@ -587,7 +599,35 @@ export function createGenerateView(host, deps) {
       'btn-primary',
     );
 
-    function updateServiceState() {
+    async function fetchTripoBalance(force = false) {
+      if (!force && balanceCache.has('tripo')) return balanceCache.get('tripo');
+      const result = await api.generationBalance();
+      const str = (result.ok && result.value) ? t('gen.balance', { balance: String(result.value.balance ?? 0), frozen: String(result.value.frozen ?? 0) }) : '';
+      if (result.ok && result.value) balanceCache.set('tripo', str);
+      return str;
+    }
+
+    async function fetchWorldLabsBalance(force = false) {
+      if (!force && balanceCache.has('worldlabs')) return balanceCache.get('worldlabs');
+      const result = await api.generationWorldLabsBalance();
+      const str = (result.ok && result.value) ? t('gen.worldLabsBalance', { balance: String(result.value.balance ?? 0) }) : (result.error?.message ?? '');
+      if (result.ok && result.value) balanceCache.set('worldlabs', str);
+      return str;
+    }
+
+    async function fetchElevenLabsBalance(force = false) {
+      if (!force && balanceCache.has('elevenlabs')) return balanceCache.get('elevenlabs');
+      const result = await api.generationElevenlabsBalance();
+      const str = (result.ok && result.value) ? t('gen.elevenlabsBalance', {
+        remaining: String(result.value.remainingCharacters ?? 0),
+        used: String(result.value.characterCount ?? 0),
+        limit: String(result.value.characterLimit ?? 0),
+      }) : (result.error?.message ?? '');
+      if (result.ok && result.value) balanceCache.set('elevenlabs', str);
+      return str;
+    }
+
+    function updateServiceState(refreshBalance = false) {
       if (mode === 'sound') {
         const prov = soundProvider.value;
         start.disabled = false;
@@ -602,6 +642,12 @@ export function createGenerateView(host, deps) {
           if (!has) {
             keyWarning.textContent = t('settings.elevenlabs');
             keyWarning.classList.remove('hidden');
+          } else {
+            fetchElevenLabsBalance(refreshBalance).then((text) => {
+              if (mode === 'sound' && soundProvider.value === 'elevenlabs') {
+                balance.textContent = text;
+              }
+            });
           }
         } else if (prov === 'freesound') {
           const has = Boolean(status.ok && status.value.hasKey?.freesound);
@@ -611,13 +657,16 @@ export function createGenerateView(host, deps) {
             keyWarning.classList.remove('hidden');
           }
         } else if (prov === 'local') {
-          api.generationCheckLocalAudio().then((st) => {
+          api.generationCheckLocalAudio().then((res) => {
+            const st = res?.value;
             if (st?.ready) {
               soundLocalStatus.textContent = t('gen.soundLocalReady', { device: st.device || 'GPU' });
-              soundLocalStatus.className = 'hint check-ok';
+              soundLocalStatus.className = 'hint sound-local-status check-ok';
+              balance.textContent = t('gen.balanceLocalInfinite');
             } else {
               soundLocalStatus.textContent = t('gen.soundLocalOffline');
-              soundLocalStatus.className = 'hint check-fail';
+              soundLocalStatus.className = 'hint sound-local-status check-fail';
+              balance.textContent = '';
             }
           });
         }
@@ -634,17 +683,17 @@ export function createGenerateView(host, deps) {
       } else {
         keyWarning.classList.add('hidden');
         if (service === 'worldlabs') {
-          api.generationWorldLabsBalance().then((result) => {
-            // Si falla (clave rechazada, cuenta sin API), se ve el motivo en vez de quedar en blanco.
-            balance.textContent = result.ok ? t('gen.worldLabsBalance', { balance: String(result.value.balance) }) : (result.error?.message ?? '');
+          fetchWorldLabsBalance(refreshBalance).then((text) => {
+            if (mode === 'world') balance.textContent = text;
           });
         } else {
-          api.generationBalance().then((result) => {
-            balance.textContent = result.ok ? t('gen.balance', { balance: String(result.value.balance), frozen: String(result.value.frozen) }) : '';
+          fetchTripoBalance(refreshBalance).then((text) => {
+            if (mode === 'text' || mode === 'image') balance.textContent = text;
           });
         }
       }
     }
+    activeUpdateServiceState = updateServiceState;
 
     // REQ-65: cada pestaña dice con qué servicio se genera.
     const tabs = ['text', 'image', 'world', 'sound'].map((key) =>

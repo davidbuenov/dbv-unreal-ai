@@ -326,6 +326,14 @@ pub async fn generation_worldlabs_balance(ai: State<'_, AiState>) -> Result<supe
     Ok(balance)
 }
 
+/// Saldo de la cuenta de ElevenLabs (caracteres restantes y límite de suscripción). @spec REQ-77
+#[tauri::command]
+pub async fn generation_elevenlabs_balance(ai: State<'_, AiState>) -> Result<super::audio::ElevenLabsBalance, UnrealError> {
+    let key = ai.secrets.get(&key_account("elevenlabs")).ok_or_else(|| UnrealError::NotFound("no hay clave de ElevenLabs: añádela en Ajustes".into()))?;
+    let balance = tauri::async_runtime::spawn_blocking(move || super::audio::get_elevenlabs_subscription(&key)).await.map_err(|error| UnrealError::Io(error.to_string()))??;
+    Ok(balance)
+}
+
 /// El evento que recibe la interfaz a partir del fichero de trabajo.
 fn progress_of(app: &AppHandle, record: &JobRecord) -> Progress {
     let entry = if record.stage == "done" { library(app).ok().and_then(|library| entry_of(&library, record)) } else { None };

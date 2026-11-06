@@ -13,7 +13,15 @@ import { barPercent, createJobCard, stageText } from '../../src/generation/jobCa
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 import { cleanImproved, IMPROVE_LIMITS, improveMessages, improvePrompt } from '../../src/generation/promptImprover.js';
 
-const READ_ONLY = new Set(['generation_status', 'generation_jobs', 'generation_balance', 'generation_worldlabs_balance', 'generation_prepare']);
+const READ_ONLY = new Set([
+  'generation_status',
+  'generation_jobs',
+  'generation_balance',
+  'generation_worldlabs_balance',
+  'generation_elevenlabs_balance',
+  'generation_check_local_audio',
+  'generation_prepare',
+]);
 let invoked;
 
 beforeAll(() => {
@@ -27,11 +35,13 @@ beforeEach(() => {
     core: {
       invoke: vi.fn(async (command) => {
         invoked.push(command);
-        if (command === 'generation_status') return { spent: 0, budget: 300, hasKey: { tripo: true, worldlabs: true } };
+        if (command === 'generation_status') return { spent: 0, budget: 300, hasKey: { tripo: true, worldlabs: true, elevenlabs: true } };
         if (command === 'generation_jobs') return [];
         if (command === 'generation_balance') return { balance: 100, frozen: 0 };
         if (command === 'generation_prepare') return { total: 1580 };
         if (command === 'generation_worldlabs_balance') return { balance: 5000 };
+        if (command === 'generation_check_local_audio') return { ready: true, device: 'NVIDIA RTX 4090', status: 'ready' };
+        if (command === 'generation_elevenlabs_balance') return { characterCount: 12500, characterLimit: 30000, remainingCharacters: 17500, status: 'active' };
         return null;
       }),
     },
@@ -424,5 +434,78 @@ describe('Mejorar el prompt', () => {
     providerSelect.value = 'local';
     providerSelect.dispatchEvent(new Event('change'));
     expect(localPanel.classList.contains('hidden')).toBe(false);
+  });
+
+  it('evalúa correctamente la disponibilidad del servicio local y muestra créditos infinitos @spec REQ-77', async () => {
+    const host = await renderView();
+    host.querySelector('[data-mode="sound"]').click();
+
+    const providerSelect = host.querySelector('select[aria-label="Proveedor"]');
+    providerSelect.value = 'local';
+    providerSelect.dispatchEvent(new Event('change'));
+
+    const statusEl = host.querySelector('.sound-local-status');
+    const balanceEl = host.querySelector('.view-header .hint');
+
+    await vi.waitFor(() => {
+      expect(statusEl.textContent).toContain('NVIDIA RTX 4090');
+      expect(statusEl.classList.contains('check-ok')).toBe(true);
+      expect(balanceEl.textContent).toBe('Saldo local: ∞ créditos');
+    });
+  });
+
+  it('muestra saldo de ElevenLabs, cachea en sesión y refresca tras generar @spec REQ-77', async () => {
+    let elevenlabsCallCount = 0;
+    window.__TAURI__.core.invoke = vi.fn(async (command, args) => {
+      if (command === 'generation_status') return { spent: 0, budget: 300, hasKey: { tripo: true, worldlabs: true, elevenlabs: true } };
+      if (command === 'generation_jobs') return [];
+      if (command === 'generation_balance') return { balance: 100, frozen: 0 };
+      if (command === 'generation_check_local_audio') return { ready: true, device: 'GPU', status: 'ready' };
+      if (command === 'generation_elevenlabs_balance') {
+        elevenlabsCallCount++;
+        return {
+          characterCount: elevenlabsCallCount === 1 ? 12500 : 13000,
+          characterLimit: 30000,
+          remainingCharacters: elevenlabsCallCount === 1 ? 17500 : 17000,
+          status: 'active',
+        };
+      }
+      if (command === 'generation_generate_sound') return { ok: true };
+      return null;
+    });
+
+    const host = await renderView();
+    host.querySelector('[data-mode="sound"]').click();
+
+    const providerSelect = host.querySelector('select[aria-label="Proveedor"]');
+    providerSelect.value = 'elevenlabs';
+    providerSelect.dispatchEvent(new Event('change'));
+
+    const balanceEl = host.querySelector('.view-header .hint');
+
+    await vi.waitFor(() => {
+      expect(balanceEl.textContent).toBe('Saldo de ElevenLabs: 17500 caracteres (12500/30000)');
+    });
+    expect(elevenlabsCallCount).toBe(1);
+
+    // Cambiar de pestaña y volver a Sonidos -> debe usar la caché de sesión sin volver a llamar
+    host.querySelector('[data-mode="text"]').click();
+    host.querySelector('[data-mode="sound"]').click();
+
+    await vi.waitFor(() => {
+      expect(balanceEl.textContent).toBe('Saldo de ElevenLabs: 17500 caracteres (12500/30000)');
+    });
+    expect(elevenlabsCallCount).toBe(1);
+
+    // Generar un sonido con ElevenLabs -> debe invalidar la caché y refrescar
+    const promptInput = host.querySelector('textarea[aria-label="Descripción del sonido"]');
+    promptInput.value = 'sci-fi laser beam';
+    const startButton = host.querySelector('.btn-primary');
+    startButton.click();
+
+    await vi.waitFor(() => {
+      expect(elevenlabsCallCount).toBe(2);
+      expect(balanceEl.textContent).toBe('Saldo de ElevenLabs: 17000 caracteres (13000/30000)');
+    });
   });
 });

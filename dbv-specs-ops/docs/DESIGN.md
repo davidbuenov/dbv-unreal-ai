@@ -246,6 +246,16 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
       - **Escala CFG:** slider + campo numérico (1.0–15.0, paso 0.5) con guía de adherencia al prompt.
       - **Semilla (Seed):** campo numérico con botón secundario `🎲 Aleatorio`.
     - **Adaptación contextual:** al cambiar al proveedor ElevenLabs o Freesound, todos los controles específicos de difusión local se ocultan automáticamente, restaurando la interfaz mínima y adecuada a cada proveedor.
+- **Visualización de Saldos, Caché de Sesión y Saldo Infinito Local (REQ-77):**
+  - La cabecera de la vista *Generar* (`view-header`) muestra dinámicamente el saldo según el servicio activo:
+    - **Tripo (3D):** `Saldo de Tripo: X créditos (Y reservados)`.
+    - **World Labs (Mundo):** `Saldo de World Labs: X créditos`.
+    - **ElevenLabs (Sonido):** `Saldo de ElevenLabs: X caracteres (usados: Y / límite: Z)`.
+    - **Local (Sonido):** `Saldo local: ∞ créditos` al detectar `dbv-audio-service` disponible.
+    - **Freesound (Sonido):** sin consumo de cuota (búsqueda abierta de catálogo).
+  - **Caché en memoria de sesión:** los saldos consultados se retienen durante la sesión para que la alternancia entre pestañas sea instantánea y sin parpadeos ni peticiones redundantes.
+  - **Refresco reactivo post-generación:** la finalización de una generación invalida la entrada del proveedor en la caché de saldo y actualiza inmediatamente el indicador.
+  - **Corrección visual de estado local:** el indicador de `dbv-audio-service` evalúa correctamente `st?.value?.ready`, mostrando el estado en verde con el dispositivo real (`GPU`/`CPU`).
 
 ---
 

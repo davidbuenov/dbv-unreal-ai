@@ -163,6 +163,68 @@ pub fn generate_elevenlabs_sfx(
     Ok(bytes)
 }
 
+/// Información de suscripción y saldo de caracteres de ElevenLabs. @spec REQ-77
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElevenLabsBalance {
+    pub character_count: i64,
+    pub character_limit: i64,
+    pub remaining_characters: i64,
+    pub status: String,
+}
+
+/// Consulta el saldo y suscripción de la cuenta de ElevenLabs. @spec REQ-77
+pub fn get_elevenlabs_subscription(api_key: &str) -> Result<ElevenLabsBalance, UnrealError> {
+    let url = "https://api.elevenlabs.io/v1/user/subscription";
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(10)))
+        .build()
+        .new_agent();
+
+    let mut res = agent
+        .get(url)
+        .header("xi-api-key", api_key)
+        .header("Accept", "application/json")
+        .call()
+        .map_err(|e| {
+            if let ureq::Error::StatusCode(code) = &e {
+                match *code {
+                    401 => UnrealError::Protocol("clave de API de ElevenLabs inválida o no autorizada (HTTP 401)".into()),
+                    429 => UnrealError::Protocol("cuota de ElevenLabs superada o límite alcanzado (HTTP 429)".into()),
+                    other => UnrealError::Protocol(format!("ElevenLabs devolvió HTTP {other}")),
+                }
+            } else {
+                UnrealError::Io(format!("error en llamada a ElevenLabs: {e}"))
+            }
+        })?;
+
+    if res.status().as_u16() != 200 {
+        return Err(UnrealError::Protocol(format!("ElevenLabs devolvió HTTP {}", res.status())));
+    }
+
+    let body: Value = res
+        .body_mut()
+        .read_json()
+        .map_err(|e| UnrealError::Protocol(format!("error parseando JSON de ElevenLabs: {e}")))?;
+
+    parse_elevenlabs_subscription_json(&body)
+}
+
+/// Parsea el JSON devuelto por /v1/user/subscription de ElevenLabs. @spec REQ-77
+pub fn parse_elevenlabs_subscription_json(body: &Value) -> Result<ElevenLabsBalance, UnrealError> {
+    let count = body.get("character_count").and_then(Value::as_i64).unwrap_or(0);
+    let limit = body.get("character_limit").and_then(Value::as_i64).unwrap_or(0);
+    let status = body.get("status").and_then(Value::as_str).unwrap_or("active").to_string();
+    let remaining = (limit - count).max(0);
+
+    Ok(ElevenLabsBalance {
+        character_count: count,
+        character_limit: limit,
+        remaining_characters: remaining,
+        status,
+    })
+}
+
 /// Resultado de búsqueda en Freesound.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -340,5 +402,35 @@ mod tests {
         assert_eq!(payload["steps"], 50);
         assert_eq!(payload["cfg_scale"], 7.0);
         assert!(payload.get("seed").is_none());
+    }
+
+    /// @spec REQ-77
+    #[test]
+    fn parse_elevenlabs_subscription_json_correcto() {
+        let json_body = json!({
+            "tier": "starter",
+            "character_count": 12500,
+            "character_limit": 30000,
+            "status": "active"
+        });
+
+        let balance = parse_elevenlabs_subscription_json(&json_body).expect("debe parsear la suscripción");
+        assert_eq!(balance.character_count, 12500);
+        assert_eq!(balance.character_limit, 30000);
+        assert_eq!(balance.remaining_characters, 17500);
+        assert_eq!(balance.status, "active");
+    }
+
+    /// @spec REQ-77
+    #[test]
+    fn parse_elevenlabs_subscription_json_con_cuota_superada() {
+        let json_body = json!({
+            "character_count": 35000,
+            "character_limit": 30000,
+            "status": "active"
+        });
+
+        let balance = parse_elevenlabs_subscription_json(&json_body).expect("debe parsear");
+        assert_eq!(balance.remaining_characters, 0);
     }
 }

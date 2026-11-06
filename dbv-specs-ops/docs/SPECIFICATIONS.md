@@ -456,6 +456,24 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
     - Si el usuario no introduce prompt negativo ni altera los parámetros, la petición envía los valores por defecto estándar sin modificar el funcionamiento de ElevenLabs o Freesound.
   *Aceptación:* pulsar un preset de juego rellena automáticamente todos los campos; modificar sliders sincroniza sus valores; la llamada IPC y el payload HTTP a `http://127.0.0.1:8765/v1/generate` transmiten `negative_prompt`, `duration`, `steps`, `cfg_scale` y `seed`; y el audio guardado en la biblioteca preserva todos estos parámetros en su entrada. Al cambiar de proveedor a ElevenLabs o Freesound, el panel de parámetros de síntesis local se oculta automáticamente.
 
+### REQ-77: Visibilidad de saldo de ElevenLabs, optimización de caché de cuotas y estado del servicio de audio local
+- **Estado:** 🟡 En progreso (v0.4.1)
+- **Prioridad:** Media
+- **Descripción:** Optimiza la experiencia informativa y de consumo de red en la vista de generación y el estado del microservicio local:
+  - **Detección robusta del microservicio de audio local:**
+    - Corrección en la deserialización de la respuesta de `generation_check_local_audio` en la vista de Generación y en Ajustes para evaluar `st?.value?.ready` en lugar del envoltorio IPC `st?.ready`.
+    - Presentación en tiempo real del estado de disponibilidad y dispositivo (`GPU` / `CPU`) sin falsos negativos de servicio fuera de línea.
+  - **Consulta de cuota y suscripción de ElevenLabs:**
+    - Endpoint oficial de ElevenLabs `GET https://api.elevenlabs.io/v1/user/subscription` utilizando la clave `xi-api-key` guardada en el almacén de credenciales.
+    - Obtención de `character_count`, `character_limit` y cálculo de `remaining_characters`.
+    - Comando IPC `generation_elevenlabs_balance` en Rust con manejo tipado de errores (HTTP 401 clave inválida, 429 cuota superada).
+  - **Caché de saldos por sesión y refresco inteligente:**
+    - Las consultas de saldo (Tripo, World Labs y ElevenLabs) se realizan una sola vez por sesión al acceder al proveedor, reutilizando el valor en memoria para evitar llamadas de red repetitivas e innecesarias al alternar entre pestañas o selectores.
+    - Invalidación y refresco automático de la cuota del proveedor activo inmediatamente después de completar con éxito una generación (3D o audio).
+  - **Indicador de saldo infinito para inferencia local:**
+    - Al seleccionar el proveedor Local (`dbv-audio-service`) y encontrarse el microservicio conectado (`ready`), la cabecera de saldo muestra de forma explícita `Saldo local: ∞ créditos`, transmitiendo con claridad que la síntesis local no consume cuota externa de nube.
+  *Aceptación:* el estado del servicio local se muestra en verde con su dispositivo cuando `dbv-audio-service` está activo; el saldo de ElevenLabs muestra los caracteres restantes; alternar entre pestañas no dispara peticiones de saldo adicionales si ya están cacheadas; generar un asset refresca el saldo del proveedor utilizado; y el generador local muestra `∞ créditos` al estar conectado.
+
 ## 🏗️ 4. Propuesta de Solución Técnica (Resumen)
 
 - **Enfoque:** aplicación Tauri v2 (Rust + Vanilla JS sin bundler) que parte del código de **dbv-tauri-starter** (que ya incluye el subsistema de IA genérico extraído de dbv-typst-editor: `src/ai/*`, `src-tauri/src/ai/*`). Sobre esa base se añaden cuatro módulos:

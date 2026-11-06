@@ -13,6 +13,8 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
+- **Visibilidad de saldo de ElevenLabs y créditos ilimitados locales (REQ-77):** consulta de suscripción y caracteres restantes (`character_count`, `character_limit`) a la API oficial de ElevenLabs (`/v1/user/subscription`) con visualización dinámica en la cabecera de la vista Generar, e indicador de «Saldo local: ∞ créditos» al conectar con el microservicio local de audio.
+- **Optimización de caché de saldos por sesión (REQ-77):** retención en memoria de las cuotas consultadas para Tripo, World Labs y ElevenLabs evitando peticiones de red repetitivas al cambiar de pestaña, con invalidación y refresco reactivo tras completar cualquier generación.
 - **Panel completo de parámetros de síntesis y presets para audio local (REQ-76):**
   - **Presets de 1 clic para videojuegos:** chips rápidos (`🔫 Laser Blaster`, `🚪 Puerta Hidráulica`, `⚡ Trueno y Tormenta`, `🕹️ Retro 8-bit`, `⚔️ Espada y Metal`) que configuran en bloque el prompt descriptivo, prompt negativo, duración, pasos de difusión y escala CFG.
   - **Prompt negativo con filtros acústicos inmediatos:** campo de texto con chips de 1 clic para excluir música y voces (`🚫 Sin música ni voz`), ruido y distorsión (`🔇 Sin ruido ni distorsión`), y modo seco (`🏜️ Seco / Para Unreal`) que desactiva reverberación para que la acústica 3D la procese Unreal Engine.
@@ -22,6 +24,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Fixed
 
+- **Detección del estado del microservicio de audio local (REQ-77):** corrección de la comprobación de respuesta IPC en `generateView.js` y `settingsView.js` evaluando `st?.value?.ready` en lugar del envoltorio `st?.ready`, eliminando falsos positivos de «Servicio local no disponible (puerto 8765)» cuando `dbv-audio-service` está activo.
 - **Resiliencia de conexión con Claude Code en Windows:** el adaptador oficial ACP (`@agentclientprotocol/claude-agent-acp`) descargado por `npx` fallaba en Windows con un error interno (`Claude native binary not found for win32-x64`) tras actualizarse los paquetes del ecosistema de Anthropic sin incluir los binarios opcionales en caché; la app ahora inyecta automáticamente la variable de entorno `CLAUDE_CODE_EXECUTABLE` resolviendo la ruta del binario `claude.exe` del sistema, y propaga el detalle descriptivo del error en lugar de un genérico "Internal error".
 
 ## [0.4.0] - 2026-11-04

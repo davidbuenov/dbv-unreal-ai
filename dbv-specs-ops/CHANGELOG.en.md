@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **ElevenLabs balance visibility and local unlimited credits (REQ-77):** subscription and remaining characters lookup (`character_count`, `character_limit`) via official ElevenLabs API (`/v1/user/subscription`) with dynamic header display in Generate view, and a "Local balance: ∞ credits" badge when connected to the local audio microservice.
+- **Session balance caching optimization (REQ-77):** in-memory retention of queried quotas for Tripo, World Labs, and ElevenLabs avoiding repetitive network requests when switching tabs, with reactive invalidation and refresh upon completing any generation.
 - **Full synthesis parameters panel and presets for local audio (REQ-76):**
   - **1-Click Game Presets:** quick chips (`🔫 Laser Blaster`, `🚪 Hydraulic Door`, `⚡ Thunder & Lightning`, `🕹️ Retro 8-bit`, `⚔️ Sword & Metal`) that configure prompt, negative prompt, duration, diffusion steps, and CFG scale in one click.
   - **Negative prompt with instant acoustic filters:** text field with 1-click chips to eliminate music and vocals (`🚫 No music or vocals`), noise and distortion (`🔇 No noise or distortion`), and dry mode (`🏜️ Dry / For Unreal`) that strips reverb so Unreal Engine's spatial audio engine handles 3D reverb and attenuation.
@@ -22,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Local audio microservice status detection (REQ-77):** fixed IPC response parsing in `generateView.js` and `settingsView.js` by checking `st?.value?.ready` instead of wrapper `st?.ready`, eliminating false positive "Local service unavailable (port 8765)" alerts when `dbv-audio-service` is online.
 - **Claude Code connection resilience on Windows:** the official ACP adapter (`@agentclientprotocol/claude-agent-acp`) invoked via `npx` failed on Windows with an internal error (`Claude native binary not found for win32-x64`) when Anthropic package updates lacked pre-bundled optional binaries in the npx cache; the app now automatically injects the `CLAUDE_CODE_EXECUTABLE` environment variable pointing to the system's `claude.exe` binary, and surfaces the detailed error message instead of a generic "Internal error".
 
 ## [0.4.0] - 2026-11-04

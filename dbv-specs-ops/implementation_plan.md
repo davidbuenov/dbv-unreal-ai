@@ -1,5 +1,5 @@
 ---
-# Frontmatter de la fase vigente: v0.4.1 (Control Acústico Avanzado y Panel de Síntesis para Audio Local — REQ-76).
+# Frontmatter de la fase vigente: v0.4.1 (Control Acústico Avanzado, Panel de Síntesis y Saldos de Generación — REQ-76, REQ-77).
 dependencies:
   - Base de código consolidada en v0.4.0 (commit 6d8a07a) con REQ-71..REQ-75 en verde
   - Microservicio local dbv-audio-service v0.2.0 (FastAPI en http://127.0.0.1:8765) con soporte de negative_prompt, steps, cfg_scale y seed
@@ -7,10 +7,10 @@ dependencies:
 risks:
   - "R-33: Discrepancia de tipos o claves JSON entre Rust y dbv-audio-service -> Rust modela explícitamente el payload con serde_json::json! respetando el esquema GenerateRequest de FastAPI"
   - "R-34: Sobrecarga visual en la pestaña Sonidos por el exceso de controles -> Visibilidad condicional según el proveedor activo; chips de presets de 1 clic que rellenan en bloque"
+  - "R-35: Consultas de red repetidas a APIs de saldo al alternar pestañas -> Implementación de balanceCache por sesión con invalidación tras generación exitosa"
 rollback_strategy: >
-  Un commit por slice (S85 para el contrato en Rust y S86 para el frontend/i18n). Si algún slice falla,
-  se revierte individualmente. Los parámetros son 100% opcionales, por lo que una reversión preserva
-  la compatibilidad básica de v0.4.0 sin alterar el catálogo de la biblioteca.
+  Un commit por slice (S85 para el contrato en Rust, S86 para el frontend/i18n y S87 para saldo ElevenLabs,
+  caché y estado local). Si algún slice falla, se revierte individualmente sin alterar la biblioteca.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -340,10 +340,11 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
 |---|---|---|
 | D52 | **Contrato desacoplado y tolerante para `dbv-audio-service` (REQ-76):** En `src-tauri/src/generation/audio.rs`, la función `generate_local_sound` acepta opcionalmente `negative_prompt: Option<&str>`, `steps: Option<u32>`, `cfg_scale: Option<f32>`, y `seed: Option<u64>`. Si no se proporcionan, se usan los valores por defecto del microservicio (`""`, `50`, `7.0`, `None`). El comando Tauri `generation_generate_sound` recibe estos argumentos y los persiste en `LibraryEntry.parameters` para permitir reproducibilidad y trazabilidad. | Permite control fino de la difusión acústica sin romper retrocompatibilidad ni exigir campos obligatorios cuando el usuario solo escribe un prompt simple. |
 | D53 | **Panel de síntesis interactivo con chips de 1 clic (REQ-76):** En `src/app/generateView.js`, la pestaña «Sonidos (SFX)» se dota de un panel de síntesis específico para el proveedor Local (`dbv-audio-service`). Incluye 5 presets rápidos para videojuegos (`Laser`, `Puerta`, `Trueno`, `Retro`, `Espada`), chips de filtros negativos inmediatos (`Sin música`, `Sin ruido`, `Seco para Unreal`), sliders interactivos sincronizados con inputs numéricos para `duration`, `steps` y `cfg_scale`, y semilla con botón aleatorio `🎲`. Al alternar a `elevenlabs` o `freesound`, estos controles se ocultan dinámicamente. | Acelera radicalmente la creación de efectos sonoros para Unreal Engine minimizando la fricción y evitando que el desarrollador tenga que memorizar comandos o valores técnicos en inglés. |
+| D54 | **Caché en memoria de saldos por sesión, consulta de ElevenLabs y estado local (REQ-77):** En Rust (`src-tauri/src/generation/audio.rs`), se implementa `get_elevenlabs_subscription` y el comando Tauri `generation_elevenlabs_balance` contra `https://api.elevenlabs.io/v1/user/subscription` calculando los caracteres restantes. En JavaScript (`src/app/generateView.js`), se corrige el parsing del resultado IPC de `generationCheckLocalAudio` evaluando `st?.value?.ready` en lugar de `st?.ready`; se retienen los saldos consultados en memoria (`balanceCache`) para evitar consultas de red redundantes al alternar entre pestañas; se invalidan y refrescan reactivamente tras cada generación; y al estar conectado el proveedor Local, se muestra en cabecera `Saldo local: ∞ créditos`. | Corrige el falso negativo de servicio local fuera de línea, reduce drásticamente el tráfico innecesario a las APIs de nube al cambiar pestañas, unifica la visibilidad de créditos en ElevenLabs y añade claridad sobre la gratuidad ilimitada del microservicio local. |
 
-### Rebanadas de implementación (Slices S85 y S86)
+### Rebanadas de implementación (Slices S85, S86 y S87)
 
-1. **S85 · Contrato ampliado de audio local en Rust (`REQ-76`):**
+1. **[Completada] S85 · Contrato ampliado de audio local en Rust (`REQ-76`):**
    - En `src-tauri/src/generation/audio.rs`:
      - Modificar `generate_local_sound` para aceptar `negative_prompt: Option<&str>`, `steps: Option<u32>`, `cfg_scale: Option<f32>`, `seed: Option<u64>`.
      - Construir el payload JSON respetando `GenerateRequest` de `dbv-audio-service` (`prompt`, `negative_prompt`, `duration`, `steps`, `cfg_scale`, `seed`).
@@ -352,7 +353,7 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
      - Registrar `negative_prompt`, `steps`, `cfg_scale` y `seed` dentro de `LibraryEntry.parameters`.
    - Tests unitarios en Rust (`cargo test`) verificando la serialización, llamadas con valores personalizados y valores por defecto.
 
-2. **S86 · Panel interactivo de Síntesis en `generateView.js` con presets e i18n (`REQ-76`):**
+2. **[Completada] S86 · Panel interactivo de Síntesis en `generateView.js` con presets e i18n (`REQ-76`):**
    - En `src/app/backend.js`:
      - Actualizar `generationGenerateSound` para propagar `negativePrompt`, `steps`, `cfgScale`, `seed`.
    - En `src/app/generateView.js`:
@@ -362,6 +363,25 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
        - Sliders sincronizados bidireccionalmente con inputs numéricos para `duration` (0.5..30s), `steps` (10..100) y `cfg_scale` (1.0..15.0).
        - Campo numérico para `seed` con botón secundario `🎲 Aleatorio`.
      - Lógica en `updateServiceState` para alternar la visibilidad del panel de síntesis (visible solo si proveedor es `local`).
-   - Cadenas de traducción en `es.json`, `en.json`, `zh.json` (o sus homólogos).
+   - Cadenas de traducción en `translations.js` y `translations.zh.js`.
    - Tests de Vitest (`npm test`) verificando la reactividad del formulario y la llamada al backend.
+
+3. **S87 · Visibilidad de saldo ElevenLabs, caché de balances y corrección de estado local (`REQ-77`):**
+   - En `src-tauri/src/generation/audio.rs`:
+     - Estructura `ElevenLabsBalance` (`character_count`, `character_limit`, `remaining_characters`, `status`).
+     - Función `get_elevenlabs_subscription(api_key: &str) -> Result<ElevenLabsBalance, UnrealError>` llamando a `/v1/user/subscription`.
+     - Tests unitarios etiquetados con `/// @spec REQ-77`.
+   - En `src-tauri/src/generation/commands.rs` y `src-tauri/src/lib.rs`:
+     - Comando `generation_elevenlabs_balance`.
+   - En `src/app/backend.js`:
+     - Exportar `generationElevenlabsBalance()`.
+   - En `src/app/settingsView.js`:
+     - Corregir evaluación de `generationCheckLocalAudio` comprobando `st?.value?.ready`.
+   - En `src/app/generateView.js`:
+     - Corregir evaluación de `generationCheckLocalAudio` (`st?.value?.ready`) y mostrar `Saldo local: ∞ créditos` al estar conectado.
+     - Mapa `balanceCache` para cachear por sesión Tripo, World Labs y ElevenLabs, evitando consultas repetidas al cambiar de pestaña.
+     - Consulta de saldo para ElevenLabs (`generationElevenlabsBalance`).
+     - Invalidación y refresco reactivo tras completar una generación.
+   - Textos i18n en `translations.js` (es, en) y `translations.zh.js` (zh).
+   - Tests de Vitest en `tests/app/generate.test.js` etiquetados con `// @spec REQ-77`.
 

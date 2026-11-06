@@ -205,12 +205,13 @@
 - [x] **`/code-simplify` v0.4.0** (2026-11-04) — revisión de endpoints de audio (corrección a `POST /v1/sound-generation` de ElevenLabs), preescucha interactiva en lista para Freesound, control de solapamiento de audio, accesibilidad con `aria-label` y validación de tipos y errores sin warnings.
 - [x] **`/ship` v0.4.0** (2026-11-04, Minor) — versión 0.4.0 en `package.json`, `Cargo.toml` y `tauri.conf.json`; CHANGELOG ES/EN publicado como `[0.4.0]` con sus enlaces de comparación; notas de release `v0.4.0.md` y `v0.4.0.en.md`; README ES/EN y `walkthrough.md` actualizados. Tag propuesto: `v0.4.0`.
 
-## v0.4.1 — Control Acústico Avanzado y Prompts Negativos para Audio Local
+## v0.4.1 — Control Acústico Avanzado, Prompts Negativos para Audio Local y Saldos de Generación
 
-- [x] **`/spec` v0.4.1** (2026-11-05) — definición de `REQ-76` (panel completo de parámetros de síntesis, chips de presets para videojuegos, prompt negativo con filtros de exclusión acústica, sliders sincronizados de duration, steps, cfg_scale y seed para `dbv-audio-service`) en `SPECIFICATIONS.md` y `DESIGN.md`.
-- [x] **`/plan` v0.4.1** (2026-11-05) — decisiones de arquitectura (D52, D53), Adversarial Architect Review y desglose de tareas S85–S86 en `implementation_plan.md`.
+- [x] **`/spec` v0.4.1** (2026-11-05) — definición de `REQ-76` (parámetros de síntesis, chips de presets y filtros negativos) y `REQ-77` (consulta de suscripción ElevenLabs, caché de saldos por sesión, créditos infinitos para inferencia local y corrección de detección local) en `SPECIFICATIONS.md` y `DESIGN.md`.
+- [x] **`/plan` v0.4.1** (2026-11-05) — decisiones de arquitectura (D52, D53, D54), Adversarial Architect Review y desglose de tareas S85–S87 en `implementation_plan.md`.
 - [x] **S85 · Contrato ampliado de audio local en Rust** (`REQ-76`) — actualización de `generate_local_sound` y `generation_generate_sound` con `negative_prompt`, `steps`, `cfg_scale` y `seed`.
 - [x] **S86 · Panel interactivo de Síntesis en Generar Sonidos con presets e i18n** (`REQ-76`) — chips de presets de videojuegos, chips de prompt negativo, sliders sincronizados de parámetros en `generateView.js`, llamada ampliada en `backend.js` y textos en `es.json`, `en.json`, `zh.json`.
+- [x] **S87 · Visibilidad de saldo ElevenLabs, caché de balances y corrección de estado local** (`REQ-77`) — endpoint y comando Rust para suscripción de ElevenLabs (`/v1/user/subscription`), corrección de `st?.value?.ready` en `generateView.js` y `settingsView.js`, caché de saldo por sesión y refresco tras generación, e indicador de saldo infinito local (`∞ créditos`).
 - [ ] **`/test` v0.4.1** — verificación de tests en Rust (serialización y llamadas) y Vitest, `dbv-lint`.
 - [ ] **`/code-simplify` v0.4.1** — revisión de ergonomía y robustez.
 - [ ] **`/ship` v0.4.1** — bump a 0.4.1, notas de release, changelog, MSIX.
@@ -256,9 +257,9 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-11-05, fases **`/spec`**, **`/plan`** y **`/build`** (S85, S86) de **v0.4.1** completadas con éxito para `REQ-76` (panel completo de parámetros de síntesis, presets rápidos de videojuegos, prompt negativo acústico, sliders sincronizados de duración/steps/cfg_scale y semilla determinista para `dbv-audio-service`).
+> **Last update / Última actualización:** 2026-11-06, fases **`/spec`**, **`/plan`** y **`/build`** (S85, S86, S87) de **v0.4.1** completadas con éxito para `REQ-76` y `REQ-77` (panel de síntesis y presets de audio local, corrección de detección de estado del microservicio local evaluando `st?.value?.ready`, consulta de suscripción ElevenLabs, caché de balances por sesión y créditos infinitos locales `∞ créditos`).
 
-> **Exact point / Punto exacto:** Implementación de S85 y S86 finalizada y verificada en verde: Rust 240 pasados (0 fallos, 5 ignorados, clippy 0 warnings), Vitest 384 pasados en 43 suites (0 fallos), Python 48 pasados (0 fallos), `dbv-lint.py` limpio (91 requisitos con ID, 89 con test).
+> **Exact point / Punto exacto:** Implementación de S85, S86 y S87 finalizada y verificada en verde: Rust 242 pasados (0 fallos, 5 ignorados, clippy 0 warnings), Vitest 386 pasados en 43 suites (0 fallos), Python 48 pasados (0 fallos), `dbv-lint.py` limpio (92 requisitos con ID, 90 con test).
 
 > **Pending / Pendiente:** Prueba manual interactiva por parte del usuario en la interfaz en vivo de `dbv-unreal-ai` contra `dbv-audio-service` ejecutándose en `http://127.0.0.1:8765`.
 
