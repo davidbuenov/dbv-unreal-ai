@@ -618,12 +618,19 @@ export function createGenerateView(host, deps) {
     async function fetchElevenLabsBalance(force = false) {
       if (!force && balanceCache.has('elevenlabs')) return balanceCache.get('elevenlabs');
       const result = await api.generationElevenlabsBalance();
-      const str = (result.ok && result.value) ? t('gen.elevenlabsBalance', {
-        remaining: String(result.value.remainingCharacters ?? 0),
-        used: String(result.value.characterCount ?? 0),
-        limit: String(result.value.characterLimit ?? 0),
-      }) : (result.error?.message ?? '');
-      if (result.ok && result.value) balanceCache.set('elevenlabs', str);
+      let str = '';
+      if (result.ok && result.value) {
+        str = t('gen.elevenlabsBalance', {
+          remaining: String(result.value.remainingCharacters ?? 0),
+          used: String(result.value.characterCount ?? 0),
+          limit: String(result.value.characterLimit ?? 0),
+        });
+        balanceCache.set('elevenlabs', str);
+      } else {
+        const rawErr = result.error?.message ?? '';
+        str = rawErr.includes('user_read') ? t('gen.elevenlabsNoUserRead') : rawErr;
+        if (rawErr.includes('user_read')) balanceCache.set('elevenlabs', str);
+      }
       return str;
     }
 

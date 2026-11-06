@@ -157,6 +157,7 @@ export const ZH_APP = {
   'gen.noKeyWorldLabs': '请在「设置」中添加你的 World Labs 密钥才能生成世界。',
   'gen.worldLabsBalance': 'World Labs 余额：{balance} 积分',
   'gen.elevenlabsBalance': 'ElevenLabs 余额：{remaining} 字符（{used}/{limit}）',
+  'gen.elevenlabsNoUserRead': '余额不可用（API 密钥在 ElevenLabs 中缺少 user_read 权限）',
   'gen.balanceLocalInfinite': '本地余额：∞ 积分',
   'gen.imageHint': '物体的图片（PNG、JPG 或 WebP）。图片会上传到 Tripo，模型保存在资源库中。',
   'gen.pickImage': '选择图片…',
