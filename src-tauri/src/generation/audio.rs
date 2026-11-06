@@ -114,6 +114,30 @@ pub fn generate_local_sound(
     Ok(bytes)
 }
 
+/// Extrae el mensaje de error descriptivo devuelto por ElevenLabs en el cuerpo JSON.
+fn extract_elevenlabs_error(status: u16, body_text: &str) -> UnrealError {
+    let detail = serde_json::from_str::<Value>(body_text)
+        .ok()
+        .and_then(|v| {
+            if let Some(msg) = v.get("detail").and_then(|d| d.get("message")).and_then(Value::as_str) {
+                Some(msg.to_string())
+            } else if let Some(msg) = v.get("detail").and_then(Value::as_str) {
+                Some(msg.to_string())
+            } else {
+                v.get("message").and_then(Value::as_str).map(str::to_string)
+            }
+        });
+
+    let msg = match detail {
+        Some(d) => format!("ElevenLabs (HTTP {status}): {d}"),
+        None if status == 401 => "clave de API de ElevenLabs inválida o no autorizada (HTTP 401)".to_string(),
+        None if status == 429 => "cuota de ElevenLabs superada o límite alcanzado (HTTP 429)".to_string(),
+        None => format!("ElevenLabs devolvió HTTP {status}"),
+    };
+
+    UnrealError::Protocol(msg)
+}
+
 /// Genera un efecto de sonido usando la API de ElevenLabs.
 pub fn generate_elevenlabs_sfx(
     api_key: &str,
@@ -121,9 +145,11 @@ pub fn generate_elevenlabs_sfx(
     duration_seconds: Option<f32>,
     loop_audio: bool,
 ) -> Result<Vec<u8>, UnrealError> {
+    let clean_key = api_key.trim().trim_matches('"').trim_matches('\'').trim();
     let url = "https://api.elevenlabs.io/v1/sound-generation";
     let agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(60)))
+        .http_status_as_error(false)
         .build()
         .new_agent();
 
@@ -137,23 +163,15 @@ pub fn generate_elevenlabs_sfx(
 
     let mut res = agent
         .post(url)
-        .header("xi-api-key", api_key)
+        .header("xi-api-key", clean_key)
         .header("Content-Type", "application/json")
         .send_json(&body)
-        .map_err(|e| {
-            if let ureq::Error::StatusCode(code) = &e {
-                match *code {
-                    401 => UnrealError::Protocol("clave de API de ElevenLabs inválida o no autorizada (HTTP 401)".into()),
-                    429 => UnrealError::Protocol("cuota de ElevenLabs superada o límite alcanzado (HTTP 429)".into()),
-                    other => UnrealError::Protocol(format!("ElevenLabs SFX devolvió HTTP {other}")),
-                }
-            } else {
-                UnrealError::Io(format!("error en llamada a ElevenLabs SFX: {e}"))
-            }
-        })?;
+        .map_err(|e| UnrealError::Io(format!("error en llamada a ElevenLabs SFX: {e}")))?;
 
-    if res.status().as_u16() != 200 {
-        return Err(UnrealError::Protocol(format!("ElevenLabs SFX devolvió HTTP {}", res.status())));
+    let status = res.status().as_u16();
+    if status != 200 {
+        let text = res.body_mut().read_to_string().unwrap_or_default();
+        return Err(extract_elevenlabs_error(status, &text));
     }
 
     let mut bytes = Vec::new();
@@ -175,31 +193,25 @@ pub struct ElevenLabsBalance {
 
 /// Consulta el saldo y suscripción de la cuenta de ElevenLabs. @spec REQ-77
 pub fn get_elevenlabs_subscription(api_key: &str) -> Result<ElevenLabsBalance, UnrealError> {
+    let clean_key = api_key.trim().trim_matches('"').trim_matches('\'').trim();
     let url = "https://api.elevenlabs.io/v1/user/subscription";
     let agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(10)))
+        .http_status_as_error(false)
         .build()
         .new_agent();
 
     let mut res = agent
         .get(url)
-        .header("xi-api-key", api_key)
+        .header("xi-api-key", clean_key)
         .header("Accept", "application/json")
         .call()
-        .map_err(|e| {
-            if let ureq::Error::StatusCode(code) = &e {
-                match *code {
-                    401 => UnrealError::Protocol("clave de API de ElevenLabs inválida o no autorizada (HTTP 401)".into()),
-                    429 => UnrealError::Protocol("cuota de ElevenLabs superada o límite alcanzado (HTTP 429)".into()),
-                    other => UnrealError::Protocol(format!("ElevenLabs devolvió HTTP {other}")),
-                }
-            } else {
-                UnrealError::Io(format!("error en llamada a ElevenLabs: {e}"))
-            }
-        })?;
+        .map_err(|e| UnrealError::Io(format!("error en llamada a ElevenLabs: {e}")))?;
 
-    if res.status().as_u16() != 200 {
-        return Err(UnrealError::Protocol(format!("ElevenLabs devolvió HTTP {}", res.status())));
+    let status = res.status().as_u16();
+    if status != 200 {
+        let text = res.body_mut().read_to_string().unwrap_or_default();
+        return Err(extract_elevenlabs_error(status, &text));
     }
 
     let body: Value = res
