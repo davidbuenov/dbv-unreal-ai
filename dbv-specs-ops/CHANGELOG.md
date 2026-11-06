@@ -13,7 +13,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
-- **Visibilidad de saldo de ElevenLabs y créditos ilimitados locales (REQ-77):** consulta de suscripción y caracteres restantes (`character_count`, `character_limit`) a la API oficial de ElevenLabs (`/v1/user/subscription`) con visualización dinámica en la cabecera de la vista Generar, e indicador de «Saldo local: ∞ créditos» al conectar con el microservicio local de audio.
+- **Visibilidad de saldo de ElevenLabs y créditos ilimitados locales (REQ-77):** consulta de suscripción y caracteres restantes (`character_count`, `character_limit`) a la API oficial de ElevenLabs (`/v1/user/subscription`) con visualización dinámica en la cabecera de la vista Generar (soportando los 10.000 caracteres mensuales del plan gratuito y con indicación amigable si falta el permiso `user_read`), e indicador de «Saldo local: ∞ créditos» al conectar con el microservicio local de audio.
 - **Optimización de caché de saldos por sesión (REQ-77):** retención en memoria de las cuotas consultadas para Tripo, World Labs y ElevenLabs evitando peticiones de red repetitivas al cambiar de pestaña, con invalidación y refresco reactivo tras completar cualquier generación.
 - **Panel completo de parámetros de síntesis y presets para audio local (REQ-76):**
   - **Presets de 1 clic para videojuegos:** chips rápidos (`🔫 Laser Blaster`, `🚪 Puerta Hidráulica`, `⚡ Trueno y Tormenta`, `🕹️ Retro 8-bit`, `⚔️ Espada y Metal`) que configuran en bloque el prompt descriptivo, prompt negativo, duración, pasos de difusión y escala CFG.

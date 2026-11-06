@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **ElevenLabs balance visibility and local unlimited credits (REQ-77):** subscription and remaining characters lookup (`character_count`, `character_limit`) via official ElevenLabs API (`/v1/user/subscription`) with dynamic header display in Generate view, and a "Local balance: ∞ credits" badge when connected to the local audio microservice.
+- **ElevenLabs balance visibility and local unlimited credits (REQ-77):** subscription and remaining characters lookup (`character_count`, `character_limit`) via official ElevenLabs API (`/v1/user/subscription`) with dynamic header display in Generate view (supporting the 10,000 free monthly characters and handling missing `user_read` permission gracefully), and a "Local balance: ∞ credits" badge when connected to the local audio microservice.
 - **Session balance caching optimization (REQ-77):** in-memory retention of queried quotas for Tripo, World Labs, and ElevenLabs avoiding repetitive network requests when switching tabs, with reactive invalidation and refresh upon completing any generation.
 - **Full synthesis parameters panel and presets for local audio (REQ-76):**
   - **1-Click Game Presets:** quick chips (`🔫 Laser Blaster`, `🚪 Hydraulic Door`, `⚡ Thunder & Lightning`, `🕹️ Retro 8-bit`, `⚔️ Sword & Metal`) that configure prompt, negative prompt, duration, diffusion steps, and CFG scale in one click.

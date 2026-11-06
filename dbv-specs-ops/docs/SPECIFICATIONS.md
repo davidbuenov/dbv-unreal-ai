@@ -464,7 +464,9 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
     - Corrección en la deserialización de la respuesta de `generation_check_local_audio` en la vista de Generación y en Ajustes para evaluar `st?.value?.ready` en lugar del envoltorio IPC `st?.ready`.
     - Presentación en tiempo real del estado de disponibilidad y dispositivo (`GPU` / `CPU`) sin falsos negativos de servicio fuera de línea.
   - **Consulta de cuota y suscripción de ElevenLabs:**
-    - Endpoint oficial de ElevenLabs `GET https://api.elevenlabs.io/v1/user/subscription` utilizando la clave `xi-api-key` guardada en el almacén de credenciales.
+    - Endpoint oficial de ElevenLabs `GET https://api.elevenlabs.io/v1/user/subscription` utilizando la clave `xi-api-key` (con prefijo `sk_`) guardada en el almacén de credenciales.
+    - Soporte para cuentas gratuitas (que cuentan con 10.000 caracteres mensuales) y de pago.
+    - Requiere permiso `user_read` o clave con permisos completos (*Full Access*). En caso de que la clave carezca de dicho permiso granular, la aplicación muestra una indicación amigable sin bloquear la generación de audio.
     - Obtención de `character_count`, `character_limit` y cálculo de `remaining_characters`.
     - Comando IPC `generation_elevenlabs_balance` en Rust con manejo tipado de errores (HTTP 401 clave inválida, 429 cuota superada).
   - **Caché de saldos por sesión y refresco inteligente:**

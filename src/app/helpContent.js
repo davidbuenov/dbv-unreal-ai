@@ -194,7 +194,7 @@ const TEXTS = {
       needTitle: 'Tres proveedores y cómo configurarlos',
       needs: [
         '<strong>Local (dbv-audio-service):</strong> 100% gratuito, privado y sin cuota de nube. Ejecuta el microservicio en local con el modelo Stable Audio Open 1.0 en <span class="mono">http://127.0.0.1:8765</span> aprovechando tu GPU.',
-        '<strong>ElevenLabs SFX:</strong> Efectos de sonido realistas de altísima calidad vía API en la nube. Consigue tu clave en <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a> y pégala en <em>Ajustes → Audio</em>.',
+        '<strong>ElevenLabs SFX:</strong> Efectos de sonido realistas de altísima calidad vía API en la nube (el plan gratuito incluye 10.000 caracteres mensuales). Al crear tu clave en <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a>, dale permisos completos (<em>Full Access</em> o al menos <em>user_read</em> y <em>sound_generation</em>), copia la clave secreta que empieza por <span class="mono">sk_</span> y pégala en <em>Ajustes → Audio</em>.',
         '<strong>Freesound:</strong> Búsqueda y descarga directa de sonidos y grabaciones reales (licencias libres CC0 y CC-BY). Crea una cuenta gratuita en Freesound, solicita tus credenciales en <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Freesound - API credentials</a> (obtendrás un <em>Client secret / Api key</em>) y pégala como token en <em>Ajustes → Audio</em>.',
       ],
       providersTitle: 'Duración y bucles',
@@ -287,7 +287,7 @@ const TEXTS = {
       needTitle: 'Three providers and how to configure them',
       needs: [
         '<strong>Local (dbv-audio-service):</strong> 100% free, private with zero cloud cost. Runs Stable Audio Open 1.0 locally at <span class="mono">http://127.0.0.1:8765</span> using your local GPU.',
-        '<strong>ElevenLabs SFX:</strong> Ultra high-quality realistic AI sound effects. Get your API Key at <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a> and paste it into <em>Settings → Audio</em>.',
+        '<strong>ElevenLabs SFX:</strong> Ultra high-quality realistic AI sound effects (free tier includes 10,000 monthly characters). When creating your key at <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a>, grant full access (<em>Full Access</em> or at least <em>user_read</em> and <em>sound_generation</em>), copy the secret key starting with <span class="mono">sk_</span> and paste it into <em>Settings → Audio</em>.',
         '<strong>Freesound:</strong> Search and download real-world sounds (CC0 and CC-BY licenses). Create a free account at Freesound, request credentials at <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Freesound - API credentials</a> (you get a <em>Client secret / Api key</em>), and paste it as token into <em>Settings → Audio</em>.',
       ],
       providersTitle: 'Duration and loops',
@@ -380,7 +380,7 @@ const TEXTS = {
       needTitle: '三种提供商及配置方法',
       needs: [
         '<strong>本地 (dbv-audio-service)：</strong>100% 免费、私密且无需云端费用。在 <span class="mono">http://127.0.0.1:8765</span> 本地运行 Stable Audio Open 1.0，利用本地 GPU。',
-        '<strong>ElevenLabs SFX：</strong>逼真的高质量 AI 音效。在 <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a> 获取 API 密钥并粘贴至<em>设置 → 音频</em>。',
+        '<strong>ElevenLabs SFX：</strong>逼真的高质量 AI 音效（免费计划每月提供 10,000 字符额度）。在 <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">ElevenLabs API Keys</a> 创建密钥时，建议授予完全权限（<em>Full Access</em> 或至少勾选 <em>user_read</em> 和 <em>sound_generation</em>），复制以 <span class="mono">sk_</span> 开头的密钥并粘贴至<em>设置 → 音频</em>。',
         '<strong>Freesound：</strong>搜索并下载真实录音（CC0 和 CC-BY 许可）。在 Freesound 注册免费账户，于 <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">Freesound - API credentials</a> 申请凭证（获取 <em>Client secret / Api key</em>），并作为令牌粘贴至<em>设置 → 音频</em>。',
       ],
       providersTitle: '时长与循环',
