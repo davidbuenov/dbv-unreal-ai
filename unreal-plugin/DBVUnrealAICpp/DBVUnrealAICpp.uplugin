@@ -13,13 +13,15 @@
 	"Modules": [
 		{
 			"Name": "DBVUnrealAICppRender",
-			"Type": "Runtime",
-			"LoadingPhase": "PostConfigInit"
+			"Type": "Editor",
+			"LoadingPhase": "PostConfigInit",
+			"TargetAllowList": [ "Editor" ]
 		},
 		{
 			"Name": "DBVUnrealAICpp",
-			"Type": "Runtime",
-			"LoadingPhase": "Default"
+			"Type": "Editor",
+			"LoadingPhase": "Default",
+			"TargetAllowList": [ "Editor" ]
 		}
 	],
 	"Plugins": [

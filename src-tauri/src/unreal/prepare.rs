@@ -245,9 +245,21 @@ pub fn enable_plugins(text: &str, plugins: &[&str]) -> Result<String, UnrealErro
     let list = root.entry("Plugins").or_insert_with(|| json!([]));
     let entries = list.as_array_mut().ok_or_else(|| UnrealError::Format("Plugins no es una lista".into()))?;
     for name in plugins {
+        let is_editor_tool = *name == PYTHON_PLUGIN || *name == CPP_PLUGIN;
         match entries.iter_mut().find(|p| p.get("Name").and_then(Value::as_str) == Some(name)) {
-            Some(entry) => entry["Enabled"] = json!(true),
-            None => entries.push(json!({ "Name": name, "Enabled": true })),
+            Some(entry) => {
+                entry["Enabled"] = json!(true);
+                if is_editor_tool && entry.get("TargetAllowList").is_none() {
+                    entry["TargetAllowList"] = json!(["Editor"]);
+                }
+            }
+            None => {
+                let mut obj = json!({ "Name": name, "Enabled": true });
+                if is_editor_tool {
+                    obj["TargetAllowList"] = json!(["Editor"]);
+                }
+                entries.push(obj);
+            }
         }
     }
     unreal_json(&value, newline)
@@ -460,6 +472,14 @@ mod tests {
         assert!(out.contains("\"Name\": \"EditorToolset\",\r\n\t\t\t\"Enabled\": true"));
         assert!(!out.contains('\n') || out.matches('\n').count() == out.matches("\r\n").count());
         assert_eq!(enable_plugins(&out, &["EditorToolset"]).unwrap(), out, "idempotente");
+    }
+
+    #[test]
+    fn plugins_de_la_app_se_limitan_al_editor_para_no_romper_empaquetado_juego() {
+        let out = enable_plugins(UPROJECT, &[PYTHON_PLUGIN, CPP_PLUGIN]).unwrap();
+        assert!(out.contains("\"Name\": \"DBVUnrealAI\""));
+        assert!(out.contains("\"Name\": \"DBVUnrealAICpp\""));
+        assert!(out.contains("\"TargetAllowList\": [\r\n\t\t\t\t\"Editor\"\r\n\t\t\t]"));
     }
 
     /// @spec REQ-04
