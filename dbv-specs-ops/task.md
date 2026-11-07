@@ -3,9 +3,9 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8: conecta cualquier IA al proyecto abierto, lo prepara y genera assets con Tripo y World Labs directamente en el editor.
-* **Estado actual**: **v0.4.0 entregada y verificada (`/ship`)** (2026-11-04, Minor): implementación completa de S80..S84 para REQ-71 a REQ-75 (Audio & SFX local y nube con catálogo interactivo de Freesound y preescucha HTML5, Enviar a Unreal para audio con herramienta MCP, visión en tiempo real con Capturar viewport, autoría configurable con huella inmutable DBV y autodetección resiliente del puerto MCP).
-* **Última decisión técnica**: delegar la generación local de audio en el microservicio desacoplado `dbv-audio-service` (`http://127.0.0.1:8765`, pesos abiertos con Stable Audio Open 1.0) para mantener la app principal ligera (~15 MB) y libre de dependencias pesadas de PyTorch/CUDA; preservar de forma inmutable la atribución de origen y `dbv-specs-ops` en la cabecera estándar de 6 líneas al configurar autoría personalizada del usuario.
-* **Próximo paso**: desarrollo en sesión separada de `dbv-audio-service` en `D:\Programacion\github-davidbuenov\dbv-audio-service` y pruebas de integración local.
+* **Estado actual**: **v0.4.1 entregada y verificada (`/ship`)** (2026-11-07, Patch): implementación completa de REQ-76 y REQ-77 (controles avanzados de síntesis de audio local con presets y filtros acústicos negativos, visibilidad de saldo ElevenLabs y caché por sesión, indicador de saldo infinito local `∞ créditos`, corrección del adaptador Claude Code en Windows y aislamiento de plugins DBV Unreal AI para empaquetado de juegos standalone/VR).
+* **Última decisión técnica**: marcar módulos de `DBVUnrealAICpp` como `Type: Editor` y `TargetAllowList: [Editor]` tanto en `.uplugin` como en `.uproject` (`prepare.rs`), evitando fallos de empaquetado standalone/Android donde dependencias de `UnrealEd` no existen en runtime; implementar caché de balances en frontend con invalidación reactiva.
+* **Próximo paso**: planificar versión v0.5.0 (exploración de integración de UEFN / Verse y publicación en Microsoft Store).
 
 ## Checklist de Tareas
 
@@ -212,9 +212,9 @@
 - [x] **S85 · Contrato ampliado de audio local en Rust** (`REQ-76`) — actualización de `generate_local_sound` y `generation_generate_sound` con `negative_prompt`, `steps`, `cfg_scale` y `seed`.
 - [x] **S86 · Panel interactivo de Síntesis en Generar Sonidos con presets e i18n** (`REQ-76`) — chips de presets de videojuegos, chips de prompt negativo, sliders sincronizados de parámetros en `generateView.js`, llamada ampliada en `backend.js` y textos en `es.json`, `en.json`, `zh.json`.
 - [x] **S87 · Visibilidad de saldo ElevenLabs, caché de balances y corrección de estado local** (`REQ-77`) — endpoint y comando Rust para suscripción de ElevenLabs (`/v1/user/subscription`), corrección de `st?.value?.ready` en `generateView.js` y `settingsView.js`, caché de saldo por sesión y refresco tras generación, e indicador de saldo infinito local (`∞ créditos`).
-- [ ] **`/test` v0.4.1** — verificación de tests en Rust (serialización y llamadas) y Vitest, `dbv-lint`.
-- [ ] **`/code-simplify` v0.4.1** — revisión de ergonomía y robustez.
-- [ ] **`/ship` v0.4.1** — bump a 0.4.1, notas de release, changelog, MSIX.
+- [x] **`/test` v0.4.1** — verificación de tests en Rust (243 pasados, 0 fallos), Vitest (386 pasados en 43 suites), Python (48 pasados) y `dbv-lint.py` limpio.
+- [x] **`/code-simplify` v0.4.1** — revisión de ergonomía, seguridad y robustez, clippy sin advertencias.
+- [x] **`/ship` v0.4.1** (2026-11-07) — bump a 0.4.1, notas de release en ES y EN (`v0.4.1.md`, `v0.4.1.en.md`), changelog actualizado, aislamiento de plugins para empaquetado standalone/VR (Android / Meta Quest), tag `v0.4.1` (sin publicación en Store a petición del usuario para pasar a v0.5.0).
 
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
@@ -257,10 +257,10 @@
 
 ## 🔄 Context Snapshot / Snapshot de Contexto
 
-> **Last update / Última actualización:** 2026-11-06, fases **`/spec`**, **`/plan`** y **`/build`** (S85, S86, S87) de **v0.4.1** completadas con éxito para `REQ-76` y `REQ-77` (panel de síntesis y presets de audio local, corrección de detección de estado del microservicio local evaluando `st?.value?.ready`, consulta de suscripción ElevenLabs, caché de balances por sesión y créditos infinitos locales `∞ créditos`).
+> **Last update / Última actualización:** 2026-11-07, release **v0.4.1** entregada con éxito tras completar `/code-simplify` y `/ship`. Incluye REQ-76 (síntesis de audio local avanzada y presets), REQ-77 (visibilidad y caché de balances ElevenLabs / Local), resiliencia de Claude Code en Windows y aislamiento de plugins DBV para empaquetado standalone/Android VR.
 
-> **Exact point / Punto exacto:** Implementación de S85, S86 y S87 finalizada y verificada en verde: Rust 242 pasados (0 fallos, 5 ignorados, clippy 0 warnings), Vitest 386 pasados en 43 suites (0 fallos), Python 48 pasados (0 fallos), `dbv-lint.py` limpio (92 requisitos con ID, 90 con test).
+> **Exact point / Punto exacto:** v0.4.1 cerrada en master con tag `v0.4.1`. Tests 100% en verde: Rust 243, Vitest 386, Python 48, linter 0 errores. Notas de release generadas en `dbv-specs-ops/releases/v0.4.1.md` y `v0.4.1.en.md`.
 
-> **Pending / Pendiente:** Prueba manual interactiva por parte del usuario en la interfaz en vivo de `dbv-unreal-ai` contra `dbv-audio-service` ejecutándose en `http://127.0.0.1:8765`.
+> **Pending / Pendiente:** Ninguna tarea pendiente en v0.4.1. Publicación en Microsoft Store omitida a petición explícita del usuario para pasar directamente a v0.5.0.
 
-> **Next step / Próximo paso:** Tras la verificación por parte del usuario, proceder con las fases `/code-simplify` y `/ship` de la versión v0.4.1.
+> **Next step / Próximo paso:** Arrancar `/spec` de **v0.5.0** con el soporte e integración de UEFN (Unreal Editor for Fortnite) y lenguaje Verse vía servidor MCP oficial de UEFN.

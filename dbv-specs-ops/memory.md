@@ -9,12 +9,16 @@
 
 ## 🎯 Contexto Activo
 
-- **Foco inmediato (2026-11-04):** finalización de los ciclos **`/build` y `/test` de la v0.4.0** (Minor tras v0.3.1): implementadas y probadas las rebanadas S80..S84 para `REQ-71` a `REQ-75` (generación de audio y SFX en backend y UI, importación nativa a Unreal y herramienta MCP `unreal_import_sound`, visión multimodal con «📷 Capturar viewport», titular de Copyright configurable conservando autoría inmutable de DBV y autodetección resiliente del puerto MCP).
-- **Estado actual del desarrollo:** v0.4.0 completamente implementada y probada al 100% (238 tests Rust, 375 tests Vitest, 48 tests Python, 0 errores de linter). Siguiente paso: `/code-simplify` o `/ship`.
-- **Calidad de splats y colocación en Unreal:** Solución 100% nativa y libre en C++ (`DBVUnrealAICpp`) por GPU que sustituye dependencias de pago. Soporte completo de `.spz` y `.ply` con escala 100x y rotación adecuada, emparejado con collider mesh para colisión física.
+- **Foco inmediato (2026-11-07):** finalización y cierre de la **versión v0.4.1** (`/ship`, Patch tras v0.4.0) e inicio de preparación para **v0.5.0** (integración con UEFN / Verse y publicación en Microsoft Store).
+- **Estado actual del desarrollo:** v0.4.1 completamente entregada y probada al 100% (243 tests Rust, 386 tests Vitest en 43 suites, 48 tests Python, 0 errores de linter). Tag `v0.4.1` creado. A petición del usuario, la publicación en Microsoft Store se pospone para v0.5.0.
 
 ## 🏗️ Log de Decisiones Técnicas (ADR Ligero)
 *Registro de por qué se tomaron ciertas rutas (ej. cambios en librerías, arquitectura o patrones). Formato: `- **AAAA-MM-DD - Título:** decisión y motivo.`*
+
+- **2026-11-07 - ADR-V041-001 · Aislamiento de plugins para empaquetado de juegos y síntesis de audio (v0.4.1):**
+  1. **Aislamiento de plugins DBV en empaquetado (Android / Meta Quest VR):** Los plugins `DBVUnrealAI` y `DBVUnrealAICpp` son herramientas de editor dependientes de `UnrealEd`, `ToolsetRegistry` y `PythonScriptPlugin`. En `DBVUnrealAICpp.uplugin` los módulos estaban tipados como `"Type": "Runtime"`, lo que provocaba que UnrealBuildTool (UBT) intentara compilarlos al empaquetar juegos standalone (como APKs para Meta Quest). Decisión: tipar los módulos como `"Type": "Editor"` con `"TargetAllowList": ["Editor"]` en `.uplugin`, y actualizar `enable_plugins` en `src-tauri/src/unreal/prepare.rs` para inyectar automáticamente `"TargetAllowList": ["Editor"]` en el `.uproject` del usuario.
+  2. **Caché y resiliencia de balances ElevenLabs / Local (REQ-77):** Retención en memoria de sesión de los saldos de Tripo, World Labs y ElevenLabs para eliminar llamadas HTTP redundantes al navegar entre pestañas, con invalidación automática tras generar. Detección amigable si la clave carece del permiso `user_read` sin bloquear la generación, soporte para la cuota gratuita de 10.000 caracteres, y distintivo de «Saldo local: ∞ créditos» para inferencia local.
+  3. **Resiliencia de Claude Code en Windows:** Detección de `claude.exe` e inyección de `CLAUDE_CODE_EXECUTABLE` al arrancar `@agentclientprotocol/claude-agent-acp` vía `npx`, solventando el fallo interno por falta de binarios nativos en el ecosistema Windows.
 
 - **2026-11-04 - ADR-V040-001 · Alcance y arquitectura de la v0.4.0 (Audio, Visión y Robustez):**
   1. **Generación de audio desacoplada (REQ-71):** Para no inflar el instalador de la app con dependencias pesadas de PyTorch/CUDA (~4 GB) ni romper la certificación en Microsoft Store, la generación local se delega a un microservicio externo e independiente (`dbv-audio-service`, en `http://127.0.0.1:8765`), conviviendo de forma transparente con APIs en la nube (ElevenLabs Text-to-SFX y búsqueda en Freesound). Para Freesound, la interfaz despliega un listado de resultados coincidentes con preescucha de audio nativa HTML5 y descarga selectiva hacia la biblioteca.

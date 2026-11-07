@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-07
+
+Version v0.4.1: live ElevenLabs balance visibility and session balance caching; advanced local audio synthesis controls with game presets, acoustic negative prompt, and continuous parameters; Claude Code adapter resilience on Windows; and DBV Unreal AI plugins isolation for standalone game packaging (Android / Meta Quest / VR).
+
 ### Added
 
 - **ElevenLabs balance visibility and local unlimited credits (REQ-77):** subscription and remaining characters lookup (`character_count`, `character_limit`) via official ElevenLabs API (`/v1/user/subscription`) with dynamic header display in Generate view (supporting the 10,000 free monthly characters and handling missing `user_read` permission gracefully), and a "Local balance: ∞ credits" badge when connected to the local audio microservice.
@@ -24,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **DBV Unreal AI plugins isolation for standalone game packaging (Android / Meta Quest / VR):** `DBVUnrealAICpp.uplugin` now explicitly declares its C++ modules as `"Type": "Editor"` with `"TargetAllowList": ["Editor"]`, and `prepare.rs` (`enable_plugins`) automatically confines both `DBVUnrealAI` and `DBVUnrealAICpp` to Editor in `.uproject`. This prevents UnrealBuildTool (UBT) packaging compilation errors in standalone game builds (such as Android/Meta Quest) where Editor-only dependencies like `UnrealEd` or `ToolsetRegistry` do not exist.
 - **Local audio microservice status detection (REQ-77):** fixed IPC response parsing in `generateView.js` and `settingsView.js` by checking `st?.value?.ready` instead of wrapper `st?.ready`, eliminating false positive "Local service unavailable (port 8765)" alerts when `dbv-audio-service` is online.
 - **Claude Code connection resilience on Windows:** the official ACP adapter (`@agentclientprotocol/claude-agent-acp`) invoked via `npx` failed on Windows with an internal error (`Claude native binary not found for win32-x64`) when Anthropic package updates lacked pre-bundled optional binaries in the npx cache; the app now automatically injects the `CLAUDE_CODE_EXECUTABLE` environment variable pointing to the system's `claude.exe` binary, and surfaces the detailed error message instead of a generic "Internal error".
 
@@ -271,7 +276,8 @@ First release: connection to Unreal 5.8 through MCP, project preparation, conver
 - **[Important]** A job id could clash between the window and an agent's `--mcp` if both launched in the same millisecond; it now carries the process id.
 - Review nits (3): early `return`s outside guard clauses in `tools::build`, `resolve_source` and `uploadable`.
 
-[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.2.4...v0.3.0
