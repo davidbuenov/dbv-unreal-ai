@@ -216,6 +216,22 @@
 - [x] **`/code-simplify` v0.4.1** — revisión de ergonomía, seguridad y robustez, clippy sin advertencias.
 - [x] **`/ship` v0.4.1** (2026-11-07) — bump a 0.4.1, notas de release en ES y EN (`v0.4.1.md`, `v0.4.1.en.md`), changelog actualizado, aislamiento de plugins para empaquetado standalone/VR (Android / Meta Quest), tag `v0.4.1` (sin publicación en Store a petición del usuario para pasar a v0.5.0).
 
+## v0.5.0 — Integración de UEFN (Unreal Editor for Fortnite), lenguaje Verse y Microsoft Store
+
+> **Visión v0.5.0:** Unificar en la misma aplicación DBV Unreal AI el soporte nativo para **Unreal Engine 5.8+** y **UEFN**, aprovechando que ambos comparten el servidor MCP integrado oficial (`ModelContextProtocol`, HTTP JSON-RPC en puerto 8000..8005) y la arquitectura de copiloto por IA de escritorio.
+
+- [ ] **`/spec` v0.5.0** — Especificación de integración UEFN y lenguaje Verse:
+  - **Detección y descubrimiento de proyectos UEFN (`.uefnproject`):** escanear proyectos de UEFN, reconocer la presencia de `Content/` y scripts Verse, y detectar si el editor activo en el puerto MCP es UE clásico o UEFN.
+  - **Prompt de dominio adaptado para Verse y UEFN:** prompt de sistema especializado en lenguaje Verse (`using { /Fortnite.com/Devices }`, estructuras de concurrencia `sync`/`race`/`rush`, lógica de dispositivos y gameplay de Fortnite Creativo), complementando el prompt de Python/C++ de Unreal Engine.
+  - **Herramientas de código para Verse (`.verse`):** extender `propose_changes` y `files.rs` para permitir a la IA inspeccionar, validar y editar ficheros `.verse` en el proyecto del usuario con diff revisable y reversión segura.
+  - **Generación y envío de assets a UEFN:** compatibilidad de «Enviar a Unreal» para assets 3D (Tripo), escenarios (World Labs) y audio hacia proyectos UEFN bajo las convenciones de importación de Fortnite Creative.
+  - **Preparación y compatibilidad de plugins en UEFN:** verificar el comportamiento de toolsets o utilizar exclusivamente las herramientas nativas expuestas por el servidor MCP oficial de UEFN (sin requerir compilación C++, dado que UEFN no permite plugins C++ de terceros).
+- [ ] **`/plan` v0.5.0** — Architect Review, análisis de transporte MCP en UEFN y desglose de tareas.
+- [ ] **`/build` y `/test` v0.5.0** — Implementación en backend Rust, UI y tests de integración/unitarios.
+- [ ] **`/ship` v0.5.0 — Publicación en Microsoft Store:**
+  - Generación de bundle MSIX firmado para Microsoft Store (`tauri-windows-bundle` / Partner Center).
+  - Revisión checklist `MARKETPLACE_PUBLISHING.md` y actualización de fichas descriptivas (`descripcionStore_es.md`).
+
 ## Próxima versión — hallazgos de la prueba de la v0.1.0
 
 - [x] «Cómo instalarlo» no abría el navegador: `opener.openUrl` en vez de `shell.open` (2026-10-25).

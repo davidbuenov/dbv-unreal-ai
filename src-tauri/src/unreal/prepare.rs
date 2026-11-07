@@ -30,7 +30,14 @@ use super::discovery::{self, EngineInstall, McpSettings, UProject, MCP_SECTION};
 use super::{ini, io_error, UnrealError};
 
 /// Plugins de Epic que la preparación activa.
-pub const REQUIRED_PLUGINS: [&str; 6] = ["ModelContextProtocol", "ToolsetRegistry", "PythonScriptPlugin", "EditorToolset", "AutomationTestToolset", "SlateInspectorToolset"];
+pub const REQUIRED_PLUGINS: [&str; 6] = [
+    "ModelContextProtocol",
+    "ToolsetRegistry",
+    "PythonScriptPlugin",
+    "EditorToolset",
+    "AutomationTestToolset",
+    "SlateInspectorToolset",
+];
 /// Solo en proyectos con C++: compilar con Live Coding desde la app (REQ-22).
 pub const CPP_PLUGINS: [&str; 1] = ["LiveCodingToolset"];
 
@@ -147,13 +154,29 @@ struct BackedUp {
 /// Carpeta `unreal-plugin/` que acompaña a la app: variable `DBV_UNREAL_PLUGIN_DIR`, junto al
 /// ejecutable (recursos de Tauri en Windows/Linux), `Resources/` en macOS o el repo en desarrollo.
 pub fn toolset_source() -> Result<PathBuf, UnrealError> {
-    let mut candidates: Vec<PathBuf> = std::env::var_os("DBV_UNREAL_PLUGIN_DIR").map(PathBuf::from).into_iter().collect();
-    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf)) {
+    let mut candidates: Vec<PathBuf> = std::env::var_os("DBV_UNREAL_PLUGIN_DIR")
+        .map(PathBuf::from)
+        .into_iter()
+        .collect();
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
         candidates.push(exe_dir.join("unreal-plugin"));
         candidates.push(exe_dir.join("..").join("Resources").join("unreal-plugin"));
-        candidates.push(exe_dir.join("..").join("lib").join("DBV Unreal AI").join("unreal-plugin"));
+        candidates.push(
+            exe_dir
+                .join("..")
+                .join("lib")
+                .join("DBV Unreal AI")
+                .join("unreal-plugin"),
+        );
     }
-    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("unreal-plugin"));
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("unreal-plugin"),
+    );
     candidates
         .into_iter()
         .find(|dir| dir.join(PYTHON_PLUGIN).join(format!("{PYTHON_PLUGIN}.uplugin")).is_file())
@@ -164,7 +187,10 @@ pub fn toolset_source() -> Result<PathBuf, UnrealError> {
 pub fn plugin_version(uplugin: &Path) -> Option<String> {
     let text = std::fs::read_to_string(uplugin).ok()?;
     let value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
-    value.get("VersionName").and_then(Value::as_str).map(str::to_string)
+    value
+        .get("VersionName")
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 // ─── Diagnóstico ─────────────────────────────────────────────────────
@@ -189,24 +215,62 @@ pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealErro
     let mut checks = vec![Check {
         id: "engine".into(),
         ok: version.is_some_and(|v| v >= MIN_ENGINE) && engine.is_some(),
-        detail: engine.as_ref().map(|e| e.version.clone()).unwrap_or_else(|| project.engine_association.clone()),
+        detail: engine
+            .as_ref()
+            .map(|e| e.version.clone())
+            .unwrap_or_else(|| project.engine_association.clone()),
     }];
     for name in required_plugins(project.has_cpp) {
         let enabled = project.plugins.iter().any(|p| p.name == name && p.enabled);
-        checks.push(Check { id: format!("plugin:{name}"), ok: enabled, detail: String::new() });
+        checks.push(Check {
+            id: format!("plugin:{name}"),
+            ok: enabled,
+            detail: String::new(),
+        });
     }
     let mcp = discovery::read_mcp_settings(dir);
-    checks.push(Check { id: "autoStart".into(), ok: mcp.auto_start == Some(true), detail: mcp.port.to_string() });
-    let installed = plugin_version(&dir.join("Plugins").join(PYTHON_PLUGIN).join(format!("{PYTHON_PLUGIN}.uplugin")));
-    let bundled = plugin_version(&source.join(PYTHON_PLUGIN).join(format!("{PYTHON_PLUGIN}.uplugin"))).unwrap_or_default();
-    let toolset_enabled = project.plugins.iter().any(|p| p.name == PYTHON_PLUGIN && p.enabled);
-    checks.push(Check { id: "toolset".into(), ok: toolset_enabled && installed.as_deref() == Some(bundled.as_str()), detail: installed.clone().unwrap_or_default() });
+    checks.push(Check {
+        id: "autoStart".into(),
+        ok: mcp.auto_start == Some(true),
+        detail: mcp.port.to_string(),
+    });
+    let installed = plugin_version(
+        &dir.join("Plugins")
+            .join(PYTHON_PLUGIN)
+            .join(format!("{PYTHON_PLUGIN}.uplugin")),
+    );
+    let bundled = plugin_version(
+        &source
+            .join(PYTHON_PLUGIN)
+            .join(format!("{PYTHON_PLUGIN}.uplugin")),
+    )
+    .unwrap_or_default();
+    let toolset_enabled = project
+        .plugins
+        .iter()
+        .any(|p| p.name == PYTHON_PLUGIN && p.enabled);
+    checks.push(Check {
+        id: "toolset".into(),
+        ok: toolset_enabled && installed.as_deref() == Some(bundled.as_str()),
+        detail: installed.clone().unwrap_or_default(),
+    });
     let ready = checks.iter().all(|c| c.ok);
     let proposed_port = propose_free_port(&mcp, discovery::editor_open_for(uproject));
     let direct_access = super::duplicates::scan(dir, mcp.port);
     let engine_ok = version.is_some_and(|v| v >= MIN_ENGINE);
     let convai = super::convai::status(dir, &project, engine.as_ref(), engine_ok);
-    let result = Readiness { project, engine, mcp, proposed_port, checks, toolset_installed: installed, toolset_bundled: bundled, ready, direct_access, convai };
+    let result = Readiness {
+        project,
+        engine,
+        mcp,
+        proposed_port,
+        checks,
+        toolset_installed: installed,
+        toolset_bundled: bundled,
+        ready,
+        direct_access,
+        convai,
+    };
     Ok(result)
 }
 
@@ -215,7 +279,9 @@ pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealErro
 /// al 8001 al preparar con el editor abierto, y la app siguió hablando con el 8000).
 pub fn propose_free_port(mcp: &McpSettings, own_editor_open: bool) -> u16 {
     let mut candidate = mcp.port;
-    if !own_editor_open && (mcp.auto_start != Some(true) || candidate == discovery::DEFAULT_MCP_PORT) {
+    if !own_editor_open
+        && (mcp.auto_start != Some(true) || candidate == discovery::DEFAULT_MCP_PORT)
+    {
         let mut port = discovery::DEFAULT_MCP_PORT;
         while port < 65535 && discovery::port_listening(port) {
             port += 1;
@@ -232,7 +298,8 @@ pub fn unreal_json(value: &Value, newline: &str) -> Result<String, UnrealError> 
     let mut out = Vec::new();
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"\t");
     let mut serializer = serde_json::Serializer::with_formatter(&mut out, formatter);
-    serde::Serialize::serialize(value, &mut serializer).map_err(|error| UnrealError::Format(error.to_string()))?;
+    serde::Serialize::serialize(value, &mut serializer)
+        .map_err(|error| UnrealError::Format(error.to_string()))?;
     let text = String::from_utf8(out).map_err(|error| UnrealError::Format(error.to_string()))?;
     Ok(format!("{}{newline}", text.replace('\n', newline)))
 }
@@ -240,13 +307,21 @@ pub fn unreal_json(value: &Value, newline: &str) -> Result<String, UnrealError> 
 /// `.uproject` con `plugins` activados (los que falten se añaden al final, en orden).
 pub fn enable_plugins(text: &str, plugins: &[&str]) -> Result<String, UnrealError> {
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|error| UnrealError::Format(format!(".uproject: {error}")))?;
-    let root = value.as_object_mut().ok_or_else(|| UnrealError::Format(".uproject no es un objeto JSON".into()))?;
+    let mut value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+        .map_err(|error| UnrealError::Format(format!(".uproject: {error}")))?;
+    let root = value
+        .as_object_mut()
+        .ok_or_else(|| UnrealError::Format(".uproject no es un objeto JSON".into()))?;
     let list = root.entry("Plugins").or_insert_with(|| json!([]));
-    let entries = list.as_array_mut().ok_or_else(|| UnrealError::Format("Plugins no es una lista".into()))?;
+    let entries = list
+        .as_array_mut()
+        .ok_or_else(|| UnrealError::Format("Plugins no es una lista".into()))?;
     for name in plugins {
         let is_editor_tool = *name == PYTHON_PLUGIN || *name == CPP_PLUGIN;
-        match entries.iter_mut().find(|p| p.get("Name").and_then(Value::as_str) == Some(name)) {
+        match entries
+            .iter_mut()
+            .find(|p| p.get("Name").and_then(Value::as_str) == Some(name))
+        {
             Some(entry) => {
                 entry["Enabled"] = json!(true);
                 if is_editor_tool && entry.get("TargetAllowList").is_none() {
@@ -269,12 +344,24 @@ pub fn enable_plugins(text: &str, plugins: &[&str]) -> Result<String, UnrealErro
 fn plugin_files(source: &Path, plugin: &str) -> Result<Vec<(String, PathBuf)>, UnrealError> {
     let root = source.join(plugin);
     let mut files = Vec::new();
-    for entry in walkdir::WalkDir::new(&root).into_iter().filter_entry(|e| e.file_name() != "__pycache__") {
+    for entry in walkdir::WalkDir::new(&root)
+        .into_iter()
+        .filter_entry(|e| e.file_name() != "__pycache__")
+    {
         let entry = entry.map_err(|error| UnrealError::Io(error.to_string()))?;
         if entry.file_type().is_file() && entry.path().extension().is_none_or(|ext| ext != "pyc") {
-            let relative = entry.path().strip_prefix(&root).map_err(|error| UnrealError::Io(error.to_string()))?;
-            let parts: Vec<String> = relative.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
-            files.push((format!("Plugins/{plugin}/{}", parts.join("/")), entry.path().to_path_buf()));
+            let relative = entry
+                .path()
+                .strip_prefix(&root)
+                .map_err(|error| UnrealError::Io(error.to_string()))?;
+            let parts: Vec<String> = relative
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect();
+            files.push((
+                format!("Plugins/{plugin}/{}", parts.join("/")),
+                entry.path().to_path_buf(),
+            ));
         }
     }
     files.sort();
@@ -291,11 +378,21 @@ fn read_optional(path: &Path) -> Result<Option<String>, UnrealError> {
 }
 
 fn relative_of(dir: &Path, path: &Path) -> String {
-    path.strip_prefix(dir).unwrap_or(path).components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/")
+    path.strip_prefix(dir)
+        .unwrap_or(path)
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// Cambios que haría «Preparar», sin escribir nada (REQ-05).
-pub fn plan(uproject: &Path, source: &Path, variant: Variant, port: Option<u16>) -> Result<PreparePlan, UnrealError> {
+pub fn plan(
+    uproject: &Path,
+    source: &Path,
+    variant: Variant,
+    port: Option<u16>,
+) -> Result<PreparePlan, UnrealError> {
     let dir = project_dir(uproject);
     let mut changes = Vec::new();
     // 1. Plugins del `.uproject`.
@@ -304,29 +401,51 @@ pub fn plan(uproject: &Path, source: &Path, variant: Variant, port: Option<u16>)
     wanted.extend_from_slice(variant.plugins());
     let after = enable_plugins(&before, &wanted)?;
     if after != before {
-        changes.push(FileChange { relative: relative_of(dir, uproject), before: Some(before), after });
+        changes.push(FileChange {
+            relative: relative_of(dir, uproject),
+            before: Some(before),
+            after,
+        });
     }
     // 2. Arranque automático del servidor MCP (ajustes del usuario).
     let settings = discovery::user_settings_ini(dir);
     let current = read_optional(&settings)?;
-    let mut text = ini::set(current.as_deref().unwrap_or(""), MCP_SECTION, "bAutoStartServer", "True");
+    let mut text = ini::set(
+        current.as_deref().unwrap_or(""),
+        MCP_SECTION,
+        "bAutoStartServer",
+        "True",
+    );
     if let Some(port) = port {
         text = ini::set(&text, MCP_SECTION, "ServerPortNumber", &port.to_string());
     }
     if current.as_deref() != Some(text.as_str()) {
-        changes.push(FileChange { relative: relative_of(dir, &settings), before: current, after: text });
+        changes.push(FileChange {
+            relative: relative_of(dir, &settings),
+            before: current,
+            after: text,
+        });
     }
     // 3. El toolset.
     for plugin in variant.plugins() {
         for (relative, origin) in plugin_files(source, plugin)? {
-            let after = std::fs::read_to_string(&origin).map_err(|error| io_error(&origin, &error))?;
+            let after =
+                std::fs::read_to_string(&origin).map_err(|error| io_error(&origin, &error))?;
             let before = read_optional(&dir.join(&relative))?;
             if before.as_deref() != Some(after.as_str()) {
-                changes.push(FileChange { relative, before, after });
+                changes.push(FileChange {
+                    relative,
+                    before,
+                    after,
+                });
             }
         }
     }
-    let result = PreparePlan { variant, needs_restart: !changes.is_empty(), changes };
+    let result = PreparePlan {
+        variant,
+        needs_restart: !changes.is_empty(),
+        changes,
+    };
     Ok(result)
 }
 
@@ -342,8 +461,14 @@ pub fn inside(dir: &Path, relative: &str) -> Result<PathBuf, UnrealError> {
 }
 
 fn backup_id(project: &str) -> String {
-    let millis = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let name: String = project.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let name: String = project
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .collect();
     format!("{millis}-{name}")
 }
 
@@ -351,7 +476,12 @@ fn backup_id(project: &str) -> String {
 fn missing_dirs(dir: &Path, targets: &[PathBuf]) -> Vec<String> {
     let mut created: Vec<String> = Vec::new();
     for target in targets {
-        let mut missing: Vec<PathBuf> = target.ancestors().skip(1).take_while(|a| *a != dir && !a.exists()).map(Path::to_path_buf).collect();
+        let mut missing: Vec<PathBuf> = target
+            .ancestors()
+            .skip(1)
+            .take_while(|a| *a != dir && !a.exists())
+            .map(Path::to_path_buf)
+            .collect();
         missing.reverse();
         for folder in missing.iter().map(|d| relative_of(dir, d)) {
             if !created.contains(&folder) {
@@ -380,27 +510,50 @@ fn write_changes(plan: &PreparePlan, targets: &[PathBuf]) -> Result<(), UnrealEr
 /// al final y un fallo a mitad dejaba el proyecto a medias y sin forma de revertirlo).
 pub fn apply(uproject: &Path, plan: &PreparePlan, backups: &Path) -> Result<String, UnrealError> {
     let dir = project_dir(uproject);
-    let targets: Vec<PathBuf> = plan.changes.iter().map(|c| inside(dir, &c.relative)).collect::<Result<_, _>>()?;
-    let id = backup_id(uproject.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default().as_str());
+    let targets: Vec<PathBuf> = plan
+        .changes
+        .iter()
+        .map(|c| inside(dir, &c.relative))
+        .collect::<Result<_, _>>()?;
+    let id = backup_id(
+        uproject
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+            .as_str(),
+    );
     let store = backups.join(&id);
     std::fs::create_dir_all(&store).map_err(|error| io_error(&store, &error))?;
-    let mut manifest = Manifest { project_dir: dir.to_string_lossy().into_owned(), files: Vec::new(), created_dirs: missing_dirs(dir, &targets) };
+    let mut manifest = Manifest {
+        project_dir: dir.to_string_lossy().into_owned(),
+        files: Vec::new(),
+        created_dirs: missing_dirs(dir, &targets),
+    };
     for (change, target) in plan.changes.iter().zip(&targets) {
         let existed = target.is_file();
         if existed {
             let copy = inside(&store.join("files"), &change.relative)?;
-            std::fs::create_dir_all(copy.parent().unwrap_or(&store)).map_err(|error| io_error(&copy, &error))?;
+            std::fs::create_dir_all(copy.parent().unwrap_or(&store))
+                .map_err(|error| io_error(&copy, &error))?;
             std::fs::copy(target, &copy).map_err(|error| io_error(target, &error))?;
         }
-        manifest.files.push(BackedUp { relative: change.relative.clone(), existed });
+        manifest.files.push(BackedUp {
+            relative: change.relative.clone(),
+            existed,
+        });
     }
-    let text = serde_json::to_string_pretty(&manifest).map_err(|error| UnrealError::Format(error.to_string()))?;
+    let text = serde_json::to_string_pretty(&manifest)
+        .map_err(|error| UnrealError::Format(error.to_string()))?;
     std::fs::write(store.join("manifest.json"), text).map_err(|error| io_error(&store, &error))?;
     let result = match write_changes(plan, &targets) {
         Ok(()) => Ok(id),
         Err(error) => Err(match revert(uproject, backups, &id) {
-            Ok(()) => UnrealError::Io(format!("{error} — no se cambió nada: la preparación se deshizo sola")),
-            Err(rollback) => UnrealError::Io(format!("{error} — y no se pudo deshacer ({rollback}): revierte con la copia {id}")),
+            Ok(()) => UnrealError::Io(format!(
+                "{error} — no se cambió nada: la preparación se deshizo sola"
+            )),
+            Err(rollback) => UnrealError::Io(format!(
+                "{error} — y no se pudo deshacer ({rollback}): revierte con la copia {id}"
+            )),
         }),
     };
     result
@@ -410,10 +563,15 @@ pub fn apply(uproject: &Path, plan: &PreparePlan, backups: &Path) -> Result<Stri
 pub fn revert(uproject: &Path, backups: &Path, id: &str) -> Result<(), UnrealError> {
     let dir = project_dir(uproject);
     let store = inside(backups, id)?;
-    let text = std::fs::read_to_string(store.join("manifest.json")).map_err(|_| UnrealError::NotFound(format!("no existe la copia de seguridad {id}")))?;
-    let manifest: Manifest = serde_json::from_str(&text).map_err(|error| UnrealError::Format(error.to_string()))?;
+    let text = std::fs::read_to_string(store.join("manifest.json"))
+        .map_err(|_| UnrealError::NotFound(format!("no existe la copia de seguridad {id}")))?;
+    let manifest: Manifest =
+        serde_json::from_str(&text).map_err(|error| UnrealError::Format(error.to_string()))?;
     if Path::new(&manifest.project_dir) != dir {
-        return Err(UnrealError::NotFound(format!("la copia {id} es de otro proyecto: {}", manifest.project_dir)));
+        return Err(UnrealError::NotFound(format!(
+            "la copia {id} es de otro proyecto: {}",
+            manifest.project_dir
+        )));
     }
     for file in &manifest.files {
         let target = inside(dir, &file.relative)?;
@@ -427,7 +585,10 @@ pub fn revert(uproject: &Path, backups: &Path, id: &str) -> Result<(), UnrealErr
     // De dentro hacia fuera, y solo si quedaron vacías (no se borra nada que el usuario añadiera después).
     for relative in manifest.created_dirs.iter().rev() {
         let folder = inside(dir, relative)?;
-        if folder.read_dir().is_ok_and(|mut entries| entries.next().is_none()) {
+        if folder
+            .read_dir()
+            .is_ok_and(|mut entries| entries.next().is_none())
+        {
             std::fs::remove_dir(&folder).map_err(|error| io_error(&folder, &error))?;
         }
     }
@@ -441,7 +602,9 @@ mod tests {
     const UPROJECT: &str = "{\r\n\t\"FileVersion\": 3,\r\n\t\"EngineAssociation\": \"5.8\",\r\n\t\"Category\": \"\",\r\n\t\"Plugins\": [\r\n\t\t{\r\n\t\t\t\"Name\": \"ModelContextProtocol\",\r\n\t\t\t\"Enabled\": false\r\n\t\t}\r\n\t]\r\n}\r\n";
 
     fn source() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("unreal-plugin")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("unreal-plugin")
     }
 
     fn project() -> (tempfile::TempDir, PathBuf) {
@@ -457,7 +620,16 @@ mod tests {
             .into_iter()
             .flatten()
             .filter(|e| e.file_type().is_file() || e.file_type().is_dir())
-            .map(|e| (relative_of(dir, e.path()), if e.file_type().is_file() { std::fs::read(e.path()).unwrap() } else { Vec::new() }))
+            .map(|e| {
+                (
+                    relative_of(dir, e.path()),
+                    if e.file_type().is_file() {
+                        std::fs::read(e.path()).unwrap()
+                    } else {
+                        Vec::new()
+                    },
+                )
+            })
             .collect();
         files.sort();
         files
@@ -467,11 +639,18 @@ mod tests {
     #[test]
     fn activa_plugins_conservando_orden_tabuladores_y_crlf() {
         let out = enable_plugins(UPROJECT, &["ModelContextProtocol", "EditorToolset"]).unwrap();
-        assert!(out.starts_with("{\r\n\t\"FileVersion\": 3,\r\n\t\"EngineAssociation\": \"5.8\","), "{out}");
+        assert!(
+            out.starts_with("{\r\n\t\"FileVersion\": 3,\r\n\t\"EngineAssociation\": \"5.8\","),
+            "{out}"
+        );
         assert!(out.contains("\"Name\": \"ModelContextProtocol\",\r\n\t\t\t\"Enabled\": true"));
         assert!(out.contains("\"Name\": \"EditorToolset\",\r\n\t\t\t\"Enabled\": true"));
         assert!(!out.contains('\n') || out.matches('\n').count() == out.matches("\r\n").count());
-        assert_eq!(enable_plugins(&out, &["EditorToolset"]).unwrap(), out, "idempotente");
+        assert_eq!(
+            enable_plugins(&out, &["EditorToolset"]).unwrap(),
+            out,
+            "idempotente"
+        );
     }
 
     #[test]
@@ -488,9 +667,22 @@ mod tests {
         let (_dir, path) = project();
         let report = readiness(&path, &source()).unwrap();
         assert!(!report.ready);
-        let failing: Vec<&str> = report.checks.iter().filter(|c| !c.ok).map(|c| c.id.as_str()).collect();
-        for expected in ["plugin:ModelContextProtocol", "plugin:EditorToolset", "autoStart", "toolset"] {
-            assert!(failing.contains(&expected), "{expected} debería fallar: {failing:?}");
+        let failing: Vec<&str> = report
+            .checks
+            .iter()
+            .filter(|c| !c.ok)
+            .map(|c| c.id.as_str())
+            .collect();
+        for expected in [
+            "plugin:ModelContextProtocol",
+            "plugin:EditorToolset",
+            "autoStart",
+            "toolset",
+        ] {
+            assert!(
+                failing.contains(&expected),
+                "{expected} debería fallar: {failing:?}"
+            );
         }
         assert_eq!(report.toolset_bundled, "0.3.2");
     }
@@ -503,17 +695,37 @@ mod tests {
         let original = snapshot(dir.path());
         let plan = plan(&path, &source(), Variant::Python, Some(8123)).unwrap();
         assert!(plan.needs_restart);
-        assert!(plan.changes.iter().any(|c| c.relative == "Plugins/DBVUnrealAI/Content/Python/init_unreal.py" && c.before.is_none()));
-        assert!(plan.changes.iter().all(|c| !c.relative.contains("__pycache__")));
+        assert!(plan.changes.iter().any(|c| c.relative
+            == "Plugins/DBVUnrealAI/Content/Python/init_unreal.py"
+            && c.before.is_none()));
+        assert!(plan
+            .changes
+            .iter()
+            .all(|c| !c.relative.contains("__pycache__")));
         let id = apply(&path, &plan, backups.path()).unwrap();
         let report = readiness(&path, &source()).unwrap();
-        let failing: Vec<&str> = report.checks.iter().filter(|c| !c.ok).map(|c| c.id.as_str()).collect();
+        let failing: Vec<&str> = report
+            .checks
+            .iter()
+            .filter(|c| !c.ok)
+            .map(|c| c.id.as_str())
+            .collect();
         // En CI no hay Unreal instalado: solo puede fallar la comprobación del motor.
         assert!(failing.iter().all(|id| *id == "engine"), "{failing:?}");
         assert_eq!(report.mcp.port, 8123);
-        assert!(super::plan(&path, &source(), Variant::Python, Some(8123)).unwrap().changes.is_empty(), "preparar dos veces no cambia nada");
+        assert!(
+            super::plan(&path, &source(), Variant::Python, Some(8123))
+                .unwrap()
+                .changes
+                .is_empty(),
+            "preparar dos veces no cambia nada"
+        );
         revert(&path, backups.path(), &id).unwrap();
-        assert_eq!(snapshot(dir.path()), original, "revertir deja el proyecto byte a byte como estaba");
+        assert_eq!(
+            snapshot(dir.path()),
+            original,
+            "revertir deja el proyecto byte a byte como estaba"
+        );
     }
 
     /// Live Coding desde la app solo tiene sentido con C++: un proyecto de Blueprints no lo pide.
@@ -521,15 +733,30 @@ mod tests {
     #[test]
     fn un_proyecto_con_cpp_pide_el_toolset_de_live_coding() {
         let (dir, path) = project();
-        let ids = |path: &Path| readiness(path, &source()).unwrap().checks.into_iter().map(|c| c.id).collect::<Vec<_>>();
+        let ids = |path: &Path| {
+            readiness(path, &source())
+                .unwrap()
+                .checks
+                .into_iter()
+                .map(|c| c.id)
+                .collect::<Vec<_>>()
+        };
         assert!(!ids(&path).contains(&"plugin:LiveCodingToolset".to_string()));
-        assert!(!plan(&path, &source(), Variant::Python, None).unwrap().changes[0].after.contains("LiveCodingToolset"));
+        assert!(!plan(&path, &source(), Variant::Python, None)
+            .unwrap()
+            .changes[0]
+            .after
+            .contains("LiveCodingToolset"));
 
         std::fs::create_dir_all(dir.path().join("Source").join("Demo")).unwrap();
         assert!(ids(&path).contains(&"plugin:LiveCodingToolset".to_string()));
-        let uproject = &plan(&path, &source(), Variant::Python, None).unwrap().changes[0];
+        let uproject = &plan(&path, &source(), Variant::Python, None)
+            .unwrap()
+            .changes[0];
         assert!(uproject.relative.ends_with("Demo.uproject"));
-        assert!(uproject.after.contains("\"Name\": \"LiveCodingToolset\",\r\n\t\t\t\"Enabled\": true"));
+        assert!(uproject
+            .after
+            .contains("\"Name\": \"LiveCodingToolset\",\r\n\t\t\t\"Enabled\": true"));
     }
 
     /// @spec REQ-05
@@ -537,9 +764,18 @@ mod tests {
     fn la_variante_cpp_instala_tambien_el_paquete_python() {
         let (_dir, path) = project();
         let plan = plan(&path, &source(), Variant::Cpp, None).unwrap();
-        assert!(plan.changes.iter().any(|c| c.relative.starts_with("Plugins/DBVUnrealAICpp/Source/")));
-        assert!(plan.changes.iter().any(|c| c.relative.starts_with("Plugins/DBVUnrealAI/Content/Python/")));
-        let uproject = plan.changes.iter().find(|c| c.relative == "Demo.uproject").unwrap();
+        assert!(plan
+            .changes
+            .iter()
+            .any(|c| c.relative.starts_with("Plugins/DBVUnrealAICpp/Source/")));
+        assert!(plan.changes.iter().any(|c| c
+            .relative
+            .starts_with("Plugins/DBVUnrealAI/Content/Python/")));
+        let uproject = plan
+            .changes
+            .iter()
+            .find(|c| c.relative == "Demo.uproject")
+            .unwrap();
         assert!(uproject.after.contains("\"Name\": \"DBVUnrealAICpp\""));
     }
 
@@ -548,7 +784,11 @@ mod tests {
     fn nunca_escribe_fuera_del_proyecto() {
         let dir = tempfile::tempdir().unwrap();
         for bad in ["../x", "/etc/x", "a/../../x", "", "C:\\x"] {
-            assert!(matches!(inside(dir.path(), bad), Err(UnrealError::Outside(_))) || cfg!(not(windows)) && bad == "C:\\x", "{bad}");
+            assert!(
+                matches!(inside(dir.path(), bad), Err(UnrealError::Outside(_)))
+                    || cfg!(not(windows)) && bad == "C:\\x",
+                "{bad}"
+            );
         }
         assert!(inside(dir.path(), "Plugins/DBVUnrealAI/x.py").is_ok());
     }
@@ -561,12 +801,22 @@ mod tests {
         let backups = tempfile::tempdir().unwrap();
         let plan = plan(&path, &source(), Variant::Python, Some(8123)).unwrap();
         // Una carpeta donde va un fichero del plan: esa escritura fallará después de que otras hayan funcionado.
-        let blocked = dir.path().join("Plugins").join("DBVUnrealAI").join("Content").join("Python").join("init_unreal.py");
+        let blocked = dir
+            .path()
+            .join("Plugins")
+            .join("DBVUnrealAI")
+            .join("Content")
+            .join("Python")
+            .join("init_unreal.py");
         std::fs::create_dir_all(&blocked).unwrap();
         let before = snapshot(dir.path());
         let error = apply(&path, &plan, backups.path()).unwrap_err();
         assert!(error.to_string().contains("se deshizo sola"), "{error}");
-        assert_eq!(snapshot(dir.path()), before, "el proyecto queda exactamente como estaba");
+        assert_eq!(
+            snapshot(dir.path()),
+            before,
+            "el proyecto queda exactamente como estaba"
+        );
     }
 
     /// @spec REQ-05
@@ -574,12 +824,24 @@ mod tests {
     fn revertir_no_borra_lo_que_el_usuario_anadio_despues() {
         let (dir, path) = project();
         let backups = tempfile::tempdir().unwrap();
-        let id = apply(&path, &plan(&path, &source(), Variant::Python, None).unwrap(), backups.path()).unwrap();
-        let mine = dir.path().join("Plugins").join("DBVUnrealAI").join("mio.txt");
+        let id = apply(
+            &path,
+            &plan(&path, &source(), Variant::Python, None).unwrap(),
+            backups.path(),
+        )
+        .unwrap();
+        let mine = dir
+            .path()
+            .join("Plugins")
+            .join("DBVUnrealAI")
+            .join("mio.txt");
         std::fs::write(&mine, "mío").unwrap();
         revert(&path, backups.path(), &id).unwrap();
         assert!(mine.is_file());
-        assert!(matches!(revert(&path, backups.path(), "no-existe"), Err(UnrealError::NotFound(_))));
+        assert!(matches!(
+            revert(&path, backups.path(), "no-existe"),
+            Err(UnrealError::NotFound(_))
+        ));
     }
 
     #[test]
@@ -593,7 +855,11 @@ mod tests {
     /// @spec REQ-07
     #[test]
     fn propone_puerto_libre_distinto_si_el_puerto_base_esta_en_uso() {
-        let mcp = McpSettings { port: 8000, path: "/mcp".into(), auto_start: None };
+        let mcp = McpSettings {
+            port: 8000,
+            path: "/mcp".into(),
+            auto_start: None,
+        };
         let port = propose_free_port(&mcp, false);
         assert!(port >= 8000);
     }
@@ -601,7 +867,11 @@ mod tests {
     /// @spec REQ-07, REQ-05
     #[test]
     fn con_el_editor_del_proyecto_abierto_conserva_su_puerto() {
-        let mcp = McpSettings { port: 8000, path: "/mcp".into(), auto_start: Some(true) };
+        let mcp = McpSettings {
+            port: 8000,
+            path: "/mcp".into(),
+            auto_start: Some(true),
+        };
         // Aunque el 8000 esté ocupado: lo ocupa su propio editor.
         let _busy = std::net::TcpListener::bind(("127.0.0.1", 8000));
         assert_eq!(propose_free_port(&mcp, true), 8000);
