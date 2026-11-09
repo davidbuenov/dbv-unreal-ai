@@ -9,7 +9,7 @@
 
 ## 🎯 Contexto Activo
 
-- **Punto de retorno (2026-11-09, fin de sesión):** ver «SNAPSHOT DE FIN DE SESIÓN» en `task.md`. Todo sin commit; hechos S94, S95, S96 y S105; caja negra aprobada (la Store incluye S112 y S113); `DBVMCPFirst` preparado; chaqueta de Pablo generada y sin equipar.
+- **Punto de retorno (2026-11-09, fin de sesión):** ver «SNAPSHOT DE FIN DE SESIÓN» en `task.md`. Todo commiteado en la rama `v0.5.0` (`c76bb83`, sin push); hechos S94, S95, S96 y S105; caja negra aprobada (la Store incluye S112 y S113); `DBVMCPFirst` preparado; chaqueta de Pablo generada y sin equipar.
 - **Foco inmediato (2026-11-09):** vestir un MetaHuman desde la app (S94–S96 hechos: destino explícito, tipos de prenda y corte, plugins para vestir en «Preparar») y **caja negra** añadida a la v0.5.0 (`REQ-91..REQ-97`, plan §15, pendiente de aprobación). Antes (2026-11-08): `S88..S91`, `REQ-80..REQ-82`.
 - **Estado de la integración de Ropa para MetaHumans (`REQ-80`, `REQ-81`):**
   - El pipeline procedural en `metahuman.py` (`equip_metahuman_outfit`) está completamente integrado y cubierto por tests (52 Python, 247 Rust, 389 Vitest).
