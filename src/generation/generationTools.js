@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-15, REQ-16, REQ-17, REQ-19, REQ-27, REQ-33, RNF-04
+// @spec REQ-15, REQ-16, REQ-17, REQ-19, REQ-27, REQ-33, REQ-83, REQ-84, RNF-04
 //
 // Las herramientas de Tripo NO se definen aquí: llegan de Rust (`generation/tools.rs`, comando
 // `generation_tool_specs`), las mismas que ve un agente por el MCP propio (D10). Este módulo solo las adapta
@@ -77,7 +77,7 @@ export function describeEnds(ends) {
  * @param {() => Promise<{ok: boolean, value?: object}>} [deps.worldlabsBalance] Saldo de World Labs (otra cuenta).
  * @param {() => Promise<{ok: boolean, value?: object[]}>} deps.listLibrary
  * @param {(id: string, name: string) => Promise<{ok: boolean, value?: object}>} deps.rename
- * @param {(entry: object) => Promise<{ok: boolean, assetPath?: string, actor?: string, error?: string}>} deps.send
+ * @param {(entry: object, options?: {metahuman?: string}) => Promise<{ok: boolean, assetPath?: string, actor?: string, equippedSlot?: string, note?: string, error?: string}>} deps.send
  * @param {(request: object) => Promise<'once'|'always'|'deny'>} deps.askApproval Tarjeta de aprobación (permiso).
  * @param {(request: object) => Promise<boolean>} deps.confirmCost Tarjeta de coste.
  */
@@ -153,21 +153,25 @@ export function createGenerationTools(deps) {
   const send = {
     name: 'library_send_to_unreal',
     description: 'Import a library asset into the connected Unreal project (under /Game/DBV/Generated) and place it in front of the editor camera. For 3D models it imports the mesh; for World Labs scenarios it imports the collider mesh (Static Mesh with collision) for ground physics. Needs the user approval.',
-    parameters: object({ id: { type: 'string', description: 'Library id from library_list.' }, purpose: { type: 'string' } }, ['id']),
+    parameters: object({ id: { type: 'string', description: 'Library id from library_list.' }, metahuman: { type: 'string', description: 'For a MetaHuman garment: label of the character to dress, from unreal_list_metahumans. Without it the garment is only imported, never equipped.' }, purpose: { type: 'string' } }, ['id']),
     label: (args) => `Unreal ← ${args.id ?? ''}`,
-    run: async ({ id, purpose = '' }) => {
+    run: async ({ id, metahuman = '', purpose = '' }) => {
       const listed = await deps.listLibrary();
       const entry = listed.ok ? listed.value.find((e) => e.id === id) : null;
       let text;
       if (entry) await deps.showPreview?.(entry);
       if (!entry) text = `error: no library asset with id "${id}". Call library_list.`;
-      else if ((await deps.askApproval({ kind: 'tool', toolset: 'DBV Unreal AI', tool: 'library_send_to_unreal', args: { id, name: entry.name }, purpose })) === 'deny') {
+      else if ((await deps.askApproval({ kind: 'tool', toolset: 'DBV Unreal AI', tool: 'library_send_to_unreal', args: { id, name: entry.name, ...(metahuman ? { metahuman } : {}) }, purpose })) === 'deny') {
         text = 'The user DENIED importing this asset. It was not imported.';
       } else {
-        const sent = await deps.send(entry);
+        const sent = await deps.send(entry, { metahuman });
         const anims = sent.ok && sent.animations?.length ? ` It is a skeletal mesh with ${sent.animations.length} animation(s)${sent.playing ? `; the actor plays ${sent.playing} in the editor` : ''}.` : '';
         const outdated = sent.note === 'toolsetOutdated' ? ' The DBV toolset of the project is outdated, so the animation is not playing: tell the user to prepare the project again in the app.' : '';
-        text = sent.ok ? `Imported as ${sent.assetPath}${sent.actor ? ` and placed as actor "${sent.actor}"` : ''}.${anims}${outdated}` : `error: ${sent.error}`;
+        const dressed = sent.ok && sent.equippedSlot ? ` The garment was auto-rigged and equipped (${sent.equippedSlot}) on the MetaHuman "${sent.actor}": tell the user who was dressed.` : '';
+        const cut = sent.ok && sent.cutMismatch ? ` WARNING: the garment has a ${sent.cutMismatch.garment} cut and the body is ${sent.cutMismatch.body}: it may not fit well. Tell the user and offer to generate it again with the right cut.` : '';
+        const noTarget = sent.ok && sent.note === 'noMetahumanTarget' ? ' It is a MetaHuman garment and NO target was given, so it was only imported and not equipped: call unreal_list_metahumans, then ask the user which character to dress (or use the only one and say so) and call unreal_equip_metahuman_outfit.' : '';
+        const placedAs = sent.ok && !sent.equippedSlot && sent.actor ? ` and placed as actor "${sent.actor}"` : '';
+        text = sent.ok ? `Imported as ${sent.assetPath}${placedAs}.${dressed}${cut}${noTarget}${anims}${outdated}` : `error: ${sent.error}`;
       }
       return text;
     },

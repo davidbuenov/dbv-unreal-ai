@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-15, REQ-17, RNF-04, RNF-IA.4
+// @spec REQ-15, REQ-17, RNF-04, RNF-IA.4, REQ-84
 //
 // Un trabajo de generación: lanzar la tarea, seguir su progreso, descargar el resultado al
 // momento (Tripo caduca sus enlaces a los 5 minutos) y guardarlo en la biblioteca. Nada se
@@ -223,6 +223,9 @@ pub fn run_operation(client: &TripoClient, request: &OperationRequest, library: 
     catalog::validate(op, &request.params).map_err(UnrealError::Format)?;
     let mut body = request.params.clone();
     if let Value::Object(map) = &mut body {
+        for internal in ["garment_slot", "garment_kind", "garment_cut", "quad_remesh", "quad_face_limit", "original_prompt"] {
+            map.remove(internal);
+        }
         if catalog::needs_model(op) && map.get("model").and_then(Value::as_str).is_none_or(str::is_empty) {
             map.insert("model".into(), Value::String(catalog::DEFAULT_MODEL.into()));
         }
@@ -245,14 +248,44 @@ pub fn run_operation(client: &TripoClient, request: &OperationRequest, library: 
 #[allow(clippy::too_many_arguments)]
 pub fn finish_task(client: &TripoClient, request: &OperationRequest, body: Value, task_id: String, library: &Library, cancel: &AtomicBool, polling: Polling, report: &mut impl FnMut(JobEvent)) -> Result<Outcome, UnrealError> {
     let op = request.operation;
-    let task = wait_for_task(client, &task_id, cancel, polling, report)?;
-    let links: Vec<(String, String)> = task
+    let base_task = wait_for_task(client, &task_id, cancel, polling, report)?;
+    let garment_slot = request.params.get("garment_slot").and_then(Value::as_str).map(str::to_string).filter(|s| !s.is_empty());
+    let quad_remesh = request.params.get("quad_remesh").and_then(Value::as_bool).unwrap_or(false) || garment_slot.is_some();
+    let quad_face_limit = request.params.get("quad_face_limit").and_then(Value::as_u64).unwrap_or(8000);
+
+    let (task, final_task_id, base_thumb) = if quad_remesh && matches!(op.name, "text_to_model" | "image_to_model" | "multiview_to_model") {
+        let convert_body = json!({
+            "input": task_id,
+            "format": "GLTF",
+            "quad": true,
+            "force_symmetry": true,
+            "face_limit": quad_face_limit,
+            "flatten_bottom": false,
+        });
+        report(JobEvent::Note("retopologizando prenda en quads simétricos (/models/convert)…".into()));
+        report(JobEvent::Request { endpoint: "/models/convert", body: &convert_body });
+        let conv_id = client.create("/models/convert", &convert_body)?;
+        report(JobEvent::Task(&conv_id));
+        let mut conv_task = wait_for_task(client, &conv_id, cancel, polling, report)?;
+        conv_task.credits = match (base_task.credits, conv_task.credits) {
+            (Some(a), Some(b)) => Some(a + b),
+            _ => None,
+        };
+        (conv_task, conv_id, base_task.image_url.clone())
+    } else {
+        (base_task, task_id.clone(), None)
+    };
+
+    let mut links: Vec<(String, String)> = task
         .output
         .as_object()
         .into_iter()
         .flat_map(|map| map.iter())
         .filter_map(|(key, value)| value.as_str().filter(|v| v.starts_with("https://") || (cfg!(test) && v.starts_with("http://127.0.0.1"))).map(|url| (key.clone(), url.to_string())))
         .collect();
+    if let Some(thumb_url) = base_thumb.filter(|_| !links.iter().any(|(k, _)| k.contains("image"))) {
+        links.push(("rendered_image_url".to_string(), thumb_url));
+    }
     let data: serde_json::Map<String, Value> = task.output.as_object().into_iter().flat_map(|map| map.iter()).filter(|(key, value)| !links.iter().any(|(k, _)| k == *key) && !value.is_null()).map(|(k, v)| (k.clone(), v.clone())).collect();
     let entry = if op.produces == "none" || links.is_empty() {
         None
@@ -277,14 +310,37 @@ pub fn finish_task(client: &TripoClient, request: &OperationRequest, body: Value
                 }
             }
         }
+        let mut meta = json!({ "operation": op.name, "request": body });
+        if let (Some(obj), true) = (meta.as_object_mut(), quad_remesh) {
+            obj.insert("quad_remeshed".into(), json!(true));
+            obj.insert("quad_face_limit".into(), json!(quad_face_limit));
+            obj.insert("base_task_id".into(), json!(task_id));
+            if let Some(slot) = &garment_slot {
+                obj.insert("garment_slot".into(), json!(slot));
+            }
+            // REQ-84: el tipo y el corte viajan con la prenda a la biblioteca.
+            for key in ["garment_kind", "garment_cut"] {
+                if let Some(value) = request.params.get(key).and_then(Value::as_str).filter(|v| !v.is_empty()) {
+                    obj.insert(key.into(), json!(value));
+                }
+            }
+        }
+        let prompt_str = request
+            .params
+            .get("original_prompt")
+            .or_else(|| request.params.get("prompt"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string();
         let entry = LibraryEntry {
             id,
             name: request.name.clone(),
             provider: "tripo".into(),
             kind: op.produces.into(),
-            prompt: request.params.get("prompt").and_then(Value::as_str).unwrap_or("").trim().to_string(),
-            parameters: json!({ "operation": op.name, "request": body }),
-            task_id: task_id.clone(),
+            prompt: prompt_str,
+            parameters: meta,
+            task_id: final_task_id.clone(),
             created_at: now_secs(),
             credits: task.credits.or(Some(catalog::estimate(op, &request.params))),
             files,
@@ -296,7 +352,7 @@ pub fn finish_task(client: &TripoClient, request: &OperationRequest, body: Value
         library.add(entry.clone())?;
         Some(entry)
     };
-    Ok(Outcome { entry, output: Value::Object(data), task_id })
+    Ok(Outcome { entry, output: Value::Object(data), task_id: final_task_id })
 }
 
 /// Texto → modelo (la operación de siempre) con los valores verificados de `TextToModel`.
@@ -428,5 +484,57 @@ mod tests {
         assert!(within_budget(270.0, 30.0, 300.0));
         assert!(!within_budget(271.0, 30.0, 300.0));
         assert!(within_budget(10_000.0, 30.0, 0.0), "0 = sin tope");
+    }
+
+    /// @spec REQ-80
+    #[test]
+    fn una_prenda_de_metahuman_encadena_convert_con_quads_y_guarda_metadatos() {
+        let (cdn, cdn_handle) = fake_server(vec![http("200 OK", "", "glb-quad-bytes")]);
+        let model_url = cdn.replace("/mcp", "/quad.glb");
+        let (api, api_handle) = fake_server(vec![
+            http("200 OK", "", r#"{"code":0,"data":{"task_id":"t-base"}}"#),
+            http("200 OK", "", &format!(r#"{{"code":0,"data":{{"status":"success","progress":100,"consumed_credit":20,"output":{{"model_url":"{model_url}"}}}}}}"#)),
+            http("200 OK", "", r#"{"code":0,"data":{"task_id":"t-conv"}}"#),
+            http("200 OK", "", &format!(r#"{{"code":0,"data":{{"status":"success","progress":100,"consumed_credit":10,"output":{{"model_url":"{model_url}"}}}}}}"#)),
+        ]);
+        let client = TripoClient::with_base_url("k", api.trim_end_matches("/mcp"));
+        let dir = tempfile::tempdir().unwrap();
+        let library = Library::new(dir.path().join("library"));
+        let launch = tools::build(
+            "generate_metahuman_outfit",
+            &json!({ "prompt": "leather jacket", "name": "Chaqueta", "kind": "top", "cut": "male", "face_limit": 8000 }),
+            &library,
+        )
+        .unwrap();
+        let mut requests = Vec::new();
+        let outcome = run_operation(
+            &client,
+            &OperationRequest { operation: launch.operation, params: launch.params, name: launch.name, parent: None },
+            &library,
+            &AtomicBool::new(false),
+            quick(),
+            &mut |ev| {
+                if let JobEvent::Request { endpoint, body } = ev {
+                    requests.push((endpoint.to_string(), body.clone()));
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].0, "/generation/text-to-model");
+        assert!(requests[0].1.get("garment_slot").is_none() && requests[0].1.get("garment_kind").is_none() && requests[0].1.get("garment_cut").is_none(), "no envía campos internos a Tripo");
+        assert_eq!(requests[1].0, "/models/convert");
+        assert_eq!(requests[1].1["input"], "t-base");
+        assert_eq!(requests[1].1["quad"], true);
+        assert_eq!(requests[1].1["force_symmetry"], true);
+        assert_eq!(requests[1].1["format"], "GLTF");
+        assert_eq!(requests[1].1["face_limit"], 8000);
+        let entry = outcome.entry.unwrap();
+        assert_eq!(entry.parameters["garment_slot"], "Torso");
+        assert_eq!((entry.parameters["garment_kind"].as_str(), entry.parameters["garment_cut"].as_str()), (Some("top"), Some("male")), "REQ-84: el tipo y el corte llegan a la biblioteca");
+        assert_eq!(entry.parameters["quad_remeshed"], true);
+        assert_eq!(entry.credits, Some(30.0));
+        api_handle.join().unwrap();
+        cdn_handle.join().unwrap();
     }
 }

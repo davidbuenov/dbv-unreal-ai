@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-01, REQ-02, REQ-03, REQ-04, REQ-05
+// @spec REQ-01, REQ-02, REQ-03, REQ-04, REQ-05, REQ-87
 //
 // Escenarios A y B: la app detecta el editor abierto, dice qué le falta al proyecto y lo
 // prepara enseñando ANTES el diff de cada fichero, con copia de seguridad y «Revertir».
@@ -19,11 +19,14 @@ import { isDbvToolset } from '../unreal/unrealTools.js';
 
 const BACKUP_KEY = 'dbv-unreal-ai:lastBackup:';
 
+/** Plugins de Epic que usa «vestir a un MetaHuman» (los mismos que `prepare::DRESSING_PLUGINS`). @spec REQ-87 */
+export const DRESSING_PLUGINS = ['GeometryScripting', 'ChaosClothAssetToolset', 'PythonFoundationPackages'];
+
 /** Texto y explicación de una comprobación del diagnóstico. */
 export function checkLabel(check) {
   const [kind, name] = check.id.split(':');
   const label = kind === 'plugin' ? t('check.plugin', { name }) : t(`check.${kind}`, { detail: check.detail || '—' });
-  const why = t(`check.why.${kind}`);
+  const why = t(kind === 'plugin' && DRESSING_PLUGINS.includes(name) ? 'check.why.dressing' : `check.why.${kind}`);
   return { label, why };
 }
 

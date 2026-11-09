@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Choosing who gets dressed (REQ-83):** the app no longer equips a garment on "the first MetaHuman in the level". The Library asks who to dress (with one it comes preselected, with several you must pick and with none the garment is only imported), the AI calls `unreal_list_metahumans` and asks when there are several, `library_send_to_unreal` and `unreal_equip_metahuman_outfit` take the target (`metahuman`, `actor_label`) and, without one, they neither equip nor place anything: the garment is only imported and the user is told. If the editor cannot equip it, the error comes back as is instead of leaving the garment loose in front of the camera.
+- **Garment types and cut (REQ-84):** Generate offers `top`, `pants`, `skirt`, `dress` and `shoes` instead of the slot, plus a female, male or neutral cut. Each type has its own prompt (a dress is a whole garment without a body) and the cut goes into it. The type and cut are saved in the library and, when equipping, a warning is shown if the cut does not suit the chosen body. Old entries and calls with only `garment_slot` keep working and get their type.
+- **"Prepare" enables the plugins for dressing (REQ-87):** `GeometryScripting`, `ChaosClothAssetToolset` and `PythonFoundationPackages` (`numpy` and `Pillow`; the first start needs a network connection), only the ones the project's engine ships, as "Editor only" when the app adds them, with their check and explanation in the diagnosis.
+
+- **Debugging a runtime failure (REQ-97, first step of the black box):** new *Diagnose a runtime failure* recipe and rules in the AI prompt: when a failure happens during play, measure before changing code; a memory note or a comment is a hypothesis, not a fact; say what was measured and what was not; and never record with per-frame callbacks in `unreal_run_python` (on 2026-11-08 one flooded the log with tens of thousands of lines). If the model writes one in its reply, the app reminds it.
+
+### Fixed
+- DBVUnrealAI plugin: the project would not open after installing it, because it declared a dependency on `GLTFImporter`, which does not exist in UE 5.8.
+- MetaHuman clothing (REQ-81): the gap between head and shoulders no longer appears when replacing the stock shirt (`NeckHideScale`, which shrank the neck through the material).
+- MetaHuman skirts (REQ-81): straight hem, no open patches, and a tight fit at the hips with a straight drop, without skin poking through the fabric at rest.
+- Torso garments (REQ-81): the fit no longer clips the real waist width, which made skin show through.
+
 ## [0.4.1] - 2026-11-07
 
 Version v0.4.1: live ElevenLabs balance visibility and session balance caching; advanced local audio synthesis controls with game presets, acoustic negative prompt, and continuous parameters; Claude Code adapter resilience on Windows; and DBV Unreal AI plugins isolation for standalone game packaging (Android / Meta Quest / VR).

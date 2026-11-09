@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 import unreal
 
-from dbv_unreal_ai import analysis
+from dbv_unreal_ai import analysis, metahuman
 
 #: Versión del contrato de herramientas (la app la compara con la que trae).
 TOOLSET_VERSION = "0.4.0"
@@ -28,6 +28,13 @@ TOOLSET_VERSION = "0.4.0"
 def _json(value: Any) -> str:
     """Serializa el resultado de una herramienta."""
     return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _in_play() -> bool:
+    """Si el editor está en una sesión de Play (PIE)."""
+    subsystem_class = getattr(unreal, "LevelEditorSubsystem", None)
+    subsystem = unreal.get_editor_subsystem(subsystem_class) if subsystem_class is not None else None
+    return bool(subsystem is not None and subsystem.is_in_play_in_editor())
 
 
 def _transaction() -> Any:
@@ -97,7 +104,11 @@ def import_model(source_file: str, folder_path: str = "/Game/DBV/Generated", ass
     aquí no se fija fábrica, así que glTF entra por Interchange con sus materiales y texturas. Un GLB con
     esqueleto (un rig de Tripo) da un Skeletal Mesh con su Skeleton y, si trae clips, sus Animation Sequences:
     entonces el principal es el Skeletal Mesh y se devuelven las animaciones para reproducirlas al colocarlo.
+
+    Durante Play se niega: Interchange crea entonces una malla vacía con materiales dinámicos que no se pueden guardar.
     """
+    if _in_play():
+        return _json({"success": False, "error": "the editor is in Play mode: stop it and send the asset again (importing during Play creates assets that cannot be saved)"})
     if not os.path.isfile(source_file):
         return _json({"success": False, "error": f"file not found: {source_file}"})
     if not folder_path.startswith("/Game/"):
@@ -469,4 +480,175 @@ def undo_turn(count: int, expected_current: int = 0) -> str:
             result["success"] = True
             result["undone"] = count
     return _json(result)
+
+
+METAHUMAN_SLOTS = metahuman.METAHUMAN_SLOTS
+_metahuman_components = metahuman.metahuman_components
+_target_slot_bounds = metahuman.target_slot_bounds
+list_metahumans = metahuman.list_metahumans
+
+
+def _resolve_garment_static_mesh(garment_source: str, folder_path: str, asset_name: str) -> tuple[Any, str | None]:
+    """Obtiene el ``UStaticMesh`` de una ruta en disco (importándolo) o de un asset ``/Game/...``."""
+    return metahuman.resolve_garment_static_mesh(garment_source, folder_path, asset_name, import_model)
+
+
+def equip_metahuman_outfit(
+    actor_label: str,
+    garment_source: str,
+    slot: str = "Torso",
+    folder_path: str = "/Game/DBV/MetaHumanOutfits",
+    asset_name: str = "",
+    scale_multiplier: float = 1.05,
+    z_offset: float = 0.0,
+    smoothing_iterations: int = 5,
+) -> str:
+    """Transfiere pesos del cuerpo MetaHuman a una prenda con ``GeometryScript`` (``INPAINT_WEIGHTS``) y la equipa. @spec REQ-81"""
+    return metahuman.equip_metahuman_outfit(
+        actor_label,
+        garment_source,
+        slot=slot,
+        folder_path=folder_path,
+        asset_name=asset_name,
+        scale_multiplier=scale_multiplier,
+        z_offset=z_offset,
+        smoothing_iterations=smoothing_iterations,
+        import_model_fn=import_model,
+        unique_name_fn=_unique_name,
+    )
+
+
+_PLAYTEST_STATE: dict[str, Any] = {}
+
+
+def start_pie_playtest_tracker(duration_seconds: float = 3.0, actions_json: str = "[]") -> str:
+    """Registra el muestreador e inyector de inputs por ticks de Slate para el play-testing en PIE. @spec REQ-82"""
+    global _PLAYTEST_STATE  # noqa: PLW0603
+    if _PLAYTEST_STATE.get("handle") is not None:
+        with suppress_errors():
+            unreal.unregister_slate_post_tick_callback(_PLAYTEST_STATE["handle"])
+
+    try:
+        parsed_actions = json.loads(actions_json) if actions_json else []
+    except Exception:
+        parsed_actions = []
+
+    target_duration = max(0.5, min(float(duration_seconds or 3.0), 15.0))
+    _PLAYTEST_STATE = {
+        "handle": None,
+        "elapsed": 0.0,
+        "duration": target_duration,
+        "actions": parsed_actions if isinstance(parsed_actions, list) else [],
+        "ticks": 0,
+        "dt_samples": [],
+        "pawn_spawned": False,
+        "pawn_class": None,
+        "start_location": None,
+        "end_location": None,
+        "min_z": None,
+        "jumped": False,
+        "completed": False,
+    }
+
+    def _on_tick(delta_time: float) -> None:
+        st = _PLAYTEST_STATE
+        st["ticks"] += 1
+        dt = float(delta_time) if 0.0 < float(delta_time) < 0.5 else (1.0 / 60.0)
+        st["elapsed"] += dt
+        st["dt_samples"].append(dt)
+
+        pie_worlds = unreal.EditorLevelLibrary.get_pie_worlds(False) if hasattr(unreal, "EditorLevelLibrary") else []
+        if pie_worlds:
+            pie_world = pie_worlds[0]
+            pawn = unreal.GameplayStatics.get_player_pawn(pie_world, 0)
+            if pawn is not None:
+                st["pawn_spawned"] = True
+                st["pawn_class"] = pawn.get_class().get_name()
+                loc = pawn.get_actor_location()
+                pos = _round(loc)
+                if st["start_location"] is None:
+                    st["start_location"] = pos
+                    st["min_z"] = pos[2]
+                st["end_location"] = pos
+                if st["min_z"] is None or pos[2] < st["min_z"]:
+                    st["min_z"] = pos[2]
+
+                _apply_playtest_actions(pawn, st)
+
+        if st["elapsed"] >= st["duration"] and st.get("handle") is not None:
+            unreal.unregister_slate_post_tick_callback(st["handle"])
+            st["handle"] = None
+            st["completed"] = True
+
+    _PLAYTEST_STATE["handle"] = unreal.register_slate_post_tick_callback(_on_tick)
+    return _json({"started": True, "duration_seconds": target_duration})
+
+
+def _apply_playtest_actions(pawn: Any, st: dict[str, Any]) -> None:
+    """Inyecta movimiento o salto en ``pawn`` durante un tick de PIE. @spec REQ-82"""
+    actions = st.get("actions") or ["forward"]
+    names = [a.get("action", "forward") if isinstance(a, dict) else str(a) for a in actions]
+    fwd = pawn.get_actor_forward_vector()
+    right = pawn.get_actor_right_vector()
+    if "forward" in names and hasattr(pawn, "add_movement_input"):
+        pawn.add_movement_input(fwd, 1.0, True)
+    if "backward" in names and hasattr(pawn, "add_movement_input"):
+        pawn.add_movement_input(fwd, -1.0, True)
+    if "right" in names and hasattr(pawn, "add_movement_input"):
+        pawn.add_movement_input(right, 1.0, True)
+    if "left" in names and hasattr(pawn, "add_movement_input"):
+        pawn.add_movement_input(right, -1.0, True)
+    if "jump" in names and not st.get("jumped") and st["elapsed"] >= 0.25 and hasattr(pawn, "jump"):
+        pawn.jump()
+        st["jumped"] = True
+
+
+class suppress_errors:
+    """Contexto simple para ignorar errores de limpieza en callbacks de Slate."""
+
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        return True
+
+
+def read_pie_playtest_telemetry() -> str:
+    """Detiene el tracker de PIE si sigue activo y devuelve la telemetría recogida. @spec REQ-82"""
+    st = _PLAYTEST_STATE
+    if st.get("handle") is not None:
+        with suppress_errors():
+            unreal.unregister_slate_post_tick_callback(st["handle"])
+        st["handle"] = None
+        st["completed"] = True
+
+    dts = st.get("dt_samples") or []
+    avg_dt = (sum(dts) / len(dts)) if dts else 0.0
+    avg_fps = round(1.0 / avg_dt, 1) if avg_dt > 0.0 else 0.0
+    start_loc = st.get("start_location")
+    end_loc = st.get("end_location")
+    dist = 0.0
+    fell = False
+    if start_loc and end_loc:
+        dx = end_loc[0] - start_loc[0]
+        dy = end_loc[1] - start_loc[1]
+        dz = end_loc[2] - start_loc[2]
+        dist = round((dx * dx + dy * dy + dz * dz) ** 0.5, 1)
+        min_z = st.get("min_z") if st.get("min_z") is not None else end_loc[2]
+        fell = bool(min_z < start_loc[2] - 500.0 or end_loc[2] < -1000.0)
+
+    report = {
+        "completed": bool(st.get("completed")),
+        "duration_seconds": round(float(st.get("elapsed") or 0.0), 2),
+        "ticks": int(st.get("ticks") or 0),
+        "pawn_spawned": bool(st.get("pawn_spawned")),
+        "pawn_class": st.get("pawn_class"),
+        "start_location": start_loc,
+        "end_location": end_loc,
+        "distance_moved_cm": dist,
+        "fell_out_of_world": fell,
+        "avg_fps": avg_fps,
+    }
+    return _json(report)
+
 

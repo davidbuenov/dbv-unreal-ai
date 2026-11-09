@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-17, REQ-19, REQ-16, REQ-28, REQ-30
+// @spec REQ-17, REQ-19, REQ-16, REQ-28, REQ-30, REQ-80, REQ-81, REQ-83, REQ-84
 //
 // Escenario G: todo lo generado o importado, de cualquier proyecto, con búsqueda. Cada asset dice qué es
 // (modelo, rig, animación, imagen) y de cuál sale, y ofrece el paso siguiente: un modelo se riggea, un rig se
@@ -13,7 +13,7 @@
 // imágenes propios u otra biblioteca entera, y renombrar.
 
 import { t } from '../ai/i18nBridge.js';
-import { sendToUnreal } from '../unreal/sendToUnreal.js';
+import { cutMismatch, listMetahumans, sendToUnreal } from '../unreal/sendToUnreal.js';
 import * as api from './backend.js';
 import { button, el } from './dom.js';
 import { confirmAndLaunch } from './generateView.js';
@@ -50,6 +50,23 @@ export function isV1Rig(entry) {
   return !model || String(model).startsWith('v1.0');
 }
 
+const GARMENT_ICONS = { top: '👕', pants: '👖', skirt: '👗', dress: '👗', shoes: '👟' };
+
+/**
+ * Tipo de una prenda (`top`, `pants`, `skirt`, `dress`, `shoes`) o `null` si el asset no es una prenda. Una entrada
+ * antigua con solo `garment_slot` lo recibe como la app: Torso → top, Feet → shoes, Legs → falda si su descripción
+ * lo dice y pantalón si no. Igual que `generation::tools::infer_garment_kind`. @spec REQ-84
+ */
+export function garmentKindOf(entry) {
+  const params = entry?.parameters ?? {};
+  let kind = null;
+  if (params.garment_kind) kind = String(params.garment_kind);
+  else if (params.garment_slot === 'Feet') kind = 'shoes';
+  else if (params.garment_slot === 'Legs') kind = /skirt|kilt|falda/i.test(`${entry.prompt ?? ''} ${entry.name ?? ''}`) ? 'skirt' : 'pants';
+  else if (params.garment_slot) kind = 'top';
+  return kind;
+}
+
 /** Backend que necesita `sendToUnreal` para el proyecto conectado. */
 export function sendBackend(connection) {
   return {
@@ -84,14 +101,15 @@ async function pumpThumbnailQueue() {
 
 /** Miniatura de un asset (la que trajo el proveedor, o una imagen del propio asset), o su icono. */
 export async function assetThumbnail(entry, className = 'asset-thumb') {
-  const icon = { rig: '🦴', animation: '💃', image: '🖼', world: '🏝️', splat: '🏝️', sound: '🎵' }[entry.kind] ?? '◆';
+  const garmentIcon = garmentKindOf(entry) ? (GARMENT_ICONS[garmentKindOf(entry)] ?? '👕') : null;
+  const icon = garmentIcon ?? ({ rig: '🦴', animation: '💃', image: '🖼', world: '🏝️', splat: '🏝️', sound: '🎵' }[entry.kind] ?? '◆');
   const box = el('div', { className, text: icon, style: 'position: relative;' });
   const image = entry.thumbnail ?? (entry.kind === 'image' ? entry.files?.[0] : null);
   if (image) {
     const path = await api.libraryFilePath(entry.id, image);
     if (path.ok && path.value && window.__TAURI__?.core) {
       box.replaceChildren(el('img', { attrs: { src: window.__TAURI__.core.convertFileSrc(path.value), alt: entry.name } }));
-      if (entry.kind === 'animation' || entry.kind === 'rig') {
+      if (entry.kind === 'animation' || entry.kind === 'rig' || garmentIcon) {
         box.append(el('span', { className: 'asset-badge', text: icon, style: 'position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.6); border-radius: 4px; padding: 1px 4px; font-size: 13px;' }));
       }
     }
@@ -145,12 +163,71 @@ export function createLibraryView(host, deps) {
   const grid = el('div', { className: 'library-grid' });
   search.addEventListener('input', () => paint());
 
+  /**
+   * A quién vestir (REQ-83): la app no elige nunca por su cuenta. Con uno solo sale ya elegido; con varios hay que
+   * elegir; sin ninguno solo se importa la prenda. Devuelve la etiqueta, `''` para solo importar o `null` si se cancela.
+   */
+  function chooseMetahuman(entry, found) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+        deps.closeModal();
+      };
+      const select = el('select', { attrs: { 'aria-label': t('lib.dressWho') } });
+      if (found.length > 1) select.append(el('option', { text: t('lib.dressChoose'), attrs: { value: '', disabled: 'disabled', selected: 'selected' } }));
+      for (const mh of found) select.append(el('option', { text: `${mh.label}${mh.build ? ` · ${mh.build}` : ''}`, attrs: { value: mh.label } }));
+      const equip = button(t('lib.dressGo'), () => finish(select.value), 'btn-primary');
+      const cutWarning = el('p', { className: 'check-fail hidden' });
+      const refresh = () => {
+        equip.disabled = !select.value;
+        const chosen = found.find((mh) => mh.label === select.value);
+        const mismatch = chosen ? cutMismatch(entry, chosen.build) : null;
+        cutWarning.textContent = mismatch ? t('lib.dressCutMismatch', { garment: t(`gen.garmentCut.${mismatch.garment}`), body: mismatch.body === 'female' ? t('lib.bodyFemale') : t('lib.bodyMale') }) : '';
+        cutWarning.classList.toggle('hidden', !mismatch);
+      };
+      select.addEventListener('change', refresh);
+      refresh();
+      deps.openModal(
+        [
+          el('h3', { text: t('lib.dressTitle', { name: entry.name }) }),
+          el('p', { className: 'hint', text: t('lib.dressHint') }),
+          select,
+          cutWarning,
+          el('div', { className: 'modal-actions' }, button(t('lib.dressImportOnly'), () => finish('')), el('span', { className: 'spacer' }), button(t('gen.cancel'), () => finish(null)), equip),
+        ],
+        { onClose: () => { if (!settled) { settled = true; resolve(null); } } },
+      );
+    });
+  }
+
   async function send(entry, statusLine) {
     const connection = deps.state.connection;
     if (connection?.status !== 'online') return deps.toast(t('lib.noProject'), 'error');
+    let metahuman = '';
+    if (garmentKindOf(entry)) {
+      const found = await listMetahumans(sendBackend(connection));
+      if (found.ok && found.metahumans.length) {
+        const chosen = await chooseMetahuman(entry, found.metahumans);
+        if (chosen === null) return null;
+        metahuman = chosen;
+      } else if (found.ok) {
+        deps.toast(t('lib.dressNone'));
+      }
+    }
     statusLine.textContent = t('lib.sending');
-    const result = await sendToUnreal({ backend: sendBackend(connection) }, entry, { project: connection.projectPath });
-    const extra = result.ok && result.animations?.length ? ` · ${t(result.playing ? 'lib.sentPlaying' : 'lib.sentAnimations', { n: String(result.animations.length) })}` : '';
+    const result = await sendToUnreal({ backend: sendBackend(connection) }, entry, { project: connection.projectPath, metahuman });
+    let extra = '';
+    if (result.ok && result.equippedSlot) {
+      extra = ` · ${t('lib.sentEquipped', { actor: result.actor ?? metahuman, slot: result.equippedSlot })}`;
+      if (result.cutMismatch) deps.toast(t('lib.dressCutMismatch', { garment: t(`gen.garmentCut.${result.cutMismatch.garment}`), body: result.cutMismatch.body === 'female' ? t('lib.bodyFemale') : t('lib.bodyMale') }), 'error');
+    } else if (result.ok && result.note === 'noMetahumanTarget') {
+      extra = ` · ${t('lib.sentNotEquipped')}`;
+    } else if (result.ok && result.animations?.length) {
+      extra = ` · ${t(result.playing ? 'lib.sentPlaying' : 'lib.sentAnimations', { n: String(result.animations.length) })}`;
+    }
     statusLine.textContent = result.ok ? `${t('lib.sent', { path: result.assetPath })}${extra}` : '';
     if (result.note === 'toolsetOutdated') deps.toast(t('lib.toolsetOutdated'), 'error');
     if (!result.ok) deps.toast(t(`lib.error.${result.error}`) === `lib.error.${result.error}` ? result.error : t(`lib.error.${result.error}`), 'error');
@@ -269,7 +346,7 @@ export function createLibraryView(host, deps) {
         'div',
         { className: 'asset-body' },
         el('div', { className: 'asset-name', text: entry.name }),
-        el('div', { className: 'asset-meta', text: `${kind} · ${entry.provider} · ${date}${entry.credits ? ` · ${t('lib.credits', { n: String(entry.credits) })}` : ''}` }),
+        el('div', { className: 'asset-meta', text: `${kind}${garmentKindOf(entry) ? ` (${t(`gen.garmentKind.${garmentKindOf(entry)}`)})` : ''} · ${entry.provider} · ${date}${entry.credits ? ` · ${t('lib.credits', { n: String(entry.credits) })}` : ''}` }),
         parent ? el('div', { className: 'asset-meta', text: t('lib.from', { name: parent.name }) }) : null,
         audioPlayer,
         statusLine,
@@ -280,13 +357,13 @@ export function createLibraryView(host, deps) {
         canSend ? button(t('lib.send'), () => send(entry, statusLine), 'btn-primary') : null,
         viewableFile(entry)
           ? button(t('preview.open'), () =>
-              openPreview(entry, {
-                openModal: deps.openModal,
-                closeModal: deps.closeModal,
-                onThumbnail: () => paint(),
-                onSend: canSend ? (e) => (deps.closeModal(), send(e, statusLine)) : null,
-              }),
-            )
+            openPreview(entry, {
+              openModal: deps.openModal,
+              closeModal: deps.closeModal,
+              onThumbnail: () => paint(),
+              onSend: canSend ? (e) => (deps.closeModal(), send(e, statusLine)) : null,
+            }),
+          )
           : null,
         nextStep(entry),
         button(t('lib.rename'), () => rename(entry), 'btn-ghost'),

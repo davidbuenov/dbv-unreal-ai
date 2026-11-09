@@ -129,6 +129,8 @@ export const ZH_AI = {
   'ai.recipes': '配方',
   'ai.recipesShow': '查看引导式配方',
   'ai.recipesHint': '引导式任务：AI 一步步完成，最后在编辑器中检查结果。',
+  'ai.playtest': '在 Play 中测试',
+  'ai.playtestHint': '启动编辑器内运行（PIE），驱动角色移动，检查日志并截取视口以验证关卡。',
   'ai.rememberHint': '让 AI 提议把已决定的内容保存到项目记忆中',
   'ai.attachKinds': '图片和文档',
   'ai.imagesNotSeen': '此模型看不到图片：它只获得附加图片的名称和路径（可以用于 Tripo）。请使用视觉模型让它看到图片。',

@@ -237,6 +237,8 @@ export function createAiApp(deps) {
       onRemember: host.rememberRequest ? () => ask(host.rememberRequest(getLanguage())) : undefined,
       // Menú de recetas del host (en DBV Unreal AI, REQ-23): una tarjeta en la conversación.
       onRecipes: host.openRecipes ? () => host.openRecipes({ panel, ask }) : undefined,
+      // Prueba autónoma en Play (REQ-82): arranca PIE, mueve el Pawn y analiza telemetría y captura.
+      onPlaytest: host.runPlaytest ? () => host.runPlaytest({ panel, ask }) : undefined,
       onCopy: (code) => navigator.clipboard.writeText(code).then(() => host.toast(t('ai.copied'))),
       onInsert: (code) => insertAtCursor(code),
     },

@@ -57,6 +57,11 @@ describe('preparación (REQ-04, REQ-05)', () => {
     expect(checkLabel({ id: 'plugin:EditorToolset', ok: false, detail: '' }).label).toBe('Plugin EditorToolset activo');
     expect(checkLabel({ id: 'autoStart', ok: false, detail: '8000' }).label).toMatch(/puerto 8000/);
     expect(checkLabel({ id: 'engine', ok: true, detail: '5.8.2' }).why).toMatch(/5\.8/);
+    // REQ-87: los plugins de vestir explican para qué sirven y que son experimentales y solo del Editor.
+    const dressing = checkLabel({ id: 'plugin:ChaosClothAssetToolset', ok: false, detail: '' });
+    expect(dressing.label).toBe('Plugin ChaosClothAssetToolset activo');
+    expect(dressing.why).toMatch(/MetaHuman/);
+    expect(checkLabel({ id: 'plugin:EditorToolset', ok: false, detail: '' }).why).not.toMatch(/MetaHuman/);
   });
 
   it('el diff enseña solo lo que cambia y un fichero nuevo entero @spec REQ-05', () => {

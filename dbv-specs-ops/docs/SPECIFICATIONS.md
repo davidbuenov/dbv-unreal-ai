@@ -1,8 +1,8 @@
 # 📋 Especificaciones: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` (Especificación)
-> **Estado:** Validado para `/plan` v0.4.1 (v1.11: parámetros avanzados y prompt negativo para audio local —REQ-76— amplía REQ-71; v1.10: novedades v0.4.0 —REQ-71..REQ-75—; v1.9: aislamiento de conversaciones ACP, modelo por defecto real y contador de tokens por conversación —REQ-67—, pegado de imágenes desde el portapapeles `Ctrl+V` / arrastrar y soltar con miniatura —REQ-68—, cabecera estándar DBV en todos los ficheros propios y generados por la IA —REQ-69—, reanudación de trabajos huérfanos de World Labs —REQ-70— y edición de `.md` en la raíz y `docs/**` —REQ-22—)
-> **Última Revisión:** 2026-11-05
+> **Estado:** Borrador `/spec` v0.5.0 (v1.14: caja negra, depurar supervisando la partida del usuario —REQ-91..REQ-97—, a partir de `docs/Propuesta_CajaNegra_DBVUnrealAI.md`; v1.13: vestir un MetaHuman de principio a fin desde la app —REQ-83..REQ-90—, y UEFN y Verse pasan a la v0.6.0; v1.12: integración con UEFN y lenguaje Verse —REQ-78, REQ-79—, generación y rigging automático de ropa para MetaHumans con Tripo Quads y GeometryScript —REQ-80, REQ-81—, y Play-testing autónomo en PIE —REQ-82—; v1.11: REQ-76, REQ-77 entregados en v0.4.1; v1.10: REQ-71..REQ-75 en v0.4.0)
+> **Última Revisión:** 2026-11-08
 
 ---
 
@@ -429,7 +429,7 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
 
 ### 3.16. Novedades de la v0.4.1 (Control Acústico Avanzado y Panel Completo de Síntesis para Audio Local)
 
-- [ ] **REQ-76 · Panel completo de parámetros de síntesis y presets para audio local (amplía REQ-71):**
+- [x] **REQ-76 · Panel completo de parámetros de síntesis y presets para audio local (amplía REQ-71):**
   - **Chips de presets rápidos para videojuegos:**
     - Botones de 1 clic en la interfaz de Generar (pestaña «Sonidos (SFX)») al seleccionar el proveedor Local que configuran simultáneamente el prompt descriptivo, el prompt negativo acústico, la duración, los pasos y la escala CFG idóneos para arquetipos típicos de videojuegos:
       1. 🔫 *Laser Blaster* (Sci-Fi, alta energía, seco).
@@ -456,25 +456,241 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
     - Si el usuario no introduce prompt negativo ni altera los parámetros, la petición envía los valores por defecto estándar sin modificar el funcionamiento de ElevenLabs o Freesound.
   *Aceptación:* pulsar un preset de juego rellena automáticamente todos los campos; modificar sliders sincroniza sus valores; la llamada IPC y el payload HTTP a `http://127.0.0.1:8765/v1/generate` transmiten `negative_prompt`, `duration`, `steps`, `cfg_scale` y `seed`; y el audio guardado en la biblioteca preserva todos estos parámetros en su entrada. Al cambiar de proveedor a ElevenLabs o Freesound, el panel de parámetros de síntesis local se oculta automáticamente.
 
-### REQ-77: Visibilidad de saldo de ElevenLabs, optimización de caché de cuotas y estado del servicio de audio local
-- **Estado:** 🟡 En progreso (v0.4.1)
-- **Prioridad:** Media
-- **Descripción:** Optimiza la experiencia informativa y de consumo de red en la vista de generación y el estado del microservicio local:
-  - **Detección robusta del microservicio de audio local:**
-    - Corrección en la deserialización de la respuesta de `generation_check_local_audio` en la vista de Generación y en Ajustes para evaluar `st?.value?.ready` en lugar del envoltorio IPC `st?.ready`.
-    - Presentación en tiempo real del estado de disponibilidad y dispositivo (`GPU` / `CPU`) sin falsos negativos de servicio fuera de línea.
-  - **Consulta de cuota y suscripción de ElevenLabs:**
-    - Endpoint oficial de ElevenLabs `GET https://api.elevenlabs.io/v1/user/subscription` utilizando la clave `xi-api-key` (con prefijo `sk_`) guardada en el almacén de credenciales.
-    - Soporte para cuentas gratuitas (que cuentan con 10.000 caracteres mensuales) y de pago.
-    - Requiere permiso `user_read` o clave con permisos completos (*Full Access*). En caso de que la clave carezca de dicho permiso granular, la aplicación muestra una indicación amigable sin bloquear la generación de audio.
-    - Obtención de `character_count`, `character_limit` y cálculo de `remaining_characters`.
-    - Comando IPC `generation_elevenlabs_balance` en Rust con manejo tipado de errores (HTTP 401 clave inválida, 429 cuota superada).
-  - **Caché de saldos por sesión y refresco inteligente:**
-    - Las consultas de saldo (Tripo, World Labs y ElevenLabs) se realizan una sola vez por sesión al acceder al proveedor, reutilizando el valor en memoria para evitar llamadas de red repetitivas e innecesarias al alternar entre pestañas o selectores.
-    - Invalidación y refresco automático de la cuota del proveedor activo inmediatamente después de completar con éxito una generación (3D o audio).
-  - **Indicador de saldo infinito para inferencia local:**
-    - Al seleccionar el proveedor Local (`dbv-audio-service`) y encontrarse el microservicio conectado (`ready`), la cabecera de saldo muestra de forma explícita `Saldo local: ∞ créditos`, transmitiendo con claridad que la síntesis local no consume cuota externa de nube.
+- [x] **REQ-77 · Visibilidad de saldo de ElevenLabs, optimización de caché de cuotas y estado del servicio de audio local:**
+  - **Estado:** ✅ Completado (v0.4.1)
+  - **Prioridad:** Media
+  - **Descripción:** Optimiza la experiencia informativa y de consumo de red en la vista de generación y el estado del microservicio local:
+    - **Detección robusta del microservicio de audio local:**
+      - Corrección en la deserialización de la respuesta de `generation_check_local_audio` en la vista de Generación y en Ajustes para evaluar `st?.value?.ready` en lugar del envoltorio IPC `st?.ready`.
+      - Presentación en tiempo real del estado de disponibilidad y dispositivo (`GPU` / `CPU`) sin falsos negativos de servicio fuera de línea.
+    - **Consulta de cuota y suscripción de ElevenLabs:**
+      - Endpoint oficial de ElevenLabs `GET https://api.elevenlabs.io/v1/user/subscription` utilizando la clave `xi-api-key` (con prefijo `sk_`) guardada en el almacén de credenciales.
+      - Soporte para cuentas gratuitas (que cuentan con 10.000 caracteres mensuales) y de pago.
+      - Requiere permiso `user_read` o clave con permisos completos (*Full Access*). En caso de que la clave carezca de dicho permiso granular, la aplicación muestra una indicación amigable sin bloquear la generación de audio.
+      - Obtención de `character_count`, `character_limit` y cálculo de `remaining_characters`.
+      - Comando IPC `generation_elevenlabs_balance` en Rust con manejo tipado de errores (HTTP 401 clave inválida, 429 cuota superada).
+    - **Caché de saldos por sesión y refresco inteligente:**
+      - Las consultas de saldo (Tripo, World Labs y ElevenLabs) se realizan una sola vez por sesión al acceder al proveedor, reutilizando el valor en memoria para evitar llamadas de red repetitivas e innecesarias al alternar entre pestañas o selectores.
+      - Invalidación y refresco automático de la cuota del proveedor activo inmediatamente después de completar con éxito una generación (3D o audio).
+    - **Indicador de saldo infinito para inferencia local:**
+      - Al seleccionar el proveedor Local (`dbv-audio-service`) y encontrarse el microservicio conectado (`ready`), la cabecera de saldo muestra de forma explícita `Saldo local: ∞ créditos`, transmitiendo con claridad que la síntesis local no consume cuota externa de nube.
   *Aceptación:* el estado del servicio local se muestra en verde con su dispositivo cuando `dbv-audio-service` está activo; el saldo de ElevenLabs muestra los caracteres restantes; alternar entre pestañas no dispara peticiones de saldo adicionales si ya están cacheadas; generar un asset refresca el saldo del proveedor utilizado; y el generador local muestra `∞ créditos` al estar conectado.
+
+### 3.17. Novedades de la v0.5.0 (Generación de Ropa para MetaHumans y Play-testing Autónomo; UEFN y Verse pasan a la v0.6.0)
+
+> **Cambio de alcance (2026-11-08):** REQ-78 y REQ-79 se conservan aquí con su texto, pero se entregan en la v0.6.0 (ADR-V050-004).
+
+- [ ] **REQ-78 · Detección, diagnóstico y conexión con proyectos de UEFN (`.uefnproject`) [v0.6.0] (amplía REQ-01..REQ-05, REQ-19):**
+  - **Detección de procesos y proyectos UEFN:**
+    - `discovery.rs` detecta procesos activos de **Unreal Editor for Fortnite** (`UnrealEditorFortnite-Win64-Shipping.exe`, `UnrealEditorFortnite`) y proyectos con extensión `.uefnproject` además de `.uproject`.
+    - Identificación explícita del tipo de motor/entorno (`engine_kind: "ue5" | "uefn"`). En la píldora de conexión y en la vista Proyecto se muestra el distintivo `[UEFN]` cuando el proyecto conectado es de Fortnite.
+  - **Conexión MCP y diagnóstico adaptado a UEFN:**
+    - Reutiliza el cliente MCP Streamable HTTP (`mcp_client.rs`) con autodetección de puertos `8000..8005` (REQ-75) contra el servidor `ModelContextProtocol` integrado en UEFN.
+    - Como UEFN opera en un entorno cerrado (sin compilación C++ de motor ni ejecución libre de `PythonScriptPlugin`), el diagnóstico de preparación (REQ-04) adapta su lista de comprobación al modo UEFN: verifica la versión de UEFN, la configuración del servidor MCP, el puerto libre y los toolsets nativos expuestos por UEFN, omitiendo la instalación de `DBVUnrealAI` / `DBVUnrealAICpp` y desactivando en la UI las acciones que requieran `RunPython` sin restricciones.
+  - **Envío de assets 3D y audio a UEFN:**
+    - «Enviar a Unreal» adapta la ruta destino al espacio de nombres del módulo del proyecto UEFN y utiliza las herramientas de importación y colocación de actores expuestas por el servidor MCP de UEFN.
+  *Aceptación:* con un proyecto `.uefnproject` abierto en UEFN, la app lo detecta como `uefn`, conecta por MCP, muestra la lista de comprobación adaptada sin exigir `PythonScriptPlugin` ni plugins C++, y permite explorar los toolsets expuestos por UEFN.
+
+- [ ] **REQ-79 · Soporte del lenguaje Verse (`.verse`), edición asistida y recetas de Fortnite Creative [v0.6.0] (amplía REQ-22, REQ-23, REQ-69, REQ-74):**
+  - **Edición segura de código Verse (`propose_changes` / `files.rs`):**
+    - Se amplía la guardia de rutas permitidas en `src-tauri/src/ai/files.rs` para admitir ficheros `.verse` dentro de las carpetas de contenido y módulos del proyecto (`Content/**/*.verse`, `Plugins/**/*.verse`, `<NombreProyecto>/**/*.verse`).
+    - Todo fichero `.verse` nuevo creado por la IA incluye la cabecera estándar DBV de 6 líneas (REQ-69 / REQ-74) utilizando el comentario de línea `#` propio de Verse.
+    - Al aplicar cambios en ficheros `.verse` desde la tarjeta de diff (REQ-22), en lugar de invocar Live Coding C++ o UBT, la app invoca la compilación de Verse expuesta por el editor UEFN (o guía al usuario para pulsar «Build Verse Code» en UEFN si el servidor MCP no expone el comando de compilación de Verse).
+  - **Prompt de dominio especializado en Verse y Dispositivos Creativos (`uefnPrompt`):**
+    - Cuando el proyecto activo es `uefn`, el prompt de sistema inyecta las reglas sintácticas y semánticas de **Verse**:
+      - Bloques de importación (`using { /Fortnite.com/Devices }`, `using { /Verse.org/Simulation }`, `using { /UnrealEngine.com/Temporary/Diagnostics }`, `using { /UnrealEngine.com/Temporary/SpatialMath }`).
+      - Definición de dispositivos (`<nombre>_device := class(creative_device):`), método `OnBegin<override>()<suspends>:void`, propiedades `@editable` para vincular dispositivos del nivel (`button_device`, `item_spawner_device`, `timer_device`, `hud_message_device`, `cinematic_sequence_device`, `elimination_manager_device`).
+      - Reglas estrictas de Verse: expresiones falibles (`if (Player := Agents[0]):`), especificador `<decides><transacts>`, y concurrencia estructurada (`sync:`, `race:`, `rush:`, `spawn{}` y `Sleep()`).
+  - **Recetas específicas para UEFN:**
+    - Cuando el proyecto conectado es UEFN, el menú **Recetas** (REQ-23) ofrece plantillas listas para Fortnite Creative (ej. *«Dispositivo Verse de cuenta atrás y marcador»*, *«Zona de puntuación con Button Device e Item Spawner»*, *«Generar prop 3D con Tripo e importarlo a la isla UEFN»*).
+  *Aceptación:* `files.rs` permite leer y proponer cambios en `Content/game_manager.verse` rechazando rutas fuera del proyecto; el validador de cabeceras verifica el bloque de 6 líneas con `#`; y al conectar un proyecto `uefn`, el prompt de dominio incluye las directivas de Verse y el menú Recetas muestra las recetas de UEFN.
+
+- [ ] **REQ-80 · Generación de prendas 3D con retopología en Quads vía Tripo 3D (`generate_metahuman_outfit` - Fase Generación) [v0.5.0] (amplía REQ-15, REQ-33):**
+  - **Encadenamiento automático de retopología en Quads (`convert_model`):**
+    - Se amplía el cliente de Tripo en Rust (`src-tauri/src/generation/tripo.rs`) con soporte para la operación `convert_model` (`format: "GLTF"`, `quad: true`, `face_limit: 8000` configurable entre `2000` y `20000`, `flatten_bottom: false`).
+    - Al generar una prenda para MetaHuman, una vez completada la tarea base (`text_to_model` o `image_to_model`), el trabajo encadena automáticamente la tarea de retopología en *quads* antes de descargar el `.glb` final a la biblioteca, garantizando una topología limpia apta para deformación esquelética sin triángulos irregulares.
+  - **Reglas de *Prompt Engineering* anatómico por slot (`Torso`, `Legs`, `Feet`):**
+    - Según el slot elegido, la app enriquece el prompt enviado a Tripo (sin alterar el texto visible del usuario en la biblioteca) para forzar la geometría canónica de MetaHuman:
+      - `Torso`: `"{prompt}, 3D clothing garment only, strict A-pose with sleeves angled at 45 degrees downwards, symmetrical, hollow interior at neck, waist and cuffs, no mannequin, no human body, game-ready PBR"`.
+      - `Legs`: `"{prompt}, 3D pants/trousers garment only, strict A-pose legs slightly apart, symmetrical, hollow waist and ankle openings, no mannequin, no human body, game-ready PBR"`.
+      - `Feet`: `"{prompt}, pair of shoes/boots aligned symmetrically for rigging, hollow ankle opening, game-ready PBR"`.
+  - **Interfaz en la vista Generar y en la Biblioteca:**
+    - En la pestaña **Objeto 3D** de la vista Generar, se añade el modo/conmutador **«👕 Prenda para MetaHuman»** con selector de slot (`Torso`, `Piernas (Legs)`, `Calzado (Feet)`) y límite de caras en quads (por defecto `8000`).
+    - Los assets resultantes se guardan en la biblioteca con metadatos `garment_slot: "Torso" | "Legs" | "Feet"` y `quad_remeshed: true`.
+  *Aceptación:* solicitar una prenda con `target_slot: "Torso"` contra el servidor Tripo (o simulado) aplica el sufijo de A-pose a 45°, lanza `convert_model` con `quad: true` y `face_limit: 8000` tras la generación, muestra el coste combinado antes de gastar (RNF-04) y guarda el `.glb` retopologizado en la biblioteca con su slot.
+
+- [ ] **REQ-81 · Alineación anatómica, transferencia de Skin Weights (`GeometryScript`) y equipado en vivo en MetaHumans [v0.5.0] (amplía REQ-04, REQ-06, REQ-19):**
+  - **Requisitos en la preparación del proyecto (REQ-04/REQ-05):**
+    - Se comprueba y activa la presencia del plugin `GeometryScripting` en el `.uproject` para proyectos de UE 5.8. La importación de `.glb` la hace Interchange: en UE 5.8 no existe ningún plugin `GLTFImporter`, y depender de él impide abrir el proyecto.
+  - **Pipeline de auto-rigging y ajuste de ropa en Unreal (`equip_metahuman_outfit` / `generate_metahuman_outfit`):**
+    - Nueva herramienta en el toolset DBV (`metahuman_tools.py` / `DBVUnrealAICpp`) y expuesta en el servidor MCP propio:
+      1. **Importación PBR y doble cara:** importa el `.glb` como `UStaticMesh` (`SM_<asset_name>`) en `/Game/MetaHumans/GeneratedClothing` (o ruta elegida) y activa `two_sided = True` en los materiales importados para evitar caras transparentes en cuellos, mangas o bajos.
+      2. **Carga en `UDynamicMesh`:** vuelca el `SkeletalMesh` del cuerpo base del MetaHuman (`base_body_mesh_path`, por defecto `/Game/MetaHumans/Common/Male/Medium/NormalWeight/Body/m_med_nrw_body` o autodetectado del componente `Body` del Actor destino) y el `StaticMesh` de la prenda a instancias `UDynamicMesh` mediante `GeometryScriptLibrary_SceneUtilityFunctions`.
+      3. **Auto-Alineación Anatómica por Bounding Box:** escala y centra la malla de la prenda para encajar sobre las cotas anatómicas del slot en el cuerpo base (`Torso`: altura ~64 cm, centro Z ~117 cm; `Legs`: altura ~87 cm, centro Z ~51,5 cm; `Feet`: altura ~14 cm, centro Z ~7 cm, o calculadas dinámicamente a partir del Bounding Box de los huesos del slot en el `Body` real del MetaHuman destino).
+      4. **Transferencia de Pesos Esqueléticos (*InpaintWeights*):** ejecuta `GeometryScriptLibrary_MeshBoneWeightFunctions.transfer_bone_weights_from_mesh` desde el `body_dyn` hacia `garment_dyn` con `GeometryScriptTransferBoneWeightsMethod.INPAINT_WEIGHTS`.
+      5. **Creación del `USkeletalMesh` final:** genera `/Game/MetaHumans/GeneratedClothing/SK_<asset_name>` asociado al esqueleto `mh_body_skm.skeleton` mediante `create_new_skeletal_mesh_asset_from_mesh`, copiando los slots de materiales PBR del `StaticMesh`.
+      6. **Equipado en vivo en el Actor MetaHuman:** si se indica `target_actor_label` (o se elige un MetaHuman del nivel al pulsar «Enviar a Unreal»), localiza el Actor en el nivel, asigna `SK_<asset_name>` al `SkeletalMeshComponent` correspondiente (`Torso`, `Legs` o `Feet`), invoca `set_leader_pose_component(Body)` para sincronizar las animaciones con el cuerpo, y ofrece la opción de ocultar/enmascarar la superficie de piel subyacente para evitar penetración de malla (*clipping*).
+      7. **Cuello descubierto y faldas (añadido el 2026-11-08):** al equipar en `Torso` se apaga `NeckHideScale` en los materiales de la cabeza (encoge el cuello por material y abre una rendija con `Body` si no está la camisa de fábrica). Una falda se suelda, se recorta con planos en dobladillo y cintura y se ajusta en los dos sentidos a la envolvente convexa del cuerpo: ciñe hasta la cadera y cae recta debajo, sin entrar entre las piernas. Se eliminan las capas interiores que no se ven desde fuera y, bajo la cadera, los pesos pasan gradualmente a un reparto continuo entre pelvis y muslos para que la tela no se parta por el centro al andar.
+  *Aceptación:* dado un `.glb` de prenda y un Actor MetaHuman en el nivel, la herramienta crea `SK_<asset_name>` emparentado al esqueleto del MetaHuman, transfiere los pesos de huesos sin errores, lo asigna al componente del slot con `set_leader_pose_component(Body)` y la acción es reversible o limpa mediante transacción. Con la prenda equipada no hay rendija entre `Face` y `Body`, y en una falda el cuerpo no asoma por fuera de la tela en reposo (holgura radial medida > 0).
+
+- [ ] **REQ-82 · Bucle de Play-testing autónomo en el Editor (`playtest_level`) [v0.5.0] (inspirado en Genex Games, amplía REQ-06, REQ-13, REQ-37):**
+  - **Objetivo:** permitir que la IA (o el usuario con un clic) inicie una partida de prueba en el editor (**PIE — Play In Editor**), ejecute entradas de control o acciones simuladas sin bloquear el hilo de juego, recolecte telemetría de física/rendimiento/logs más evidencia visual, detenga el modo Play y evalúe por sí misma si el nivel o la mecánica construida funciona o necesita corrección.
+  - **Herramienta MCP y del Toolset (`unreal_playtest` / `playtest_level`):**
+    - Parámetros de entrada:
+      - `duration_seconds` (`1..30`, por defecto `5` segundos).
+      - `actions` (lista opcional de acciones secuenciales o comandos durante el Play: p. ej. `MoveForward`, `Jump`, `Turn`, `Interact` o comandos de consola de prueba).
+      - `capture_frames` (`bool`, por defecto `true`: captura imagen del viewport en PIE antes de cerrar).
+      - `assertions` (opcional: condiciones esperadas, como `min_z > -500` para verificar que el jugador no cae al vacío, `no_blueprint_errors: true`, o llegar a menos de X metros de un actor).
+    - **Ejecución no bloqueante por ticks de Slate:**
+      1. Arranca la sesión PIE (`LevelEditorSubsystem.editor_request_begin_play()`).
+      2. Registra un observador por ticks (`register_slate_post_tick_callback`) durante `duration_seconds` que deja correr libremente el bucle de juego y físicas del motor mientras inyecta las entradas solicitadas en el `PlayerController` / `Pawn` activo y muestrea cada 0,5 s: posición `(x, y, z)` y velocidad del `PlayerPawn`, estado de suelo (`IsFalling` / `IsMovingOnGround`), y fotogramas por segundo (`FPS`).
+      3. Captura las líneas nuevas del Output Log generadas durante la ventana del Playtest, filtrando errores (`Error`), advertencias relevantes (`Warning`), accesos nulos de Blueprint (`Accessed None`) y fallos de colisión.
+      4. Toma una captura del viewport activo en PIE (`CaptureViewport` / screenshot de alta resolución) en el último instante de la prueba.
+      5. Detiene limpiamente la sesión PIE (`editor_request_end_play()`), restaurando el estado del editor.
+    - **Informe diagnóstico devuelto a la IA y a la interfaz:**
+      - Devuelve un JSON estructurado con: `{ passed, duration_seconds, pawn_spawned, start_location, end_location, fell_out_of_world, avg_fps, min_fps, errors, warnings, assertion_results, screenshot_path }`.
+      - En la conversación (o agentes con visión), adjunta automáticamente la captura tomada durante el Playtest junto al resumen de telemetría para que la IA razone visual y analíticamente (p. ej. detectar si el jugador atravesó el suelo de un escenario de World Labs o si un Blueprint lanzó error al interactuar).
+  - **Interfaz y conexión con la vista Plan (REQ-36/REQ-37):**
+    - Botón rápido **«▶️ Probar en Play (IA)»** en la barra de entrada de la conversación y como tipo de comprobación verificable en las tareas de la vista **Plan** (`check_task` admite criterios de tipo `playtest`).
+  *Aceptación:* al ejecutar `unreal_playtest` con `duration_seconds: 3`, el editor entra en PIE sin congelar el hilo principal, registra la trayectoria del `PlayerPawn`, los FPS y los errores de log, toma una captura en vivo, cierra PIE automáticamente y entrega el informe completo y la imagen a la conversación.
+
+### 3.18. Vestir un MetaHuman de principio a fin desde la app [v0.5.0, ampliación del 2026-11-08]
+
+*Por qué:* el 2026-11-08 se consiguió una falda y un vestido con tela sobre Victoria, pero con scripts sueltos, valores a mano y revisión a ojo. El usuario decide que la v0.5.0 no sale a la Microsoft Store hasta que la app haga lo mismo sola, con el MetaHuman de cada usuario. Amplía REQ-80 y REQ-81; REQ-78 y REQ-79 pasan a la v0.6.0 (ADR-V050-004).
+
+**Flujo completo:** generar la prenda → elegir el MetaHuman → crear o reutilizar su copia → retirar la ropa de la zona → limpiar la piel → ajustar al cuerpo → aplicar huesos o tela según el tipo → validar en Play → informar.
+
+- [ ] **REQ-83 · Elección explícita del MetaHuman de destino [v0.5.0] (amplía REQ-81):**
+  - La app no elige nunca por su cuenta: desaparece «el primero del nivel» (`sendToUnreal.js`, `send_model`, `unreal_equip_metahuman_outfit`, `equip_metahuman_outfit`). Sin destino válido, la operación termina con un error que enumera los MetaHumans disponibles.
+  - **Desde la IA:** consulta `unreal_list_metahumans`. Si hay uno, lo usa y lo dice; si hay varios, pregunta al usuario, salvo que ya lo haya indicado. No hay nombres de personaje en el código ni en los prompts.
+  - **Desde la Biblioteca y Generar:** al equipar, un selector con los MetaHumans del nivel abierto (nombre y tipo de cuerpo). Con uno solo, sale ya elegido. Sin ninguno, se ofrece solo importar la prenda.
+  - El resultado indica siempre a quién se ha vestido.
+  *Aceptación:* con 3 MetaHumans en el nivel, ninguna ruta equipa sin un destino indicado; con un destino, solo cambia ese personaje. Un test busca que no queden nombres de personaje fuera de los fixtures.
+
+- [ ] **REQ-84 · Tipos de prenda y ropa que se retira [v0.5.0] (amplía REQ-80):**
+  - La prenda tiene un tipo: `top`, `pants`, `skirt`, `dress` o `shoes`, guardado en la biblioteca como `garment_kind`. Sustituye al selector de ranura en la interfaz. Cada tipo tiene su sufijo de prompt, y `dress` pide prenda entera sin cuerpo.
+  - **Complexión:** la generación admite un corte (`male`, `female`, `neutral`) que entra en el prompt, y se puede tomar del MetaHuman elegido. Una prenda con forma femenina no se ajusta bien a un cuerpo masculino, ni al revés, y si el corte no coincide se avisa al equipar.
+  - Compatibilidad: una entrada antigua con solo `garment_slot` sigue funcionando (`Torso` → `top`, `Feet` → `shoes`, `Legs` → `skirt` o `pants` según su forma).
+
+  | Tipo | Ranura que ocupa | Ropa que se retira | Método |
+  | --- | --- | --- | --- |
+  | `top` | `Torso` | `Torso` | huesos |
+  | `pants` | `Legs` | `Legs` | huesos |
+  | `shoes` | `Feet` | `Feet` | huesos |
+  | `skirt` | tela | `Legs` | tela (REQ-87) |
+  | `dress` | tela | `Torso` y `Legs` | tela (REQ-87) |
+
+  - **Retirar** significa vaciar u ocultar la ranura en la copia del personaje (REQ-85): no se borra ningún asset. Lo que no sea de esa zona se conserva.
+  - Poner un `top` o `pants` retira también la tela que ocupe su zona, y al revés: nunca quedan dos prendas superpuestas.
+  - **Al retirar una tela,** el personaje recupera su cuerpo completo (REQ-86), y las ranuras que esa tela vació y la nueva prenda no ocupa vuelven a la pieza del Blueprint de partida. Así, un top sobre un vestido deja el top y las piernas con su ropa original, nunca el cuerpo al descubierto ni con triángulos quitados.
+  *Aceptación:* tras cada tipo, las ranuras quedan como dice la tabla. Con un vestido puesto, enviar un top deja el top, la ropa original en `Legs` y el cuerpo completo. Una entrada antigua de la biblioteca se puede equipar sin regenerarla.
+
+- [ ] **REQ-85 · Copia del personaje, con el original intacto [v0.5.0] (amplía REQ-81):**
+  - La primera prenda crea una copia del Blueprint del MetaHuman (`<BP>_DBV`) y sustituye en el nivel a ese actor por uno de la copia, con la misma etiqueta, transformación y carpeta. El Blueprint original, sus materiales y su cuerpo no se modifican nunca.
+  - Las prendas siguientes reutilizan esa copia: no se encadenan copias de copias. Si el actor ya pertenece a un Blueprint de la app, se trabaja sobre él.
+  - El informe avisa de las secuencias del nivel enlazadas al actor anterior, que habría que volver a enlazar. Ofrece volver al original: restaura el actor con el Blueprint de partida, sin borrar assets.
+  - No guarda el nivel: lo decide el usuario, y el informe se lo recuerda.
+  - Si el proceso falla en cualquier punto, el actor del nivel queda como estaba. Se rechaza durante Play.
+  - Todos los assets van a `/Game/DBV/MetaHumanOutfits/<Personaje>/<Prenda>/`, sin colisiones de nombre.
+  *Aceptación:* tras vestir y fallar a propósito en un paso intermedio, el nivel y el Blueprint original quedan idénticos. Tras vestir bien, otro actor del Blueprint original no cambia, y «volver al original» lo restaura.
+
+- [ ] **REQ-86 · Piel sin la ropa interior pintada y cuerpo oculto bajo la prenda [v0.5.0] (amplía REQ-81):**
+  - La ropa interior gris viene pintada en color, normal y specular del cuerpo del MetaHuman. La app crea copias limpias de los tres mapas y un material hijo, partiendo de las texturas que usa realmente ese personaje, y los aplica solo a su copia. Se hace una vez por personaje. El relleno es piel lisa, sin añadir anatomía, y solo busca que no se vea la ropa interior por una abertura de la prenda.
+  - Si las texturas del personaje no tienen esa disposición de ropa interior, se omite el paso y se avisa.
+  - En faldas y vestidos, una copia del cuerpo quita los triángulos que la prenda tapa siempre, en todos los LOD visibles, para que nada asome al andar. Las zonas expuestas (brazos, piernas, escote) se conservan.
+  *Aceptación:* en Victoria, Pablo y David, ninguna captura muestra gris en aberturas de la prenda, ni costuras en piel expuesta. Las texturas y materiales originales no cambian (se compara su ruta y fecha).
+
+- [ ] **REQ-87 · Tela con Chaos Cloth automática en faldas y vestidos, también para otros cuerpos [v0.5.0] (amplía REQ-81):**
+  - **Sin valores de Victoria:** alturas de cintura, cadera y dobladillo, holguras y física salen de los huesos y del cuerpo del personaje de destino, incluida su `PhysicsAsset`. Sin `PhysicsAsset` o sin los huesos necesarios, error claro y sin cambios.
+  - **Medidas fiables (spike del 2026-11-08):** los huesos se leen del componente `Body` del actor visible, no de la pose de referencia del esqueleto, que da las mismas alturas en todos los cuerpos. Un actor oculto devuelve los huesos a 0, y al mostrarlo hace falta un tick del editor: valores a cero son un error, nunca una medida.
+  - **Cuerpo completo (spike del 2026-11-08):** los cuerpos de MetaHuman con ropa de fábrica no tienen la piel que esa ropa tapa (Pablo no tiene muslos ni torso). Se parte de la malla completa de su complexión (`<complexión>_body` o `_body_preview`), de la que el cuerpo recortado es un subconjunto exacto. Se dibuja lo que ya tenía más lo que la prenda deja al aire. **Los pesos de la tela se transfieren siempre desde la malla completa** (REJECTED-12). Sin malla completa, `skirt` y `dress` dan un error claro con los demás tipos disponibles.
+  - **Falda:** se reconstruye como una sola capa sobre el contorno del cuerpo, con color y detalle horneados desde el modelo de Tripo (REJECTED-11: la malla original no sirve para simular).
+  - **Vestido:** se suelda, se ajusta el torso y se conserva el vuelo. Parte superior sujeta al cuerpo y parte inferior libre (`MaxDistance` por altura), con malla de simulación aparte de la de render.
+  - **Separar la prenda:** si Tripo entrega una figura con brazos, manos u otra ropa, se aísla la prenda. Si no se puede aislar con garantías, se avisa en el informe en vez de equipar en silencio algo roto.
+  - **Grafo y activos:** el Cloth Asset y su Dataflow se crean por script, sin diálogos ni plantillas exclusivas de un proyecto. La tela se enlaza al `Body` en el Blueprint de la copia (el enlace por script no se guarda en el nivel), de modo que funciona en Play y en Sequencer.
+  - **Preparar:** `ChaosClothAssetToolset` y `GeometryScripting` pasan a los plugins que activa y comprueba «Preparar», avisando del reinicio. Sin ellos, las prendas de tela dan un error que lleva a «Preparar».
+  - **Dependencias:** no se puede depender de paquetes de Python instalados por casualidad en el proyecto (`numpy`, `PIL`, `cv2` llegaron por `Intermediate/PipInstall`). Se resuelve en P-19.
+  *Aceptación:* desde la app, una falda y un vestido caminan en Play y en Sequencer con la tela enlazada, en Victoria (`f_med_nrw`) y Pablo o David (`m_tal_nrw`), sin agujeros nuevos respecto al modelo, sin trizas y sin que el cuerpo atraviese la tela en reposo ni en un ciclo de andar normal.
+
+- [ ] **REQ-88 · Una sola herramienta determinista y conocimiento para usarla [v0.5.0] (amplía REQ-06, REQ-19):**
+  - El procedimiento vive en el plugin como una operación única (`dress_metahuman`), con la misma entrada en las variantes Python y C++ y expuesta por el servidor MCP propio (`unreal_dress_metahuman`). La usan la app, la IA de la app y los clientes externos, con el mismo resultado sea cual sea el proveedor.
+  - Es una acción con aprobación, como las demás que modifican el proyecto. Muestra progreso por pasos y no bloquea la interfaz de la app; sus tiempos de espera se adaptan a la duración real.
+  - El prompt de dominio indica cuándo usarla, cómo elegir destino (REQ-83), qué tipo corresponde a qué prenda y sus límites. Prohíbe rehacer el proceso con `run_python` mientras la herramienta exista.
+  - Los parámetros de ajuste tienen valores por defecto y son opcionales, para que la IA pueda reintentar con otros valores a partir del informe (REQ-89).
+  *Aceptación:* la misma prenda y personaje dan el mismo resultado llamando desde Biblioteca, chat y cliente MCP externo. La suite de evals muestra que la IA usa esa herramienta y no `run_python`.
+
+- [ ] **REQ-89 · Validación automática e informe [v0.5.0] (amplía REQ-82):**
+  - Antes de dar una prenda por buena, se mide: bordes abiertos frente al modelo de partida, holgura con el cuerpo, enlace de la tela con `Body`, y prueba en Play de pocos segundos (`unreal_playtest` o equivalente, con una animación de andar si existe en el proyecto) con capturas de frente, lado y espalda.
+  - El informe da por pasos qué se hizo, qué se retiró, medidas, avisos, capturas, y un resultado: `ok`, `con_avisos` o `error`. Una IA con visión recibe las capturas para revisarlas, y el usuario las ve en la conversación o en la Biblioteca.
+  - Nunca se presenta como correcta una prenda con la validación fallida. El editor queda fuera de Play y sin actores o secuencias temporales.
+  *Aceptación:* con una malla preparada con agujeros, o un personaje sin física, el resultado no es `ok` y explica el motivo. Tras la validación no queda rastro temporal en el nivel.
+
+- [ ] **REQ-90 · Criterio de publicación en la Microsoft Store [v0.5.0]:**
+  - La v0.5.0 no se publica sin esta matriz, ejecutada con la **app instalada** (MSIX), en un **proyecto recién preparado**, sin scripts externos ni intervención manual en el editor:
+    - `dress`, `skirt` y `top` en Victoria, Pablo y David (9 casos), con prendas nuevas de Tripo en al menos un caso de cada tipo y el resto desde la biblioteca, para limitar créditos;
+    - el resultado de cada caso, con sus capturas, revisado por el usuario;
+    - un juego **empaquetado** para Windows con un personaje vestido con tela, para confirmar que la tela funciona fuera del editor. Android/VR se prueba con el mismo proyecto; si no funciona, se documenta como límite.
+  - Un vídeo de pasarela generado con el resultado de la app cierra la prueba.
+  - El límite de que el resultado depende del modelo de Tripo se explica en la documentación y en la ficha de la Store (ES y EN).
+  *Aceptación:* la matriz y su resultado quedan registrados en `walkthrough.md`; `/ship` no la da por cumplida con casos sin revisar.
+
+### 3.19. Caja negra: depurar supervisando la partida del usuario [v0.5.0, ampliación del 2026-11-09]
+
+*Por qué:* el 2026-11-08, depurando `ExperienciaPlataforma` (la cesta de una grúa en VR), la IA midió por fotograma mientras el usuario jugaba con el visor y cruzó lo que el usuario notó con los números. Así encontró en minutos lo que leer código no mostraba: una composición de transformaciones invertida, un bucle entre dos valores y una nota de la memoria que era falsa. Se hizo con scripts sueltos en `unreal_run_python`, y los tropiezos (un callback que inundó el log con decenas de miles de líneas, otro que seguía vivo tras el PIE, una prueba que empezó con el personaje descolocado, una variable sin grabar) son requisitos de aquí. El usuario pide convertirlo en una función de la app para **todos los proyectos** y meterlo en la v0.5.0. Propuesta completa, con ejemplos y flujo: `docs/Propuesta_CajaNegra_DBVUnrealAI.md`.
+
+**Flujo:** el usuario juega → la grabadora anota las señales de cada fotograma → el usuario marca los momentos raros y cuenta lo que ha notado → la IA cruza marcas y datos antes de tocar nada → se arregla → se vuelve a jugar y se compara con la grabación anterior.
+
+**Dónde vive cada cosa:** la grabadora, en el plugin (solo Editor, como los demás); el almacenamiento, en `Saved/DBVUnrealAI/Sessions/`; el análisis, en Rust dentro de la app (funciona con el editor cerrado o colgado); las herramientas `session_*`, definidas una sola vez y publicadas por el MCP propio y por el asistente (D10).
+
+- [ ] **REQ-91 · Grabadora de sesión, segura y solo de lectura [v0.5.0] (amplía REQ-82):**
+  - Graba por fotograma las señales de un plan: posición y giro de actores o sockets, variables de Blueprint por reflexión (con sus nombres con espacios), propiedades de la instancia de animación, y presets (`player`, `player_vr`, `performance`, `input`, `gameplay_events`). Guarda además eventos (marcas, entradas, cambios de modo de movimiento y de base, pausas, errores del log). Sin tocar nada del juego.
+  - **Robustez (R1..R10 de la propuesta):** (R1) termina siempre, atada al inicio y fin de PIE y a un límite de tiempo, nunca solo a un número de fotogramas, y el cierre va antes de cualquier acceso a objetos del juego; (R2) un error de lectura apaga solo esa señal, avisa **una vez** y el resto sigue, con referencias débiles, nunca se repite en el log; (R3) coste por fotograma medido y guardado en `meta.json`, con aviso si pasa de 0,5 ms con 30 señales; (R4) no modifica nada persistente (sin transacciones del editor, lo creado para la interfaz es transitorio); (R5) avisa si el editor pierde velocidad (FPS bajos, ventana sin foco) y sugiere traerlo al frente o desactivar «Use Less CPU when in Background»; (R6) escribe por bloques para conservar lo grabado si el editor se cierra de golpe; (R7) cada experimento puede empezar de un estado limpio, y la sesión guarda qué se hizo antes; (R8) tras resolver los objetivos, avisa de los que no existen y sugiere variables relacionadas del mismo Blueprint; (R9) solo una grabación activa, nada sobrevive entre sesiones y una acción «Parar todo» siempre disponible; (R10) `meta.json` distingue visor real, simulador y PIE.
+  - **Resolver objetivos:** `actor_class`, sockets y variables se resuelven al crearse el mundo y se reintentan unos segundos, porque hay actores que aparecen después.
+  - **Límites por defecto, configurables:** 10 minutos o 500 MB por sesión y las últimas 20 sesiones. Al llegar al límite deja de grabar y avisa; el juego no se interrumpe nunca.
+  - **Una sola variante común:** el contrato es el mismo en las variantes Python y C++ del plugin (R-02b). La variante Python es la base y vale para proyectos solo Blueprint (unas 10 señales recomendadas); la C++ es una optimización opcional que solo se construye si la medición de P-22 lo pide.
+  *Aceptación:* destruir un actor observado apaga su señal con **un solo** aviso en el log y las demás siguen; cerrar el PIE a mitad guarda lo grabado y no deja nada enganchado; abrir otro PIE justo después no engancha la sesión anterior; forzar el cierre del editor deja una sesión que se puede abrir y analizar; un actor o variable inexistente se avisa y la sesión sigue; tras la sesión, ni assets ni nivel han cambiado; en 50 sesiones de prueba ninguna deja nada enganchado ni errores repetidos en el log.
+
+- [ ] **REQ-92 · Herramientas `session_*` en el MCP propio y en el asistente [v0.5.0] (amplía REQ-20, REQ-33):**
+  - `session_plan` (propone qué grabar y qué probar; devuelve lo que el usuario acepte), `session_start` (`pie`, `vr_preview`, `simulate`, `attach`, con `max_seconds`), `session_status`, `session_wait` (bloquea hasta que termina o llega una marca, con tiempo máximo), `session_mark`, `session_stop`, `session_analyze`, `session_query` (un tramo con filtros y límite estricto de filas), `session_compare`, `session_isolate`, `session_drive`, `session_list` y `session_delete` (pide confirmación).
+  - Una sola definición en Rust, publicada por las dos superficies con la misma tabla de herramientas. `session_wait` lo atiende la app, no el editor, así que no depende de que la API de toolsets admita llamadas largas.
+  - Las respuestas son siempre compactas: quien quiera más detalle lo pide con un filtro. `session_analyze` ejecuta los análisis en el servidor y devuelve solo el resultado.
+  - Arrancar y parar PIE reutiliza la misma ruta que `unreal_playtest` (REQ-82), con la misma garantía de `StopPIE`.
+  *Aceptación:* las dos superficies listan las mismas herramientas con el mismo esquema; un análisis completo ocupa menos de unos 2 KB en la conversación; `session_wait` no bloquea la interfaz.
+
+- [ ] **REQ-93 · Análisis de la sesión en Rust [v0.5.0]:**
+  - `stillness` (temblor en reposo), `oscillation` (bucles de 2 valores: período y amplitud), `jumps` (saltos puntuales agrupados en episodios), `follow` (si A sigue a B), `wrong_axis` (movimiento en el eje equivocado: compara incrementos en mundo y en local y prueba permutaciones), `relative_yaw`, `timeline`, `transitions`, `around_marks`, `correlate`, `frame_budget` y `gaps` (calidad de la propia medición).
+  - Cada resultado dice qué datos usó y cuántas muestras, para poder dudar de él.
+  - **Reglas para interpretar:** los fotogramas en pausa se excluyen por defecto; «parado» se deduce de la señal, no de las entradas (así no se repite el error de la variable sin grabar); si `gaps` encuentra problemas (fotogramas perdidos, PIE en pausa, FPS bajos) el resultado lo dice y no se presenta como fiable; correlación no es causa: los análisis dan pistas y la causa se confirma con un experimento o leyendo el código.
+  *Aceptación:* sobre un archivo sintético con lo sembrado (oscilación de período 2, salto de 31 cm en 0,18 s, deriva, eje intercambiado), cada análisis lo detecta con valores correctos; sobre otro sin nada sembrado no detecta nada; con FPS bajos sembrados, `gaps` lo avisa.
+
+- [ ] **REQ-94 · Botón «Jugar con caja negra», panel e historial [v0.5.0]:**
+  - Botón junto a «Probar en Play», con desplegable (En el editor (PIE), Con visor (VR Preview), Sesión ya en marcha, Elegir qué grabar…). Con visor conectado, el modo por defecto es «Con visor»; si no, PIE.
+  - **Tarjeta del plan** (corta y editable): qué se grabará y qué se le pedirá hacer al usuario. Pulsar «Empezar» cuenta como la aprobación de grabar y analizar (no modifica el proyecto). **Panel durante la partida:** tiempo, FPS, fotogramas, marcas, paso actual, «Marcar momento» y «Terminar».
+  - **Al terminar:** «¿Qué has notado?», con «Analizar», «Volver a jugar» y «Descartar». La IA responde en tres columnas: lo que notaste, lo que dicen los datos y la conclusión.
+  - **Comparar:** toda sesión posterior a un arreglo se compara con la anterior, y avisa si no coincide el modo de ejecución (R10). **Historial** con las últimas sesiones (fecha, nivel, objetivo, duración y resultado), para reabrir, comparar o borrar.
+  - La IA lo propone en el chat ante un fallo de ejecución («tiembla», «a veces», «salta», «no sigue», «se atasca», «va a tirones», «antes funcionaba»).
+  - i18n completo en `es`, `en` y `zh-CN`.
+  *Aceptación:* con el botón se empieza a grabar en menos de 10 segundos y sin escribir nada; el panel refleja el estado real; el historial conserva sesiones tras reiniciar la app.
+
+- [ ] **REQ-95 · Marcar y seguir el plan con el visor puesto [v0.5.0]:**
+  - Quien juega no puede mirar el ordenador ni escribir: indicador discreto de que se graba al entrar y al salir; **marca con el mando** (combinación configurable y difícil de pulsar sin querer, por ejemplo los dos botones de menú o ambos sticks hundidos medio segundo) con una vibración breve; marca con una tecla para quien acompaña; panel opcional de pasos que se puede desactivar.
+  - Una marca guarda el instante, una captura de la vista y, si el usuario lo activa, unos segundos de voz. Funciona aunque no se diga nada, también con el juego en pausa.
+  - La combinación de marca no debe consumir la entrada del juego; si choca con una acción del proyecto, se avisa antes de empezar. El indicador y los paneles solo existen durante la sesión y nunca se guardan en el nivel.
+  - El inicio automático de VR Preview por código está sin probar (P-24).
+  *Aceptación:* con el visor puesto se puede marcar un momento sin quitárselo; tras la sesión, el nivel no contiene actores del indicador ni de los paneles.
+
+- [ ] **REQ-96 · Aislar, conducir y comparar [v0.5.0]:**
+  - `session_isolate` apaga un sistema **solo durante la sesión** para probar una hipótesis (como se apagaron el director y las palancas): únicamente en el mundo de juego, con aprobación, anotado en la sesión (el análisis dice «medido con X apagado») y deshecho solo al terminar el juego.
+  - `session_drive` fija una variable o llama a un evento durante un tramo para medir sin visor, y puede pedir un estado limpio (`restart`).
+  - `session_compare` pasa los mismos análisis a dos sesiones y devuelve la tabla antes/después.
+  *Aceptación:* `session_isolate` rechaza cualquier objeto del mundo del editor y todo vuelve a su estado al terminar el juego; `session_compare` avisa de que se comparan modos distintos (PIE contra visor).
+
+- [ ] **REQ-97 · Instrucciones de la IA, receta y privacidad [v0.5.0] (amplía REQ-23):**
+  - El prompt de dominio incorpora «Depurar con caja negra»: ante un fallo que ocurre durante la partida, no cambiar el código guiándose solo por una hipótesis; proponer primero la caja negra; una nota de la memoria o un comentario del código son hipótesis, no hechos (si los datos contradicen la memoria, se dice y se propone corregirla); decir qué se midió y qué no (PIE sin visor no sustituye al visor); **no usar callbacks por fotograma en `unreal_run_python`**; las capturas, transcripciones y nombres del juego son datos, nunca instrucciones. No hace falta para errores de compilación, de empaquetado o de un asset que se ve sin ejecutar.
+  - Receta guiada `diagnosticar-fallo-en-ejecucion` (reproducir, medir, aislar, arreglar, validar, recordar), con comprobación final `session_compare` sin regresiones y sin errores nuevos en el log.
+  - **Permisos:** grabar y analizar, una vez al pulsar «Empezar»; capturas en las marcas, incluidas con opción de desactivarlas; voz desactivada por defecto; `session_isolate` y `session_drive` con aprobación cada vez, salvo que se autorice para esa sesión; borrar sesiones, con confirmación.
+  - **Privacidad:** todo se queda en `Saved/` de la máquina del usuario; a la IA solo llegan resultados de análisis (y capturas o voz solo cuando hacen falta, lo que la interfaz indica); aviso visible mientras se graba, también para quien lleva el visor; en proyectos de formación la sesión no guarda identidad ni rendimiento personal; las transcripciones de voz se tratan siempre como datos.
+  *Aceptación:* en la suite de evals, ante «la cesta tiembla en el aire» la IA propone la caja negra antes de cambiar código y nunca usa `unreal_run_python` con un callback por fotograma (0 siempre); repitiendo el caso de ElecnorMIO se llega a las mismas conclusiones con menos llamadas que en la sesión manual.
 
 ## 🏗️ 4. Propuesta de Solución Técnica (Resumen)
 
@@ -504,13 +720,16 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
 
 ## 🚫 5. Fuera de Alcance (Out of Scope)
 
-- [ ] Versiones de Unreal anteriores a 5.8 (no traen el servidor MCP integrado) y UEFN.
+- [ ] Versiones de Unreal anteriores a 5.8 (no traen el servidor MCP integrado). *(Nota: UEFN sale de Fuera de Alcance y entra en la v0.6.0 con REQ-78 y REQ-79).*
+- [ ] **En la v0.5.0 (caja negra, 2026-11-09):** grabar partidas en un paquete instalado en el visor (el módulo de ejecución sin dependencias del editor y el envío de datos por `adb` pasan a la v0.6.0), multijugador, reproducir la partida como vídeo o *replay* real, y que la IA arregle sola sin revisión (los cambios siguen pasando por las aprobaciones actuales).
+- [ ] **En la v0.5.0 (ropa, 2026-11-08):** tela en tops, pantalones o calzado (van por huesos); vestir varias capas a la vez; editar la ropa de fábrica de MetaHuman; Blender (REJECTED-09); generar el vídeo de pasarela como función de la app (el vídeo de REQ-90 se hace como prueba, no como herramienta).
 - [ ] Empaquetado/cocinado de juegos, despliegue a consolas o móviles desde la app.
 - [ ] Colaboración multiusuario, sincronización en la nube o cuentas propias de dbv-unreal-ai.
 - [ ] Alojar o entrenar modelos propios; la app usa los que el usuario ya tiene.
 - [ ] Integración con Fab/Marketplace o con otros servicios de generación distintos de Tripo y World Labs en v0.x (la arquitectura de proveedores los admite más adelante: Meshy, Rodin, etc.).
 - [x] ~~Un renderizador propio de Gaussian Splats en C++ con compute shaders (ver P-03).~~ *Entra en la v0.3.0 (REQ-61), pedido por el usuario el 2026-10-31: el componente C++ propio (ADR del 2026-10-26) ya existía, pero dibujaba en la CPU.*
 - [ ] Sustituir el editor de Unreal: la app no edita Blueprints visualmente ni muestra el viewport en vivo.
+- [ ] **En la v0.5.0 (2026-11-07):** en proyectos de UEFN, cualquier herramienta que dependa de `PythonScriptPlugin` sin restricciones o de compilación C++ local (como el pipeline `GeometryScript` de ropa de MetaHumans o el renderizador C++ de Gaussian Splats), ya que UEFN opera en un sandbox cerrado; de Genex Games se descartan el puente headless con Blender, la orquestación multi-agente con workers separados y el marketplace de plugins de terceros, adoptando exclusivamente el **Play-testing autónomo** (REQ-82).
 - [ ] **En la v0.3.0 (2026-10-31):** una clave de Convai en la app y su API REST (crear o editar personajes, Knowledge Bank, Narrative Design), porque el plugin se autentica solo; la voz con el personaje dentro de la app (se habla en Play, en Unreal); el SDK de Convai para Unity; `unvirtualizedResources` en el manifiesto de la MSIX (descartado por el usuario); REQ-21 (MCPs de terceros), que Convai no necesita porque va dentro del MCP de Epic (el usuario tampoco la eligió al ampliar la versión); los splats `.sog`; usar XGrids u otro plugin de splats de terceros como alternativa automática (REJECTED-05).
 - [ ] **En la v0.2:** el idioma chino (`zh-CN`, aplazado por el usuario el 2026-10-26); una memoria con requisitos numerados, fases o varios ficheros (la de REQ-34 se queda en dos); sincronizar la memoria entre equipos por otra vía que el control de versiones del propio proyecto; crear o editar `AGENTS.md`/`CLAUDE.md` en el proyecto de Unreal.
 
@@ -573,6 +792,32 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - **Mitigación:** solo ficheros de texto dentro del proyecto y fuera de los plugins de la app, un diff revisado por fichero, copia de seguridad con «Revertir» y como mucho dos reintentos de compilación. Nunca se ejecuta otra cosa que la compilación.
 - **R-31 · Live Coding no aplica todos los cambios** (clases nuevas, `Build.cs`) y su toolset es experimental (REQ-22).
   - **Mitigación:** la app distingue el caso y propone compilar con el editor cerrado. Se prueba contra el editor real.
+- **R-32 · Entorno cerrado de UEFN frente a UE 5.8 estándar** (REQ-78, REQ-79): UEFN no permite ejecutar `PythonScriptPlugin` libre (`RunPython`) ni compilar plugins C++ de motor arbitrarios por restricciones de seguridad de Fortnite, por lo que las herramientas disponibles dependen estrictamente de los toolsets nativos que exponga el servidor MCP de UEFN.
+  - **Mitigación:** realizar un *spike* en vivo con UEFN abierto (`P-14`) para inventariar qué devuelve `list_toolsets` y `describe_toolset` en UEFN; adaptar la interfaz y el servidor MCP para desactivar con mensaje claro las funciones que requieran `RunPython` (como `GeometryScript` de MetaHumans), y volcar el valor diferencial en la edición asistida de **Verse (`.verse`)** y los toolsets nativos de UEFN.
+- **R-33 · Proporciones anatómicas y penetración de malla (*clipping*) en prendas de MetaHuman generadas por IA** (REQ-80, REQ-81): Tripo 3D puede generar mangas cuyo ángulo difiera ligeramente de 45° o prendas ajustadas que la piel del cuerpo del MetaHuman atraviese al animarse.
+  - **Mitigación:** (1) sufijos de *prompt engineering* estrictos por slot más retopología obligatoria en *quads* (`convert_model`); (2) cálculo de cotas de *Bounding Box* apoyado en las posiciones reales de los huesos del `Body` (`clavicle`, `upperarm`, `thigh`, `ankle`); (3) forzar `two_sided = True` en los materiales importados; (4) opción de ocultar la piel subyacente del slot equipado; y (5) validación en el spike `P-15` con un MetaHuman real en escena.
+- **R-34 · Bloqueo del hilo de juego si el Play-testing autónomo espera de forma síncrona** (REQ-82): ejecutar `time.sleep()` dentro de un comando Python en Unreal congela el *Game Thread*, impidiendo que corran las físicas, los ticks de animación o el movimiento del `PlayerPawn` durante PIE.
+  - **Mitigación:** prohibido usar esperas bloqueantes dentro de un único tick de Python. El bucle de `unreal_playtest` debe orquestarse de forma **asíncrona por ticks de Slate** (`unreal.register_slate_post_tick_callback`) o dirigirse desde Rust mediante pasos discretos (`begin_play` → espera asíncrona en Rust / muestreo por ticks → captura de estado/viewport → `end_play`), verificándolo en vivo en el spike `P-16`.
+- **R-35 · El resultado depende de lo que entregue Tripo** (REQ-84, REQ-87, REQ-90): el modelo puede ser una figura entera o tener formas que el ajuste no resuelva; hoy solo hay evidencia con una falda y un vestido.
+  - **Mitigación:** sufijo de prompt por tipo, aislar la prenda con aviso si no hay garantías, validación automática (REQ-89), y explicar el límite en la documentación y la Store. No se promete la calidad del vídeo para toda prenda.
+- **R-36 · Generalizar más allá de un cuerpo** (REQ-87): todo lo de la tela se ajustó sobre `f_med_nrw`; otros cuerpos cambian proporciones, física y UV.
+  - **Mitigación:** nada de valores fijos, matriz con `m_tal_nrw` desde el principio (REQ-90), y error claro ante un cuerpo no compatible.
+- **R-37 · Sustituir el actor rompe referencias del usuario** (REQ-85): secuencias, Blueprints del nivel o scripts que apunten al actor anterior dejan de funcionar.
+  - **Mitigación:** detectar y avisar de las secuencias enlazadas, conservar etiqueta y transformación, ofrecer volver al original y no guardar el nivel sin permiso del usuario.
+- **R-38 · Plugin de tela experimental y operación larga** (REQ-87, REQ-88): `ChaosClothAssetToolset` puede cambiar con el motor, crear un Cloth Asset con el factory abre un diálogo modal y las operaciones del editor pueden superar los tiempos de espera actuales (120 s).
+  - **Mitigación:** spike P-17, comprobar el plugin en «Preparar», pasos con progreso y tiempos propios, y comprobar el `.uplugin` contra el motor antes de declararlo (lección del 2026-11-08).
+- **R-39 · Tela en juego empaquetado** (REQ-90): los plugins de la app son solo Editor desde la v0.4.1 (Android/VR) y la tela necesita código en tiempo de ejecución.
+  - **Mitigación:** spike P-20 antes de publicar. Si falla, la tela no se ofrece como lista para empaquetar en esa plataforma y se documenta.
+- **R-40 · La falda se abre con la pierna adelantada** (REQ-87): visto en Victoria y en Pablo; la tela se separa por delante y el muslo pasa a través en cada zancada. Causa probable, sin confirmar: los pesos de cada lado siguen a su muslo y la tela no recupera.
+  - **Mitigación:** S99 prueba pesos continuos entre pelvis y muslos en la parte baja y más `MaxDistance`. Si no se resuelve, es un límite que se documenta.
+- **R-41 · Un callback por fotograma puede romper el editor o inundar el log** (REQ-91): ocurrió el 2026-11-08 con decenas de miles de líneas, y otro script siguió vivo tras acabar el PIE.
+  - **Mitigación:** R1 y R2 como requisitos con prueba automática; el cierre va antes de cualquier acceso a objetos del juego; se comprueba la identidad del mundo, no solo el nombre del nivel; y el prompt prohíbe esos callbacks en `unreal_run_python` (REQ-97).
+- **R-42 · El coste de muestrear desde Python y un editor en segundo plano** (REQ-91): a unos 3 FPS una prueba de 700 fotogramas dejó de ser viable.
+  - **Mitigación:** medir el coste real y guardarlo (R3, P-22), limitar las señales recomendadas en Python, avisar con `gaps` y con R5, y construir la variante C++ solo si la medición lo exige.
+- **R-43 · Privacidad de la sesión** (REQ-95, REQ-97): capturas y voz pueden contener datos personales, y en proyectos de formación quien juega puede ser un trabajador.
+  - **Mitigación:** todo local en `Saved/`; voz desactivada por defecto; la sesión no guarda identidad ni rendimiento personal; aviso visible mientras se graba, también en el visor; a la IA solo llegan resultados y, si hacen falta, capturas.
+- **R-44 · La variante C++ exige recompilar** (REQ-91): no hay Live Coding (ver memoria) y un proyecto solo Blueprint no puede compilar.
+  - **Mitigación:** la variante Python es la base y cubre todos los proyectos; la C++ es opcional y se evalúa tras medir.
 - ~~**R-13 · «Copilot» es una marca registrada de Microsoft.**~~ *Retirado el 2026-10-24: el usuario cambió el nombre visible a «DBV Unreal AI», que no usa la marca.*
 
 ## ❓ 7. Preguntas Abiertas
@@ -592,6 +837,19 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
 - [x] **P-12 · ¿Hace falta `AllToolsets` para que salgan los toolsets de Convai?** Su asistente lo activa, y «Preparar» no. Se comprueba en el spike: si hace falta, el diagnóstico de Convai (REQ-55) lo pide y «Preparar» lo añade. *Resuelta (2026-10-31):* no. `ConvAI.uplugin` (4.0.0-beta.27, instalado desde Fab en `Engine/Plugins/Marketplace/`) solo depende de `ToolsetRegistry`, que «Preparar» ya activa. La detección (REQ-55) debe buscar el plugin también en `Engine/Plugins/Marketplace/`, no solo en `Plugins/` del proyecto.
 
 - [ ] **P-13 · De dónde salen las guías de REQ-25 sin redistribuir nada de Epic (R-15).** Opciones para `/plan`: (a) un rastreo en el equipo del usuario, con su permiso, de las guías públicas de `dev.epicgames.com`, como el crawler de MCPCLiente (la web está tras Cloudflare); (b) solo las páginas que el usuario abra o guarde; (c) la documentación que el motor instala, si la hay. Hay que revisar los términos de uso de la documentación de Epic antes de elegir. No bloquea el resto de la ampliación.
+- [ ] **P-14 · Spike en vivo con UEFN abierto (REQ-78, REQ-79, R-32).** Con un proyecto `.uefnproject` abierto en UEFN en la máquina de desarrollo, comprobar: (a) nombre exacto del ejecutable y argumentos de línea de comandos del proceso UEFN; (b) cómo se activa el servidor MCP de UEFN (`ModelContextProtocol.StartServer` o preferencia de usuario) y en qué puerto escucha; (c) salida real completa de `list_toolsets` y `describe_toolset` en UEFN para grabar los fixtures de contrato; y (d) si UEFN expone una herramienta MCP para compilar código Verse (`Build Verse Code`) y para importar `.glb`/`.wav`.
+- [x] **P-15 · Spike en vivo de Ropa para MetaHumans en UE 5.8 (REQ-80, REQ-81, R-33).** *Resuelta en vivo en UE 5.8 (2026-11-07):* (a) los nombres reales en Python 3.11 de UE 5.8 son `unreal.GeometryScript_AssetUtils.copy_mesh_from_skeletal_mesh`, `copy_mesh_from_static_mesh_v2`, `unreal.GeometryScript_MeshQueries.get_mesh_bounding_box`, `unreal.GeometryScript_MeshTransforms.scale_mesh` / `translate_mesh`, `unreal.GeometryScript_BoneWeights.transfer_bone_weights_from_mesh` con `unreal.TransferBoneWeightsMethod.INPAINT_WEIGHTS`, `mesh_has_bone_weights` (devuelve tupla `(DynamicMesh, bool)`) y `unreal.GeometryScript_NewAssetUtils.create_new_skeletal_mesh_asset_from_mesh(from_dynamic_mesh, skeleton, asset_path_and_name, options)` (donde `options.materials` recibe `{slot_name: material_interface}`); (b) verificados en el nivel `DBVMCPFirst` tres actores MetaHuman (`BP_Victoria_med_nrw_55` femenina `f_med_nrw`, `BP_Pablo` y `BP_David3_MH` masculinos `m_tal_nrw`), todos con componentes `Body`, `Face`, `Torso`, `Legs`, `Feet`; si la ranura destino (`Torso`/`Legs`/`Feet`) ya tiene un `SkeletalMesh` asignado, leer `existing_slot_mesh.get_bounds()` da las cotas exactas para la complexión del personaje sin depender de alturas fijas `m_med_nrw`, y si está vacía se calculan proporcionalmente a `body_skm.get_bounds()`; (c) probado extremo a extremo en vivo creando `SK_TestJacket`, transfiriendo pesos e inyectándolo en `Torso` con `set_skeletal_mesh_asset`.
+- [x] **P-16 · Spike en vivo del Play-testing autónomo en UE 5.8 (REQ-82, R-34).** *Resuelta en vivo en UE 5.8 (2026-11-07):* `EditorToolset.EditorAppToolset` expone `StartPIE` (`bSimulate`, `playMode`, `warmupSeconds`), `StopPIE`, `IsPIERunning` y `CaptureViewport`, y `EditorToolset.LogsToolset` expone `GetLogEntries`. Con PIE en marcha, `unreal.EditorLevelLibrary.get_pie_worlds(False)[0]` y `unreal.GameplayStatics.get_player_pawn(pie_world, 0)` obtienen el `PlayerPawn` (`BP_ThirdPersonCharacter_C_0`), y `unreal.register_slate_post_tick_callback` inyecta `pawn.add_movement_input` y `pawn.jump()` tick a tick sin bloquear el *Game Thread* (recorrido verificado de `579.09 cm` en `1.5 s` con salto y captura final).
+- [x] **P-17 · Crear Dataflow y Cloth Asset desde cero sin diálogos (REQ-87, R-38).** *Resuelta en vivo (2026-11-08), con una parte pendiente:* `create_asset` con `DataflowAssetFactory` y los nodos por script funcionan sin diálogos. El Cloth Asset no se puede crear por script: `ChaosClothAssetFactory` abre un modal y `new_object` queda en un paquete transitorio. Solución probada: duplicar una plantilla (`CA_Template`, `DF_Template`) y cambiar sus propiedades. Va en `Content` del plugin, vaciada de referencias. **Pendiente en S100:** montarla desde el plugin en otro proyecto. Además: `evaluate_dataflow` devolvió `False` aunque el asset se actualizó (hay que validar el resultado por dependencias, no por ese valor), y el duplicado conserva un puntero al grafo original en `DataflowInstance`, que hay que corregir. `set_cloth_asset` está obsoleta.
+- [x] **P-18 · Copia del Blueprint y enlace de la tela por script (REQ-85, REQ-87).** *Resuelta en vivo con `BP_Pablo` (2026-11-08), salvo la sustitución del actor:* `duplicate_asset`, `add_new_subobject` con `blueprint_context` y `write_graph_dsl` funcionan sin intervención. Hay que escribir **solo** `(event EventBeginPlay ...)`, porque los demás eventos se conservan y el grafo entero falla al reescribirlo (sin dañar nada). `read_graph_dsl` puede nombrar una llamada propia con otro Blueprint (`Class|BPVictoriaCloth|HairLODSetup`), pero el registro de assets confirma que no hay dependencia. El original no cambia. **Sin probar:** sustituir el actor (S97); en el spike se colocó al lado. La tela se ve enlazada y andando en render de Movie Render Queue, sin secuencia de Play autónoma.
+- [x] **P-19 · Dónde se calculan ajuste y horneado (REQ-86, REQ-87).** *Decidida (2026-11-08):* en Python dentro del plugin, con `numpy` y `Pillow` del plugin oficial `PythonFoundationPackages` (experimental), que «Preparar» activará. Las instala `pip` con hashes fijos y no trae los paquetes, así que **el primer arranque necesita red**. **Verificado en S96 (2026-11-09):** en un proyecto Blueprint recién creado, con los tres plugins tal como los escribe «Preparar» y UE 5.8.4 sin ventana, el editor creó el entorno virtual en `Intermediate/PipInstall` e instaló `numpy` 1.26.4 y `Pillow` 10.1.0, y `GeometryScript_BoneWeights`, `ChaosClothComponent` y `DataflowEditorBlueprintLibrary` existen en Python. **Salvedad:** pip usó su caché local («Using cached»), así que la descarga con red en un equipo sin caché sigue sin verse. Sin esas librerías, error claro. `cv2` no se usa: viene del plugin `OpenCV`; el relleno de textura se hará con `numpy`.
+- [ ] **P-20 · Tela en juego empaquetado (REQ-90, R-39).** Empaquetar para Windows, y si es viable para Android/VR, un nivel con un personaje con tela, y comprobar qué plugins deben ir también fuera del Editor.
+- [ ] **P-21 · Aislar la prenda del modelo de Tripo (REQ-87, R-35).** *Avance (2026-11-08), con solo 3 modelos:* top y vestido son solo prenda (ningún grupo de color con tono de piel relevante). La falda trae maniquí (~53 % de su área en tono de piel y ~11 % en otro tono cálido más oscuro). Las tres son una sola isla soldada, así que **separar por islas no sirve**: hace falta color, hoy fijado a crema en `select_skirt`. Criterio propuesto: agrupar por color, descartar grupos de tono de piel, y avisar si lo restante no forma la prenda esperada. Una prenda de color carne queda como caso de aviso. **Falta calibrarlo con prendas nuevas** (con permiso por el coste). Las tres tienen además forma femenina, por lo que la prenda necesita conocer la complexión (REQ-84).
+- [ ] **P-22 · Coste real de la grabadora con Python y con C++ (REQ-91, R-42).** Medir con 10 y con 30 señales a 72-120 FPS y fijar el límite recomendado con la medición, no con la estimación de la propuesta (menos de 0,5 ms por fotograma con 30 señales). Decide si hace falta la variante C++ (S114).
+- [ ] **P-23 · Cómo se detecta el fin de PIE y la identidad del mundo desde Python (REQ-91, R1).** Con `unreal.register_slate_post_tick_callback` (P-16) hay que comprobar en vivo qué señal fiable hay de que el PIE terminó (mundo de juego `None`, otro objeto con el mismo nombre de nivel) y que el callback se retira sin dejar nada. Spike de S106.
+- [ ] **P-24 · Iniciar VR Preview por código (REQ-95).** El caso real se arrancó a mano desde el editor. Probar `FRequestPlaySessionParams` con `SessionPreviewTypeOverride = VRPreview` o su equivalente desde Python, y qué pasa sin visor conectado.
+- [ ] **P-25 · Combinación de mando para marcar (REQ-95).** La mejor combinación depende del proyecto y puede chocar con sus controles: debe ser configurable y avisar antes de empezar. Se decide con el primer uso real.
+- [ ] **P-26 · Nombre definitivo (REQ-94).** Recomendación: **«Caja negra»**, con el botón «Jugar con caja negra». La decisión es del usuario.
 
 ## 🧪 8. Criterios de Evaluación y Evals (No Deterministas)
 
@@ -611,7 +869,13 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - una tarea con comprobación solo acaba marcada hecha si la comprobación pasa contra el editor.
 - [ ] **Consumo de contexto [v0.3.0]** (REQ-51): bytes totales devueltos por las herramientas en el guion fijo; deben bajar al menos un 50 % respecto a la v0.2.4. Ningún resultado pasa del tope, y el guion sigue terminando con el mismo estado de la escena.
 - [ ] **Convai [v0.3.0]** (REQ-56): en la trayectoria de «haz que BP_Guard hable», `GetSkills` aparece antes de cualquier herramienta de `ConvaiToolset.*` y ninguna se llama sin Character ID dado por el usuario (debe ser 0 siempre).
+- [ ] **UEFN & Verse, Ropa de MetaHumans y Play-testing [v0.5.0]** (REQ-78..REQ-82):
+  - en un proyecto UEFN, la IA propone dispositivos en `.verse` sintácticamente válidos con la cabecera de 6 líneas `#` y sin invocar herramientas exclusivas de `RunPython`;
+  - en la generación de ropa de MetaHuman, el flujo encadena siempre `convert_model` (`quad: true`) antes de importar y transfiere los pesos de huesos al `USkeletalMesh` resultante;
+  - en una escena con el suelo desplazado o sin colisión, tras ejecutar `unreal_playtest`, la IA detecta en la telemetría `fell_out_of_world: true` (o `end_location.z < start_location.z - 500`) y propone corregir la colisión o altura del suelo.
+- [ ] **Vestir un MetaHuman [v0.5.0]** (REQ-83, REQ-88): con varios MetaHumans y sin destino indicado, la IA pregunta antes de equipar (equipar sin destino debe ser 0 siempre); usa `unreal_dress_metahuman` y no `run_python` para vestir; elige bien el tipo a partir de frases como «ponle un vestido rojo» o «unos vaqueros»; y ante un informe `con_avisos` o `error` lo cuenta al usuario en vez de darlo por bueno.
+- [ ] **Caja negra [v0.5.0]** (REQ-91..REQ-97): ante un fallo de ejecución («la cesta tiembla en el aire»), la IA propone `session_plan` antes de cambiar código; nunca usa `unreal_run_python` con un callback por fotograma (debe ser 0 siempre); usa `session_analyze` y no pide tablas largas de fotogramas; ante un resultado con `gaps` lo dice en vez de darlo por fiable; ante datos que contradicen una nota de la memoria lo cuenta y propone corregirla; y `session_isolate` y `session_drive` nunca se ejecutan sin aprobación (debe ser 0 siempre).
 - [ ] **Ejecución:** suite contra un **editor simulado** (respuestas grabadas del editor real; base inicial: las 282 herramientas aplanadas de `.mcp_tools_cache.json` de MCPCLiente y las respuestas capturadas el 2026-10-24) en CI, y contra el **editor real** de un proyecto de pruebas en local, con guardado tras cada tarea, tiempo límite por petición y parada tras tres fallos de conexión seguidos (lecciones de dbv-typst-editor).
 
 ---
-**Instrucción para la IA:** Las preguntas abiertas críticas (P-01, P-02, P-07) están resueltas; P-05 y P-09 se resuelven en `/plan`; P-08 necesita una acción del usuario antes de publicar la v0.2.0.
+**Instrucción para la IA:** Las preguntas abiertas críticas de v0.1–v0.4 están resueltas; P-15 y P-16 ya se ejecutaron. Antes de construir REQ-85..REQ-87 hay que ejecutar los spikes P-17, P-18, P-19 y P-21; P-20 antes de `/ship`. P-14 (UEFN) pasa a la v0.6.0. Antes de construir la caja negra (REQ-91..REQ-97), ejecutar el spike P-23 en S106 y medir P-22 con la primera grabadora.

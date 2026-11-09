@@ -11,6 +11,19 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+### Añadido
+- **Elegir a quién se viste (REQ-83):** la app ya no equipa una prenda en «el primer MetaHuman del nivel». La Biblioteca pregunta a quién vestir (con uno solo sale ya elegido, con varios hay que elegir y sin ninguno solo se importa), la IA consulta `unreal_list_metahumans` y pregunta si hay varios, `library_send_to_unreal` y `unreal_equip_metahuman_outfit` reciben el destino (`metahuman`, `actor_label`) y, sin él, no equipan ni colocan nada: la prenda solo se importa y se avisa. Si el editor no puede equipar, el error llega tal cual en vez de dejar la prenda suelta delante de la cámara.
+- **Tipos de prenda y corte (REQ-84):** Generar ofrece `top`, `pants`, `skirt`, `dress` y `shoes` en lugar de la ranura, y un corte de mujer, de hombre o neutro. Cada tipo tiene su prompt (un vestido es una prenda entera sin cuerpo) y el corte entra en él. El tipo y el corte se guardan en la biblioteca y, al equipar, se avisa si el corte no encaja con el cuerpo elegido. Las entradas y llamadas antiguas con solo `garment_slot` siguen valiendo y reciben su tipo.
+- **«Preparar» activa los plugins para vestir (REQ-87):** `GeometryScripting`, `ChaosClothAssetToolset` y `PythonFoundationPackages` (`numpy` y `Pillow`; el primer arranque necesita red), solo los que el motor del proyecto trae, como «solo Editor» cuando los añade la app, y con su comprobación y explicación en el diagnóstico.
+
+- **Depurar un fallo en ejecución (REQ-97, primer paso de la caja negra):** nueva receta *Diagnosticar un fallo en ejecución* y reglas en el prompt de la IA: ante un fallo que ocurre durante la partida, medir antes de cambiar código; una nota de la memoria o un comentario son hipótesis, no hechos; decir qué se midió y qué no; y no grabar nunca con callbacks por fotograma en `unreal_run_python` (el 2026-11-08 uno inundó el log con decenas de miles de líneas). Si el modelo escribe uno en su respuesta, la app se lo recuerda.
+
+### Corregido
+- Plugin DBVUnrealAI: el proyecto no abría tras instalarlo porque declaraba la dependencia `GLTFImporter`, que no existe en UE 5.8.
+- Ropa de MetaHumans (REQ-81): desaparece la rendija entre cabeza y hombros al cambiar la camisa de fábrica (`NeckHideScale`, que encogía el cuello por material).
+- Faldas de MetaHumans (REQ-81): dobladillo recto, sin parches abiertos y ajuste ceñido a la cadera con caída recta, sin que la piel atraviese la tela en reposo.
+- Prendas de torso (REQ-81): el cálculo ya no recorta el ancho real de la cintura, que hacía asomar la piel.
+
 ## [0.4.1] - 2026-11-07
 
 Versión v0.4.1: visibilidad de saldo de ElevenLabs en vivo y caché de balances por sesión; controles avanzados de síntesis de audio local con presets para videojuegos, prompt negativo acústico y parámetros continuos; resiliencia del adaptador Claude Code en Windows; y aislamiento de los plugins DBV Unreal AI para empaquetado de juegos standalone (Android / Meta Quest / VR).

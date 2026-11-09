@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-33, REQ-16, REQ-28, REQ-29, REQ-32
+// @spec REQ-33, REQ-16, REQ-28, REQ-29, REQ-32, REQ-80, REQ-84
 //
 // Las herramientas de Tripo se definen AQUÍ y las publican dos superficies (D10): el servidor MCP propio
 // (agentes como Claude Code) y el asistente integrado (modelos locales y de nube, vía comandos Tauri). Antes
@@ -39,7 +39,134 @@ impl Launch {
 }
 
 /// Herramientas que lanzan una operación con coste.
-pub const LAUNCHERS: [&str; 7] = ["generate_3d_model", "image_to_3d_model", "rig_model", "animate_model", "tripo_run", "generate_world", "export_world_mesh"];
+pub const LAUNCHERS: [&str; 8] = [
+    "generate_3d_model",
+    "image_to_3d_model",
+    "generate_metahuman_outfit",
+    "rig_model",
+    "animate_model",
+    "tripo_run",
+    "generate_world",
+    "export_world_mesh",
+];
+
+/// Ranuras válidas de ropa en un Actor MetaHuman. @spec REQ-80
+pub const METAHUMAN_SLOTS: [&str; 3] = ["Torso", "Legs", "Feet"];
+
+/// Normaliza el nombre de la ranura (`Torso`, `Legs`, `Feet`). @spec REQ-80
+pub fn normalize_garment_slot(slot: &str) -> Result<&'static str, String> {
+    match slot.trim().to_ascii_lowercase().as_str() {
+        "" | "torso" | "top" | "shirt" | "jacket" => Ok("Torso"),
+        "legs" | "bottom" | "pants" | "trousers" | "skirt" => Ok("Legs"),
+        "feet" | "shoes" | "boots" | "footwear" => Ok("Feet"),
+        other => Err(format!("invalid MetaHuman garment slot «{other}»: expected Torso, Legs or Feet")),
+    }
+}
+
+/// Tipos de prenda de la app. Sustituyen a la ranura en la interfaz. @spec REQ-84
+pub const GARMENT_KINDS: [&str; 5] = ["top", "pants", "skirt", "dress", "shoes"];
+
+/// Normaliza el tipo de prenda (admite los sinónimos habituales). @spec REQ-84
+pub fn normalize_garment_kind(kind: &str) -> Result<&'static str, String> {
+    match kind.trim().to_ascii_lowercase().as_str() {
+        "top" | "shirt" | "jacket" | "blouse" | "sweater" | "torso" => Ok("top"),
+        "pants" | "trousers" | "jeans" | "shorts" => Ok("pants"),
+        "skirt" | "kilt" => Ok("skirt"),
+        "dress" | "gown" => Ok("dress"),
+        "shoes" | "boots" | "footwear" | "feet" => Ok("shoes"),
+        other => Err(format!("invalid garment kind «{other}»: expected top, pants, skirt, dress or shoes")),
+    }
+}
+
+/// Ranura del MetaHuman que ocupa la prenda. Un vestido arranca en `Torso` y, además, retira `Legs` (REQ-84). @spec REQ-84
+pub fn slot_of_kind(kind: &str) -> &'static str {
+    match kind {
+        "pants" | "skirt" => "Legs",
+        "shoes" => "Feet",
+        _ => "Torso",
+    }
+}
+
+/// Tipo de una entrada antigua que solo guardó la ranura: `Torso` → top, `Feet` → shoes y `Legs` → falda o pantalón
+/// según lo que dijera su descripción. @spec REQ-84
+pub fn infer_garment_kind(slot: &str, prompt: &str) -> &'static str {
+    let lower = prompt.to_ascii_lowercase();
+    match slot {
+        "Feet" => "shoes",
+        "Legs" if ["skirt", "kilt", "falda"].iter().any(|w| lower.contains(w)) => "skirt",
+        "Legs" => "pants",
+        _ => "top",
+    }
+}
+
+/// Corte de la prenda (`male`, `female`, `neutral`); vacío = sin indicar. @spec REQ-84
+pub fn normalize_garment_cut(cut: &str) -> Result<Option<&'static str>, String> {
+    match cut.trim().to_ascii_lowercase().as_str() {
+        "" => Ok(None),
+        "male" | "man" | "men" | "masculine" | "hombre" => Ok(Some("male")),
+        "female" | "woman" | "women" | "feminine" | "mujer" => Ok(Some("female")),
+        "neutral" | "unisex" => Ok(Some("neutral")),
+        other => Err(format!("invalid garment cut «{other}»: expected male, female or neutral")),
+    }
+}
+
+/// Enriquece el prompt de una prenda para que Tripo genere solo la ropa hueca en A-pose simétrica, sin maniquí.
+/// Cada tipo pide lo suyo (un vestido es una prenda entera sin cuerpo) y el corte entra en el texto. @spec REQ-80, REQ-84
+pub fn build_garment_prompt(prompt: &str, kind: &str, cut: Option<&str>) -> String {
+    let base = prompt.trim();
+    let body = match kind {
+        "pants" => format!("3D standalone pair of trousers ({base}) in symmetrical A-pose, hollow interior waist and two separate leg openings, no mannequin, no human body, no legs, no feet, clean quad-friendly topology"),
+        "skirt" => format!("3D standalone skirt ({base}), a single layer of fabric, symmetrical, hollow waist opening and open hem, no lining, no mannequin, no human body, no legs, no torso, clean quad-friendly topology"),
+        "dress" => format!("3D standalone full-length dress ({base}) in symmetrical A-pose, a single layer of fabric, hollow interior with open neckline, armholes or sleeve cuffs and open hem, no mannequin, no human body, no head, no hands, no legs, no feet, clean quad-friendly topology"),
+        "shoes" => format!("3D standalone pair of footwear ({base}), symmetrical, hollow ankle opening, no mannequin, no human feet or legs, clean quad-friendly topology"),
+        _ => format!("3D standalone upper-body garment ({base}) in symmetrical A-pose, hollow interior, open neck Collar and open sleeve cuffs, no mannequin, no human body, no head, no hands, clean quad-friendly topology"),
+    };
+    match cut {
+        Some("male") => format!("{body}, tailored for a male body shape"),
+        Some("female") => format!("{body}, tailored for a female body shape"),
+        _ => body,
+    }
+}
+
+/// Prenda pedida por una llamada: tipo, ranura que ocupa y corte. @spec REQ-84
+struct Garment {
+    kind: &'static str,
+    slot: &'static str,
+    cut: Option<&'static str>,
+}
+
+/// La prenda de una llamada: por `kind_key` o, si no está, por la ranura (compatibilidad con entradas y llamadas
+/// anteriores). `None` si no pide ninguna. @spec REQ-84
+fn garment_of(args: &Value, keys: [&str; 3], prompt: &str) -> Result<Option<Garment>, String> {
+    let [kind_key, slot_key, cut_key] = keys;
+    let kind_arg = text(args, kind_key);
+    let slot_arg = text(args, slot_key);
+    let cut = normalize_garment_cut(&text(args, cut_key))?;
+    let garment = if !kind_arg.is_empty() {
+        let kind = normalize_garment_kind(&kind_arg)?;
+        Some(Garment { kind, slot: slot_of_kind(kind), cut })
+    } else if !slot_arg.is_empty() {
+        let slot = normalize_garment_slot(&slot_arg)?;
+        Some(Garment { kind: infer_garment_kind(slot, prompt), slot, cut })
+    } else {
+        None
+    };
+    Ok(garment)
+}
+
+/// Marca en los parámetros del trabajo que es una prenda: tipo, ranura, corte y retopología a quads. @spec REQ-80, REQ-84
+fn insert_garment(own: &mut Map<String, Value>, garment: &Garment, quad_limit: u64) {
+    own.insert("garment_slot".into(), json!(garment.slot));
+    own.insert("garment_kind".into(), json!(garment.kind));
+    if let Some(cut) = garment.cut {
+        own.insert("garment_cut".into(), json!(cut));
+    }
+    own.insert("quad_remesh".into(), json!(true));
+    own.insert("quad_face_limit".into(), json!(quad_limit));
+}
+
+/// Prompt negativo anatómico por defecto para prendas de MetaHuman. @spec REQ-80
+pub const GARMENT_NEGATIVE_PROMPT: &str = "human body, skin, head, face, neck, hands, fingers, legs, feet, mannequin, dummy, stand, hanger, asymmetrical pose, folded clothes";
 
 fn tool(name: &str, description: &str, properties: Value, required: &[&str]) -> Value {
     json!({ "name": name, "description": description, "inputSchema": { "type": "object", "properties": properties, "required": required } })
@@ -71,15 +198,21 @@ pub fn specs(confirm: bool) -> Vec<Value> {
     let launchers = vec![
         tool(
             "generate_3d_model",
-            &format!("Generate 3D models from a text description with Tripo (≈20 credits each with texture; smart_low_poly +10). The models go to the app library and the user sees the progress. Write `prompt` in English describing ONE object; for a character that will be rigged ask for a T-pose. It does NOT rig, animate or import into Unreal: use rig_model, animate_model and library_send_to_unreal.{ask}"),
-            json!({ "prompt": { "type": "string" }, "name": name, "variants": variants, "face_limit": { "type": "integer", "description": "Approximate triangle budget (a hint)." }, "smart_low_poly": { "type": "boolean" }, "options": options }),
+            &format!("Generate 3D models from a text description with Tripo (≈20 credits each with texture; smart_low_poly +10; garment_slot +10 for quad retopology). The models go to the app library and the user sees the progress. Write `prompt` in English describing ONE object; for a character that will be rigged ask for a T-pose; for MetaHuman clothing prefer generate_metahuman_outfit. It does NOT rig, animate or import into Unreal: use rig_model, animate_model and library_send_to_unreal.{ask}"),
+            json!({ "prompt": { "type": "string" }, "name": name, "variants": variants, "face_limit": { "type": "integer", "description": "Approximate triangle/quad budget (a hint)." }, "smart_low_poly": { "type": "boolean" }, "garment_kind": { "type": "string", "enum": ["top", "pants", "skirt", "dress", "shoes"], "description": "Optional MetaHuman garment type: enriches the prompt for a hollow garment without body and chains quad retopology (+10 credits). A dress is a whole garment; skirts and dresses get cloth simulation when equipped." }, "garment_cut": { "type": "string", "enum": ["male", "female", "neutral"], "description": "Garment cut, to match the body it will be worn on." }, "garment_slot": { "type": "string", "enum": ["Torso", "Legs", "Feet"], "description": "Legacy: use garment_kind." }, "options": options }),
             &["prompt", "name"],
         ),
         tool(
             "image_to_3d_model",
-            &format!("Generate 3D models from ONE reference image with Tripo (≈30 credits each). `image` is a local file path (an image the user attached), a library id of an image, or an http(s) URL. For several views of the same object use tripo_run with multiview_to_model.{ask}"),
-            json!({ "image": { "type": "string" }, "name": name, "variants": variants, "options": options }),
+            &format!("Generate 3D models from ONE reference image with Tripo (≈30 credits each; garment_slot +10 for quad retopology). `image` is a local file path (an image the user attached), a library id of an image, or an http(s) URL. For several views of the same object use tripo_run with multiview_to_model.{ask}"),
+            json!({ "image": { "type": "string" }, "name": name, "variants": variants, "garment_kind": { "type": "string", "enum": ["top", "pants", "skirt", "dress", "shoes"], "description": "Optional MetaHuman garment type: chains quad retopology (+10 credits)." }, "garment_cut": { "type": "string", "enum": ["male", "female", "neutral"] }, "garment_slot": { "type": "string", "enum": ["Torso", "Legs", "Feet"], "description": "Legacy: use garment_kind." }, "face_limit": { "type": "integer" }, "options": options }),
             &["image", "name"],
+        ),
+        tool(
+            "generate_metahuman_outfit",
+            &format!("Generate a 3D garment for a MetaHuman character (`kind`: top, pants, skirt, dress or shoes; `cut`: male, female or neutral, to match the body) with Tripo (30 credits: 20 text_to_model + 10 quad convert). Automatically applies anatomical prompt engineering (hollow A-pose garment without mannequin/limbs) and chains a symmetrical quad retopology (`convert` with `quad: true`, `force_symmetry: true`, `face_limit: 8000`) so Unreal's GeometryScript InpaintWeights can transfer bone weights cleanly when sent or equipped with unreal_equip_metahuman_outfit.{ask}"),
+            json!({ "prompt": { "type": "string", "description": "Garment description in English (e.g. 'cyberpunk leather jacket with neon collar')." }, "name": name, "kind": { "type": "string", "enum": ["top", "pants", "skirt", "dress", "shoes"], "description": "Garment type (default top). A dress is a whole garment without body; skirts and dresses are simulated as cloth when equipped." }, "cut": { "type": "string", "enum": ["male", "female", "neutral"], "description": "Garment cut. A female cut does not fit a male body well and the other way round: use the build of the MetaHuman it is for." }, "slot": { "type": "string", "enum": ["Torso", "Legs", "Feet"], "description": "Legacy: use kind." }, "face_limit": { "type": "integer", "description": "Quad polygon budget (default 8000)." }, "variants": variants, "options": options }),
+            &["prompt", "name"],
         ),
         tool(
             "rig_model",
@@ -161,11 +294,20 @@ pub fn build(tool: &str, args: &Value, library: &Library) -> Result<Launch, Stri
             if prompt.is_empty() {
                 return Err("the prompt is empty".into());
             }
+            let garment = garment_of(args, ["garment_kind", "garment_slot", "garment_cut"], &prompt)?;
             let mut own = Map::new();
-            own.insert("prompt".into(), json!(prompt));
-            for key in ["face_limit", "smart_low_poly"] {
-                if let Some(value) = args.get(key).filter(|v| !v.is_null()) {
-                    own.insert(key.into(), value.clone());
+            if let Some(garment) = &garment {
+                let quad_limit = args.get("face_limit").and_then(Value::as_u64).unwrap_or(8000).clamp(1000, 20000);
+                own.insert("prompt".into(), json!(build_garment_prompt(&prompt, garment.kind, garment.cut)));
+                own.insert("original_prompt".into(), json!(prompt));
+                own.insert("negative_prompt".into(), json!(GARMENT_NEGATIVE_PROMPT));
+                insert_garment(&mut own, garment, quad_limit);
+            } else {
+                own.insert("prompt".into(), json!(prompt));
+                for key in ["face_limit", "smart_low_poly"] {
+                    if let Some(value) = args.get(key).filter(|v| !v.is_null()) {
+                        own.insert(key.into(), value.clone());
+                    }
                 }
             }
             Launch { operation: op("text_to_model")?, params: merged(args, own), name: required_name(args)?, variants: variants_of(args), parent: None }
@@ -177,7 +319,25 @@ pub fn build(tool: &str, args: &Value, library: &Library) -> Result<Launch, Stri
             }
             let mut own = Map::new();
             own.insert("input".into(), json!(image));
+            if let Some(garment) = garment_of(args, ["garment_kind", "garment_slot", "garment_cut"], "")? {
+                let quad_limit = args.get("face_limit").and_then(Value::as_u64).unwrap_or(8000).clamp(1000, 20000);
+                insert_garment(&mut own, &garment, quad_limit);
+            }
             Launch { operation: op("image_to_model")?, params: merged(args, own), name: required_name(args)?, variants: variants_of(args), parent: library.get(&image).map(|e| e.id) }
+        }
+        "generate_metahuman_outfit" => {
+            let prompt = text(args, "prompt");
+            if prompt.is_empty() {
+                return Err("the prompt is empty".into());
+            }
+            let garment = garment_of(args, ["kind", "slot", "cut"], &prompt)?.unwrap_or(Garment { kind: "top", slot: "Torso", cut: None });
+            let quad_limit = args.get("face_limit").and_then(Value::as_u64).unwrap_or(8000).clamp(1000, 20000);
+            let mut own = Map::new();
+            own.insert("prompt".into(), json!(build_garment_prompt(&prompt, garment.kind, garment.cut)));
+            own.insert("original_prompt".into(), json!(prompt));
+            own.insert("negative_prompt".into(), json!(GARMENT_NEGATIVE_PROMPT));
+            insert_garment(&mut own, &garment, quad_limit);
+            Launch { operation: op("text_to_model")?, params: merged(args, own), name: required_name(args)?, variants: variants_of(args), parent: None }
         }
         "rig_model" => {
             let id = text(args, "id");
@@ -339,5 +499,64 @@ mod tests {
         assert!(build("tripo_run", &json!({ "operation": "convert", "params": { "input": "x" } }), &library).unwrap_err().contains("format"));
         assert!(operations_text(&json!({})).unwrap().contains("retopology"));
         assert!(operations_text(&json!({ "operation": "retarget" })).unwrap().contains("dance_01"));
+    }
+
+    /// @spec REQ-80
+    #[test]
+    fn prenda_metahuman_enriquece_prompt_por_ranura_y_suma_retopologia_quads() {
+        let (_dir, library) = library_with(&[]);
+        let outfit = build(
+            "generate_metahuman_outfit",
+            &json!({ "prompt": "cyberpunk leather jacket", "name": "Chaqueta Cyberpunk", "slot": "Torso", "face_limit": 8000 }),
+            &library,
+        )
+        .unwrap();
+        assert_eq!(outfit.operation.name, "text_to_model");
+        assert_eq!(outfit.params["garment_slot"], "Torso");
+        assert_eq!(outfit.params["garment_kind"], "top", "una llamada antigua con solo la ranura recibe su tipo");
+        assert_eq!(outfit.params["quad_remesh"], true);
+        assert_eq!(outfit.params["quad_face_limit"], 8000);
+        assert!(outfit.params["prompt"].as_str().unwrap().contains("symmetrical A-pose"));
+        assert!(outfit.params["negative_prompt"].as_str().unwrap().contains("mannequin"));
+        assert_eq!(outfit.total(), 30.0, "20 base + 10 convert quad");
+        assert!(build("generate_metahuman_outfit", &json!({ "prompt": "hat", "name": "Sombrero", "slot": "Head" }), &library).is_err());
+    }
+
+    /// @spec REQ-84
+    #[test]
+    fn cada_tipo_de_prenda_ocupa_su_ranura_y_pide_lo_suyo() {
+        let (_dir, library) = library_with(&[]);
+        for (kind, slot) in [("top", "Torso"), ("pants", "Legs"), ("skirt", "Legs"), ("dress", "Torso"), ("shoes", "Feet")] {
+            let launch = build("generate_metahuman_outfit", &json!({ "prompt": "red thing", "name": "Prenda", "kind": kind }), &library).unwrap();
+            assert_eq!(launch.params["garment_kind"], kind);
+            assert_eq!(launch.params["garment_slot"], slot, "{kind}");
+            assert_eq!(launch.total(), 30.0, "{kind}: 20 base + 10 quads");
+            assert!(launch.params["prompt"].as_str().unwrap().contains("red thing"));
+        }
+        let dress = build("generate_3d_model", &json!({ "prompt": "red evening dress", "name": "Vestido", "garment_kind": "dress", "garment_cut": "female" }), &library).unwrap();
+        let prompt = dress.params["prompt"].as_str().unwrap();
+        assert!(prompt.contains("full-length dress") && prompt.contains("no legs") && prompt.ends_with("tailored for a female body shape"), "{prompt}");
+        assert_eq!(dress.params["garment_cut"], "female");
+        assert_eq!(dress.params["original_prompt"], "red evening dress");
+        let man = build("image_to_3d_model", &json!({ "image": "C:/refs/chaqueta.png", "name": "Chaqueta", "garment_kind": "top", "garment_cut": "male" }), &library).unwrap();
+        assert_eq!((man.params["garment_kind"].as_str(), man.params["garment_cut"].as_str(), man.params["garment_slot"].as_str()), (Some("top"), Some("male"), Some("Torso")));
+        let neutral = build("generate_metahuman_outfit", &json!({ "prompt": "hoodie", "name": "Sudadera", "cut": "neutral" }), &library).unwrap();
+        assert!(!neutral.params["prompt"].as_str().unwrap().contains("tailored for"), "neutro no añade nada");
+        assert!(build("generate_metahuman_outfit", &json!({ "prompt": "hat", "name": "Sombrero", "kind": "hat" }), &library).unwrap_err().contains("top, pants, skirt, dress or shoes"));
+        assert!(build("generate_metahuman_outfit", &json!({ "prompt": "x", "name": "X", "cut": "robot" }), &library).unwrap_err().contains("male, female or neutral"));
+    }
+
+    /// Una entrada antigua con solo `garment_slot` sigue valiendo y recibe su tipo. @spec REQ-84
+    #[test]
+    fn una_entrada_antigua_con_solo_la_ranura_recibe_su_tipo() {
+        assert_eq!(infer_garment_kind("Torso", "leather jacket"), "top");
+        assert_eq!(infer_garment_kind("Feet", "boots"), "shoes");
+        assert_eq!(infer_garment_kind("Legs", "tartan kilt"), "skirt");
+        assert_eq!(infer_garment_kind("Legs", "falda plisada"), "skirt");
+        assert_eq!(infer_garment_kind("Legs", "denim jeans"), "pants");
+        let (_dir, library) = library_with(&[]);
+        let old = build("generate_3d_model", &json!({ "prompt": "tartan kilt", "name": "Kilt", "garment_slot": "Legs" }), &library).unwrap();
+        assert_eq!((old.params["garment_slot"].as_str(), old.params["garment_kind"].as_str()), (Some("Legs"), Some("skirt")));
+        assert!(old.params["prompt"].as_str().unwrap().contains("standalone skirt"));
     }
 }

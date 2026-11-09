@@ -199,6 +199,55 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
         """
         return editor.undo_turn(count, expected_current)
 
+    @toolset_registry.tool_call
+    @staticmethod
+    def list_metahumans() -> str:
+        """List all MetaHuman actors in the open level with their Body skeletal mesh, build and outfit slots (Torso, Legs, Feet).
+
+        Returns:
+            JSON with count and metahumans list.
+        """
+        return editor.list_metahumans()
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def equip_metahuman_outfit(
+        actor_label: str,
+        garment_source: str,
+        slot: str = "Torso",
+        folder_path: str = "/Game/DBV/MetaHumanOutfits",
+        asset_name: str = "",
+        scale_multiplier: float = 1.05,
+        z_offset: float = 0.0,
+        smoothing_iterations: int = 5,
+    ) -> str:
+        """Auto-rig a 3D garment mesh (.glb or StaticMesh) onto a MetaHuman's skeleton using GeometryScript InpaintWeights and equip it in the chosen slot (Torso, Legs, Feet).
+
+        Args:
+            actor_label: Label of the MetaHuman actor in the open level.
+            garment_source: Local file path (.glb/.fbx) or /Game/... StaticMesh path.
+            slot: Target slot ("Torso", "Legs", or "Feet").
+            folder_path: Content Browser folder for the new SkeletalMesh.
+            asset_name: Optional asset name.
+            scale_multiplier: Slight inflation factor (default 1.05) to prevent skin poke-through.
+            z_offset: Vertical offset in cm.
+            smoothing_iterations: Bone weight smoothing iterations (default 5).
+
+        Returns:
+            JSON with success, actor, slot, skeletal_mesh, skeleton, has_bone_weights.
+        """
+        return editor.equip_metahuman_outfit(
+            actor_label,
+            garment_source,
+            slot,
+            folder_path,
+            asset_name,
+            scale_multiplier,
+            z_offset,
+            smoothing_iterations,
+        )
+
+
 
 
 def register() -> bool:

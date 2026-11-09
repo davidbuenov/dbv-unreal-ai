@@ -407,10 +407,12 @@ pub fn estimate(op: &Operation, params: &Value) -> f64 {
         ]
         .iter()
         .any(|k| params.get(*k).is_some());
+    let quad_remesh = flag(params, "quad_remesh") || !text(params, "garment_slot").is_empty();
+    let remesh_addon = if quad_remesh { 10.0 } else { 0.0 };
     match op.name {
-        "text_to_model" => (if textured(params) { 20.0 } else { 10.0 }) + model_addons(params),
+        "text_to_model" => (if textured(params) { 20.0 } else { 10.0 }) + model_addons(params) + remesh_addon,
         "image_to_model" | "multiview_to_model" => {
-            (if textured(params) { 30.0 } else { 20.0 }) + model_addons(params)
+            (if textured(params) { 30.0 } else { 20.0 }) + model_addons(params) + remesh_addon
         }
         "image_to_splat" => 30.0,
         "text_to_image" | "image_to_image" => {

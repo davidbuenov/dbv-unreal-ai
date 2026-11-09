@@ -174,10 +174,10 @@ mod tests {
 
     /// @spec REQ-23
     #[test]
-    fn las_cuatro_recetas_con_textos_en_espanol_ingles_y_chino() {
+    fn las_cinco_recetas_con_textos_en_espanol_ingles_y_chino() {
         let recipes = all();
         let ids: Vec<&str> = recipes.iter().map(|r| r.id.as_str()).collect();
-        assert_eq!(ids, ["test_level", "tripo_character", "world_walk", "convai_metahuman"]);
+        assert_eq!(ids, ["test_level", "tripo_character", "world_walk", "convai_metahuman", "runtime_diagnosis"]);
         for recipe in &recipes {
             for lang in ["es", "en", "zh-CN"] {
                 assert!(!text(&recipe.title, lang).is_empty() && !text(&recipe.summary, lang).is_empty(), "{} sin {lang}", recipe.id);
@@ -214,7 +214,7 @@ mod tests {
         assert!(text.contains("recipe_check with id \"world_walk\"") && text.contains(&recipe.steps));
         let specs = specs();
         assert_eq!(specs.len(), 2);
-        assert_eq!(specs[1]["inputSchema"]["properties"]["id"]["enum"].as_array().unwrap().len(), 4);
+        assert_eq!(specs[1]["inputSchema"]["properties"]["id"]["enum"].as_array().unwrap().len(), 5);
         assert!(list_text().contains("convai_metahuman"));
     }
 

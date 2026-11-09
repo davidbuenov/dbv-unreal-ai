@@ -376,6 +376,11 @@ export function start() {
           if (prompt.ok) await ask(prompt.value, { label: `📋 ${localized(recipe.title, getLanguage())}` });
         }));
       },
+      // Prueba autónoma en Play (REQ-82): pide al asistente ejecutar `unreal_playtest` y analizar telemetría y captura.
+      runPlaytest: async ({ ask }) => {
+        if (state.connection?.status !== 'online') return toast(t('unreal.pill.offline'), 'error');
+        return ask(t('unreal.playtestPrompt'), { label: `▶️ ${t('ai.playtest')}` });
+      },
       beforeTurn: async () => {
         let startUndo = null;
         if (state.connection?.status === 'online') {
@@ -485,10 +490,10 @@ export function start() {
           worldlabsBalance: api.generationWorldLabsBalance,
           rename: api.libraryRename,
           listLibrary: api.libraryList,
-          send: async (entry) => {
+          send: async (entry, { metahuman = '' } = {}) => {
             let sendResult = { ok: false, error: 'no Unreal project connected' };
             if (state.connection?.status === 'online') {
-              sendResult = await sendToUnreal({ backend: sendBackend(state.connection) }, entry, { project: state.connection.projectPath });
+              sendResult = await sendToUnreal({ backend: sendBackend(state.connection) }, entry, { project: state.connection.projectPath, metahuman });
               if (sendResult.ok && entry?.id && turnContext?.importedAssets) {
                 turnContext.importedAssets.push(entry.id);
               }

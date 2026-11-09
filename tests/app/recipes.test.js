@@ -23,7 +23,7 @@ describe('Recetas', () => {
     const onPick = vi.fn();
     const card = recipesCard(RECIPES, onPick);
     const titles = [...card.querySelectorAll('.recipe strong')].map((n) => n.textContent);
-    expect(titles).toEqual(['Nivel de prueba', 'Personaje de Tripo con animaciones', 'Caminar por un mundo de World Labs', 'MetaHuman que habla con Convai']);
+    expect(titles).toEqual(['Nivel de prueba', 'Personaje de Tripo con animaciones', 'Caminar por un mundo de World Labs', 'MetaHuman que habla con Convai', 'Diagnosticar un fallo en ejecución']);
     expect(card.querySelector('[data-recipe="tripo_character"]').parentElement.textContent).toContain('tu clave de Tripo');
     expect(card.querySelector('[data-recipe="test_level"]').parentElement.querySelector('.recipe__needs')).toBeNull();
 

@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-04, REQ-05
+// @spec REQ-04, REQ-05, REQ-87
 //
 // Qué hace falta para que un proyecto hable con la IA (verificado en DBVMCPFirst y en las
 // lecciones de MCPCLiente):
@@ -41,12 +41,50 @@ pub const REQUIRED_PLUGINS: [&str; 6] = [
 /// Solo en proyectos con C++: compilar con Live Coding desde la app (REQ-22).
 pub const CPP_PLUGINS: [&str; 1] = ["LiveCodingToolset"];
 
+/// Plugins de Epic para vestir a un MetaHuman desde la app (REQ-87): `GeometryScripting` (ajuste de la prenda a los
+/// huesos), `ChaosClothAssetToolset` (tela de faldas y vestidos) y `PythonFoundationPackages` (`numpy` y `Pillow`
+/// para el cálculo, P-19; el primer arranque necesita red). Son experimentales y no existen en todos los motores:
+/// solo se piden los que el motor del proyecto trae, y los que se añaden entran como «solo Editor» (D66, igual que
+/// los plugins propios desde la v0.4.1) para no empaquetarlos en Android/VR.
+pub const DRESSING_PLUGINS: [&str; 3] = ["GeometryScripting", "ChaosClothAssetToolset", "PythonFoundationPackages"];
+
+/// Carpetas de un plugin que nunca contienen otro `.uplugin`: no se recorren al buscarlos en el motor.
+const PLUGIN_HEAVY_DIRS: [&str; 6] = ["Content", "Source", "Binaries", "Intermediate", "Resources", "Config"];
+
+/// De `names`, los plugins cuyo `.uplugin` existe bajo `Engine/Plugins` del motor `engine_root`. Un solo recorrido,
+/// con tope de profundidad, para que el diagnóstico no se note. @spec REQ-87
+pub fn engine_plugins_present(engine_root: &Path, names: &[&'static str]) -> Vec<&'static str> {
+    let mut found: Vec<&'static str> = Vec::new();
+    let walker = walkdir::WalkDir::new(engine_root.join("Engine").join("Plugins"))
+        .max_depth(6)
+        .into_iter()
+        .filter_entry(|e| !(e.file_type().is_dir() && PLUGIN_HEAVY_DIRS.iter().any(|d| e.file_name() == *d)));
+    for entry in walker.filter_map(Result::ok).filter(|e| e.file_type().is_file()) {
+        let file = entry.file_name().to_string_lossy();
+        if let Some(name) = names.iter().find(|n| file.eq_ignore_ascii_case(&format!("{n}.uplugin"))) {
+            if !found.contains(name) {
+                found.push(name);
+            }
+        }
+        if found.len() == names.len() {
+            break;
+        }
+    }
+    names.iter().copied().filter(|n| found.contains(n)).collect()
+}
+
+/// Plugins para vestir que este motor trae (ninguno si no se conoce el motor). @spec REQ-87
+fn dressing_plugins(engine: Option<&EngineInstall>) -> Vec<&'static str> {
+    engine.map(|e| engine_plugins_present(Path::new(&e.root), &DRESSING_PLUGINS)).unwrap_or_default()
+}
+
 /// Plugins que necesita este proyecto.
-fn required_plugins(has_cpp: bool) -> Vec<&'static str> {
+fn required_plugins(has_cpp: bool, dressing: &[&'static str]) -> Vec<&'static str> {
     let mut plugins = REQUIRED_PLUGINS.to_vec();
     if has_cpp {
         plugins.extend_from_slice(&CPP_PLUGINS);
     }
+    plugins.extend_from_slice(dressing);
     plugins
 }
 /// Plugin de solo contenido con el toolset en Python.
@@ -205,12 +243,22 @@ fn project_dir(uproject: &Path) -> &Path {
     uproject.parent().unwrap_or(Path::new("."))
 }
 
+/// Motor instalado que corresponde a la versión del proyecto.
+fn engine_of(project: &UProject) -> Option<EngineInstall> {
+    let engines = discovery::find_engines();
+    discovery::engine_for(&engines, &project.engine_association).cloned()
+}
+
 /// Diagnóstico del proyecto (REQ-04): qué falta para conectarlo.
 pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealError> {
+    let engine = engine_of(&discovery::read_uproject(uproject)?);
+    readiness_with_engine(uproject, source, engine)
+}
+
+/// Igual que [`readiness`] con el motor ya resuelto (así se prueba sin Unreal instalado). @spec REQ-04, REQ-87
+pub fn readiness_with_engine(uproject: &Path, source: &Path, engine: Option<EngineInstall>) -> Result<Readiness, UnrealError> {
     let project = discovery::read_uproject(uproject)?;
     let dir = project_dir(uproject);
-    let engines = discovery::find_engines();
-    let engine = discovery::engine_for(&engines, &project.engine_association).cloned();
     let version = parse_association(&project.engine_association);
     let mut checks = vec![Check {
         id: "engine".into(),
@@ -220,7 +268,7 @@ pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealErro
             .map(|e| e.version.clone())
             .unwrap_or_else(|| project.engine_association.clone()),
     }];
-    for name in required_plugins(project.has_cpp) {
+    for name in required_plugins(project.has_cpp, &dressing_plugins(engine.as_ref())) {
         let enabled = project.plugins.iter().any(|p| p.name == name && p.enabled);
         checks.push(Check {
             id: format!("plugin:{name}"),
@@ -317,7 +365,10 @@ pub fn enable_plugins(text: &str, plugins: &[&str]) -> Result<String, UnrealErro
         .as_array_mut()
         .ok_or_else(|| UnrealError::Format("Plugins no es una lista".into()))?;
     for name in plugins {
+        // Los plugins propios son solo Editor siempre; los de vestir, solo si los añadimos nosotros: si el usuario ya
+        // los tenía, su lista de destinos es decisión suya (D66).
         let is_editor_tool = *name == PYTHON_PLUGIN || *name == CPP_PLUGIN;
+        let editor_only_when_new = is_editor_tool || DRESSING_PLUGINS.contains(name);
         match entries
             .iter_mut()
             .find(|p| p.get("Name").and_then(Value::as_str) == Some(name))
@@ -330,7 +381,7 @@ pub fn enable_plugins(text: &str, plugins: &[&str]) -> Result<String, UnrealErro
             }
             None => {
                 let mut obj = json!({ "Name": name, "Enabled": true });
-                if is_editor_tool {
+                if editor_only_when_new {
                     obj["TargetAllowList"] = json!(["Editor"]);
                 }
                 entries.push(obj);
@@ -393,11 +444,23 @@ pub fn plan(
     variant: Variant,
     port: Option<u16>,
 ) -> Result<PreparePlan, UnrealError> {
+    let engine = engine_of(&discovery::read_uproject(uproject)?);
+    plan_with_engine(uproject, source, variant, port, engine.as_ref())
+}
+
+/// Igual que [`plan`] con el motor ya resuelto: los plugins para vestir se piden solo si ese motor los trae (REQ-87).
+pub fn plan_with_engine(
+    uproject: &Path,
+    source: &Path,
+    variant: Variant,
+    port: Option<u16>,
+    engine: Option<&EngineInstall>,
+) -> Result<PreparePlan, UnrealError> {
     let dir = project_dir(uproject);
     let mut changes = Vec::new();
     // 1. Plugins del `.uproject`.
     let before = std::fs::read_to_string(uproject).map_err(|error| io_error(uproject, &error))?;
-    let mut wanted = required_plugins(discovery::read_uproject(uproject)?.has_cpp);
+    let mut wanted = required_plugins(discovery::read_uproject(uproject)?.has_cpp, &dressing_plugins(engine));
     wanted.extend_from_slice(variant.plugins());
     let after = enable_plugins(&before, &wanted)?;
     if after != before {
@@ -757,6 +820,81 @@ mod tests {
         assert!(uproject
             .after
             .contains("\"Name\": \"LiveCodingToolset\",\r\n\t\t\t\"Enabled\": true"));
+    }
+
+    /// Un motor falso con los plugins de Epic que se le indiquen, en las mismas carpetas que el real.
+    fn fake_engine(plugins: &[(&str, &str)]) -> (tempfile::TempDir, EngineInstall) {
+        let root = tempfile::tempdir().unwrap();
+        for (folder, name) in plugins {
+            let dir = root.path().join("Engine").join("Plugins").join(folder).join(name);
+            std::fs::create_dir_all(dir.join("Source")).unwrap();
+            std::fs::write(dir.join(format!("{name}.uplugin")), "{}").unwrap();
+            // Un `.uplugin` dentro de Content/Source no cuenta: no es un plugin del motor.
+            std::fs::write(dir.join("Source").join(format!("{name}Fake.uplugin")), "{}").unwrap();
+        }
+        let engine = EngineInstall { version: "5.8.4".into(), major: 5, minor: 8, patch: 4, root: root.path().to_string_lossy().into_owned(), editor: String::new(), editor_exists: false };
+        (root, engine)
+    }
+
+    /// Vestir a un MetaHuman necesita `GeometryScripting`, la tela y las librerías de cálculo: «Preparar» los activa
+    /// solo si el motor los trae, como «solo Editor», y el diagnóstico los comprueba.
+    /// @spec REQ-87, REQ-05
+    #[test]
+    fn preparar_activa_los_plugins_de_vestir_que_trae_el_motor() {
+        let (_dir, path) = project();
+        let (_root, engine) = fake_engine(&[("Experimental/Toolsets", "ChaosClothAssetToolset"), ("Experimental", "PythonFoundationPackages"), ("Runtime", "GeometryScripting")]);
+        let ids = |engine: Option<EngineInstall>| readiness_with_engine(&path, &source(), engine).unwrap().checks.into_iter().filter(|c| !c.ok).map(|c| c.id).collect::<Vec<_>>();
+
+        let missing = ids(Some(engine.clone()));
+        for name in DRESSING_PLUGINS {
+            assert!(missing.contains(&format!("plugin:{name}")), "{name} se comprueba y falta: {missing:?}");
+        }
+        let plan = plan_with_engine(&path, &source(), Variant::Python, None, Some(&engine)).unwrap();
+        assert!(plan.needs_restart, "hay que reiniciar el editor una vez");
+        let uproject = &plan.changes.iter().find(|c| c.relative.ends_with("Demo.uproject")).unwrap().after;
+        for name in DRESSING_PLUGINS {
+            assert!(uproject.contains(&format!("\"Name\": \"{name}\"")), "{name} se activa");
+        }
+        let value: Value = serde_json::from_str(uproject).unwrap();
+        for entry in value["Plugins"].as_array().unwrap().iter().filter(|p| DRESSING_PLUGINS.contains(&p["Name"].as_str().unwrap_or(""))) {
+            assert_eq!(entry["TargetAllowList"], json!(["Editor"]), "{entry}: nuevo, solo Editor");
+        }
+
+        // Aplicado el plan, el diagnóstico ya no los echa en falta y preparar otra vez no cambia nada.
+        std::fs::write(&path, uproject).unwrap();
+        assert!(!ids(Some(engine.clone())).iter().any(|id| id.contains("GeometryScripting") || id.contains("ChaosCloth") || id.contains("PythonFoundation")));
+        assert!(plan_with_engine(&path, &source(), Variant::Python, None, Some(&engine)).unwrap().changes.iter().all(|c| !c.relative.ends_with("Demo.uproject")));
+    }
+
+    /// Sin el plugin en el motor no se pide nada (un `.uproject` con un plugin que no existe hace saltar un aviso al
+    /// abrir el editor), y un plugin que el usuario ya tenía conserva su lista de destinos.
+    /// @spec REQ-87
+    #[test]
+    fn no_pide_plugins_que_el_motor_no_trae_y_respeta_los_del_usuario() {
+        let (_dir, path) = project();
+        let (_root, only_geometry) = fake_engine(&[("Runtime", "GeometryScripting")]);
+        let wanted = |engine: Option<&EngineInstall>| plan_with_engine(&path, &source(), Variant::Python, None, engine).unwrap().changes.into_iter().find(|c| c.relative.ends_with("Demo.uproject")).unwrap().after;
+        let text = wanted(Some(&only_geometry));
+        assert!(text.contains("GeometryScripting") && !text.contains("ChaosClothAssetToolset") && !text.contains("PythonFoundationPackages"));
+        assert!(!wanted(None).contains("GeometryScripting"), "sin motor conocido no se añade nada");
+
+        let mut mine: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        mine["Plugins"].as_array_mut().unwrap().push(json!({ "Name": "GeometryScripting", "Enabled": false, "TargetAllowList": ["Editor", "Game"] }));
+        let mine = unreal_json(&mine, "
+").unwrap();
+        std::fs::write(&path, mine).unwrap();
+        let value: Value = serde_json::from_str(&wanted(Some(&only_geometry))).unwrap();
+        let entry = value["Plugins"].as_array().unwrap().iter().find(|p| p["Name"] == "GeometryScripting").unwrap().clone();
+        assert_eq!(entry["TargetAllowList"], json!(["Editor", "Game"]), "la lista del usuario no se toca");
+    }
+
+    /// @spec REQ-87
+    #[test]
+    fn el_recorrido_del_motor_no_cuenta_ficheros_de_dentro_de_un_plugin() {
+        let (_root, engine) = fake_engine(&[("Runtime", "GeometryScripting")]);
+        let present = engine_plugins_present(Path::new(&engine.root), &["GeometryScripting", "GeometryScriptingFake", "ChaosClothAssetToolset"]);
+        assert_eq!(present, vec!["GeometryScripting"], "solo el .uplugin de la carpeta del plugin");
+        assert!(engine_plugins_present(Path::new("Z:/no/existe"), &DRESSING_PLUGINS).is_empty());
     }
 
     /// @spec REQ-05

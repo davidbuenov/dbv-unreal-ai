@@ -1,16 +1,28 @@
 ---
-# Frontmatter de la fase vigente: v0.4.1 (Control Acústico Avanzado, Panel de Síntesis y Saldos de Generación — REQ-76, REQ-77).
+# Frontmatter de la fase vigente: v0.5.0, vestir un MetaHuman desde la app (REQ-83..REQ-90, sección 14) y caja negra (REQ-91..REQ-97, sección 15).
 dependencies:
-  - Base de código consolidada en v0.4.0 (commit 6d8a07a) con REQ-71..REQ-75 en verde
-  - Microservicio local dbv-audio-service v0.2.0 (FastAPI en http://127.0.0.1:8765) con soporte de negative_prompt, steps, cfg_scale y seed
-  - Tauri v2 en Rust + Vanilla JS sin bundler, con i18n (es, en, zh)
+  - UE 5.8 con DBVMCPFirst y tres MetaHumans de dos cuerpos (f_med_nrw y m_tal_nrw)
+  - Plugins de Epic GeometryScripting y ChaosClothAssetToolset (experimental)
+  - API de Tripo para las prendas nuevas de la matriz de REQ-90 (coste en créditos, con permiso del usuario)
+  - Scripts de la sesión del 2026-11-08 como referencia (fuera del repositorio; se portan, no se copian)
+  - Caja negra (sección 15): editor de pruebas con PIE y, para S112, un visor con VR Preview; ElecnorMIO como caso real de referencia; sin dependencias nuevas de Python (solo biblioteca estándar) ni de Rust salvo que S107 lo justifique
 risks:
-  - "R-33: Discrepancia de tipos o claves JSON entre Rust y dbv-audio-service -> Rust modela explícitamente el payload con serde_json::json! respetando el esquema GenerateRequest de FastAPI"
-  - "R-34: Sobrecarga visual en la pestaña Sonidos por el exceso de controles -> Visibilidad condicional según el proveedor activo; chips de presets de 1 clic que rellenan en bloque"
-  - "R-35: Consultas de red repetidas a APIs de saldo al alternar pestañas -> Implementación de balanceCache por sesión con invalidación tras generación exitosa"
+  - "R-35: el resultado depende del modelo de Tripo -> aislar con aviso, validación automática y límite documentado"
+  - "R-36: todo se ajustó sobre un solo cuerpo -> sin valores fijos y prueba con m_tal_nrw desde el primer slice de ajuste"
+  - "R-37: sustituir el actor rompe referencias -> avisar de las secuencias, conservar etiqueta y transformación, volver al original"
+  - "R-38: plugin experimental y operación larga -> spike P-17, pasos con progreso y tiempos propios"
+  - "R-39: tela en juego empaquetado -> spike P-20 antes de publicar; si falla, límite documentado por plataforma"
+  - "R-41: un callback por fotograma rompe el editor o inunda el log -> R1 y R2 con prueba automática y cierre antes de tocar objetos"
+  - "R-42: coste de muestrear desde Python -> medir en S106 (P-22) y construir la variante C++ solo si hace falta"
+  - "R-43: privacidad de capturas y voz -> todo local, voz apagada por defecto, sin identidad en la sesión"
+  - "R-44: la variante C++ exige recompilar -> Python es la base y cubre proyectos solo Blueprint"
 rollback_strategy: >
-  Un commit por slice (S85 para el contrato en Rust, S86 para el frontend/i18n y S87 para saldo ElevenLabs,
-  caché y estado local). Si algún slice falla, se revierte individualmente sin alterar la biblioteca.
+  Un commit por slice. Ningún slice toca el Blueprint ni los assets originales del usuario, y todo lo creado queda en
+  /Game/DBV/MetaHumanOutfits/<Personaje>/. Si un slice de tela no supera su puerta, equip_metahuman_outfit por huesos
+  sigue funcionando y se retira skirt/dress de la interfaz. No se publica en la Store sin REQ-90.
+  Caja negra: un commit por slice, solo lectura sobre el proyecto (REQ-91, R4); si un slice no supera su puerta, el
+  anterior sigue siendo utilizable (S105, instrucciones y receta, no depende de la grabadora) y las herramientas
+  session_* de ese slice se retiran del catálogo sin tocar el resto.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -366,7 +378,7 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
    - Cadenas de traducción en `translations.js` y `translations.zh.js`.
    - Tests de Vitest (`npm test`) verificando la reactividad del formulario y la llamada al backend.
 
-3. **S87 · Visibilidad de saldo ElevenLabs, caché de balances y corrección de estado local (`REQ-77`):**
+3. **[Completada] S87 · Visibilidad de saldo ElevenLabs, caché de balances y corrección de estado local (`REQ-77`):**
    - En `src-tauri/src/generation/audio.rs`:
      - Estructura `ElevenLabsBalance` (`character_count`, `character_limit`, `remaining_characters`, `status`).
      - Función `get_elevenlabs_subscription(api_key: &str) -> Result<ElevenLabsBalance, UnrealError>` llamando a `/v1/user/subscription`.
@@ -385,3 +397,159 @@ Fuente: `dbv-tauri-starter` `template-v0.4.0` (ADR-036 del starter). Cada paso s
    - Textos i18n en `translations.js` (es, en) y `translations.zh.js` (zh).
    - Tests de Vitest en `tests/app/generate.test.js` etiquetados con `// @spec REQ-77`.
 
+## 13. Plan de implementación — DBV Unreal AI v0.5.0 (Ropa para MetaHumans con GeometryScript, Play-Testing Autónomo en PIE y Soporte UEFN + Verse)
+
+> **Modo:** Orquestador (afecta a cliente de generación Tripo y servidor MCP en Rust, plugin Python/C++ de Unreal 5.8, y vistas/herramientas en JavaScript).
+> **Orden de ejecución acordado con el usuario:** Bloque 1 en vivo contra UE 5.8 (`S88..S91`: Ropa para MetaHumans `REQ-80`, `REQ-81` y Play-testing autónomo `REQ-82` con los 3 MetaHumans del nivel `DBVMCPFirst`); Bloque 2 (`S92`: UEFN + Verse `REQ-78`, `REQ-79`) en cuanto termine la descarga de UEFN.
+
+### Decisiones de arquitectura v0.5.0
+
+| # | Decisión | Motivo |
+|---|---|---|
+| D55 | **Encadenado automático `text_to_model`/`image_to_model` → `convert_model` (`quad: true`, `format: "GLTF"`) para prendas de MetaHuman (`REQ-80`):** En Tripo v3, pasar `quad: true` directamente a `text_to_model` fuerza salida FBX sin las texturas PBR empaquetadas como GLB estándar; en cambio, encadenar la tarea base (`text_to_model` o `image_to_model`) con `convert_model` (`format: "GLTF"`, `quad: true`, `force_symmetry: true`, `face_limit: 8000`, `flatten_bottom: false`) devuelve un `.glb` retopologizado en quads simétricos con materiales PBR que el importador Interchange de UE 5.8 importa como `UStaticMesh` + materiales listos para copiar al `USkeletalMesh`. Además, la ingeniería de prompt inyecta por ranura (`Torso`, `Legs`, `Feet`) directrices de «hollow garment only, no mannequin, no human body/head/hands, A-pose symmetrical». | Garantiza topología limpia en quads apta para deformación esquelética manteniendo el flujo `.glb` con materiales PBR y sin muñecos internos. |
+| D56 | **Descubrimiento adaptativo de cotas y API real de `GeometryScript` en UE 5.8 (`REQ-81`, Spike `P-15`):** En lugar de usar alturas fijas para complexión `m_med_nrw` (que fallan en personajes femeninos como `BP_Victoria_med_nrw_55` o altos como `BP_Pablo` y `BP_David3_MH`), `equip_metahuman_outfit` en `editor.py` inspecciona primero si el componente de ranura (`Torso`, `Legs`, `Feet`) ya tiene un `SkeletalMesh` asignado (`slot_comp.get_skeletal_mesh_asset()`). Si existe, usa `existing_slot_mesh.get_bounds()` como caja de destino exacta (`origin` y `box_extent`); si está vacío, calcula las cotas proporcionalmente a `body_skm.get_bounds()`. Se usan las clases reales de Python en UE 5.8 verificadas en `P-15`: `unreal.GeometryScript_AssetUtils`, `unreal.GeometryScript_MeshQueries`, `unreal.GeometryScript_MeshTransforms`, `unreal.GeometryScript_BoneWeights` (`unreal.TransferBoneWeightsMethod.INPAINT_WEIGHTS`, desempaquetando la tupla `(DynamicMesh, bool)` de `mesh_has_bone_weights`) y `unreal.GeometryScript_NewAssetUtils.create_new_skeletal_mesh_asset_from_mesh(garment_dyn, skeleton, dest_skm_path, skm_opts)` preservando los materiales de `static_materials`. | Soporta cualquier estatura y complexión de MetaHuman (`f_med_nrw`, `m_tal_nrw`, `m_med_nrw`, etc.), conserva texturas PBR y evita el `TypeError: DynamicMesh is not JSON serializable` y los nombres de cabeceras C++ inexistentes en Python. |
+| D57 | **Orquestación híbrida de Play-testing autónomo en PIE sin bloquear el *Game Thread* (`REQ-82`, Spike `P-16`):** La herramienta `unreal_playtest` combina las herramientas nativas de Epic (`EditorToolset.EditorAppToolset.StartPIE`, `CaptureViewport`, `StopPIE` y `EditorToolset.LogsToolset.GetLogEntries`) con un controlador de entrada/telemetría por ticks de Slate (`unreal.register_slate_post_tick_callback`) en Python. El callback inyecta `pawn.add_movement_input` y `pawn.jump()` en cada frame de PIE usando el `delta_time` real, muestrea la trayectoria (`start_location`, `end_location`, `distance_moved_cm`, `fell_out_of_world`, `avg_fps`) y se desregistra automáticamente al cumplirse `duration_seconds`. Al finalizar, captura el viewport antes de `StopPIE` y adjunta el informe JSON + imagen multimodal. | Evita por completo `time.sleep()` en el hilo principal del editor, mide el movimiento físico real del `PlayerPawn` (`BP_ThirdPersonCharacter`) y cierra siempre la sesión PIE aunque ocurra un error. |
+| D58 | **Detección de variante `EngineVariant::Uefn` y modo Verse (`REQ-78`, `REQ-79`):** `detect.rs` y `project.rs` distinguen proyectos `.uproject` (UE 5.8) de `.uefnproject` (UEFN), ocultando `RunPython` cuando el motor activo es UEFN y activando `uefnPrompt` + reglas de escritura `.verse` en `code.rs`. | Permite reutilizar la arquitectura MCP de la app en UEFN sin exponer herramientas de Python ni C++ incompatibles con Verse. |
+
+### Rebanadas de implementación (Slices S88–S92)
+
+1. **S88 · Generación de prendas para MetaHuman con retopología en quads en Rust (`REQ-80`):**
+   - En `src-tauri/src/generation/mod.rs` y `src-tauri/src/generation/commands.rs`:
+     - Añadir soporte de parámetros de prenda MetaHuman (`garment_slot: Option<String>`, `quad_remesh: Option<bool>`, `face_limit: Option<u32>`) en la generación 3D de Tripo.
+     - Función pura `build_metahuman_garment_prompt(prompt: &str, slot: &str) -> String` que enriquece el prompt según la ranura (`Torso`, `Legs`, `Feet`) para generar la prenda hueca en A-pose simétrica sin maniquí ni extremidades.
+     - Cuando `garment_slot` está presente (o `quad_remesh == Some(true)`), encadenar tras `text_to_model` / `image_to_model` una tarea `convert_model` (`format: "GLTF"`, `quad: true`, `force_symmetry: true`, `face_limit: face_limit.unwrap_or(8000)`, `flatten_bottom: false`) y descargar el `.glb` resultante, guardando `garment_slot`, `quad_remeshed: true` y `face_limit` en `LibraryEntry.parameters`.
+   - En `src-tauri/src/generation/tools.rs` y `src-tauri/src/mcp_server.rs`:
+     - Exponer la herramienta `generate_metahuman_outfit` (`prompt`, `slot`: `Torso`|`Legs`|`Feet`, `face_limit`, `actor_label` opcional) en el catálogo de herramientas de generación y en el servidor MCP `dbv-unreal-ai`.
+   - Tests unitarios en Rust etiquetados con `/// @spec REQ-80`.
+
+2. **S89 · Auto-rigging por `GeometryScript` (`INPAINT_WEIGHTS`) y equipado en vivo en MetaHumans (`REQ-81`):**
+   - En `unreal-plugin/DBVUnrealAI/Content/Python/dbv_unreal_ai/editor.py`, `toolset.py` y `cpp_bridge.py` (y sincronizado en `d:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI\Content\Python\dbv_unreal_ai\`):
+     - Implementar `list_metahumans()` para enumerar los actores MetaHuman del nivel actual con sus componentes (`Body`, `Torso`, `Legs`, `Feet`), ruta del `SkeletalMesh` base y complexión detectada (`f_med_nrw`, `m_tal_nrw`, `m_med_nrw`, etc.).
+     - Implementar `equip_metahuman_outfit(actor_label, glb_or_asset_path, slot="Torso", destination_path="/Game/DBV/MetaHumanOutfits", asset_name=None, scale_multiplier=1.05, z_offset=0.0, smoothing_iterations=5)` usando las clases reales de UE 5.8 (`GeometryScript_AssetUtils`, `GeometryScript_MeshQueries`, `GeometryScript_MeshTransforms`, `GeometryScript_BoneWeights` con `TransferBoneWeightsMethod.INPAINT_WEIGHTS` y `GeometryScript_NewAssetUtils.create_new_skeletal_mesh_asset_from_mesh`), adaptando automáticamente las cotas a la complexión del MetaHuman y asignando el `USkeletalMesh` con `set_skeletal_mesh_asset` dentro de `ScopedEditorTransaction`.
+   - En `src-tauri/src/unreal/prepare.rs`:
+     - Asegurar que `GeometryScripting` y `GLTFImporter` están en la lista de plugins verificados/activados por «Preparar proyecto».
+   - En `src-tauri/src/mcp_server.rs` y `src/unreal/sendToUnreal.js`:
+     - Exponer `equip_metahuman_outfit` y `list_metahumans` en el servidor MCP y en el flujo de «Enviar a Unreal» cuando el ítem de biblioteca tiene `parameters.garment_slot`.
+   - Tests en Python (`pytest`) y Rust (`cargo test`) etiquetados con `@spec REQ-81`, más verificación en vivo sobre los 3 MetaHumans del nivel (`BP_Victoria_med_nrw_55`, `BP_Pablo`, `BP_David3_MH`).
+
+3. **S90 · Play-testing autónomo en PIE con telemetría e inspección visual (`REQ-82`):**
+   - En `unreal-plugin/DBVUnrealAI/Content/Python/dbv_unreal_ai/editor.py`:
+     - Implementar `start_pie_playtest_tracker(duration_seconds, actions)` y `read_pie_playtest_telemetry()` mediante `unreal.register_slate_post_tick_callback` para mover el `PlayerPawn` (`forward`, `backward`, `left`, `right`, `jump`, `wait`), medir `start_location`, `end_location`, `distance_moved_cm`, `fell_out_of_world` y `avg_fps` sin bloquear el hilo principal.
+   - En `src-tauri/src/mcp_server.rs` y `src/unreal/unrealTools.js`:
+     - Exponer `unreal_playtest` (`duration_seconds`: 1..15, `actions`: lista de acciones, `capture_screenshot`: bool) que orquesta `StartPIE` → tracker por ticks de Slate → `GetLogEntries` → `CaptureViewport` → `StopPIE` (garantizado siempre en limpieza) y devuelve el JSON estructurado de telemetría + captura de pantalla multimodal.
+   - Tests unitarios y de contrato etiquetados con `@spec REQ-82`, más prueba en vivo en `DBVMCPFirst`.
+
+4. **S91 · Interfaz de usuario para Ropa de MetaHuman y botón «▶️ Probar en Play» (`REQ-80`, `REQ-81`, `REQ-82`):**
+   - En `src/app/generateView.js`:
+     - Añadir en la pestaña Modelos 3D (Tripo) el conmutador «Prenda para MetaHuman (Auto-Rig)», selector de ranura (`Torso`, `Legs`, `Feet`) y límite de quads (`8000` por defecto), mostrando el coste estimado combinado (`30 créditos`: `20` generación + `10` retopología en quads).
+   - En `src/app/libraryView.js` y `src/unreal/sendToUnreal.js`:
+     - Mostrar insignia de prenda MetaHuman (`👕 Torso`, `👖 Legs`, `👟 Feet`) en las tarjetas de la biblioteca y permitir equiparla en un MetaHuman del nivel al pulsar «Enviar a Unreal».
+   - En `src/ai/chatPanel.js` y `src/app/aiApp.js`:
+     - Añadir acción rápida «▶️ Probar en Play» en la barra del chat para lanzar un play-test autónomo e inyectar el informe y la captura en la conversación.
+   - Traducciones completas en `src/app/translations.js` (`es`, `en`) y `src/app/translations.zh.js` (`zh`).
+   - Tests de Vitest etiquetados con `// @spec REQ-80`, `// @spec REQ-81`, `// @spec REQ-82`.
+
+5. **S92 · Soporte UEFN y lenguaje Verse (`REQ-78`, `REQ-79`) [Aplazado a v0.6.0; pendiente de descarga de UEFN para Spike P-14]:**
+   - Detección de `.uefnproject` y proceso `UnrealEditorFortnite-Win64-Shipping.exe` en `project.rs` / `detect.rs`.
+   - Soporte de escritura `.verse` en `code.rs` con cabecera de 6 líneas `#`.
+   - `uefnPrompt` en `src/unreal/systemPrompt.js` y adaptación de `unrealTools.js`.
+
+## 14. Plan de implementación — v0.5.0: vestir un MetaHuman de principio a fin desde la app (REQ-83..REQ-90)
+
+> **Modo:** Orquestador. **Estado:** pendiente de aprobación del usuario. `edge_cases` queda en confianza baja hasta los spikes de S93.
+
+### Decisiones de arquitectura
+
+| # | Decisión | Motivo |
+|---|---|---|
+| D59 | **El plugin decide los pasos; los clientes solo los recorren.** `dress_metahuman_start(...)` devuelve un `job_id` y `dress_metahuman_step(job_id)` ejecuta un paso y devuelve el siguiente, con estado en `Saved/DBVUnrealAI/outfits/<job_id>.json`. La app y el MCP propio tienen un bucle mínimo. | Da progreso real, evita el límite de 120 s por llamada y no duplica la lógica en `sendToUnreal.js` y `mcp_server.rs`. REQ-88 pide la lógica en el plugin. |
+| D60 | **Paquete nuevo `dbv_unreal_ai/outfit/`:** `character` (copia, ranuras, volver al original), `skin`, `fit_skirt`, `fit_dress`, `cloth`, `validate` y `pipeline`. `metahuman.py` conserva la vía por huesos. | `metahuman.py` ya tiene 1178 líneas. Módulos con cálculo puro testeable sin motor. |
+| D61 | **Copia + sustitución del actor,** reutilizada entre prendas, y **Blueprint de partida anotado en la copia** para restaurar ranuras y volver al original. | Decisión del usuario. El enlace de la tela solo persiste en el Blueprint (lección del 2026-11-08). |
+| D62 | **Plantilla de tela en `Content` del plugin (`CA_Template`, `DF_Template`), vacía de referencias.** Decidido tras P-17: el Cloth Asset no se puede crear sin diálogo. Se duplica y se cambian propiedades, incluido el puntero de `DataflowInstance`. | Único camino sin modal hallado. El coste es un asset binario que hay que revisar con cada versión del motor. |
+| D63 | **Cálculo en Python del plugin con `numpy` y `Pillow` de `PythonFoundationPackages`** (P-19), sin `cv2`. «Preparar» activa el plugin. | Es oficial de Epic y no obliga a portar el cálculo. El primer arranque necesita red; se prueba en S96. |
+| D64 | **`skirt` y `dress` no usan `_conform_skirt` ni `_remove_hidden_layers`** (REJECTED-10, REJECTED-11). Quedan sin uso y se retiran en `/code-simplify` junto con sus tests. | Evita mantener dos caminos para faldas. |
+| D65 | **Un solo trabajo de ropa a la vez por editor.** El plugin rechaza otro `start` y cualquier paso durante Play de usuario, y comprueba al reanudar que el actor sigue existiendo. | El usuario puede tocar el editor entre pasos. |
+
+### Slices
+
+Cada slice es un commit y se construye en pasos de hasta 50 líneas, con `@spec`, tests, y `CHANGELOG` ES y EN.
+
+1. **S93 · Spikes con puerta (`P-17`, `P-18`, `P-19`, `P-21`), sin código de producto.** Dataflow y Cloth Asset sin diálogos en un proyecto sin assets de hoy; copia de `BP_Pablo` con tela enlazada y actor sustituido; instalación real de dependencias; aislamiento de la prenda con los GLB de la biblioteca. **Puerta:** resultados en `SPECIFICATIONS.md` y parada para revisar con el usuario si P-17, P-18 o P-21 fallan.
+2. **S94 · Destino explícito (`REQ-83`).** Quitar «el primero» en `metahuman.py`, `sendToUnreal.js`, `unrealTools.js` y `mcp_server.rs`; selector en Biblioteca y Generar; regla en el prompt; i18n es, en, zh. Se puede entregar aunque lo demás falle.
+3. **S95 · Tipos de prenda (`REQ-84`).** `garment_kind` en `generation/` y `catalog.rs`, sufijos por tipo, compatibilidad con `garment_slot`, interfaz e i18n.
+4. **S96 · Preparar (`REQ-87`).** `ChaosClothAssetToolset` en `prepare.rs` y en el diagnóstico, comprobando antes que su `.uplugin` existe en el motor y reiniciando una vez.
+5. **S97 · Personaje (`REQ-85`, `REQ-84`).** `outfit/character.py`: copia, sustitución, reutilización, ranuras según la tabla, restauración al quitar una tela, volver al original y aviso de secuencias. Prueba de fallo a mitad.
+6. **S98 · Piel y cuerpo (`REQ-86`).** `outfit/skin.py`: textura limpia desde el material real del personaje, detección de disposición no reconocida, cuerpo sin zona tapada en los LOD visibles.
+7. **S99 · Ajuste de falda y vestido (`REQ-87`).** Portar `skirt_shell.py` y `dress_fit.py` sin constantes de Victoria, con alturas desde huesos. Puerta: mismo resultado visual en `f_med_nrw` y aceptable en `m_tal_nrw` antes de S100.
+8. **S100 · Tela (`REQ-87`).** `outfit/cloth.py`: malla de simulación, grafo, `MaxDistance` por altura, `PhysicsAsset` del personaje, componente y enlace en `BeginPlay` en la copia.
+9. **S101 · Herramienta única (`REQ-88`).** `pipeline.py` (D59), exposición en `toolset.py`, `cpp_bridge.py`, `unrealTools.js` y `mcp_server.rs`; aprobación; progreso en la interfaz; conocimiento en el prompt. Los envíos de prendas pasan por aquí.
+10. **S102 · Validación e informe (`REQ-89`).** `outfit/validate.py`: medidas, Play sin bloquear (reutiliza REQ-82), capturas de tres lados, limpieza; tarjeta de informe e i18n. Con esto la prueba de la app ya tiene sentido.
+11. **S103 · Pendientes de ropa en huesos (`REQ-81`).** Soldadura de tops, `two_sided` y LOD (`task.md`), necesarios para que `top` pase la matriz.
+12. **S104 · Evals, matriz y publicación (`REQ-88`, `REQ-90`).** Evals de §8; `P-20`; matriz de 9 casos con MSIX; revisión del usuario; vídeo; documentación e `IA.md` en ES y EN; ficha de la Store. Las generaciones de Tripo se piden al usuario antes de gastar.
+
+### Pruebas
+
+- **Python:** `tests/python` con el doble de `unreal` para ranuras, restauración, alturas por huesos, máscara de textura, relleno sin ombligo repetido, estados del pipeline y fallos a mitad.
+- **Rust y Vitest:** contratos de `dress_metahuman`, ausencia de destino, bucle de pasos, compatibilidad de entradas antiguas, selector.
+- **En vivo:** puertas de S93, S99, S100, y matriz de REQ-90. Lo no deterministamente testeable (calidad de la tela) lo revisa el usuario con capturas.
+
+### Cuestiones para `/code-simplify`
+
+`metahuman.py`: `equip_metahuman_outfit` y otras funciones incumplen la regla de un solo `return` o la captura genérica de excepciones según los pases de revisión; se revisan solo donde se toque.
+
+### Decisión añadida durante S96
+
+| # | Decisión | Motivo |
+|---|---|---|
+| D66 | **Los plugins de vestir se piden solo si el motor trae su `.uplugin` y entran como «solo Editor» cuando los añade la app.** Si el usuario ya los tenía, su lista de destinos no se toca. | Un `.uproject` con un plugin que no existe hace saltar un aviso al abrir el editor (lección del 2026-11-08), y los plugins de la app son solo Editor desde la v0.4.1 para empaquetar en Android/VR. `P-20` dirá si la tela exige alguno fuera del Editor. |
+
+## 15. Plan de implementación — v0.5.0: caja negra, depurar supervisando la partida del usuario (REQ-91..REQ-97)
+
+> **Modo:** Orquestador. **Estado:** `/spec` hecho el 2026-11-09 (v1.14); **pendiente de aprobación del usuario** para pasar a `/build`. El usuario pidió incluirla en la v0.5.0, de modo que `/ship` espera a REQ-90 **y** a la puerta de REQ-97. Origen: `docs/Propuesta_CajaNegra_DBVUnrealAI.md`.
+
+### Architect Review (resumen; el debate completo se imprimió en la conversación)
+
+- **Builder:** grabadora en el plugin, análisis en Rust, herramientas `session_*` definidas una vez para el MCP propio y el asistente, botón en la app.
+- **Adversary:** `unreal_playtest` ya registra un callback de Slate por ticks (REQ-82): dos callbacks por fotograma sobre el mismo mundo (un playtest y una sesión) se pisarían, y un callback que sobrevive al PIE reproduce el incidente del 2026-11-08 (decenas de miles de líneas en el log). Un editor que se cuelga a mitad de `Saved/DBVUnrealAI/Sessions/` no debe dejar un archivo ilegible, y `session_isolate` apaga sistemas del juego: si no se deshace, el usuario prueba otra cosa distinta de la que cree.
+- **Evidence:** `SPECIFICATIONS.md` §3.19 (R1, R2, R6 y R9 de REQ-91), R-34 y R-41; `editor.py` (`start_pie_playtest_tracker`) y `mcp_server.rs` (`playtest`, con su `StopPIE` garantizado).
+- **Resolución:** una sola grabación o playtest activo por editor (R9, y rechazo mutuo); el cierre se ata al fin de PIE y a la identidad del mundo antes de leer ningún objeto; el formato escribe por bloques autocontenidos (un bloque a medias se descarta, el resto se lee); `session_isolate` solo sobre el mundo de juego, con aprobación, anotado y deshecho al terminar. La estimación de coste y el fin de PIE desde Python no se asumen: son los spikes P-22 y P-23 de S106.
+- **Confianza:** `edge_cases="medium"` (los fallos reales ya medidos están cubiertos, falta el comportamiento de VR Preview, P-24), `security="medium"` (sesiones locales, voz apagada, `session_isolate` con aprobación), `concurrency="medium"` (una grabación activa por editor y exclusión con `unreal_playtest`; hasta P-23 no se sabe qué señal fiable hay del fin de PIE).
+
+### Decisiones de arquitectura
+
+| # | Decisión | Motivo |
+|---|---|---|
+| D67 | **La variante Python de la grabadora es la base; la C++ es opcional y condicionada a P-22.** La propuesta recomendaba C++; aquí se invierte el orden. | El usuario quiere que valga «para todos los proyectos» y un proyecto solo Blueprint no puede compilar C++ (no hay Live Coding, R-44). El contrato es el mismo en las dos variantes (R-02b). |
+| D68 | **Formato `frames.bin` sin compresión, por bloques autocontenidos y con la biblioteca estándar de Python.** Cada bloque lleva su cabecera con filas y columnas, los tiempos y las columnas en `f32`. `meta.json` y `events.jsonl` en texto. | A 72 FPS una señal ocupa unos 1 MB por hora: la compresión no compensa. Los bloques cumplen R6, y evitan `numpy` en la grabación (solo llega con `PythonFoundationPackages`). |
+| D69 | **Una sola definición de `session_*` en Rust (`sessions/tools.rs`), publicada por el MCP propio y por el asistente (D10).** `session_wait` y el análisis los atiende la app. | Sin dos copias; el análisis funciona con el editor cerrado o colgado; no depende de que el toolset admita llamadas largas (patrón de `generation_jobs`). |
+| D70 | **El análisis es Rust puro sobre los ficheros** (`sessions/analysis/`), con funciones por análisis y tests contra archivos sintéticos con lo sembrado. | Determinista y testeable sin motor: es el equivalente a la comprobación por estado del resto de la suite. |
+| D71 | **Arrancar y parar PIE reutiliza la ruta de `unreal_playtest`** (`StartPIE`/`StopPIE` con garantía de parada) y el cierre de la sesión se ata a la identidad del mundo, no al nombre del nivel. | Una sola forma de gobernar PIE; evita la sesión que sobrevive al juego. |
+| D72 | **S105 (instrucciones, receta y regla contra callbacks por fotograma) se entrega primero y sin depender de la grabadora.** | Es lo que evita hoy el incidente del log y no cuesta más de un par de días. |
+| D73 | **Grabar en paquetes instalados en el visor queda fuera** (módulo de ejecución sin `UnrealEd` y envío por `adb`): pasa a la v0.6.0. | `DBVUnrealAICpp` es solo Editor porque depende de `UnrealEd` y rompía el empaquetado; no puede alojarlo. |
+
+### Slices
+
+Cada slice es un commit, en pasos de hasta 50 líneas, con `@spec`, tests y `CHANGELOG` ES y EN.
+
+1. **S105 · Instrucciones, receta y regla de seguridad (`REQ-97`).** Sección «Depurar con caja negra» en `unrealPrompt` (y en la guía común de IA `docs/IA*.md`), receta `diagnosticar-fallo-en-ejecucion` en `recipes.json`, y aviso de `pythonNudge` ante un callback por fotograma en `unreal_run_python`. Evals de trayectoria (propone antes de cambiar código; 0 callbacks por fotograma).
+2. **S106 · Grabadora Python (`REQ-91`).** Paquete `dbv_unreal_ai/session/`: señales (componente, socket, variable por reflexión, propiedad de la instancia de animación), presets, `finish()` primero, apagado de señal con aviso único, una sola sesión activa y exclusión con el playtest, límites, bloques de `frames.bin`, `events.jsonl`, `meta.json` con el modo de ejecución y el coste medido. **Puerta:** spike P-23 en vivo (fin de PIE e identidad del mundo) y medición de P-22.
+3. **S107 · Almacenamiento y lector en Rust (`REQ-91`).** `sessions/store.rs`: carpeta `Saved/DBVUnrealAI/Sessions/`, lectura tolerante de un bloque a medias, historial, límites de 20 sesiones y 500 MB, borrado con confirmación. Tests con sesiones cortadas a mitad.
+4. **S108 · Análisis núcleo (`REQ-93`).** `stillness`, `oscillation`, `jumps`, `follow`, `timeline`, `transitions`, `frame_budget` y `gaps`, con las reglas de interpretación. Tests con archivos sintéticos con lo sembrado y con uno limpio.
+5. **S109 · Herramientas `session_*` (`REQ-92`).** `session_plan`, `start`, `status`, `wait`, `mark`, `stop`, `analyze`, `query`, `list`, `delete` en una sola definición; aprobación y límite de tamaño de respuesta; prompt de dominio.
+6. **S110 · Interfaz (`REQ-94`).** Botón y desplegable, tarjeta del plan, panel, pregunta final, tabla «lo que notaste / lo que dicen los datos / conclusión», historial, i18n es, en, zh.
+7. **S111 · Marcas y análisis restantes (`REQ-93`, `REQ-94`).** Marca con teclado y desde la app, `around_marks`, `correlate`, `wrong_axis`, `relative_yaw`.
+8. **S112 · Visor (`REQ-95`).** Spike P-24 (VR Preview por código), indicador, marca con el mando con vibración, capturas, pasos en el visor, voz opcional; avisos de conflicto con los controles del juego.
+9. **S113 · Aislar, conducir y comparar (`REQ-96`).** `session_isolate`, `session_drive`, `session_compare` con aprobación y deshacer al terminar el juego; se adelanta si el núcleo sale rápido (en el caso real, aislar fue lo más revelador).
+10. **S114 · Grabadora C++ (`REQ-91`), condicional a P-22.** Solo si la medición de S106 supera el objetivo; mismo contrato y mismos tests. Se compila con el editor cerrado (sin Live Coding).
+11. **S115 · Evals, caso de referencia y documentación (`REQ-97`).** Recrear los dos fallos reales (`FTransform` compuesto al revés, bucle valor-objetivo) y que `wrong_axis` y `oscillation` los señalen; 50 sesiones sin nada enganchado ni errores repetidos; repetir ElecnorMIO; `docs/IA*.md` en ES y EN.
+
+### Pruebas
+
+- **Python (`tests/python`):** doble de `unreal` para apagado de señal con aviso único, cierre al terminar el PIE, mundo nuevo con el mismo nombre de nivel, una sola sesión activa, límites, y un archivo cortado a mitad que se lee.
+- **Rust:** formato, lectura tolerante, cada análisis con su archivo sintético (con lo sembrado y limpio), contrato de las herramientas y paridad entre las dos superficies, tamaño de respuesta (menos de unos 2 KB un análisis completo).
+- **Vitest:** botón, tarjeta, panel, historial y tabla de conclusiones.
+- **En vivo:** puertas de S106 (P-22, P-23) y S112 (P-24), y el caso real de ElecnorMIO con visor, que revisa el usuario.
+
+### Cuestiones para `/code-simplify`
+
+La grabadora y los análisis deben cumplir desde el principio la regla de un solo `return` y la captura de excepciones concretas (`<coding_standards>`); se revisan función por función antes de `/ship`.

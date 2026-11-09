@@ -83,3 +83,32 @@ def undo_turn(count: str, expected_current: str) -> str:
     return editor.undo_turn(c, exp)
 
 
+def list_metahumans() -> str:
+    """Ver ``editor.list_metahumans``."""
+    return editor.list_metahumans()
+
+
+def equip_metahuman_outfit(
+    actor_label: str,
+    garment_source: str,
+    slot: str,
+    folder_path: str,
+    asset_name: str,
+    scale_multiplier: str = "",
+    z_offset: str = "",
+    smoothing_iterations: str = "",
+) -> str:
+    """Ver ``editor.equip_metahuman_outfit``."""
+    return editor.equip_metahuman_outfit(
+        _text(actor_label),
+        _text(garment_source),
+        _text(slot) or "Torso",
+        _text(folder_path) or "/Game/DBV/MetaHumanOutfits",
+        _text(asset_name),
+        float(_text(scale_multiplier) or "1.05") if scale_multiplier else 1.05,
+        float(_text(z_offset) or "0.0") if z_offset else 0.0,
+        int(_text(smoothing_iterations) or "5") if smoothing_iterations else 5,
+    )
+
+
+

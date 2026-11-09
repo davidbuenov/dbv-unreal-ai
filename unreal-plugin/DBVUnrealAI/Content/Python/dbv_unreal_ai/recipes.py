@@ -164,11 +164,20 @@ def _check_convai_metahuman(actors: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _check_runtime_diagnosis(actors: list[Any]) -> list[dict[str, Any]]:
+    """Lo que el editor puede decir de esta receta: que no quedó una partida en marcha. Comparar sesiones llega con
+    ``session_compare`` (REQ-96); hasta entonces el resultado lo juzga la persona."""
+    del actors
+    in_play = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world() is not None
+    return [_item("not_in_play", not in_play, "the editor is in Play" if in_play else "the editor is not in Play")]
+
+
 CHECKS: dict[str, Callable[[list[Any]], list[dict[str, Any]]]] = {
     "test_level": _check_test_level,
     "tripo_character": _check_tripo_character,
     "world_walk": _check_world_walk,
     "convai_metahuman": _check_convai_metahuman,
+    "runtime_diagnosis": _check_runtime_diagnosis,
 }
 
 

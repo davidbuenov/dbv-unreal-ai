@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-15, REQ-27, REQ-28, REQ-29, REQ-32, RNF-04, RNF-IA.2
+// @spec REQ-15, REQ-27, REQ-28, REQ-29, REQ-32, REQ-80, RNF-04, RNF-IA.2
 //
 // Escenario D. Nada se lanza sin la tarjeta de coste (con el foco en «Cancelar», DESIGN.md), que enseña el
 // total de todas las variantes y lo que se enviará a Tripo (RNF-IA.2, REQ-27). Lanza las MISMAS herramientas
@@ -59,8 +59,11 @@ export async function confirmAndLaunch(deps, tool, args) {
   return ids;
 }
 
-/** Argumentos de la herramienta a partir del formulario. */
-export function formArgs({ mode, prompt, image, name, variants, faceLimit, lowPoly, textureQuality, worldModel }) {
+/** Tipos de prenda de MetaHuman (los mismos que `generation::tools::GARMENT_KINDS`). @spec REQ-84 */
+export const GARMENT_KINDS = ['top', 'pants', 'skirt', 'dress', 'shoes'];
+
+/** Argumentos de la herramienta a partir del formulario. `garmentSlot` es el campo antiguo; manda `garmentKind`. @spec REQ-15, REQ-80, REQ-84 */
+export function formArgs({ mode, prompt, image, name, variants, faceLimit, lowPoly, textureQuality, worldModel, garmentSlot, garmentKind, garmentCut }) {
   let result = null;
   if (mode === 'world') {
     const args = {
@@ -72,7 +75,17 @@ export function formArgs({ mode, prompt, image, name, variants, faceLimit, lowPo
     result = { tool: 'generate_world', args };
   } else {
     const options = textureQuality && textureQuality !== 'standard' ? { texture_quality: textureQuality } : undefined;
-    const common = { name: (name || '').trim(), variants: Number(variants) || 1, ...(options ? { options } : {}) };
+    const kind = garmentKind ? String(garmentKind).trim() : '';
+    const slot = !kind && garmentSlot ? String(garmentSlot).trim() : '';
+    const cut = kind || slot ? String(garmentCut ?? '').trim() : '';
+    const common = {
+      name: (name || '').trim(),
+      variants: Number(variants) || 1,
+      ...(options ? { options } : {}),
+      ...(kind ? { garment_kind: kind } : {}),
+      ...(slot ? { garment_slot: slot } : {}),
+      ...(cut ? { garment_cut: cut } : {}),
+    };
     const args =
       mode === 'image'
         ? { image, ...common }
@@ -121,6 +134,22 @@ export function createGenerateView(host, deps) {
     const faces = el('input', { attrs: { type: 'number', min: '500', max: '200000', step: '500', 'aria-label': t('gen.faceLimit') } });
     const lowPoly = el('input', { attrs: { type: 'checkbox' } });
     const quality = el('select', { attrs: { 'aria-label': t('gen.textureQuality') } }, ...['standard', 'detailed', 'extreme'].map((q) => el('option', { text: t(`gen.quality.${q}`), attrs: { value: q } })));
+    const garmentCheck = el('input', { attrs: { type: 'checkbox', 'aria-label': t('gen.garmentCheck') } });
+    const garmentKindSelect = el(
+      'select',
+      { className: 'hidden', attrs: { 'aria-label': t('gen.garmentKind') } },
+      ...GARMENT_KINDS.map((k) => el('option', { text: t(`gen.garmentKind.${k}`), attrs: { value: k } })),
+    );
+    const garmentCutSelect = el(
+      'select',
+      { className: 'hidden', attrs: { 'aria-label': t('gen.garmentCut') } },
+      ...['', 'female', 'male', 'neutral'].map((c) => el('option', { text: t(`gen.garmentCut.${c || 'any'}`), attrs: { value: c } })),
+    );
+    garmentCheck.addEventListener('change', () => {
+      garmentKindSelect.classList.toggle('hidden', !garmentCheck.checked);
+      garmentCutSelect.classList.toggle('hidden', !garmentCheck.checked);
+      refreshEstimate();
+    });
     const worldPrompt = el('textarea', { attrs: { rows: '3', 'aria-label': t('gen.prompt') } });
     const worldModel = el('select', { attrs: { 'aria-label': t('gen.worldModel') } },
       el('option', { text: t('gen.worldModel.full'), attrs: { value: 'marble-1.1' } }),
@@ -143,6 +172,8 @@ export function createGenerateView(host, deps) {
       lowPoly: lowPoly.checked,
       textureQuality: quality.value,
       worldModel: worldModel.value,
+      garmentKind: (mode === 'text' || mode === 'image') && garmentCheck.checked ? garmentKindSelect.value : '',
+      garmentCut: garmentCutSelect.value,
     });
 
     let estimateTimer = null;
@@ -155,7 +186,7 @@ export function createGenerateView(host, deps) {
         estimate.textContent = prepared?.ok && prepared.value?.total != null ? t('gen.estimate', { cost: String(prepared.value.total), spent: String(withSessionCap(prepared.value, status.value).spent) }) : '';
       }, 250);
     }
-    for (const input of [prompt, worldPrompt, name, variants, faces, lowPoly, quality, worldModel]) input.addEventListener('input', refreshEstimate);
+    for (const input of [prompt, worldPrompt, name, variants, faces, lowPoly, quality, garmentKindSelect, garmentCutSelect, worldModel]) input.addEventListener('input', refreshEstimate);
 
     async function suggest() {
       const currentPrompt = mode === 'world' ? worldPrompt.value.trim() : prompt.value.trim();
@@ -521,6 +552,7 @@ export function createGenerateView(host, deps) {
 
     const variantsLabel = el('label', {}, t('gen.variants'), variants);
     const qualityLabel = el('label', {}, t('gen.textureQuality'), quality);
+    const garmentLabel = el('div', { className: 'row' }, el('label', { className: 'row' }, garmentCheck, t('gen.garmentCheck')), garmentKindSelect, garmentCutSelect);
 
     const start = button(
       t('gen.start'),
@@ -718,6 +750,7 @@ export function createGenerateView(host, deps) {
             if (mode !== 'sound') stopAllAudio();
             variantsLabel.classList.toggle('hidden', mode === 'world' || mode === 'sound');
             qualityLabel.classList.toggle('hidden', mode === 'world' || mode === 'sound');
+            garmentLabel.classList.toggle('hidden', mode === 'world' || mode === 'sound');
             updateServiceState();
             refreshEstimate();
           },
@@ -738,7 +771,7 @@ export function createGenerateView(host, deps) {
         imagePane,
         worldPane,
         soundPane,
-        el('div', { className: 'row' }, el('label', {}, t('gen.name'), el('div', { className: 'row' }, name, button(t('gen.suggestName'), suggest, 'btn-ghost'))), variantsLabel, qualityLabel),
+        el('div', { className: 'row' }, el('label', {}, t('gen.name'), el('div', { className: 'row' }, name, button(t('gen.suggestName'), suggest, 'btn-ghost'))), variantsLabel, qualityLabel, garmentLabel),
         el('div', { className: 'row' }, start, estimate),
       ),
       el('div', { className: 'view-header' }, el('h3', { text: t('gen.jobs') })),

@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-19, REQ-16
+// @spec REQ-19, REQ-16, REQ-81, REQ-83, REQ-84
 //
 // Importa con `import_model` del toolset DBV (glTF por Interchange: malla, material y textura;
 // `StaticMeshTools.import_file` de Epic fuerza FBX y rechaza los .glb) y, si se pide, lo coloca
@@ -19,6 +19,8 @@ import { isDbvToolset } from './unrealTools.js';
 
 /** Carpeta del Content Browser para lo generado (convención del usuario: todo bajo /Game/DBV). */
 export const GENERATED_FOLDER = '/Game/DBV/Generated';
+/** Carpeta del Content Browser para las prendas de MetaHuman: la misma en la que `equip_metahuman_outfit` crea el `SK_`. @spec REQ-81 */
+export const OUTFITS_FOLDER = '/Game/DBV/MetaHumanOutfits';
 /** Carpeta del World Outliner para lo colocado. */
 export const OUTLINER_FOLDER = 'DBV/Generated';
 
@@ -42,18 +44,79 @@ const parse = (result) => {
   }
 };
 
+/** Código fijo para riggear y equipar una prenda en un MetaHuman del nivel. @spec REQ-81 */
+export function equipMetahumanCode(actorLabel, garmentSource, slot, scaleMultiplier = 1.05, zOffset = 0) {
+  const hex = Array.from(
+    new TextEncoder().encode(
+      JSON.stringify({
+        actor_label: String(actorLabel ?? ''),
+        garment_source: String(garmentSource ?? ''),
+        slot: String(slot ?? 'Torso'),
+        scale_multiplier: Number(scaleMultiplier) || 1.05,
+        z_offset: Number(zOffset) || 0,
+      }),
+    ),
+    (b) => b.toString(16).padStart(2, '0'),
+  ).join('');
+  return `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.equip_metahuman_outfit(actor_label=_p["actor_label"], garment_source=_p["garment_source"], slot=_p["slot"], scale_multiplier=float(_p["scale_multiplier"]), z_offset=float(_p["z_offset"]))\n`;
+}
+
+const LIST_METAHUMANS_CODE = 'import dbv_unreal_ai.editor as _e\nresult = _e.list_metahumans()\n';
+
+/**
+ * ¿El corte de la prenda no es el del cuerpo elegido? `build` es la complexión (`f_med_nrw` mujer, `m_tal_nrw` hombre).
+ * Devuelve `{garment, body}` o `null` si coincide, es neutro o no se sabe. @spec REQ-84
+ */
+export function cutMismatch(entry, build) {
+  const cut = entry?.parameters?.garment_cut;
+  const text = String(build ?? '');
+  let body = null;
+  if (text.startsWith('f_')) body = 'female';
+  else if (text.startsWith('m_')) body = 'male';
+  return (cut === 'female' || cut === 'male') && body && cut !== body ? { garment: cut, body } : null;
+}
+
+/** Equipa una prenda en el MetaHuman `target` del nivel. @spec REQ-81, REQ-83 */
+async function equipOnMetahuman(backend, dbv, target, primary, slot) {
+  const ran = await backend.callTool(dbv, 'run_python', { code: equipMetahumanCode(target, primary, slot) }, 120);
+  const res = ran.ok ? parse(ran.value)?.result ?? null : null;
+  let outcome;
+  if (res?.success) outcome = { ok: true, actor: res.actor ?? target, slot: res.slot ?? slot, riggedAsset: res.rigged_asset ?? primary, build: res.build ?? '' };
+  else outcome = { ok: false, error: res?.error ?? (ran.ok ? ran.value?.text : ran.error.message) ?? 'equipFailed' };
+  return outcome;
+}
+
+/**
+ * Los MetaHumans del nivel abierto (etiqueta, complexión y ranuras) para elegir a quién vestir. @spec REQ-83
+ * @returns {Promise<{ok: true, metahumans: {label: string, build: string, slots: object}[]}|{ok: false, error: string}>}
+ */
+export async function listMetahumans(backend) {
+  const listed = await backend.listToolsets();
+  const dbv = listed.ok ? listed.value.find((t) => isDbvToolset(t.name))?.name : null;
+  let outcome;
+  if (!listed.ok) outcome = { ok: false, error: listed.error.message };
+  else if (!dbv) outcome = { ok: false, error: 'toolsetMissing' };
+  else {
+    const ran = await backend.callTool(dbv, 'run_python', { code: LIST_METAHUMANS_CODE }, 60);
+    const report = ran.ok ? parse(ran.value)?.result ?? null : null;
+    outcome = Array.isArray(report?.metahumans) ? { ok: true, metahumans: report.metahumans } : { ok: false, error: ran.ok ? 'listFailed' : ran.error.message };
+  }
+  return outcome;
+}
+
 /**
  * @param {object} deps
  * @param {object} deps.backend `listToolsets()`, `callTool(toolset, tool, args, timeoutSecs)`, `libraryFilePath(id, file)`, `libraryRecordSent(id, project, assetPath)` y, opcional, `libraryWorldPlaceCode(id, splatLabel, colliderAsset, name)`.
  * @param {object} entry Entrada de la biblioteca.
- * @param {{project: string, place?: boolean, folder?: string}} options
+ * @param {{project: string, place?: boolean, folder?: string, metahuman?: string}} options `metahuman`: etiqueta del personaje a vestir si la entrada es una prenda (REQ-83).
  * @returns {Promise<{ok: true, assetPath: string, actor: string|null, kind: string, animations: string[], playing: string|null, note?: string}|{ok: false, error: string}>}
  */
 /** Espera para cargar un Gaussian Splat: un .ply de 3DGS pasa con facilidad de 2 GB (igual que el MCP propio). @spec REQ-54 */
 const SPLAT_TIMEOUT_SECONDS = 600;
 
-export async function sendToUnreal(deps, entry, { project, place = true, folder = GENERATED_FOLDER }) {
+export async function sendToUnreal(deps, entry, { project, place = true, folder: requestedFolder, metahuman = '' }) {
   const { backend } = deps;
+  const folder = requestedFolder ?? (entry.parameters?.garment_slot ? OUTFITS_FOLDER : GENERATED_FOLDER);
   const listed = await backend.listToolsets();
   const dbv = listed.ok ? listed.value.find((t) => isDbvToolset(t.name))?.name : null;
   const splatFile = entry.files?.find((f) => /\.(spz|ply)$/i.test(f));
@@ -142,22 +205,41 @@ export async function sendToUnreal(deps, entry, { project, place = true, folder 
       if (!imported.ok || !report?.success || !report.primary) {
         outcome = { ok: false, error: imported.ok ? (report?.error ?? imported.value.text) : imported.error.message };
       } else {
-        let actor = null;
-        let playing = null;
-        let note;
+        const garmentSlot = entry.parameters?.garment_slot ?? null;
+        const target = String(metahuman ?? '').trim();
         const animations = report.animations ?? [];
-        if (place) {
-          const placed = await backend.callTool(dbv, 'place_asset', { asset_path: report.primary, distance: 300, folder: OUTLINER_FOLDER }, 60);
-          actor = placed.ok ? parse(placed.value)?.actor ?? null : null;
+        // REQ-83: una prenda solo se equipa en el MetaHuman elegido; sin destino se importa y se avisa, sin colocarla.
+        const equip = place && garmentSlot && target ? await equipOnMetahuman(backend, dbv, target, report.primary, garmentSlot) : null;
+        if (equip && !equip.ok) {
+          outcome = { ok: false, error: equip.error };
+        } else {
+          let actor = equip?.actor ?? null;
+          let playing = null;
+          let note = place && garmentSlot && !target ? 'noMetahumanTarget' : undefined;
+          if (place && !garmentSlot) {
+            const placed = await backend.callTool(dbv, 'place_asset', { asset_path: report.primary, distance: 300, folder: OUTLINER_FOLDER }, 60);
+            actor = placed.ok ? parse(placed.value)?.actor ?? null : null;
+          }
+          if (actor && !equip && report.kind === 'skeletal' && animations.length) {
+            const played = await backend.callTool(dbv, 'play_animation', { actor_label: actor, animation_path: animations[0], looping: true }, 60);
+            const playedReport = played.ok && !played.value?.isError ? parse(played.value) : null;
+            if (playedReport?.success) playing = animations[0];
+            else note = 'toolsetOutdated';
+          }
+          const finalAsset = equip?.riggedAsset ?? report.primary;
+          await backend.libraryRecordSent(entry.id, project, finalAsset);
+          outcome = {
+            ok: true,
+            assetPath: finalAsset,
+            actor,
+            kind: equip ? 'metahuman_garment' : report.kind ?? 'static',
+            animations,
+            playing,
+            ...(equip ? { equippedSlot: equip.slot } : {}),
+            ...(equip && cutMismatch(entry, equip.build) ? { cutMismatch: cutMismatch(entry, equip.build) } : {}),
+            ...(note ? { note } : {}),
+          };
         }
-        if (actor && report.kind === 'skeletal' && animations.length) {
-          const played = await backend.callTool(dbv, 'play_animation', { actor_label: actor, animation_path: animations[0], looping: true }, 60);
-          const playedReport = played.ok && !played.value?.isError ? parse(played.value) : null;
-          if (playedReport?.success) playing = animations[0];
-          else note = 'toolsetOutdated';
-        }
-        await backend.libraryRecordSent(entry.id, project, report.primary);
-        outcome = { ok: true, assetPath: report.primary, actor, kind: report.kind ?? 'static', animations, playing, ...(note ? { note } : {}) };
       }
     }
   }

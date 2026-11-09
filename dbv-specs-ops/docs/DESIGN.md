@@ -257,6 +257,25 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
   - **Refresco reactivo post-generación:** la finalización de una generación invalida la entrada del proveedor en la caché de saldo y actualiza inmediatamente el indicador.
   - **Corrección visual de estado local:** el indicador de `dbv-audio-service` evalúa correctamente `st?.value?.ready`, mostrando el estado en verde con el dispositivo real (`GPU`/`CPU`).
 
+### Decisiones de diseño v0.5.0 (2026-11-07)
+
+- **Distintivo de Proyecto UEFN y Verse (REQ-78, REQ-79):**
+  - En la píldora de conexión de la barra superior y en la vista *Proyecto*, los proyectos `.uefnproject` muestran un badge semántico `[UEFN]` con acento `accent` junto al nombre de la isla.
+  - En la vista *Proyecto*, la lista de preparación oculta las filas exclusivas de UE 5.8 (`PythonScriptPlugin`, `DBVUnrealAI` / `DBVUnrealAICpp`) y muestra una nota informativa clara: *«Entorno UEFN detectado: herramientas nativas MCP y código Verse activos.»*
+  - En las tarjetas de propuesta de código (`propose_changes`), los ficheros `.verse` muestran el badge `Verse` en `--font-mono` y el botón de acción final indica *«Aplicar y compilar Verse»*.
+- **Modo «👕 Prenda para MetaHuman» en Generar y Biblioteca (REQ-80, REQ-81):**
+  - En la pestaña *Objeto 3D* de la vista *Generar*, una casilla o conmutador **«👕 Prenda para MetaHuman (A-Pose + Quads)»** despliega una fila compacta con:
+    - Selector de **Tipo de prenda** (REQ-84): `Top` · `Pantalón` · `Falda` · `Vestido` · `Calzado`, con una nota breve de qué ropa retira.
+    - Campo numérico de **Límite de Quads** (`face_limit`, por defecto `8000`, rango `2000–20000`).
+    - Nota de coste transparente en `cost` que suma la tarea de generación + la tarea de retopología (`convert_model`).
+  - En las tarjetas de la *Biblioteca*, las prendas generadas muestran la píldora de su tipo (`👕 Top`, `👖 Pantalón`, `👗 Falda`, `👗 Vestido`, `🥾 Calzado`) y el botón primario al enviarlas a Unreal pasa a llamarse **«Vestir a un MetaHuman…»**.
+  - **Selector de personaje (REQ-83):** ese botón abre un diálogo con los MetaHumans del nivel abierto (nombre y tipo de cuerpo). Con uno solo sale ya elegido; sin ninguno, explica que hace falta uno en el nivel y ofrece solo importar. El diálogo avisa de que se creará una copia y el original no cambia (REQ-85), y de que el nivel no se guarda solo.
+  - **Progreso e informe (REQ-88, REQ-89):** durante el proceso, una lista de pasos con su estado (copia, ropa retirada, piel, ajuste, tela, validación). Al terminar, una tarjeta con el estado `✓ Correcto` en `success`, `! Con avisos` en `warning` o `✗ Error` en `error`, las capturas de frente, lado y espalda en miniatura de 160 px, los avisos en texto claro, y las acciones **«Volver al original»** y, si procede, **«Guardar el nivel»** (no se hace solo).
+- **Play-testing Autónomo en Vivo (REQ-82):**
+  - En la barra de herramientas de la caja de conversación (junto a *«📷 Capturar viewport»* y *«Recetas»*), se añade el botón **«▶️ Probar en Play»**.
+  - Durante los segundos que dura la sesión PIE, la píldora de conexión muestra el estado `▶️ Probando en Play (3s)…`.
+  - Al finalizar, el resultado de la herramienta `unreal_playtest` se presenta en la conversación como una tarjeta compacta de telemetría (estado `✓ Superado` en `success` o `✗ Fallo detectado` en `error`, FPS medios/mínimos, desplazamiento del `PlayerPawn`, alertas de caída al vacío o errores de Blueprint en `--font-mono`) acompañada de la miniatura de 160 px de la captura tomada dentro de PIE.
+
 ---
 
 ## ✨ Movimiento e Interacción

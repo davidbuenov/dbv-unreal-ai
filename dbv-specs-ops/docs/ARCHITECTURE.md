@@ -1,8 +1,8 @@
 # 🏗 Arquitectura Técnica: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` → se valida y completa en `/plan`
-> **Estado:** Borrador v0.2.1
-> **Última Revisión:** 2026-10-28 (soporte Antigravity CLI y reorganización tripartita de IAs v0.2.1)
+> **Estado:** Borrador `/spec` v0.5.0
+> **Última Revisión:** 2026-11-07 (integración UEFN y Verse, Ropa de MetaHumans vía Tripo Quads + GeometryScript, y Play-testing autónomo en PIE)
 
 ---
 
@@ -99,6 +99,20 @@ Llamadas de solo lectura por HTTP desde la máquina de desarrollo:
   - Rediseño modular dividiendo la lista de proveedores en 3 contenedores semánticos (`ai-category-subscriptions`, `ai-category-cloud`, `ai-category-local`).
   - Badges semánticos para conexiones activas y persistidas en `state.connections`.
   - Botón de ajustes ⚙️ en cada agente conectado para seleccionar modelo y razonamiento inline.
+
+### Módulos y Cambios de la v0.5.0 (2026-11-07)
+
+- **Soporte de UEFN y Lenguaje Verse (`src-tauri/src/unreal/discovery.rs`, `prepare.rs`, `src-tauri/src/ai/files.rs`, `src/ai/unrealTools.js`):**
+  - `discovery.rs`: detección dual de proyectos `.uproject` (`engine_kind: "ue5"`) y `.uefnproject` (`engine_kind: "uefn"`), y procesos `UnrealEditorFortnite*`.
+  - `prepare.rs`: perfil de diagnóstico `uefn` sin requisitos de `PythonScriptPlugin` ni instalación de `DBVUnrealAI` / `DBVUnrealAICpp`.
+  - `files.rs`: guardia de edición de código ampliada para ficheros `.verse` con comentario `#` para la cabecera estándar DBV de 6 líneas.
+  - `unrealTools.js` y `recipes.js`: inyección de reglas del lenguaje Verse y dispositivos de Fortnite Creative (`uefnPrompt`) y recetas específicas cuando `engine_kind === "uefn"`.
+- **Pipeline de Ropa para MetaHumans (`src-tauri/src/generation/tripo.rs`, `jobs.rs`, `unreal-plugin/DBVUnrealAI/Content/Python/dbv_toolset/metahuman_tools.py`):**
+  - `tripo.rs` y `jobs.rs`: soporte encadenado de generación + `convert_model` (`quad: true`, `face_limit: 8000`, `flatten_bottom: false`) y modificadores de prompt anatómico por slot (`Torso`, `Legs`, `Feet`).
+  - `metahuman_tools.py`: importación PBR (`two_sided = True`), carga en `UDynamicMesh` (`GeometryScriptLibrary_SceneUtilityFunctions`), auto-escalado y centrado sobre cotas anatómicas del cuerpo base del MetaHuman, transferencia de pesos de huesos mediante `GeometryScriptLibrary_MeshBoneWeightFunctions.transfer_bone_weights_from_mesh` (`INPAINT_WEIGHTS`), creación de `USkeletalMesh` emparentado a `mh_body_skm.skeleton` y equipado en vivo con `set_leader_pose_component(Body)`.
+- **Vestir un MetaHuman (`unreal-plugin/DBVUnrealAI/Content/Python/dbv_unreal_ai/outfit/`, planificado, REQ-83..REQ-90):** la lógica vive en el plugin y avanza por pasos (`dress_metahuman_start` / `dress_metahuman_step`) con estado en `Saved/DBVUnrealAI/outfits/`; la app y el MCP propio solo recorren los pasos. Trabaja sobre una copia del Blueprint del personaje (el original no cambia). Faldas y vestidos llevan Chaos Cloth (`ChaosClothAssetToolset`) con el enlace a `Body` en el Blueprint; tops, pantalones y calzado siguen por huesos en `metahuman.py`. *La ruta `dbv_toolset/` del párrafo anterior no refleja el código actual, que está en `dbv_unreal_ai/`.*
+- **Play-testing Autónomo en PIE (`unreal-plugin/DBVUnrealAI/Content/Python/dbv_toolset/playtest_tools.py`, `src-tauri/src/mcp_server.rs`, `src/ai/unrealTools.js`):**
+  - Orquestador asíncrono por ticks de Slate (`register_slate_post_tick_callback`) para ejecutar sesiones de **Play In Editor (PIE)** durante `duration_seconds` sin congelar el *Game Thread*: `editor_request_begin_play()` → inyección de inputs y muestreo periódico de `PlayerPawn` (posición, velocidad, caída al vacío `fell_out_of_world`) y FPS → recolección de errores/warnings del Output Log + captura de pantalla en PIE (`CaptureViewport`) → `editor_request_end_play()`.
 
 ---
 

@@ -6,7 +6,10 @@
 // =============================================================================
 
 import { describe, expect, it, vi } from 'vitest';
-import { assetName, GENERATED_FOLDER, sendToUnreal } from '../../src/unreal/sendToUnreal.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { assetName, cutMismatch, GENERATED_FOLDER, listMetahumans, OUTFITS_FOLDER, sendToUnreal } from '../../src/unreal/sendToUnreal.js';
+import { garmentKindOf } from '../../src/app/libraryView.js';
 import { createGenerationTools } from '../../src/generation/generationTools.js';
 
 const ENTRY = { id: 'linterna-1', name: 'Linterna mágica', provider: 'tripo', kind: 'model', prompt: 'lantern', files: ['model.glb'], sentTo: [] };
@@ -28,6 +31,153 @@ function backend({ toolsets = [{ name: DBV, description: '' }], importResult, pl
     },
   };
 }
+
+describe('enviar prendas a Unreal (REQ-81)', () => {
+  it('una prenda se importa en la carpeta de MetaHumanOutfits, no en Generated @spec REQ-81', async () => {
+    const b = backend();
+    await sendToUnreal({ backend: b }, { ...ENTRY, parameters: { garment_slot: 'Torso' } }, { project: 'p', place: false });
+    expect(b.calls[0].args.folder_path).toBe(OUTFITS_FOLDER);
+  });
+
+  it('lo que no es prenda sigue en Generated y se respeta una carpeta pedida @spec REQ-19', async () => {
+    const plain = backend();
+    await sendToUnreal({ backend: plain }, ENTRY, { project: 'p', place: false });
+    expect(plain.calls[0].args.folder_path).toBe(GENERATED_FOLDER);
+    const chosen = backend();
+    await sendToUnreal({ backend: chosen }, { ...ENTRY, parameters: { garment_slot: 'Legs' } }, { project: 'p', place: false, folder: '/Game/Otra' });
+    expect(chosen.calls[0].args.folder_path).toBe('/Game/Otra');
+  });
+
+  it('si el editor rechaza la importación (Play), devuelve el motivo y no lo anota como enviado @spec REQ-81', async () => {
+    const b = backend({ importResult: { success: false, error: 'the editor is in Play mode' } });
+    const out = await sendToUnreal({ backend: b }, { ...ENTRY, parameters: { garment_slot: 'Torso' } }, { project: 'p' });
+    expect(out).toEqual({ ok: false, error: 'the editor is in Play mode' });
+    expect(b.libraryRecordSent).not.toHaveBeenCalled();
+    expect(b.calls).toHaveLength(1);
+  });
+});
+
+describe('destino explícito del MetaHuman (REQ-83)', () => {
+  const equipCalls = (b) => b.calls.filter((c) => c.tool === 'run_python' && String(c.args.code).includes('equip_metahuman_outfit'));
+  const GARMENT = { ...ENTRY, parameters: { garment_slot: 'Torso' } };
+  const withRunPython = (b, response) => {
+    const inner = b.callTool;
+    b.callTool = async (toolset, tool, args, timeout) => {
+      let out;
+      if (tool === 'run_python') {
+        b.calls.push({ toolset, tool, args, timeout });
+        out = { ok: true, value: { text: '', isError: false, value: { success: true, result: response } } };
+      } else {
+        out = await inner(toolset, tool, args, timeout);
+      }
+      return out;
+    };
+    return b;
+  };
+
+  it('sin destino la prenda solo se importa: no se equipa a nadie ni se coloca delante de la cámara @spec REQ-83', async () => {
+    const b = backend();
+    const out = await sendToUnreal({ backend: b }, GARMENT, { project: 'p' });
+    expect(out).toMatchObject({ ok: true, note: 'noMetahumanTarget', actor: null });
+    expect(out.equippedSlot).toBeUndefined();
+    expect(equipCalls(b)).toHaveLength(0);
+    expect(b.calls.some((c) => c.tool === 'place_asset')).toBe(false);
+  });
+
+  it('un destino en blanco cuenta como sin destino @spec REQ-83', async () => {
+    const b = backend();
+    const out = await sendToUnreal({ backend: b }, GARMENT, { project: 'p', metahuman: '   ' });
+    expect(out.note).toBe('noMetahumanTarget');
+    expect(equipCalls(b)).toHaveLength(0);
+  });
+
+  it('con destino equipa solo a ese personaje y lo dice @spec REQ-83', async () => {
+    const b = withRunPython(backend(), { success: true, actor: 'BP_Dos', slot: 'Torso', rigged_asset: '/Game/DBV/MetaHumanOutfits/Chaqueta_Rigged' });
+    const out = await sendToUnreal({ backend: b }, GARMENT, { project: 'p', metahuman: 'BP_Dos' });
+    expect(out).toMatchObject({ ok: true, actor: 'BP_Dos', equippedSlot: 'Torso', kind: 'metahuman_garment' });
+    const hex = Array.from(new TextEncoder().encode('BP_Dos'), (x) => x.toString(16).padStart(2, '0')).join('');
+    expect(equipCalls(b)).toHaveLength(1);
+    expect(equipCalls(b)[0].args.code).toContain(hex);
+  });
+
+  it('si el editor no puede equipar, el error llega tal cual y no se coloca la prenda suelta @spec REQ-83', async () => {
+    const reason = "MetaHuman 'BP_X' not found in level. Available MetaHumans: ['BP_Uno']";
+    const b = withRunPython(backend(), { success: false, error: reason });
+    const out = await sendToUnreal({ backend: b }, GARMENT, { project: 'p', metahuman: 'BP_X' });
+    expect(out).toEqual({ ok: false, error: reason });
+    expect(b.calls.some((c) => c.tool === 'place_asset')).toBe(false);
+    expect(b.libraryRecordSent).not.toHaveBeenCalled();
+  });
+
+  it('listMetahumans devuelve los personajes del nivel para el selector @spec REQ-83', async () => {
+    const b = withRunPython(backend(), { count: 2, metahumans: [{ label: 'BP_Uno', build: 'f_med_nrw' }, { label: 'BP_Dos', build: 'm_tal_nrw' }] });
+    const out = await listMetahumans(b);
+    expect(out.ok).toBe(true);
+    expect(out.metahumans.map((m) => m.label)).toEqual(['BP_Uno', 'BP_Dos']);
+    expect(await listMetahumans(backend({ toolsets: [] }))).toEqual({ ok: false, error: 'toolsetMissing' });
+  });
+
+  it('el tipo de una prenda sale de garment_kind o, en entradas antiguas, de la ranura y la descripción @spec REQ-84', () => {
+    expect(garmentKindOf({ parameters: { garment_kind: 'dress', garment_slot: 'Torso' } })).toBe('dress');
+    expect(garmentKindOf({ parameters: { garment_slot: 'Torso' } })).toBe('top');
+    expect(garmentKindOf({ parameters: { garment_slot: 'Feet' } })).toBe('shoes');
+    expect(garmentKindOf({ parameters: { garment_slot: 'Legs' }, prompt: 'tartan kilt' })).toBe('skirt');
+    expect(garmentKindOf({ parameters: { garment_slot: 'Legs' }, prompt: 'denim jeans', name: 'Vaqueros' })).toBe('pants');
+    expect(garmentKindOf({ parameters: {} })).toBeNull();
+    expect(garmentKindOf(null)).toBeNull();
+  });
+
+  it('avisa si el corte de la prenda no es el del cuerpo elegido @spec REQ-84', () => {
+    const female = { parameters: { garment_cut: 'female' } };
+    expect(cutMismatch(female, 'm_tal_nrw')).toEqual({ garment: 'female', body: 'male' });
+    expect(cutMismatch(female, 'f_med_nrw')).toBeNull();
+    expect(cutMismatch({ parameters: { garment_cut: 'neutral' } }, 'm_tal_nrw')).toBeNull();
+    expect(cutMismatch({ parameters: {} }, 'm_tal_nrw')).toBeNull();
+    expect(cutMismatch(female, '')).toBeNull();
+  });
+
+  it('al equipar con un corte que no encaja, el resultado lo dice y la IA lo cuenta @spec REQ-84', async () => {
+    const b = withRunPython(backend(), { success: true, actor: 'BP_Dos', slot: 'Torso', build: 'm_tal_nrw', rigged_asset: '/Game/DBV/MetaHumanOutfits/X' });
+    const entry = { ...ENTRY, parameters: { garment_slot: 'Torso', garment_kind: 'top', garment_cut: 'female' } };
+    const out = await sendToUnreal({ backend: b }, entry, { project: 'p', metahuman: 'BP_Dos' });
+    expect(out.cutMismatch).toEqual({ garment: 'female', body: 'male' });
+    const tools = createGenerationTools({
+      specs: [],
+      listLibrary: async () => ({ ok: true, value: [{ ...entry, id: 'g-1' }] }),
+      askApproval: async () => 'once',
+      send: async () => out,
+    });
+    const text = await tools.find((t) => t.name === 'library_send_to_unreal').run({ id: 'g-1', metahuman: 'BP_Dos' });
+    expect(text).toContain('WARNING: the garment has a female cut and the body is male');
+  });
+
+  it('library_send_to_unreal pasa el destino de la IA a la app y avisa si falta @spec REQ-83', async () => {
+    const seen = [];
+    const tools = createGenerationTools({
+      specs: [],
+      listLibrary: async () => ({ ok: true, value: [{ ...GARMENT, id: 'g-1' }] }),
+      askApproval: async () => 'once',
+      send: async (entry, options) => {
+        seen.push(options);
+        return options.metahuman ? { ok: true, assetPath: '/Game/X', actor: options.metahuman, equippedSlot: 'Torso' } : { ok: true, assetPath: '/Game/X', actor: null, note: 'noMetahumanTarget' };
+      },
+    });
+    const send = tools.find((t) => t.name === 'library_send_to_unreal');
+    expect(await send.run({ id: 'g-1' })).toContain('NO target was given');
+    expect(await send.run({ id: 'g-1', metahuman: 'BP_Dos' })).toContain('equipped (Torso) on the MetaHuman "BP_Dos"');
+    expect(seen).toEqual([{ metahuman: '' }, { metahuman: 'BP_Dos' }]);
+  });
+
+  it('ninguna ruta de equipado lleva nombres de personaje escritos en el código @spec REQ-83', () => {
+    const files = ['src/unreal/sendToUnreal.js', 'src/unreal/unrealTools.js', 'src/generation/generationTools.js', 'src/app/libraryView.js', 'unreal-plugin/DBVUnrealAI/Content/Python/dbv_unreal_ai/metahuman.py'];
+    for (const file of files) {
+      const text = readFileSync(resolve(process.cwd(), file), 'utf8');
+      expect(text, file).not.toMatch(/Victoria|Pablo|David3|candidates\[0\]|first MetaHuman/);
+    }
+    const rust = readFileSync(resolve(process.cwd(), 'src-tauri/src/mcp_server.rs'), 'utf8').split('#[cfg(test)]')[0];
+    expect(rust).not.toMatch(/Victoria|Pablo|David3|first MetaHuman/);
+  });
+});
 
 describe('enviar a Unreal (REQ-19)', () => {
   it('importa el GLB en /Game/DBV/Generated, lo coloca y lo anota en la biblioteca @spec REQ-19, REQ-17', async () => {

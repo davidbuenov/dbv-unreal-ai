@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-20, REQ-11, REQ-51
+// @spec REQ-20, REQ-11, REQ-51, REQ-81, REQ-82
 //
 // `dbv-unreal-ai --mcp [--port <n>] [--project <ruta.uproject>]` arranca, en lugar de la ventana,
 // un servidor MCP por stdio (patrón de dbv-typst-editor RF-113): lo lanza el agente (Claude Code,
@@ -125,12 +125,13 @@ const fn schema_object() -> &'static str {
 /// Herramientas que solo consultan (REQ-12): se publican con `readOnlyHint` y, cuando un agente de la conversación
 /// pide permiso para usarlas, la app lo concede sola. Lo que modifica, ejecuta Python o gasta créditos sigue
 /// preguntando (pedido por el usuario el 2026-11-01: las aprobaciones de simples consultas eran muy pesadas).
-pub const READ_ONLY_TOOLS: [&str; 17] = [
+pub const READ_ONLY_TOOLS: [&str; 18] = [
     "unreal_list_toolsets",
     "unreal_describe_toolset",
     "unreal_capture_viewport",
     "unreal_scene_summary",
     "unreal_describe_python_api",
+    "unreal_list_metahumans",
     "library_list",
     "generation_jobs",
     "tripo_operations",
@@ -213,9 +214,36 @@ pub fn tool_specs() -> Vec<Value> {
         ),
         tool(
             "library_send_to_unreal",
-            "Import a library asset into the Unreal project under /Game/DBV/Generated and place it in front of the editor camera. For 3D models it imports the mesh; for World Labs scenarios it imports the collider mesh (Static Mesh with collision) for ground and physics.",
-            json!({ "id": { "type": "string" }, "place": { "type": "boolean" } }),
+            "Import a library asset into the Unreal project under /Game/DBV/Generated and place it in front of the editor camera. For a MetaHuman garment, pass `metahuman` (the label of the character to dress, from unreal_list_metahumans) to auto-rig and equip it; without it the garment is only imported and never equipped. For 3D models it imports the mesh; for World Labs scenarios it imports the collider mesh (Static Mesh with collision) for ground and physics.",
+            json!({ "id": { "type": "string" }, "place": { "type": "boolean" }, "metahuman": { "type": "string", "description": "For a MetaHuman garment: label of the MetaHuman to dress (from unreal_list_metahumans). Never guess it: with several MetaHumans and no indication, ask the user." } }),
             json!(["id"]),
+        ),
+        tool(
+            "unreal_list_metahumans",
+            "List the MetaHuman characters in the open level: actor label, Body SkeletalMesh, build (e.g. f_med_nrw, m_tal_nrw) and current outfit slots (Torso, Legs, Feet). Read-only.",
+            json!({}),
+            json!([]),
+        ),
+        tool(
+            "unreal_equip_metahuman_outfit",
+            "Auto-rig a 3D garment (library asset id, local .glb/.fbx path, or /Game/... StaticMesh) onto a MetaHuman character in the open level using GeometryScript INPAINT_WEIGHTS and equip it in the Torso, Legs or Feet slot with set_leader_pose_component(Body).",
+            json!({
+                "actor_label": { "type": "string", "description": "Label of the MetaHuman to dress, from unreal_list_metahumans. Required: nothing is equipped without a target. If the user has not said which and there are several, ask them." },
+                "source": { "type": "string", "description": "Library asset id, local .glb/.fbx path, or /Game/... StaticMesh path." },
+                "slot": { "type": "string", "enum": ["Torso", "Legs", "Feet"], "description": "Outfit slot (default: Torso, or the library asset's garment_slot)." },
+                "scale_multiplier": { "type": "number", "description": "Scale margin over the target body slot (default 1.05)." },
+                "z_offset": { "type": "number", "description": "Vertical offset in cm (default 0.0)." }
+            }),
+            json!(["actor_label", "source"]),
+        ),
+        tool(
+            "unreal_playtest",
+            "Run an autonomous Play-In-Editor (PIE) playtest: starts PIE, drives the PlayerPawn across Slate ticks (forward/backward/left/right/jump), measures start/end location, distance moved, whether it fell out of the world, average FPS and recent Warning/Error log entries, captures the PIE viewport screenshot, and always stops PIE.",
+            json!({
+                "duration_seconds": { "type": "integer", "minimum": 1, "maximum": 15, "description": "Playtest duration in seconds (1-15, default 5)." },
+                "actions": { "type": "array", "items": { "type": "string", "enum": ["forward", "backward", "left", "right", "jump"] }, "description": "Movement actions to apply during the playtest (default: [\"forward\", \"jump\"])." }
+            }),
+            json!([]),
         ),
         tool(
             crate::unreal::compile::MCP_TOOL,
@@ -408,7 +436,9 @@ impl McpServer {
                 let entry = self.config.library.import_file(std::path::Path::new(&text(args, "path")), Some(name.as_str()).filter(|n| !n.is_empty())).map_err(err)?;
                 format!("Imported as {} (\"{}\", {}: {})", entry.id, entry.name, entry.kind, entry.files.join(", "))
             }
-            "library_send_to_unreal" => self.send_to_unreal(&text(args, "id"), args.get("place").and_then(Value::as_bool).unwrap_or(true))?,
+            "library_send_to_unreal" => self.send_to_unreal(&text(args, "id"), args.get("place").and_then(Value::as_bool).unwrap_or(true), text(args, "metahuman").trim())?,
+            "unreal_list_metahumans" => self.list_metahumans()?,
+            "unreal_equip_metahuman_outfit" => self.equip_metahuman_outfit(args)?,
             "unreal_import_sound" => {
                 let path = text(args, "path");
                 let asset_name = text(args, "asset_name");
@@ -506,8 +536,9 @@ impl McpServer {
         result
     }
 
-    /// «Enviar a Unreal» desde un agente, con la misma elección de ficheros que la ventana (D25). @spec REQ-19, REQ-54
-    fn send_to_unreal(&mut self, id: &str, place: bool) -> Result<String, String> {
+    /// «Enviar a Unreal» desde un agente, con la misma elección de ficheros que la ventana (D25). `metahuman` es el
+    /// personaje que se viste si la entrada es una prenda (vacío: solo se importa). @spec REQ-19, REQ-54, REQ-83
+    fn send_to_unreal(&mut self, id: &str, place: bool, metahuman: &str) -> Result<String, String> {
         let entry = self.config.library.get(id).ok_or_else(|| format!("no library asset with id {id}"))?;
         let err = |e: UnrealError| e.to_string();
         let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
@@ -515,7 +546,7 @@ impl McpServer {
         let name = name.trim_matches('_').to_string();
         let result = match crate::library::send_plan(&entry) {
             crate::library::SendPlan::Splat { splat, collider } => self.send_splat(&entry, &dbv, &name, &splat, collider.as_deref(), place),
-            crate::library::SendPlan::Model { model } => self.send_model(&entry, &dbv, &name, &model, place),
+            crate::library::SendPlan::Model { model } => self.send_model(&entry, &dbv, &name, &model, place, metahuman),
             crate::library::SendPlan::Sound { sound } => self.send_sound(&entry, &dbv, &name, &sound),
             crate::library::SendPlan::Nothing => Err("the asset has no model (.glb, .gltf, .fbx, .obj), audio (.wav) or Gaussian Splat (.spz, .ply) file".to_string()),
         };
@@ -604,18 +635,38 @@ impl McpServer {
         let _ = self.config.library.record_sent(id, &project, asset);
     }
 
-    /// Un modelo (Static o Skeletal Mesh) importado y colocado delante de la cámara. @spec REQ-19
-    fn send_model(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, file: &str, place: bool) -> Result<String, String> {
+    /// Un modelo (Static o Skeletal Mesh) importado y colocado delante de la cámara; una prenda solo se equipa en el
+    /// MetaHuman indicado y, sin él, se importa y se avisa (nunca se elige «el primero»). @spec REQ-19, REQ-81, REQ-83
+    fn send_model(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, file: &str, place: bool, metahuman: &str) -> Result<String, String> {
         let id = entry.id.as_str();
         let path = self.config.library.file_path(id, file).map_err(|e| e.to_string())?;
         let err = |e: UnrealError| e.to_string();
-        let import_args = json!({ "source_file": path.to_string_lossy(), "folder_path": "/Game/DBV/Generated", "asset_name": name });
+        // Mismas carpetas que `sendToUnreal.js`: una prenda va con el `SK_` que crea `equip_metahuman_outfit`.
+        let folder = if entry.parameters.get("garment_slot").is_some_and(Value::is_string) { "/Game/DBV/MetaHumanOutfits" } else { "/Game/DBV/Generated" };
+        let import_args = json!({ "source_file": path.to_string_lossy(), "folder_path": folder, "asset_name": name });
         let imported = self.editor(|s| s.call_toolset_tool(dbv, "import_model", import_args.clone(), std::time::Duration::from_secs(300))).map_err(err)?;
         let primary = imported.value.as_ref().and_then(|v| v.get("primary")).and_then(Value::as_str).map(str::to_string).ok_or_else(|| format!("import failed: {}", format(&imported)))?;
         let report = imported.value.clone().unwrap_or(Value::Null);
         let animations: Vec<String> = report.get("animations").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
         let mut message = format!("Imported as {primary}");
-        if place {
+        let garment_slot = entry.parameters.get("garment_slot").and_then(Value::as_str);
+        if place && garment_slot.is_some() {
+            let slot = garment_slot.unwrap_or("Torso");
+            if metahuman.is_empty() {
+                message.push_str(". It is a MetaHuman garment and no target was given, so it was only imported and NOT equipped: call unreal_list_metahumans, ask the user which character to dress (or use the only one and say so) and call unreal_equip_metahuman_outfit");
+            } else {
+                let ran = self.run_fixed(&Self::equip_metahuman_code(metahuman, &primary, slot, 1.05, 0.0))?;
+                let res = ran.get("result").cloned().unwrap_or(Value::Null);
+                if res.get("success") != Some(&json!(true)) {
+                    let reason = res.get("error").and_then(Value::as_str).unwrap_or("the garment could not be equipped");
+                    return Err(format!("imported as {primary}, but not equipped: {reason}"));
+                }
+                let actor = res.get("actor").and_then(Value::as_str).unwrap_or(metahuman);
+                let slot = res.get("slot").and_then(Value::as_str).unwrap_or(slot);
+                let rigged = res.get("rigged_asset").and_then(Value::as_str).unwrap_or(&primary);
+                message.push_str(&format!(" and auto-rigged + equipped on MetaHuman {actor} ({slot}) as {rigged}"));
+            }
+        } else if place {
             let place_args = json!({ "asset_path": primary, "distance": 300.0, "folder": "DBV/Generated" });
             let placed = self.editor(|s| s.call_toolset_tool(dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
             message.push_str(&format!(" and placed: {}", format(&placed)));
@@ -632,6 +683,136 @@ impl McpServer {
         }
         self.record_sent(id, dbv, &primary);
         Ok(message)
+    }
+
+    fn hex_json(payload: &Value) -> String {
+        serde_json::to_string(payload).unwrap_or_else(|_| "{}".into()).bytes().map(|b| format!("{b:02x}")).collect()
+    }
+
+    /// Código fijo para riggear y equipar una prenda en un MetaHuman del nivel. @spec REQ-81
+    pub fn equip_metahuman_code(actor_label: &str, garment_source: &str, slot: &str, scale_multiplier: f64, z_offset: f64) -> String {
+        let hex = Self::hex_json(&json!({
+            "actor_label": actor_label,
+            "garment_source": garment_source,
+            "slot": slot,
+            "scale_multiplier": scale_multiplier,
+            "z_offset": z_offset,
+        }));
+        format!(
+            "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode(\"utf-8\"))\nresult = _e.equip_metahuman_outfit(actor_label=_p[\"actor_label\"], garment_source=_p[\"garment_source\"], slot=_p[\"slot\"], scale_multiplier=float(_p[\"scale_multiplier\"]), z_offset=float(_p[\"z_offset\"]))\n"
+        )
+    }
+
+    /// Lista los actores MetaHuman del nivel abierto. @spec REQ-81
+    fn list_metahumans(&mut self) -> Result<String, String> {
+        let ran = self.run_fixed("import dbv_unreal_ai.editor as _e\nresult = _e.list_metahumans()\n")?;
+        if ran.get("success") == Some(&json!(true)) {
+            Ok(ran.get("result").cloned().unwrap_or(Value::Null).to_string())
+        } else {
+            Err(ran.get("error").and_then(Value::as_str).unwrap_or("failed to list MetaHumans").to_string())
+        }
+    }
+
+    /// Riggea y equipa una prenda en un MetaHuman del nivel. @spec REQ-81
+    fn equip_metahuman_outfit(&mut self, args: &Value) -> Result<String, String> {
+        let raw_source = args.get("source").and_then(Value::as_str).unwrap_or("").trim();
+        if raw_source.is_empty() {
+            return Err("`source` is required (library asset id, local .glb/.fbx path, or /Game/... StaticMesh path)".into());
+        }
+        // REQ-83: sin destino no se hace nada; el editor enumera los MetaHumans disponibles en el error.
+        let actor_label = args.get("actor_label").and_then(Value::as_str).unwrap_or("").trim();
+        let explicit_slot = args.get("slot").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+        let (garment_source, inferred_slot) = match self.config.library.get(raw_source) {
+            Some(entry) => {
+                let model = entry
+                    .files
+                    .iter()
+                    .find(|f| f.ends_with(".glb") || f.ends_with(".gltf") || f.ends_with(".fbx") || f.ends_with(".obj"))
+                    .ok_or_else(|| format!("library asset {raw_source} has no 3D mesh file"))?;
+                let path = self.config.library.file_path(&entry.id, model).map_err(|e| e.to_string())?;
+                let slot = entry.parameters.get("garment_slot").and_then(Value::as_str).unwrap_or("Torso").to_string();
+                (path.to_string_lossy().to_string(), slot)
+            }
+            None => (raw_source.to_string(), "Torso".to_string()),
+        };
+        let slot = explicit_slot.unwrap_or(&inferred_slot);
+        let scale_multiplier = args.get("scale_multiplier").and_then(Value::as_f64).unwrap_or(1.05).clamp(0.5, 2.0);
+        let z_offset = args.get("z_offset").and_then(Value::as_f64).unwrap_or(0.0).clamp(-200.0, 200.0);
+        let ran = self.run_fixed(&Self::equip_metahuman_code(actor_label, &garment_source, slot, scale_multiplier, z_offset))?;
+        let res = ran.get("result").cloned().unwrap_or(Value::Null);
+        if ran.get("success") == Some(&json!(true)) && res.get("success") != Some(&json!(false)) {
+            Ok(res.to_string())
+        } else {
+            let msg = res.get("error").and_then(Value::as_str).or_else(|| ran.get("error").and_then(Value::as_str)).unwrap_or("failed to equip MetaHuman outfit");
+            Err(msg.to_string())
+        }
+    }
+
+    /// Ejecuta un playtest autónomo en PIE y garantiza detener siempre la sesión (`StopPIE`). @spec REQ-82
+    fn playtest(&mut self, args: &Value) -> Value {
+        let duration_secs = args.get("duration_seconds").and_then(Value::as_u64).unwrap_or(5).clamp(1, 15);
+        let actions: Vec<String> = args
+            .get("actions")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .filter(|a: &Vec<String>| !a.is_empty())
+            .unwrap_or_else(|| vec!["forward".into(), "jump".into()]);
+        let fast_test = self.config.polling.interval < Duration::from_millis(100);
+        let start_res = self.editor(|s| s.call_toolset_tool("EditorToolset.EditorAppToolset", "StartPIE", json!({ "bSimulateInEditor": false }), DEFAULT_TIMEOUT));
+        if let Err(err) = start_res {
+            return text_result(format!("Could not start PIE: {err}"), true);
+        }
+        std::thread::sleep(if fast_test { self.config.polling.interval } else { Duration::from_millis(400) });
+        let hex = Self::hex_json(&json!({ "duration_seconds": duration_secs, "actions": actions }));
+        let start_code = format!(
+            "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode(\"utf-8\"))\nresult = _e.start_pie_playtest_tracker(float(_p[\"duration_seconds\"]), _p[\"actions\"])\n"
+        );
+        let _ = self.run_fixed(&start_code);
+        std::thread::sleep(if fast_test {
+            self.config.polling.interval
+        } else {
+            Duration::from_millis(duration_secs * 1000 + 250)
+        });
+        let telemetry = self
+            .run_fixed("import dbv_unreal_ai.editor as _e\nresult = _e.read_pie_playtest_telemetry()\n")
+            .ok()
+            .and_then(|ran| ran.get("result").cloned())
+            .unwrap_or_else(|| json!({ "pawn_spawned": false }));
+        let logs = self
+            .resolve("LogsToolset")
+            .ok()
+            .and_then(|toolset| {
+                self.editor(|s| {
+                    s.call_toolset_tool(
+                        &toolset,
+                        "GetLogEntries",
+                        json!({ "categories": null, "verbosity": "Warning", "searchString": null, "tailLines": 50 }),
+                        DEFAULT_TIMEOUT,
+                    )
+                })
+                .ok()
+            })
+            .and_then(|r| r.value)
+            .unwrap_or_else(|| json!([]));
+        let capture = self.editor(|s| crate::unreal::capture::capture(s, false, false)).ok();
+        let stop_res = self.editor(|s| s.call_toolset_tool("EditorToolset.EditorAppToolset", "StopPIE", json!({}), DEFAULT_TIMEOUT));
+        let stopped_pie = stop_res.is_ok();
+        let report = json!({
+            "telemetry": telemetry,
+            "log_entries": logs,
+            "stopped_pie": stopped_pie,
+        });
+        let text = compact::clip(&report.to_string());
+        match capture {
+            Some(cap) => json!({
+                "content": [
+                    { "type": "image", "data": cap.base64, "mimeType": cap.mime },
+                    { "type": "text", "text": text }
+                ],
+                "isError": false
+            }),
+            None => text_result(text, false),
+        }
     }
 
     fn session_spent(&self, service: &str) -> f64 {
@@ -784,6 +965,8 @@ impl McpServer {
                         Ok(capture) => json!({ "content": [{ "type": "image", "data": capture.base64, "mimeType": capture.mime }, { "type": "text", "text": crate::unreal::capture::describe(&capture) }], "isError": false }),
                         Err(error) => text_result(error.to_string(), true),
                     }
+                } else if name == "unreal_playtest" {
+                    self.playtest(&arguments)
                 } else {
                     // Ningún resultado pasa del tope, sea cual sea la herramienta (REQ-51).
                     match self.call(&name, &arguments) {
@@ -1197,11 +1380,25 @@ mod tests {
                             ("describe_toolset", _) => grabbed(&format!("describe_toolset.{}.response.json", args["toolset_name"].as_str().unwrap_or(""))),
                             (_, "get_scene_summary") => grabbed("call_tool.get_scene_summary.response.json"),
                             (_, "validate_python") => reply(json!({ "returnValue": json!({ "ok": true, "findings": [], "syntax_error": null }).to_string() }).to_string()),
-                            (_, "run_python") => reply(json!({ "returnValue": json!({ "success": true, "stdout": "", "stderr": "", "warnings": [], "error": null, "result": { "placed": 12, "folder": "DBV/Torches" } }).to_string() }).to_string()),
+                            (_, "run_python") => {
+                                let code = args["arguments"]["code"].as_str().unwrap_or("");
+                                let result_val = if code.contains("list_metahumans") {
+                                    json!({ "count": 2, "metahumans": [{ "label": "BP_Victoria_med_nrw_55", "build": "f_med_nrw", "slots": { "Torso": "/Game/MetaHumans/Common/Shirt" } }] })
+                                } else if code.contains("equip_metahuman_outfit") {
+                                    json!({ "success": true, "actor": "BP_Victoria_med_nrw_55", "slot": "Torso", "rigged_asset": "/Game/DBV/MetaHumanOutfits/Chaqueta_Rigged_f_med_nrw", "has_bone_weights": true })
+                                } else if code.contains("read_pie_playtest_telemetry") {
+                                    json!({ "pawn_spawned": true, "pawn_class": "BP_ThirdPersonCharacter_C", "start_location": [0.0, 0.0, 91.7], "end_location": [618.0, 0.0, 101.6], "distance_moved_cm": 618.0, "fell_out_of_world": false, "avg_fps": 60.0, "frames": 300, "actions_executed": ["forward", "jump"] })
+                                } else {
+                                    json!({ "placed": 12, "folder": "DBV/Torches" })
+                                };
+                                reply(json!({ "returnValue": json!({ "success": true, "stdout": "", "stderr": "", "warnings": [], "error": null, "result": result_val }).to_string() }).to_string())
+                            }
                             (_, "load_gaussian_splat") => reply(json!({ "returnValue": json!({ "success": true, "actor": args["arguments"]["actor_label"] }).to_string() }).to_string()),
                             (_, "import_model") => reply(json!({ "returnValue": json!({ "success": true, "primary": "/Game/DBV/Generated/Isla_Collider", "kind": "static", "animations": [] }).to_string() }).to_string()),
                             (_, "place_asset") => reply(json!({ "returnValue": json!({ "success": true, "actor": "Isla_Collider" }).to_string() }).to_string()),
                             (_, "get_project_info") => reply(json!({ "returnValue": json!({ "project_dir": "D:/P/Demo/" }).to_string() }).to_string()),
+                            (_, "StartPIE") => reply(json!({ "success": true }).to_string()),
+                            (_, "StopPIE") => reply(json!({ "success": true }).to_string()),
                             (_, "CaptureViewport") => reply(json!({ "image": { "mimeType": "image/png", "data": png }, "cameraLocation": { "x": 0.0, "y": -500.0, "z": 300.0 }, "cameraFOV": 90 }).to_string()),
                             _ => reply("{}".into()),
                         };
@@ -1352,5 +1549,78 @@ mod tests {
         crate::convai_characters::save(dir.path(), &[crate::convai_characters::ConvaiCharacter { name: "Victoria".into(), character_id: "c1fca5ca-03b4-11ef-ae52-42010a7be00e".into(), notes: String::new() }]).unwrap();
         let listed = rpc(&mut s, "tools/call", json!({ "name": "convai_characters", "arguments": {} }));
         assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("- Victoria: c1fca5ca-03b4-11ef-ae52-42010a7be00e"));
+    }
+
+    /// Lista MetaHumans del nivel y equipa una prenda de la biblioteca o al enviarla con `library_send_to_unreal`. @spec REQ-81
+    #[test]
+    fn lista_y_equipa_prendas_en_metahumans() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let (url, calls) = fake_editor();
+        s.config.unreal_url = url;
+        let listed = rpc(&mut s, "tools/call", json!({ "name": "unreal_list_metahumans", "arguments": {} }));
+        assert_eq!(listed["result"]["isError"], false, "{listed}");
+        assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("BP_Victoria_med_nrw_55"));
+
+        let (id, folder) = s.config.library.new_entry_dir("Chaqueta").unwrap();
+        std::fs::write(folder.join("model.glb"), b"glb").unwrap();
+        s.config.library.add(LibraryEntry {
+            id: id.clone(),
+            name: "Chaqueta".into(),
+            provider: "tripo".into(),
+            kind: "model".into(),
+            prompt: "jacket".into(),
+            parameters: json!({ "garment_slot": "Torso", "quad_remeshed": true }),
+            task_id: "t-1".into(),
+            created_at: 1,
+            credits: Some(30.0),
+            files: vec!["model.glb".into()],
+            thumbnail: None,
+            sent_to: vec![],
+            parent: None,
+            output: Value::Null,
+        }).unwrap();
+
+        // REQ-83: sin destino la prenda solo se importa; nunca se equipa en «el primero» del nivel.
+        calls.lock().unwrap().clear();
+        let sent = rpc(&mut s, "tools/call", json!({ "name": "library_send_to_unreal", "arguments": { "id": id } }));
+        assert_eq!(sent["result"]["isError"], false, "{sent}");
+        let sent_text = sent["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(sent_text.contains("NOT equipped") && !sent_text.contains("auto-rigged"), "{sent_text}");
+        let seen: Vec<(String, Value)> = calls.lock().unwrap().clone();
+        assert!(!seen.iter().any(|(_, args)| args["code"].as_str().is_some_and(|c| c.contains("equip_metahuman_outfit"))), "sin destino no se ejecuta el equipado: {seen:?}");
+        assert!(!seen.iter().any(|(tool, _)| tool == "place_asset"), "una prenda no se coloca delante de la cámara");
+
+        calls.lock().unwrap().clear();
+        let sent = rpc(&mut s, "tools/call", json!({ "name": "library_send_to_unreal", "arguments": { "id": id, "metahuman": "BP_Victoria_med_nrw_55" } }));
+        assert_eq!(sent["result"]["isError"], false, "{sent}");
+        let sent_text = sent["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(sent_text.contains("auto-rigged + equipped on MetaHuman BP_Victoria_med_nrw_55 (Torso)"), "{sent_text}");
+        let seen: Vec<(String, Value)> = calls.lock().unwrap().clone();
+        let equip_code = seen.iter().find_map(|(_, args)| args["code"].as_str().filter(|c| c.contains("equip_metahuman_outfit"))).expect("ejecuta el equipado");
+        let hex: String = "BP_Victoria_med_nrw_55".bytes().map(|b| format!("{b:02x}")).collect();
+        assert!(equip_code.contains(&hex), "el destino viaja en el código fijo");
+
+        let equipped = rpc(&mut s, "tools/call", json!({ "name": "unreal_equip_metahuman_outfit", "arguments": { "source": id, "actor_label": "BP_Victoria_med_nrw_55" } }));
+        assert_eq!(equipped["result"]["isError"], false, "{equipped}");
+        assert!(equipped["result"]["content"][0]["text"].as_str().unwrap().contains("Chaqueta_Rigged_f_med_nrw"));
+    }
+
+    /// `unreal_playtest` arranca PIE, registra movimiento por ticks, captura el viewport y detiene siempre PIE. @spec REQ-82
+    #[test]
+    fn playtest_autonomo_arranca_mide_captura_y_detiene_pie() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let (url, calls) = fake_editor();
+        s.config.unreal_url = url;
+        let res = rpc(&mut s, "tools/call", json!({ "name": "unreal_playtest", "arguments": { "duration_seconds": 3, "actions": ["forward", "jump"] } }));
+        assert_eq!(res["result"]["isError"], false, "{res}");
+        let content = res["result"]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2, "devuelve captura más telemetría JSON");
+        assert_eq!(content[0]["type"], "image");
+        let text = content[1]["text"].as_str().unwrap();
+        assert!(text.contains("\"distance_moved_cm\":618.0") && text.contains("\"stopped_pie\":true"), "{text}");
+        let seen: Vec<String> = calls.lock().unwrap().iter().map(|(t, _)| t.clone()).collect();
+        assert!(seen.contains(&"StartPIE".to_string()) && seen.contains(&"StopPIE".to_string()), "{seen:?}");
     }
 }

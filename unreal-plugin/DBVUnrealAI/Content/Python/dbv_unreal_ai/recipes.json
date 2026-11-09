@@ -44,6 +44,17 @@
       },
       "needs": ["editor", "convai"],
       "steps": "Make a MetaHuman talk with Convai. 1) Read the Convai skills first: ListSkills and GetSkills of ToolsetRegistry.AgentSkillToolset. 2) Place the assembled MetaHuman Blueprint (/Game/MetaHumans/<Name>/BP_<Name>), not the MetaHumanCharacter asset. 3) Ask which Convai character to use (convai_characters lists the registered ones) and run SetupConvaiCharacter with its Character ID. 4) Run SetupConvaiPlayer on the player pawn. 5) Add a NavMeshBoundsVolume sized to the walkable floor (AddNavMeshVolumeForCurrentLevel with the floor location and half-extent). 6) Optionally name places with level_zones_propose so the character can be asked to go there. Remind the user that the conversation happens in Play, with the microphone."
+    },
+    {
+      "id": "runtime_diagnosis",
+      "title": { "es": "Diagnosticar un fallo en ejecución", "en": "Diagnose a runtime failure", "zh-CN": "诊断运行时故障" },
+      "summary": {
+        "es": "Medir lo que pasa mientras juegas, cruzarlo con lo que notas y confirmar la causa antes de tocar nada.",
+        "en": "Measure what happens while you play, cross it with what you notice and confirm the cause before changing anything.",
+        "zh-CN": "在你游玩时测量发生的事情，与你的感受交叉对照，在修改任何东西之前先确认原因。"
+      },
+      "needs": ["editor"],
+      "steps": "Diagnose a failure that happens while the game runs (movement, physics, jitter, collisions, animation, timing, something that happens 'sometimes') by MEASURING before changing anything. 1) Reproduce: ask the user what they noticed and when. If the session_plan tool is available, propose a short plan with it (what to record and what the user should do) and record while the user plays; if they wear a headset, never ask them to look at the screen. If the session_* tools are not available, measure what you can with unreal_playtest and say clearly that a playtest in PIE does not replace the user's own play with the headset. 2) Measure: cross what the user felt with the data (session_analyze when available) and answer as a table: what you noticed / what the data says / conclusion. Say what you measured and what you did not. 3) Isolate: if several causes remain, switch ONE system off only for the test (session_isolate when available, always with approval) and repeat. 4) Fix only what you confirmed, with the smallest change, reviewed by the user. 5) Validate: play again, compare with the previous recording (session_compare when available) and check the log shows no new errors. 6) Remember: if the data contradicts a note in the project memory or a code comment, say so and propose correcting it. Never record with per-frame callbacks (register_slate_post_tick_callback, tick hooks) in unreal_run_python: they can outlive Play and flood the log."
     }
   ]
 }

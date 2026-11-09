@@ -8,6 +8,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { classifyTool, createPermissionMemory, firstWord } from '../../src/unreal/permissions.js';
 import { createUnrealTools, describeCapture, formatResult, isDbvToolset, pythonNudge, resolveToolset, unrealPrompt } from '../../src/unreal/unrealTools.js';
+import { sendToUnreal } from '../../src/unreal/sendToUnreal.js';
+import { formArgs } from '../../src/app/generateView.js';
 
 const TOOLSETS = [
   { name: 'ToolsetRegistry.AgentSkillToolset', description: 'skills' },
@@ -196,6 +198,23 @@ describe('modelos que no llaman a la herramienta (REQ-10, REQ-26)', () => {
     expect(pythonNudge('```python\nprint("hola")\n```')).toBeNull();
     expect(pythonNudge(undefined)).toBeNull();
   });
+
+  it('un callback por fotograma escrito en la respuesta lleva su aviso aparte @spec REQ-97', () => {
+    const reply = '```python\nimport unreal\nh = unreal.register_slate_post_tick_callback(lambda dt: None)\n```';
+    expect(pythonNudge(reply)).toMatch(/per-frame callback/);
+    expect(pythonNudge('```python\nimport unreal\nx = 1\n```')).not.toMatch(/per-frame callback/);
+  });
+
+  it('el prompt manda medir antes de cambiar y prohíbe grabar con callbacks por fotograma @spec REQ-97', () => {
+    for (const agent of [false, true]) {
+      const prompt = unrealPrompt({ projectName: 'Demo', agent });
+      expect(prompt).toContain('do not change code guided only by a hypothesis: measure first');
+      expect(prompt).toContain('runtime_diagnosis');
+      expect(prompt).toContain('NEVER record with per-frame callbacks');
+      expect(prompt).toContain('a hypothesis, not a fact');
+      expect(prompt).toContain('what you noticed / what the data says / conclusion');
+    }
+  });
 });
 
 describe('formato y prompt', () => {
@@ -276,5 +295,103 @@ describe('la IA ve el viewport (REQ-13)', () => {
     expect(showImage).toHaveBeenCalledWith(capture);
     expect(askApproval).not.toHaveBeenCalled();
     expect(describeCapture(capture)).toContain('Labeled actors: Pirata');
+  });
+});
+
+describe('MetaHumans y playtest autónomo (REQ-80, REQ-81, REQ-82)', () => {
+  it('formArgs propaga garment_slot cuando se elige una prenda de MetaHuman @spec REQ-80', () => {
+    const textGarment = formArgs({ mode: 'text', prompt: 'cyberpunk jacket', name: 'Chaqueta', variants: 1, garmentSlot: 'Torso' });
+    expect(textGarment.tool).toBe('generate_3d_model');
+    expect(textGarment.args.garment_slot).toBe('Torso');
+
+    const imgGarment = formArgs({ mode: 'image', image: 'ref.png', name: 'Botas', variants: 1, garmentSlot: 'Feet' });
+    expect(imgGarment.tool).toBe('image_to_3d_model');
+    expect(imgGarment.args.garment_slot).toBe('Feet');
+  });
+
+  it('formArgs manda el tipo y el corte de la prenda y deja el campo antiguo para compatibilidad @spec REQ-84', () => {
+    const dress = formArgs({ mode: 'text', prompt: 'red dress', name: 'Vestido', variants: 1, garmentKind: 'dress', garmentCut: 'female' });
+    expect(dress.args).toMatchObject({ garment_kind: 'dress', garment_cut: 'female' });
+    expect(dress.args.garment_slot).toBeUndefined();
+    const plain = formArgs({ mode: 'text', prompt: 'a lamp', name: 'Lámpara', variants: 1, garmentKind: '', garmentCut: 'male' });
+    expect(plain.args.garment_cut, 'sin prenda no hay corte').toBeUndefined();
+    const legacy = formArgs({ mode: 'image', image: 'r.png', name: 'Botas', variants: 1, garmentSlot: 'Feet' });
+    expect(legacy.args.garment_slot).toBe('Feet');
+    expect(legacy.args.garment_kind).toBeUndefined();
+    const both = formArgs({ mode: 'text', prompt: 'x', name: 'X', variants: 1, garmentKind: 'skirt', garmentSlot: 'Torso' });
+    expect(both.args.garment_kind, 'manda el tipo').toBe('skirt');
+    expect(both.args.garment_slot).toBeUndefined();
+  });
+
+  it('lista y equipa prendas de MetaHuman mediante el toolset DBV @spec REQ-81', async () => {
+    const backend = fakeBackend({
+      responses: {
+        run_python: (args) => {
+          if (args.code.includes('list_metahumans')) {
+            return { text: '', isError: false, value: { success: true, result: { count: 1, metahumans: [{ label: 'BP_Victoria', build: 'f_med_nrw' }] } } };
+          }
+          return { text: '', isError: false, value: { success: true, result: { success: true, actor: 'BP_Victoria', slot: 'Torso', rigged_asset: '/Game/DBV/MetaHumanOutfits/Chaqueta_Rigged' } } };
+        },
+        import_model: { text: '', isError: false, value: { success: true, primary: '/Game/DBV/Generated/Chaqueta', kind: 'static', animations: [] } },
+      },
+    });
+    backend.libraryFilePath = vi.fn(async () => ({ ok: true, value: 'C:/lib/model.glb' }));
+    backend.libraryRecordSent = vi.fn(async () => ({ ok: true }));
+
+    const askApproval = vi.fn(async () => 'once');
+    const tools = createUnrealTools({ backend, askApproval });
+
+    const listed = await tool(tools, 'unreal_list_metahumans').run({});
+    expect(listed).toContain('BP_Victoria');
+    expect(askApproval).not.toHaveBeenCalled();
+
+    const equipped = await tool(tools, 'unreal_equip_metahuman_outfit').run({ actor_label: 'BP_Victoria', source: '/Game/DBV/Generated/Chaqueta', slot: 'Torso' });
+    expect(equipped).toContain('Chaqueta_Rigged');
+    expect(askApproval).toHaveBeenCalledTimes(1);
+
+    const sent = await sendToUnreal(
+      { backend },
+      { id: 'g-1', name: 'Chaqueta', kind: 'model', files: ['model.glb'], parameters: { garment_slot: 'Torso' } },
+      { project: 'D:/P/Demo.uproject', place: true, metahuman: 'BP_Victoria' },
+    );
+    expect(sent).toMatchObject({ ok: true, actor: 'BP_Victoria', kind: 'metahuman_garment', equippedSlot: 'Torso' });
+  });
+
+  it('unreal_equip_metahuman_outfit sin destino no pide permiso ni ejecuta nada y manda listar @spec REQ-83', async () => {
+    const backend = fakeBackend();
+    const askApproval = vi.fn(async () => 'once');
+    const tools = createUnrealTools({ backend, askApproval });
+    const out = await tool(tools, 'unreal_equip_metahuman_outfit').run({ source: '/Game/DBV/Generated/Chaqueta', slot: 'Torso' });
+    expect(out).toContain('no target MetaHuman was chosen');
+    expect(out).toContain('unreal_list_metahumans');
+    expect(askApproval).not.toHaveBeenCalled();
+    expect(backend.calls.filter((c) => c.tool === 'run_python')).toHaveLength(0);
+    expect(tool(tools, 'unreal_equip_metahuman_outfit').parameters.required).toContain('actor_label');
+  });
+
+  it('unreal_playtest arranca PIE, mide telemetría, captura el viewport y detiene siempre PIE @spec REQ-82', async () => {
+    const capture = { mime: 'image/jpeg', base64: 'BBBB', width: 1024, height: 576, info: {}, text: 'PIE capture' };
+    const backend = {
+      ...fakeBackend({
+        responses: {
+          run_python: (args) => {
+            if (args.code.includes('read_pie_playtest_telemetry')) {
+              return { text: '', isError: false, value: { success: true, result: { pawn_spawned: true, distance_moved_cm: 618.0, fell_out_of_world: false } } };
+            }
+            return { text: '', isError: false, value: { success: true, result: { started: true } } };
+          },
+        },
+      }),
+      captureViewport: vi.fn(async () => ({ ok: true, value: capture })),
+    };
+    const askApproval = vi.fn(async () => 'once');
+    const tools = createUnrealTools({ backend, askApproval, vision: true, sleep: async () => {} });
+    const res = await tool(tools, 'unreal_playtest').run({ duration_seconds: 3, actions: ['forward', 'jump'] });
+    expect(res.images).toHaveLength(1);
+    expect(res.text).toContain('"distance_moved_cm":618');
+    expect(res.text).toContain('"stopped_pie":true');
+    const calledTools = backend.calls.map((c) => c.tool);
+    expect(calledTools[0]).toBe('StartPIE');
+    expect(calledTools[calledTools.length - 1]).toBe('StopPIE');
   });
 });
