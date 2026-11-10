@@ -37,6 +37,7 @@ use crate::generation::worldlabs::WorldLabsClient;
 use crate::generation::{key_account, service_keys, tools, within_budget, Polling};
 use crate::library::{now_secs, Library};
 use crate::project_memory::tools as memory_tools;
+use crate::sessions::{control as session_control, tools as session_tools};
 use crate::unreal::compact;
 use crate::unreal::discovery;
 use crate::unreal::mcp_client::{
@@ -136,7 +137,7 @@ const fn schema_object() -> &'static str {
 /// Herramientas que solo consultan (REQ-12): se publican con `readOnlyHint` y, cuando un agente de la conversación
 /// pide permiso para usarlas, la app lo concede sola. Lo que modifica, ejecuta Python o gasta créditos sigue
 /// preguntando (pedido por el usuario el 2026-11-01: las aprobaciones de simples consultas eran muy pesadas).
-pub const READ_ONLY_TOOLS: [&str; 19] = [
+pub const READ_ONLY_TOOLS: [&str; 25] = [
     "unreal_list_toolsets",
     "unreal_describe_toolset",
     "unreal_capture_viewport",
@@ -156,6 +157,13 @@ pub const READ_ONLY_TOOLS: [&str; 19] = [
     "recipe_check",
     "search_unreal_guides",
     "convai_characters",
+    // Caja negra (REQ-92): lo que solo lee ficheros o no graba nada.
+    "session_plan",
+    "session_status",
+    "session_list",
+    "session_analyze",
+    "session_query",
+    "session_wait",
 ];
 
 /// Las herramientas de solo lectura, para que la ventana apruebe sola sus permisos. @spec REQ-12
@@ -308,6 +316,9 @@ pub fn tool_specs() -> Vec<Value> {
     specs.push(crate::guides::spec());
     // Personajes de Convai registrados en Ajustes (REQ-58).
     specs.push(crate::convai_characters::spec());
+    // Caja negra (REQ-91..REQ-93): la misma definición que el asistente integrado (D69).
+    specs.extend(session_tools::specs());
+    specs.extend(session_control::specs());
     // Anotación estándar de MCP: algunos agentes ya no preguntan por lo que solo consulta.
     for spec in &mut specs {
         let read_only = spec["name"]
@@ -349,6 +360,38 @@ pub fn resolve_toolset(wanted: &str, names: &[String]) -> Option<String> {
 
 fn is_dbv(name: &str) -> bool {
     name.contains("DBVUnrealAIToolset") || name.contains("DBVUnrealAICppToolset")
+}
+
+/// Argumentos de `StartPIE` según el esquema real de UE 5.8 (`options` es obligatorio): PIE en el visor y sin espera
+/// extra. Lo usan `unreal_playtest` y la caja negra. @spec REQ-82, REQ-92
+fn start_pie_args() -> Value {
+    json!({ "options": { "bSimulate": false, "playMode": "PlayMode_InViewPort", "warmupSeconds": 0 } })
+}
+
+/// El editor visto por las herramientas de la caja negra: Python por `run_python` y Play por `StartPIE`/`StopPIE`,
+/// la misma ruta que `unreal_playtest` (D71). @spec REQ-92
+struct McpEditor<'a>(&'a mut McpServer);
+
+impl session_control::Editor for McpEditor<'_> {
+    fn run_python(&mut self, code: &str) -> Result<String, String> {
+        self.0.run_fixed(code).map(|v| v.to_string())
+    }
+
+    fn start_pie(&mut self) -> Result<(), String> {
+        self.0
+            .editor(|s| {
+                s.call_toolset_tool("EditorToolset.EditorAppToolset", "StartPIE", start_pie_args(), DEFAULT_TIMEOUT)
+            })
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn stop_pie(&mut self) -> Result<(), String> {
+        self.0
+            .editor(|s| s.call_toolset_tool("EditorToolset.EditorAppToolset", "StopPIE", json!({}), DEFAULT_TIMEOUT))
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
 }
 
 impl McpServer {
@@ -658,6 +701,22 @@ impl McpServer {
                 })
                 .map_err(err)?
             }
+            // Caja negra (REQ-92): lo que lee ficheros no necesita el editor; lo que graba o para Play lo gobierna por Python.
+            "session_list" => session_tools::list_text(&self.sessions_root()?, args)?,
+            "session_analyze" => session_tools::analyze_text(&self.sessions_root()?, args)?,
+            "session_query" => session_tools::query_text(&self.sessions_root()?, args)?,
+            "session_wait" => {
+                session_tools::wait_text(&self.sessions_root()?, args, Duration::from_millis(500))?
+            }
+            "session_delete" => session_tools::delete_text(&self.sessions_root()?, args)?,
+            "session_plan" => session_control::plan_text(args)?,
+            "session_start" => session_control::start_text(&mut McpEditor(self), args)?,
+            "session_status" => session_control::status_text(&mut McpEditor(self))?,
+            "session_mark" => session_control::mark_text(&mut McpEditor(self), args)?,
+            "session_stop" => {
+                let root = self.sessions_root()?;
+                session_control::stop_text(&mut McpEditor(self), &root, args)?
+            }
             "tripo_operations" => tools::operations_text(args)?,
             "tripo_balance" => self.balance()?,
             "worldlabs_balance" => self.worldlabs_balance()?,
@@ -774,6 +833,11 @@ impl McpServer {
             .map_err(err)?;
         ran.value
             .ok_or_else(|| format!("unexpected answer from the editor: {}", ran.text))
+    }
+
+    /// Carpeta de las sesiones grabadas del proyecto (`Saved/DBVUnrealAI/Sessions`). @spec REQ-91
+    fn sessions_root(&self) -> Result<PathBuf, String> {
+        Ok(session_tools::sessions_root(&self.project_dir()?))
     }
 
     /// Carpeta del proyecto, que el agente recibe con `--project` (REQ-38).
@@ -1497,7 +1561,7 @@ impl McpServer {
             s.call_toolset_tool(
                 "EditorToolset.EditorAppToolset",
                 "StartPIE",
-                json!({ "bSimulateInEditor": false }),
+                start_pie_args(),
                 DEFAULT_TIMEOUT,
             )
         });
@@ -2556,7 +2620,16 @@ mod tests {
                                 } else {
                                     json!({ "placed": 12, "folder": "DBV/Torches" })
                                 };
-                                reply(json!({ "returnValue": json!({ "success": true, "stdout": "", "stderr": "", "warnings": [], "error": null, "result": result_val }).to_string() }).to_string())
+                                let stdout = if code.contains("live.start_recording") {
+                                    json!({ "success": true, "id": "20261110-100000-prueba", "columns": ["player.x"], "errors": [], "warnings": [] }).to_string()
+                                } else if code.contains("live.stop_recording") || code.contains("live.status") {
+                                    json!({ "active": false, "status": "finished", "reason": "stopped", "rows": 3 }).to_string()
+                                } else if code.contains("live.mark") {
+                                    json!({ "success": true }).to_string()
+                                } else {
+                                    String::new()
+                                };
+                                reply(json!({ "returnValue": json!({ "success": true, "stdout": stdout, "stderr": "", "warnings": [], "error": null, "result": result_val }).to_string() }).to_string())
                             }
                             (_, "load_gaussian_splat") => reply(json!({ "returnValue": json!({ "success": true, "actor": args["arguments"]["actor_label"] }).to_string() }).to_string()),
                             (_, "import_model") => reply(json!({ "returnValue": json!({ "success": true, "primary": "/Game/DBV/Generated/Isla_Collider", "kind": "static", "animations": [] }).to_string() }).to_string()),
@@ -3147,5 +3220,85 @@ mod tests {
             seen.contains(&"StartPIE".to_string()) && seen.contains(&"StopPIE".to_string()),
             "{seen:?}"
         );
+        // El esquema real de StartPIE exige `options` (comprobado en UE 5.8.2: sin él falla).
+        let start = calls.lock().unwrap().iter().find(|(t, _)| t == "StartPIE").cloned().unwrap();
+        assert_eq!(start.1["options"]["bSimulate"], false, "{:?}", start.1);
+        assert_eq!(start.1["options"]["playMode"], "PlayMode_InViewPort");
+    }
+
+    /// Las diez herramientas de la caja negra se publican; las que solo leen van anotadas como tales. @spec REQ-92
+    #[test]
+    fn caja_negra_publica_las_diez_herramientas_con_su_anotacion() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let res = rpc(&mut s, "tools/list", json!({}));
+        let tools = res["result"]["tools"].as_array().unwrap();
+        let hint = |name: &str| tools.iter().find(|t| t["name"] == name).map(|t| t["annotations"]["readOnlyHint"].clone());
+        for name in ["session_plan", "session_status", "session_list", "session_analyze", "session_query", "session_wait"] {
+            assert_eq!(hint(name), Some(json!(true)), "{name}");
+        }
+        for name in ["session_start", "session_mark", "session_stop", "session_delete"] {
+            assert_eq!(hint(name), Some(json!(false)), "{name}");
+        }
+    }
+
+    /// `session_list` y `session_analyze` leen las sesiones del proyecto sin necesitar el editor. @spec REQ-92
+    #[test]
+    fn caja_negra_lista_y_analiza_las_sesiones_del_proyecto() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let sample = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/session_sample");
+        let session = dir.path().join("project/Saved/DBVUnrealAI/Sessions/20261110-100000");
+        std::fs::create_dir_all(&session).unwrap();
+        for file in ["frames.bin", "meta.json", "events.jsonl"] {
+            std::fs::copy(sample.join(file), session.join(file)).unwrap();
+        }
+        let list = rpc(&mut s, "tools/call", json!({ "name": "session_list", "arguments": {} }));
+        assert_eq!(list["result"]["isError"], false, "{list}");
+        assert!(list["result"]["content"][0]["text"].as_str().unwrap().contains("20261110-100000"));
+        let analyze = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "session_analyze", "arguments": { "ops": [{ "op": "frame_budget" }] } }),
+        );
+        assert_eq!(analyze["result"]["isError"], false, "{analyze}");
+        let text = analyze["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("\"gaps\"") && text.contains("frame_budget"), "{text}");
+    }
+
+    /// `session_start` arma la grabadora y arranca Play; `session_stop` cierra y para Play. @spec REQ-92
+    #[test]
+    fn caja_negra_arranca_y_para_la_grabacion_con_play() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let (url, calls) = fake_editor();
+        s.config.unreal_url = url;
+        let start = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "session_start", "arguments": { "plan": { "presets": ["player"] }, "name": "prueba" } }),
+        );
+        assert_eq!(start["result"]["isError"], false, "{start}");
+        assert!(start["result"]["content"][0]["text"].as_str().unwrap().contains("20261110-100000-prueba"));
+        let stop = rpc(&mut s, "tools/call", json!({ "name": "session_stop", "arguments": {} }));
+        assert_eq!(stop["result"]["isError"], false, "{stop}");
+        assert!(stop["result"]["content"][0]["text"].as_str().unwrap().contains("\"play_stopped\":true"));
+        let seen: Vec<String> = calls.lock().unwrap().iter().map(|(t, _)| t.clone()).collect();
+        let order = |name: &str| seen.iter().position(|t| t == name);
+        assert!(order("StartPIE") > order("run_python") && order("StopPIE").is_some(), "{seen:?}");
+    }
+
+    /// Sin proyecto o sin sesiones, las herramientas de lectura explican qué falta en vez de fallar mudas. @spec REQ-92
+    #[test]
+    fn caja_negra_sin_sesiones_lo_dice() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let res = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "session_analyze", "arguments": { "ops": [{ "op": "gaps" }] } }),
+        );
+        assert_eq!(res["result"]["isError"], true);
+        assert!(res["result"]["content"][0]["text"].as_str().unwrap().contains("no recorded sessions"));
     }
 }
