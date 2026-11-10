@@ -747,7 +747,7 @@ mod tests {
                 "{expected} debería fallar: {failing:?}"
             );
         }
-        assert_eq!(report.toolset_bundled, "0.3.2");
+        assert_eq!(report.toolset_bundled, "0.5.0");
     }
 
     /// @spec REQ-04, REQ-05

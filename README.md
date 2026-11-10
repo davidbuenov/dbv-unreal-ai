@@ -5,9 +5,9 @@
 **🇪🇸 Español · [🇬🇧 English](./README.en.md)**
 
 [![Sitio Web](https://img.shields.io/badge/Sitio_Web-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/)
-[![Releases v0.4.1](https://img.shields.io/badge/Releases-v0.4.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.5.0](https://img.shields.io/badge/Releases-v0.5.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
-[![status](https://img.shields.io/badge/status-estable_%7C_v0.4.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.4.1)
+[![status](https://img.shields.io/badge/status-estable_%7C_v0.5.0-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.5.0)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -145,6 +145,19 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 <a name="status"></a>
 
 ## 🚧 Estado
+
+**v0.5.0** (2026-11-10). Lo nuevo:
+
+- **Caja negra: depurar lo que ocurre mientras juegas (REQ-91..REQ-97):** el botón **⏺ Caja negra** junto a «Probar en Play» graba el juego **sin tocar el proyecto** (tu personaje, la cámara, objetos concretos, variables de Blueprint, FPS y eventos como pausa o modo de movimiento), te deja **marcar momentos con una tecla dentro del juego (F10)** y, al terminar, la IA analiza con datos y te responde en «lo que notaste / lo que dicen los datos / conclusión». Antes de fiarse, `gaps` comprueba si la propia medición es fiable (FPS bajos, tirones, tramos sin medir). Un panel de grabación con «Marcar momento» y «Terminar», diez herramientas `session_*` también para agentes por MCP y 50 sesiones seguidas comprobadas sin nada enganchado. Mientras graba quita «Usar menos CPU en segundo plano» para que el editor no se frene al perder el foco. Guía en [`docs/IA.md`](./docs/IA.md);
+- **Vestir un MetaHuman desde la app (REQ-83..REQ-89):** una herramienta determinista en vez de código inventado, elegir a quién se viste, cinco tipos de prenda (`top`, `pants`, `skirt`, `dress`, `shoes`), copia segura del personaje, piel limpia, tela con Chaos Cloth para faldas y vestidos y validación con capturas. **Las camisetas y pantalones ceñidos son experimentales** (la carcasa mide bien pero no siempre se ve bien); faldas, vestidos y prendas holgadas funcionan mejor;
+- **`unreal_playtest` ya arranca Play en UE 5.8.2 (REQ-82):** mandaba un argumento que el motor rechaza; ahora también recoge el log;
+- **Seguridad:** el nombre de una sesión de la caja negra no puede salirse de su carpeta, y un plan no puede pedir grabar sin fin.
+
+**Se queda para la v0.5.1:** el visor VR con marca desde el mando, aislar un sistema para probar y comparar dos grabaciones, el informe de memoria gráfica y el ajuste de la tecla de marca en Ajustes.
+
+**v0.4.1** (2026-11-07). Saldo de ElevenLabs en vivo, controles avanzados de audio local con presets para videojuegos y prompt negativo, plugins aislados como «solo Editor» para empaquetar juegos para Android y Meta Quest, y resiliencia del adaptador de Claude Code en Windows.
+
+**v0.4.0** (2026-11-04). Efectos de sonido (SFX) con un microservicio local (Stable Audio Open), ElevenLabs y Freesound, importación de audio a Unreal, «📷 Capturar viewport» para que la IA vea el editor, copyright personalizable y autodetección del puerto MCP.
 
 **v0.3.1** (2026-11-03). Lo nuevo:
 

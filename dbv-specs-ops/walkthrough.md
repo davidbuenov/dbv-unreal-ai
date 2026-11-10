@@ -1,78 +1,53 @@
-# 🧭 Walkthrough — DBV Unreal AI v0.4.1
+# 🧭 Walkthrough — DBV Unreal AI v0.5.0
 
-> **Fecha:** 2026-11-07 · **Versión:** 0.4.1 (Patch, desde la 0.4.0) · **Autores:** David Bueno Vallejo y David Bueno Carmona
-> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.16) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.4.1.md`](./releases/v0.4.1.md)
+> **Fecha:** 2026-11-10 · **Versión:** 0.5.0 (Minor, desde la 0.4.1) · **Autores:** David Bueno Vallejo y David Bueno Carmona
+> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.17..§3.20) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.5.0.md`](./releases/v0.5.0.md)
 
 ## Qué es
 
-Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cualquier IA (modelos locales, de nube o agentes por suscripción como Claude Code, Codex o Antigravity) a proyectos abiertos de Unreal Engine 5.8 por su servidor MCP. La IA actúa en el editor **con permiso**, genera assets con Tripo, mundos fotorrealistas con World Labs, y efectos de sonido y audio, y lo traslada todo al nivel de Unreal Engine.
+Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cualquier IA (modelos locales, de nube o agentes por suscripción como Claude Code, Codex o Antigravity) a un proyecto abierto de Unreal Engine 5.8, con permiso antes de actuar, generación 3D (Tripo, World Labs), audio y un servidor MCP propio.
 
-## Qué se entrega en v0.4.1
+## Qué se entrega en v0.5.0
 
 | Área | Qué hace | Requisitos |
 | --- | --- | --- |
-| Visibilidad de saldo ElevenLabs & Créditos locales | Consulta en vivo de suscripción y caracteres restantes (`character_count`, `character_limit`) a la API de ElevenLabs con visualización en cabecera de Generar (soporta los 10k gratuitos mensuales y maneja amigablemente la falta de permiso `user_read`), e indicador de «Saldo local: ∞ créditos» para el microservicio local de audio. | REQ-77 |
-| Optimización de caché de balances | Retención en memoria de las cuotas consultadas para Tripo, World Labs y ElevenLabs evitando peticiones repetitivas de red al cambiar de pestaña, con invalidación y refresco reactivo tras completar cualquier generación. | REQ-77 |
-| Panel completo de síntesis & Presets para audio local | Chips rápidos de videojuegos (`Laser Blaster`, `Puerta Hidráulica`, `Trueno`, `Retro 8-bit`, `Espada`), campo de prompt negativo con chips acústicos (`Sin música ni voz`, `Sin ruido ni distorsión`, `Seco / Para Unreal`), sliders sincronizados para duración, pasos de difusión (`steps`) y escala de guía (`cfg_scale`), más semilla aleatoria determinista (`seed`). | REQ-76 |
-| Aislamiento de plugins DBV Unreal AI para empaquetado | `DBVUnrealAICpp.uplugin` declara sus módulos C++ como `"Type": "Editor"` con `"TargetAllowList": ["Editor"]`, y `prepare.rs` (`enable_plugins`) limita `DBVUnrealAI` y `DBVUnrealAICpp` al Editor en `.uproject`, permitiendo empaquetar juegos standalone (Android / Meta Quest VR) sin errores de dependencias de editor. | Fix |
-| Resiliencia de Claude Code en Windows | Auto-inyección de la variable de entorno `CLAUDE_CODE_EXECUTABLE` al llamar al adaptador ACP de Claude Code para resolver el binario nativo en Windows y propagación de errores detallados. | Fix |
-| Corrección de estado local | Corrección en `generateView.js` y `settingsView.js` evaluando `st?.value?.ready` en lugar de `st?.ready` para la detección del microservicio de audio local. | REQ-77 |
+| **Caja negra** (grabar el juego) | Botón **⏺ Caja negra** junto a «Probar en Play». Graba el juego **sin tocar el proyecto**: personaje, cámara, objetos, sockets, variables de Blueprint, FPS y eventos (pausa, modo de movimiento, base). Formato propio por bloques con CRC (`frames.bin`), `meta.json` y `events.jsonl` en `Saved/DBVUnrealAI/Sessions/`. Un fallo en una señal la apaga con un solo aviso; límites de 10 min / 500 MB / 20 sesiones con topes duros. | REQ-91 |
+| **Marcar y terminar** | Tecla **F10 dentro del juego** (configurable con `mark_key`) que añade una marca numerada sin quitarle el foco; panel fijo con tiempo, marcas y «Marcar momento» / «Terminar», que se enciende leyendo ficheros (también si grabó un agente por `--mcp`). Mientras graba quita «Usar menos CPU en segundo plano» (en memoria) para que el editor no caiga a ~3 FPS al perder el foco, y lo restaura. | REQ-91, REQ-94 |
+| **Análisis con datos** | En Rust, sobre los ficheros (sirve con el editor cerrado): `gaps` (¿es fiable la medición?, por tiempo y por tramos), `frame_budget`, `stillness`, `oscillation`, `jumps`, `follow`, `transitions`, `timeline`, `around_marks`. Respuestas de menos de 2,5 KB; `gaps` va siempre primero. | REQ-93 |
+| **Diez herramientas `session_*`** | `session_plan`, `start`, `status`, `mark`, `stop`, `wait`, `analyze`, `query`, `list`, `delete`: una sola definición para el asistente integrado y el MCP propio (agentes). Grabar y borrar piden aprobación. | REQ-92 |
+| **Instrucciones y receta** | Receta `runtime_diagnosis`, prompt de depuración y regla contra callbacks por fotograma; `docs/IA.md` y `docs/IA.en.md`. | REQ-97 |
+| **Vestir MetaHumans** | Herramienta determinista (`unreal_dress_metahuman`), elegir a quién se viste, cinco tipos de prenda, copia segura, piel limpia, tela con Chaos Cloth (faldas y vestidos), validación con capturas. **Camisetas y pantalones ceñidos: experimentales** (REJECTED-13, REJECTED-15). | REQ-80..REQ-89, REQ-98 |
+| **`unreal_playtest` y registro** | Ahora arranca Play en UE 5.8.2 (`StartPIE` exige `options`) y pide el log con su esquema real. | REQ-82 |
+
+Aplazado a la **v0.5.1**: visor VR con marca desde el mando (REQ-95), aislar/conducir/comparar (REQ-96), informe de memoria gráfica (REQ-99), ajuste de la tecla de marca, tarjeta del plan editable, historial en la interfaz y los análisis `correlate`, `wrong_axis` y `relative_yaw`.
 
 ## Cómo probarlo
 
-1. `npm install` y `npm run tauri dev`.
-2. Ve a **Generar** → pestaña **Sonidos (SFX)**:
-   - Con **Local (`dbv-audio-service`)** seleccionado: prueba los chips de presets (ej. `🔫 Laser Blaster`), los filtros negativos (ej. `🏜️ Seco / Para Unreal`) y ajusta sliders de duración, pasos o CFG.
-   - Observa el indicador **«Saldo local: ∞ créditos»**.
-   - Con **ElevenLabs** seleccionado: introduce una clave con permiso `user_read` y comprueba que se muestra el saldo real (ej. `Saldo: 10.000 car.`); si la clave no tiene `user_read`, se muestra un mensaje informativo permitiendo generar con normalidad.
-3. En **Proyectos de Unreal**: prepara un proyecto y comprueba que en el `.uproject` los plugins `DBVUnrealAI` y `DBVUnrealAICpp` incluyen `"TargetAllowList": ["Editor"]`, permitiendo empaquetar para Android/Meta Quest sin errores.
+1. `npm install` y `npm run tauri dev`. Abre un proyecto de Unreal 5.8 y pulsa **Preparar** (copia el plugin nuevo, v0.5.0).
+2. Con el editor conectado, abre la conversación y pulsa **⏺ Caja negra → En el editor (PIE)**. Contesta a la IA y acepta la tarjeta de `session_start`.
+3. Haz **un clic dentro del juego** para que reciba el teclado, muévete 20–30 s y pulsa **F10** un par de veces cuando notes algo. Termina con **Terminar** (o cierra Play).
+4. La IA responde en tres bloques (lo que notaste / lo que dicen los datos / conclusión) y avisa si la medición no es fiable.
+5. Para probar las herramientas sin la ventana: `dbv-unreal-ai --mcp --project <.uproject>` y llama a `session_plan`, `session_start`, `session_stop`, `session_analyze`.
 
 ## Verificación
 
-- **Automática (2026-11-07):**
-  - Rust: 243 tests pasados (`cargo test`), `cargo clippy` sin advertencias.
-  - Vitest: 386 tests pasados en 43 suites (`npx vitest run`).
-  - Python: 48 tests pasados (`pytest tests/python`).
-  - Linter: `python dbv-specs-ops/scripts/dbv-lint.py unreal-plugin tests/python` limpio (0 errores, 0 avisos).
-  - Trazabilidad Spec-to-Test: 100% (92 requisitos con ID, 90 con tests).
+- **Automática (2026-11-10):**
+  - Rust: 335 tests (`cargo test --lib`), `cargo clippy --lib --all-targets` sin avisos.
+  - Vitest: 426 tests en 44 ficheros.
+  - Python: 173 tests de `unittest` en verde y 1 error previo de importación (`test_outfit_skin` necesita `numpy`, que no está instalado en este equipo); `dbv-lint.py` limpio.
+  - Banco e2e (`npm run test:e2e`): correcto.
+- **En vivo, con el editor abierto (UE 5.8.2, `DBVMCPFirst`):**
+  - Spikes P-22 (coste: 0,19 ms con 30 señales) y P-23 (fin de PIE: `get_game_world()` a `None`; un mundo retenido lanza «ObjectInstance is null»).
+  - **50 sesiones seguidas** con el `--mcp` real: 50 de 50 bien, 11.430 filas, Play parado al final, ninguna grabación activa, sin errores repetidos en el log. Coste medio de la grabadora 0,25–0,34 ms por fotograma (p95 ≤ 0,46 ms, bajo el objetivo de 0,5 ms).
+  - Quitarle el foco al editor 9 s con otra ventana: se mantuvo entre 72 y 81 FPS (antes ~3), y el ajuste volvió a su valor.
+  - Tres rondas de prueba con la persona usuaria; salieron y se corrigieron: IA que pedía escribir en un chat bloqueado, desplegable ilegible en el tema sepia, caída a ~3 FPS al perder el foco, F9 que chocaba con su captura de pantalla y un grabador viejo en memoria tras actualizar el plugin.
+- **Revisión de `/code-simplify` (2026-11-10):** un hallazgo **Crítico** de seguridad (el nombre de sesión podía salirse de su carpeta) resuelto con tests; varios Importante resueltos (arranque que fallaba a medias, tecla de marca que se apagaba si el personaje aún no existía, «Terminar» que paraba un Play ajeno, topes de límites, `slots=True`) y los demás registrados en `CHANGELOG.md` → «Conocido».
+- **Hallazgos al probar contra el editor real:** `unreal_playtest` no podía arrancar Play ni leer el log porque los argumentos de `StartPIE` y `GetLogEntries` no eran los del esquema real; el editor simulado de los tests aceptaba cualquier argumento. Regla: probar contra el editor real.
 
----
+## Límites conocidos y lo que NO está comprobado
 
-# 🧭 Walkthrough — DBV Unreal AI v0.5.0 (Vestir MetaHumans y Play-Testing)
-
-> **Fecha:** 2026-11-10 · **Versión:** 0.5.0 (Minor) · **Autores:** David Bueno Vallejo y David Bueno Carmona
-> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.18, REQ-80..REQ-90) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md)
-
-## Qué se entrega en v0.5.0 (MetaHuman Outfit Pipeline)
-
-| Área | Qué hace | Requisitos |
-| --- | --- | --- |
-| Pipeline unificado determinista | Nuevo módulo `dbv_unreal_ai.outfit.pipeline` con máquina de estados por pasos (copia de personaje, reglas de ranura, preparación de piel, fitting/rigging con InpaintWeights o Chaos Cloth, validación). | REQ-88 |
-| Destino explícito e interactivo | Selección obligatoria de personaje destino (`actor_label`) en la interfaz y herramientas. Ante múltiples MetaHumans, pregunta al usuario; nunca equipa a ciegas sobre el primero. | REQ-83 |
-| Categorización anatómica y corte | Soporte para `top`, `pants`, `skirt`, `dress` y `shoes` con corte `male`, `female`, `neutral` sobre cualquier arquetipo MetaHuman (`f_med_nrw`, `m_tal_nrw`). | REQ-84 |
-| Soldadura, 2-sided y 4 LODs | Soldadura de mallas abiertas, materiales de doble cara automáticos en prendas y regeneración de 4 niveles de LOD con `SkeletalMeshEditorSubsystem`. | REQ-81 |
-| Simulación automática de tela | Montaje procedural de Dataflow y activos Chaos Cloth para faldas y vestidos, con enlace en `BeginPlay` y colisión contra el PhysicsAsset del cuerpo. | REQ-87 |
-| Validación estructurada e imágenes | `unreal_validate_metahuman_outfit` mide holguras corporales, penetraciones, comprueba enlace de LeaderPose y captura 3 vistas (frente, lado, espalda). | REQ-89 |
-| Play-testing autónomo en PIE | `unreal_playtest` ejecuta pruebas no bloqueantes con movimiento, captura de telemetría y detección de caídas al vacío. | REQ-82 |
-
-## Matriz de Verificación de Vestimenta (REQ-90) — pendiente
-
-> **Retirada el 2026-11-10.** La matriz de 9 casos «Aprobado (OK)» que había aquí no tenía pruebas detrás: solo hay 2 trabajos guardados en `Saved/DBVUnrealAI/outfits`, y las holguras salían de un validador que compara cajas envolventes. El mismo día, el usuario vio a `Pablo_Deportista` mal vestido. La matriz se rellenará con el validador de S118, y cada fila llevará su captura guardada y el visto bueno del usuario.
-
-## Calibración de Empaquetado `P-20` (REQ-90, R-39)
-
-> **Nota (2026-11-10):** esto es lo que se espera, no una medida: no consta ningún empaquetado de prueba con ropa. `P-20` sigue abierta.
-
-1. **Ropa por Deformación Ósea (`InpaintWeights`):**
-   * Totalmente compatible con empaquetado para **Windows (Win64)**, **Android** y **Meta Quest (VR)** sin requerir dependencias de módulos de Editor.
-2. **Prendas con Simulación Física (`Chaos Cloth`):**
-   * Requiere que el `.uproject` mantenga activados los módulos de tiempo de ejecución de Chaos Cloth (`ChaosCloth`, `Dataflow`).
-   * Para empaquetado standalone en Android / Meta Quest VR, las prendas con tela se documentan como recomendadas para ejecución en plataformas de escritorio debido al coste de simulación PBD por GPU/CPU.
-
-## Verificación Automatizada
-
-- **Rust:** 254 tests pasados (`cargo test`), `cargo clippy` limpio sin avisos.
-- **Vitest:** 408 tests pasados en 43 suites (`npx vitest run`).
-- **Python:** 123 tests pasados (`pytest tests/python`).
-- **Linter:** `python dbv-specs-ops/scripts/dbv-lint.py unreal-plugin tests/python` limpio (0 errores, 0 avisos).
-
+- **Microsoft Store:** REQ-90 exige una matriz de 12 casos de ropa con la app instalada (MSIX), un juego empaquetado y un vídeo; **no se ha ejecutado**. La versión se publica en GitHub y la ficha de la Store está preparada, pero el envío a Partner Center debe decidirlo la persona responsable sabiendo que ese criterio sigue abierto.
+- **Prendas ceñidas** (camisetas, pantalones): experimentales; el aspecto no siempre es presentable aunque las métricas den `ok`.
+- **Ventana de la app:** el botón, el desplegable y el panel de grabación se han probado con tests y con la persona usuaria en dos rondas; la tarjeta del plan editable y el historial no existen todavía.
+- **F10** (la tecla por defecto desde la última ronda) no se ha vuelto a pulsar en una grabación real tras el cambio de F9.
+- **Solo PIE o una partida ya abierta en el editor**: no hay grabación en paquetes ni con visor VR.

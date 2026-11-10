@@ -5,9 +5,9 @@
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
 
 [![Website](https://img.shields.io/badge/Website-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/en/)
-[![Releases v0.4.1](https://img.shields.io/badge/Releases-v0.4.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.5.0](https://img.shields.io/badge/Releases-v0.5.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
-[![status](https://img.shields.io/badge/status-stable_%7C_v0.4.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.4.1)
+[![status](https://img.shields.io/badge/status-stable_%7C_v0.4.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.5.0)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -145,6 +145,19 @@ These channels are not available yet; they will arrive in an upcoming version. I
 <a name="status"></a>
 
 ## 🚧 Status
+
+**v0.5.0** (2026-11-10). What's new:
+
+- **Black box: debug what happens while you play (REQ-91..REQ-97):** the **⏺ Black box** button next to "Playtest" records the game **without touching the project** (your character, the camera, specific objects, Blueprint variables, FPS and events such as pause or movement mode), lets you **mark moments with a key inside the game (F10)** and, when you finish, the AI analyses with data and answers as "what you noticed / what the data says / conclusion". Before trusting it, `gaps` checks whether the measurement itself is reliable (low FPS, hitches, unmeasured stretches). A recording panel with "Mark moment" and "Finish", ten `session_*` tools also for agents over MCP and 50 sessions in a row checked with nothing left hooked. While recording it removes "Use less CPU when in background" so the editor does not slow down when it loses focus. Guide in [`docs/IA.en.md`](./docs/IA.en.md);
+- **Dress a MetaHuman from the app (REQ-83..REQ-89):** a deterministic tool instead of invented code, choosing who gets dressed, five garment types (`top`, `pants`, `skirt`, `dress`, `shoes`), a safe copy of the character, clean skin, Chaos Cloth for skirts and dresses and validation with captures. **Tight shirts and trousers are experimental** (the shell measures well but does not always look good); skirts, dresses and loose garments work better;
+- **`unreal_playtest` now starts Play on UE 5.8.2 (REQ-82):** it sent an argument the engine rejects; it now also collects the log;
+- **Security:** the name of a black-box session cannot escape its folder, and a plan cannot ask to record forever.
+
+**Left for v0.5.1:** the VR headset with marking from the controller, isolating a system to test it and comparing two recordings, the graphics memory report and the mark key setting in Settings.
+
+**v0.4.1** (2026-11-07). Live ElevenLabs balance, advanced local audio controls with game presets and negative prompt, plugins isolated as "Editor only" to package games for Android and Meta Quest, and resilience of the Claude Code adapter on Windows.
+
+**v0.4.0** (2026-11-04). Sound effects (SFX) with a local microservice (Stable Audio Open), ElevenLabs and Freesound, audio import into Unreal, "📷 Capture viewport" so the AI sees the editor, customisable copyright and MCP port auto-detection.
 
 **v0.3.1** (2026-11-03). What's new:
 

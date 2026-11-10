@@ -14,6 +14,9 @@ All core interactions with your engine run 100% locally on your machine. The AI 
 
 Key Features:
 • Bidirectional native communication with Unreal Engine 5.8 via MCP HTTP (port 8000)
+• Black box: record the game without touching the project, mark moments with a key and analyse with data to debug failures that only happen while playing
+• Dress MetaHumans from the app with a deterministic tool (loose garments, skirts and dresses with cloth; tight garments are experimental)
+• Sound effects with a local microservice, ElevenLabs and Freesound, and direct import into Unreal
 • AI assistant with three distinct tiers: Local (offline), Subscription (CLI agents), and Cloud API
 • Integrated support for Google Antigravity CLI, Claude Code, GitHub Copilot, Codex, and Gemini CLI
 • Photorealistic world generation and placement with World Labs Marble (Gaussian Splatting .spz & collision .glb)

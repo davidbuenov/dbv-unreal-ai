@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-10
+
+Version v0.5.0: **black box** to debug what happens while you play (record the game without touching it, mark moments with a key, analyse with data and know when to trust it); **dressing MetaHumans** from the app with a deterministic tool, garment types, Chaos Cloth and validation (tight shirts and trousers stay experimental); and fixes, including `unreal_playtest` now starting Play on UE 5.8.2 and a security one (a session name cannot escape its folder). Left for v0.5.1: the VR headset, isolating and comparing sessions and the graphics memory report.
+
 ### Known issues
 - **Tight tops and pants on MetaHumans (REQ-98): experimental.** The body-shell garment with draping measures well (no vertices inside the skin) but does not look presentable (crumpled cloth and texture baked over the anatomy). It does not block v0.5.0; loose garments, skirts and dresses work. To be revisited in v0.6.0 with MetaHuman-ready garments and Chaos Outfit.
 
@@ -343,7 +347,8 @@ First release: connection to Unreal 5.8 through MCP, project preparation, conver
 - **[Important]** A job id could clash between the window and an agent's `--mcp` if both launched in the same millisecond; it now carries the process id.
 - Review nits (3): early `return`s outside guard clauses in `tools::build`, `resolve_source` and `uploadable`.
 
-[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...v0.3.1

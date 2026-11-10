@@ -11,6 +11,10 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.5.0] - 2026-11-10
+
+Versión v0.5.0: **caja negra** para depurar lo que ocurre mientras juegas (grabar el juego sin tocarlo, marcar momentos con una tecla, analizar con datos y saber cuándo fiarse de ellos); **vestir MetaHumans** desde la app con una herramienta determinista, tipos de prenda, tela con Chaos Cloth y validación (las camisetas y pantalones ceñidos quedan como experimentales); y correcciones, entre ellas que `unreal_playtest` ya arranca Play en UE 5.8.2 y una de seguridad (el nombre de una sesión no puede salirse de su carpeta). Se quedan para la v0.5.1: el visor VR, aislar y comparar sesiones y el informe de memoria gráfica.
+
 ### Conocido
 - **Camisetas y pantalones ceñidos sobre MetaHumans (REQ-98): experimental.** La carcasa del cuerpo con drapeado mide bien (sin vértices dentro de la piel) pero el aspecto no es presentable (tela arrugada y textura sobre la anatomía). No bloquea la v0.5.0; las prendas holgadas, faldas y vestidos funcionan. Se retoma en la v0.6.0 con prendas hechas para MetaHuman y Chaos Outfit.
 
@@ -347,7 +351,8 @@ Primera versión: conexión con Unreal 5.8 por MCP, preparación del proyecto, c
 - **[Importante]** El id de un trabajo podía coincidir entre la ventana y el `--mcp` de un agente si lanzaban en el mismo milisegundo; ahora lleva el id del proceso.
 - Nits de la revisión (3): `return` tempranos fuera de las guardas en `tools::build`, `resolve_source` y `uploadable`.
 
-[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...HEAD
+[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.0...v0.3.1

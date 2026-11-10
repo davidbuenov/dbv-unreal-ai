@@ -14,6 +14,9 @@ Todo el flujo de trabajo con el motor es 100% local. El asistente de IA es flexi
 
 Características principales:
 • Comunicación nativa bidireccional con Unreal Engine 5.8 mediante MCP HTTP (puerto 8000)
+• Caja negra: graba el juego sin tocar el proyecto, marca momentos con una tecla y analiza con datos para depurar fallos que solo ocurren al jugar
+• Vestir MetaHumans desde la app con una herramienta determinista (prendas holgadas, faldas y vestidos con tela; las prendas ceñidas son experimentales)
+• Efectos de sonido con un microservicio local, ElevenLabs y Freesound, e importación directa a Unreal
 • Asistente de IA con tres modalidades: Locales (offline), Suscripción (agentes CLI) y API Cloud
 • Soporte integrado de Google Antigravity CLI, Claude Code, GitHub Copilot, Codex y Gemini CLI
 • Generación y colocación de mundos fotorrealistas con World Labs Marble (Gaussian Splatting .spz y colisión .glb)

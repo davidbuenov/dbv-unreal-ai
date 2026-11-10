@@ -14,6 +14,9 @@ DBV Unreal AI 是一款面向 Unreal Engine 5.8 的原生 AI 助手：轻量、�
 
 主要功能：
 • 通过 MCP HTTP（端口 8000）与 Unreal Engine 5.8 原生双向通信
+• 黑匣子：在不修改项目的情况下记录游戏，用按键标记时刻，并用数据分析，以调试只在游玩时出现的问题
+• 在应用中用确定性工具为 MetaHuman 穿衣（宽松服装、带布料的裙子和连衣裙；紧身服装为实验性功能）
+• 使用本地微服务、ElevenLabs 和 Freesound 生成音效，并直接导入 Unreal
 • 三种 AI 助手模式：本地（离线）、订阅（命令行智能体）和云端 API
 • 内置支持 Google Antigravity CLI、Claude Code、GitHub Copilot、Codex 和 Gemini CLI
 • 使用 World Labs Marble 生成并放置照片级真实感世界（Gaussian Splatting .spz 与 .glb 碰撞网格）
