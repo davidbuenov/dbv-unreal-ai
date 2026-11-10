@@ -34,6 +34,12 @@ pub fn start_pie_args() -> Value {
     json!({ "options": { "bSimulate": false, "playMode": "PlayMode_InViewPort", "warmupSeconds": 0 } })
 }
 
+/// Importa el grabador del editor tal como está AHORA en disco. El intérprete de Python del editor guarda los módulos en
+/// memoria hasta que se reinicia el editor: tras actualizar el plugin (por ejemplo, otra tecla de marca por defecto) seguía
+/// usándose el código viejo y la persona pulsaba F10 mientras el grabador escuchaba F9 (visto el 2026-11-10). Solo se
+/// descarta si NO hay una grabación en marcha, para no perderla ni arrancar una segunda.
+const FRESH_IMPORT: &str = "import sys\n_old = sys.modules.get(\"dbv_unreal_ai.session.live\")\n_busy = bool(_old and getattr(_old, \"_SESSION\", None) and _old._SESSION.status == \"recording\")\nif not _busy:\n    for _name in [n for n in sys.modules if n.startswith(\"dbv_unreal_ai.session\")]:\n        del sys.modules[_name]\nfrom dbv_unreal_ai.session import live\n";
+
 /// Modos de `session_start`. `vr_preview` y `simulate` llegan con la comprobación con visor (S112).
 pub const MODES: [&str; 2] = ["pie", "attach"];
 
@@ -215,7 +221,7 @@ pub fn start_text(editor: &mut dyn Editor, args: &Value) -> Result<String, Strin
     }
     let plan = args.get("plan").filter(|p| p.is_object()).ok_or("`plan` must be an object (see session_plan)")?;
     let code = format!(
-        "from dbv_unreal_ai.session import live\nprint(live.start_recording({}, {}))",
+        "{FRESH_IMPORT}print(live.start_recording({}, {}))",
         py_str(&plan.to_string()),
         py_str(text(args, "name"))
     );
@@ -354,6 +360,22 @@ mod tests {
         // El plan viaja como literal de cadena JSON: las comillas del actor no rompen el código.
         let code = &ed.python[0];
         assert!(code.contains("live.start_recording(\"{") && code.contains("\\\\\\\"; import os #"), "{code}");
+    }
+
+    #[test]
+    fn start_reloads_the_recorder_from_disk_unless_a_recording_is_in_progress() {
+        let mut ed = FakeEditor::default();
+        ed.replies.push(envelope(&json!({"success": true, "id": "s"})));
+        start_text(&mut ed, &json!({"plan": {}, "mode": "attach"})).unwrap();
+        let code = &ed.python[0];
+        // Descarta los módulos en memoria (el editor los conserva hasta reiniciarse), salvo con una grabación activa.
+        assert!(code.contains("del sys.modules[_name]") && code.contains("if not _busy:"), "{code}");
+        assert!(code.contains("_old._SESSION.status == \"recording\""), "{code}");
+        assert!(code.find("del sys.modules").unwrap() < code.find("import live").unwrap());
+        // `status`, `mark` y `stop` NO recargan: tienen que llegar a la grabación en curso.
+        ed.replies.push(envelope(&json!({"active": false})));
+        status_text(&mut ed).unwrap();
+        assert!(!ed.python[1].contains("del sys.modules"));
     }
 
     #[test]
