@@ -525,3 +525,31 @@ mod tests {
         assert!(delete_text(root.path(), &json!({"session": "../x", "confirm": true})).is_err());
     }
 }
+
+#[cfg(test)]
+mod real_session {
+    use super::*;
+
+    /// Prueba manual con una sesión grabada de verdad por el plugin: `DBV_SESSIONS_ROOT=<…/Saved/DBVUnrealAI/Sessions>
+    /// cargo test --lib real_session -- --ignored --nocapture`. Comprueba que lector, análisis y herramientas
+    /// entienden lo que escribe Unreal (no solo lo que escriben los tests).
+    #[test]
+    #[ignore = "necesita una sesión real: variable DBV_SESSIONS_ROOT"]
+    fn the_tools_read_a_session_recorded_by_unreal() {
+        let root = PathBuf::from(std::env::var("DBV_SESSIONS_ROOT").expect("falta DBV_SESSIONS_ROOT"));
+        println!("{}", list_text(&root, &json!({"limit": 3})).unwrap());
+        let ops = json!({"ops": [
+            {"op": "frame_budget"},
+            {"op": "stillness", "signal": "player"},
+            {"op": "jumps", "signal": "player"},
+            {"op": "oscillation", "signal": "player"},
+            {"op": "transitions"},
+            {"op": "timeline", "every_s": 5, "signal": "player"}
+        ]});
+        let text = analyze_text(&root, &ops).unwrap();
+        println!("{} bytes\n{text}", text.len());
+        let wait = wait_text(&root, &json!({"timeout_s": 1}), Duration::from_millis(50)).unwrap();
+        println!("{wait}");
+        println!("{}", query_text(&root, &json!({"columns": ["player.z", "frame.dt_ms"], "max_rows": 6})).unwrap());
+    }
+}

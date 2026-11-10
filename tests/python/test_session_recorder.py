@@ -291,8 +291,8 @@ class RecorderTest(unittest.TestCase):
         self.adapter.readers["A"] = lambda: [1.0]
         r = self._rec(_plan([_sig("A")]))
         r.start()
-        for _ in range(4):
-            self.adapter.tick(0.3)  # 4 fotogramas lentos: muy lejos de un bloque de 72
+        for _ in range(6):
+            self.adapter.tick(0.3)  # 6 fotogramas lentos (1,5 s): muy lejos de un bloque de 72
         self.assertGreaterEqual(len(self._rows()), 3)
         r.finish()
 
@@ -359,6 +359,24 @@ class RecorderTest(unittest.TestCase):
         self.adapter.tick()
         r.finish()
         self.assertEqual([e["type"] for e in self._events()], ["pause"])  # la pausa sigue funcionando
+
+    def test_time_zero_is_the_start_of_play_not_the_moment_of_arming(self) -> None:
+        self.adapter.world = None
+        self.adapter.readers["A"] = lambda: [1.0]
+        r = self._rec(_plan([_sig("A")]))
+        r.start()
+        self.clock.t += 5.0  # 5 s esperando a que el usuario dé a Play
+        r.mark("antes de jugar")
+        self.adapter.world = FakeWorld()
+        self.adapter.tick()
+        r.mark("jugando")
+        r.finish()
+        times = [t for t, _ in self._rows()]
+        self.assertLess(times[0], 0.1)
+        marks = [e for e in self._events() if e["type"] == "mark"]
+        self.assertEqual(marks[0]["t"], 0.0)
+        self.assertLess(marks[1]["t"], 0.1)
+        self.assertLess(self._meta()["duration_s"], 0.5)
 
     def test_cost_is_stored_in_meta(self) -> None:
         self.adapter.readers["A"] = lambda: [0.0]

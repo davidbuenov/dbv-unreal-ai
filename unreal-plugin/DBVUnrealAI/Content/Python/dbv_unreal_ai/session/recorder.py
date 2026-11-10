@@ -101,7 +101,8 @@ class Recorder:
         self._handle: Any = None
         self._world: Any = None
         self._readers: dict[int, Callable[[], list[float]]] = {}
-        self._t0 = 0.0
+        self._t0 = 0.0  # el cero de los tiempos: el momento en que aparece el mundo de juego, no el de armar
+        self._armed_at = 0.0
         self._world_t0 = 0.0
         self._costs: list[float] = []
         self._gaps = 0
@@ -121,7 +122,7 @@ class Recorder:
         self.folder.mkdir(parents=True, exist_ok=True)
         self._writer = FrameWriter(self.folder / "frames.bin", len(self.plan.columns))
         self._events = open(self.folder / "events.jsonl", "a", encoding="utf-8")  # noqa: SIM115
-        self._t0 = self._clock()
+        self._t0 = self._armed_at = self._clock()
         self._started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         self.status = "recording"
         Recorder.active = self
@@ -161,7 +162,8 @@ class Recorder:
             self._warn_once(f"límite de {MAX_EVENTS} eventos alcanzado; se ignoran los siguientes")
             return
         self._n_events += 1
-        self._events.write(json.dumps({"t": round(self._clock() - self._t0, 4), "type": kind, **data}, ensure_ascii=False) + "\n")
+        t = round(self._clock() - self._t0, 4) if self._world is not None else 0.0  # antes de Play, t = 0
+        self._events.write(json.dumps({"t": t, "type": kind, **data}, ensure_ascii=False) + "\n")
         self._events.flush()
 
     # ------------------------------------------------------------------ tick
@@ -180,7 +182,7 @@ class Recorder:
     def _tick(self, dt: float) -> None:
         world = self.adapter.game_world()
         if world is None and self._world is None:  # armada, esperando a que empiece PIE
-            if self._clock() - self._t0 > ARM_SECONDS:
+            if self._clock() - self._armed_at > ARM_SECONDS:
                 self.finish("no_pie")
             return
         if world is None or (self._world is not None and not self.adapter.world_alive(self._world)):
@@ -188,7 +190,7 @@ class Recorder:
             return
         if self._world is None:
             self._world = world
-            self._world_t0 = self._clock()
+            self._world_t0 = self._t0 = self._clock()  # t = 0 es el principio de la partida
         self._ticks += 1
         if dt > LOW_FRAME_DT:
             self._gaps += 1

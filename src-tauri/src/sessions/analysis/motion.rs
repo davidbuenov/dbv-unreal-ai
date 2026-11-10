@@ -201,7 +201,7 @@ pub fn oscillation(ds: &Dataset, signal: &str, min_amplitude_cm: f64) -> Oscilla
     for (name, col) in &ax {
         out.episodes.extend(episodes_of(ds, name, col, min_amplitude_cm));
     }
-    out.oscillating_s = round(out.episodes.iter().map(|e| e.t_end - e.t_start).sum(), 3);
+    out.oscillating_s = round(out.episodes.iter().map(|e| e.t_end - e.t_start).sum::<f64>() + 0.0, 3); // «+ 0.0»: la suma vacía es -0.0
     out
 }
 

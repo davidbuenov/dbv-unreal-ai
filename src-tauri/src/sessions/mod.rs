@@ -15,6 +15,7 @@
 // un bloque a medias o una línea cortada se descartan y el resto se lee (R6). Nunca modifica una sesión ajena.
 
 pub mod analysis;
+pub mod control;
 pub mod store;
 pub mod tools;
 
@@ -22,3 +23,6 @@ pub use store::{
     delete_session, list_sessions, prune_sessions, read_events, read_frames, read_meta, Frames, FramesRead,
     SessionInfo,
 };
+
+/// Sesiones que se conservan por proyecto (las últimas 20, REQ-91); al parar una grabación se podan las más antiguas.
+pub const DEFAULT_KEEP_SESSIONS: usize = 20;
