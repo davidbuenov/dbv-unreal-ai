@@ -51,7 +51,7 @@ pub struct SessionInfo {
 }
 
 /// CRC-32 (IEEE, el de `zlib.crc32` de Python) sin dependencia nueva.
-fn crc32(data: &[u8]) -> u32 {
+pub(crate) fn crc32(data: &[u8]) -> u32 {
     let mut crc: u32 = 0xFFFF_FFFF;
     for &byte in data {
         crc ^= u32::from(byte);

@@ -16,6 +16,7 @@
 
 pub mod analysis;
 pub mod store;
+pub mod tools;
 
 pub use store::{
     delete_session, list_sessions, prune_sessions, read_events, read_frames, read_meta, Frames, FramesRead,
