@@ -172,6 +172,84 @@ pub fn timeline(ds: &Dataset, events: &[Value], every_s: f64, signal: Option<&st
     out
 }
 
+/// Marcas máximas que se analizan (las respuestas son siempre compactas; el resto solo se cuenta).
+const MAX_MARKS: usize = 8;
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MarkWindow {
+    pub t: f64,
+    pub label: String,
+    pub frames: usize,
+    /// FPS medianos en la ventana alrededor de la marca.
+    pub fps: f64,
+    /// El fotograma más largo de la ventana (ms): un tirón justo ahí es la pista que se busca.
+    pub worst_frame_ms: f64,
+    /// Velocidad media de la señal pedida (cm/s) justo antes y justo después de la marca.
+    pub speed_before_cm_s: Option<f64>,
+    pub speed_after_cm_s: Option<f64>,
+    /// Cambios de estado dentro de la ventana, como «movement_mode: MOVE_WALKING→MOVE_FALLING».
+    pub events: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AroundMarks {
+    pub window_s: f64,
+    pub marks_total: usize,
+    pub marks: Vec<MarkWindow>,
+}
+
+/// Qué pasa alrededor de cada marca de la persona (`±window_s`): FPS, el peor fotograma, velocidad antes y después y los
+/// cambios de estado. Es lo primero que se mira cuando alguien dice «ahora»: la marca señala el momento que notó.
+pub fn around_marks(ds: &Dataset, events: &[Value], signal: Option<&str>, window_s: f64) -> AroundMarks {
+    let marks: Vec<(f64, String)> = events
+        .iter()
+        .filter(|e| kind_of(e) == "mark")
+        .filter_map(|e| time_of(e).map(|t| (t, text_of(e, "label"))))
+        .collect();
+    let pos = signal.and_then(|s| ds.position(s));
+    let listed = marks
+        .iter()
+        .take(MAX_MARKS)
+        .map(|(t, label)| {
+            let in_range = |from: f64, to: f64| -> Vec<usize> { (0..ds.len()).filter(|&i| ds.times[i] >= from && ds.times[i] <= to).collect() };
+            let all = in_range(t - window_s, t + window_s);
+            let dts: Vec<f64> = all
+                .iter()
+                .filter(|&&i| i > 0 && ds.valid[i] && ds.valid[i - 1])
+                .map(|&i| ds.times[i] - ds.times[i - 1])
+                .filter(|dt| *dt > 0.0)
+                .collect();
+            let mut sorted = dts.clone();
+            let fps = median(&mut sorted).map_or(0.0, |m| 1.0 / m);
+            let worst = dts.iter().copied().fold(0.0_f64, f64::max) * 1000.0;
+            let speed = |from: f64, to: f64| pos.and_then(|p| window_speed(ds, &p, &in_range(from, to)));
+            let nearby: Vec<String> = events
+                .iter()
+                .filter(|e| STATE_KINDS.contains(&kind_of(e)) && time_of(e).is_some_and(|et| (et - t).abs() <= window_s))
+                .map(|e| {
+                    if kind_of(e) == "pause" {
+                        format!("pause: {}", if e.get("paused").and_then(Value::as_bool).unwrap_or(false) { "on" } else { "off" })
+                    } else {
+                        format!("{}: {}→{}", kind_of(e), text_of(e, "from"), text_of(e, "to"))
+                    }
+                })
+                .collect();
+            MarkWindow {
+                t: round(*t, 3),
+                label: label.clone(),
+                frames: all.len(),
+                fps: round(fps, 1),
+                worst_frame_ms: round(worst, 1),
+                speed_before_cm_s: speed(t - window_s, *t),
+                speed_after_cm_s: speed(*t, t + window_s),
+                events: nearby,
+            }
+        })
+        .collect();
+    let out = AroundMarks { window_s, marks_total: marks.len(), marks: listed };
+    out
+}
+
 fn window_speed(ds: &Dataset, pos: &[&[f32]; 3], idx: &[usize]) -> Option<f64> {
     let mut path = 0.0;
     let mut time = 0.0;
@@ -259,6 +337,47 @@ mod tests {
         assert!((tl.rows[1].speed_cm_s.unwrap() - 50.0).abs() < 1.0);
         assert_eq!((tl.rows[0].transitions, tl.rows[1].transitions), (0, 1));
         assert_eq!(tl.rows[1].marks, ["empieza a temblar"]);
+    }
+
+    #[test]
+    fn around_marks_shows_fps_worst_frame_speed_before_after_and_nearby_events() {
+        // 10 FPS durante 20 s; parado hasta 10 s y luego a 50 cm/s; un tirón de 0,3 s en t = 12 y una caída en t = 12,5.
+        let mut ds = synth(
+            10.0,
+            200,
+            &[
+                ("p.x", Box::new(|_, t| if t >= 10.0 { ((t - 10.0) * 50.0) as f32 } else { 0.0 })),
+                ("p.y", Box::new(|_, _| 0.0)),
+                ("p.z", Box::new(|_, _| 0.0)),
+            ],
+        );
+        for t in ds.times.iter_mut().skip(120) {
+            *t += 0.2; // un tirón: el intervalo del fotograma 120 dura 0,3 s
+        }
+        let events = vec![
+            json!({"t": 10.0, "type": "mark", "label": "Momento 1"}),
+            json!({"t": 12.5, "type": "movement_mode", "from": "Walking", "to": "Falling"}),
+            json!({"t": 12.6, "type": "mark", "label": "Momento 2"}),
+        ];
+        let a = around_marks(&ds, &events, Some("p"), 2.0);
+        assert_eq!((a.marks_total, a.marks.len()), (2, 2));
+        let first = &a.marks[0];
+        assert_eq!(first.label, "Momento 1");
+        assert_eq!(first.speed_before_cm_s, Some(0.0));
+        assert!((first.speed_after_cm_s.unwrap() - 50.0).abs() < 3.0, "{:?}", first.speed_after_cm_s); // el tirón de 0,3 s dentro de la ventana la baja un poco
+        assert_eq!(first.fps, 10.0);
+        let second = &a.marks[1];
+        assert!((second.worst_frame_ms - 300.0).abs() < 1.0, "{}", second.worst_frame_ms); // el tirón cae junto a la marca 2
+        assert_eq!(second.events, ["movement_mode: Walking→Falling"]);
+        assert!(first.worst_frame_ms < 150.0);
+    }
+
+    #[test]
+    fn around_marks_without_marks_or_signal_is_empty_or_has_no_speed() {
+        let ds = synth(10.0, 50, &[("p.x", Box::new(|_, _| 0.0))]);
+        assert_eq!(around_marks(&ds, &[], None, 2.0).marks_total, 0);
+        let one = around_marks(&ds, &[json!({"t": 2.0, "type": "mark", "label": "x"})], None, 1.0);
+        assert_eq!((one.marks.len(), one.marks[0].speed_before_cm_s), (1, None));
     }
 
     #[test]

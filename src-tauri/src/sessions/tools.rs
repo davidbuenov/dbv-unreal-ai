@@ -35,8 +35,8 @@ const MAX_LIST: usize = 8;
 pub const MAX_WAIT_S: f64 = 120.0;
 
 /// Operaciones que entiende `session_analyze`.
-pub const ANALYSES: [&str; 8] =
-    ["gaps", "frame_budget", "stillness", "oscillation", "jumps", "follow", "transitions", "timeline"];
+pub const ANALYSES: [&str; 9] =
+    ["gaps", "frame_budget", "stillness", "oscillation", "jumps", "follow", "transitions", "timeline", "around_marks"];
 
 fn tool(name: &str, description: &str, properties: Value, required: &[&str]) -> Value {
     json!({ "name": name, "description": description, "inputSchema": { "type": "object", "properties": properties, "required": required } })
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<Value> {
         ),
         tool(
             "session_analyze",
-            "Run analyses on a recorded session and get a compact result (never the raw samples). Always includes `gaps`, the quality of the measurement itself: if it says reliable=false (low FPS, hitches, pauses) do NOT present the other results as certain. Ops: gaps; frame_budget (median/p99/spikes); stillness {signal} (jitter at rest); oscillation {signal} (two-value loops: period and amplitude); jumps {signal} (sudden steps grouped into episodes); follow {a, b} (does a follow b: mean, max deviation, drift); transitions (movement mode/base/pause changes); timeline {every_s, signal}. A `signal` is the prefix of columns like player.x/.y/.z. Correlation is not cause: confirm with an experiment or by reading the code. Read-only.",
+            "Run analyses on a recorded session and get a compact result (never the raw samples). Always includes `gaps`, the quality of the measurement itself: if it says reliable=false (low FPS, hitches, pauses) do NOT present the other results as certain. Ops: gaps; frame_budget (median/p99/spikes); stillness {signal} (jitter at rest); oscillation {signal} (two-value loops: period and amplitude); jumps {signal} (sudden steps grouped into episodes); follow {a, b} (does a follow b: mean, max deviation, drift); transitions (movement mode/base/pause changes); timeline {every_s, signal}; around_marks {signal, window_s}: FPS, worst frame, speed before/after and state changes around EACH mark the user made (look at it first when they marked a moment). A `signal` is the prefix of columns like player.x/.y/.z. Correlation is not cause: confirm with an experiment or by reading the code. Read-only.",
             json!({
                 "session": session,
                 "ops": {
@@ -197,6 +197,12 @@ fn run_op(ds: &Dataset, evs: &[Value], op: &Value) -> Result<Value, String> {
             }
         }
         "transitions" => to_value(serde_json::to_value(events::transitions(evs))),
+        "around_marks" => to_value(serde_json::to_value(events::around_marks(
+            ds,
+            evs,
+            if signal.is_empty() { None } else { Some(signal) },
+            num(op, "window_s").unwrap_or(2.0),
+        ))),
         "timeline" => to_value(serde_json::to_value(events::timeline(
             ds,
             evs,
