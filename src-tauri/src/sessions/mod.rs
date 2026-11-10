@@ -14,6 +14,7 @@
 // Todo se lee en la app (no en el editor), así que funciona con el editor cerrado o colgado. La lectura es tolerante:
 // un bloque a medias o una línea cortada se descartan y el resto se lee (R6). Nunca modifica una sesión ajena.
 
+pub mod analysis;
 pub mod store;
 
 pub use store::{
