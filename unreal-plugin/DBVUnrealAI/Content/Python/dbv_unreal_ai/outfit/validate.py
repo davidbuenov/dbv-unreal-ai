@@ -115,76 +115,80 @@ def compare_open_borders(source_asset: Any, fitted_asset: Any, max_allowed_delta
     return res
 
 
-def measure_body_clearance(actor_or_label: Any, garment_kind: str, body_trimmed: bool = False) -> dict[str, Any]:
-    """Mide la holgura y penetraciones entre la prenda y el cuerpo del MetaHuman.
+SLOT_BY_KIND = {"top": "Torso", "pants": "Legs", "shoes": "Feet"}
 
+
+def _clearance_error(garment_kind: str, reason: str) -> dict[str, Any]:
+    """Informe de holgura cuando no se ha podido medir: siempre ``error``, nunca valores inventados."""
+    res: dict[str, Any] = {
+        "result": "error",
+        "ok": False,
+        "method": "signed_distance",
+        "garment_kind": garment_kind,
+        "clearance": {"measured_vertices": 0, "over_hidden_skin_vertices": 0},
+        "bare_skin": None,
+        "warnings": [f"No se pudo medir la holgura: {reason}"],
+    }
+    return res
+
+
+def _full_body_for(body_skm: Any, actor: Any) -> tuple[Any, str]:
+    """Cuerpo completo de la misma complexión que el ``Body`` del actor; ``(None, motivo)`` si no hay."""
+    from .. import metahuman
+
+    archetype = metahuman.resolve_full_body_archetype(body_skm, actor)
+    full_skm, full_path = metahuman._find_full_body_asset(archetype)
+    reason = ""
+    # _find_full_body_asset recurre a otra complexión si no encuentra la pedida: aquí eso no vale.
+    if full_skm is None or archetype not in full_path.lower():
+        full_skm = None
+        reason = f"no hay malla de cuerpo completo para la complexión «{archetype}» en /Game/MetaHumans/Common."
+    return (full_skm, reason)
+
+
+def measure_body_clearance(
+    actor_or_label: Any,
+    garment_kind: str,
+    body_trimmed: bool = False,
+    zone: list[Any] | None = None,
+) -> dict[str, Any]:
+    """Holgura real de la prenda de una ranura: distancia con signo contra el cuerpo completo.
+
+    Cuenta solo la piel que el actor dibuja y la piel destapada dentro de la zona de la
+    prenda (la de REQ-98 si se pasa, o la plantilla por tipo). Si algo impide medir, el
+    resultado es ``error`` con el motivo: no hay estimaciones por cajas ni valores fijos
+    (REJECTED-13). ``body_trimmed`` se conserva por compatibilidad y no cambia la medida.
     @spec REQ-89
     """
-    warnings: list[str] = []
-    min_clearance = 1.2
-    median_clearance = 2.0
-    penetration_detected = False
-
+    _ = body_trimmed
     actor = actor_or_label if not isinstance(actor_or_label, str) else _find_level_actor(actor_or_label)
+    slot = SLOT_BY_KIND.get(garment_kind)
+    comps: dict[str, Any] = {}
+    if actor is not None and HAS_UNREAL and hasattr(actor, "get_components_by_class"):
+        comps = {c.get_name(): c for c in actor.get_components_by_class(unreal.SkeletalMeshComponent)}
+    body_skm = comps["Body"].get_skeletal_mesh_asset() if "Body" in comps else None
+    garment_skm = comps[slot].get_skeletal_mesh_asset() if slot in comps else None
 
-    # Soporte para mocks en tests
-    if actor is not None and hasattr(actor, "mock_clearance"):
-        min_clearance = float(getattr(actor, "mock_clearance", 1.0))
-        median_clearance = min_clearance + 0.8
-        penetration_detected = min_clearance < 0.0
-        if penetration_detected:
-            warnings.append(f"Mock penetration detected: {min_clearance:.2f} cm.")
-    # Si la prenda es falda/vestido con recorte de cuerpo (REQ-86), no puede haber penetración
-    elif body_trimmed and garment_kind in ["skirt", "dress"]:
-        min_clearance = 1.5
-        median_clearance = 2.5
-        penetration_detected = False
-    elif actor is not None and HAS_UNREAL:
-        try:
-            body_comp = None
-            garment_comp = None
-            slot_name = "Torso" if garment_kind == "top" else ("Legs" if garment_kind == "pants" else "Feet")
+    if not HAS_UNREAL:
+        res = _clearance_error(garment_kind, "solo se puede medir dentro del editor de Unreal.")
+    elif actor is None:
+        res = _clearance_error(garment_kind, f"no se encuentra el actor «{actor_or_label}» en el nivel.")
+    elif slot is None:
+        res = _clearance_error(
+            garment_kind, f"la holgura de una prenda de tela ({garment_kind}) aún no se mide vértice a vértice."
+        )
+    elif body_skm is None or garment_skm is None:
+        res = _clearance_error(garment_kind, f"el actor no tiene malla en «Body» o en «{slot}».")
+    else:
+        from . import clearance
 
-            for comp in actor.get_components_by_class(unreal.SkeletalMeshComponent):
-                cname = comp.get_name()
-                if cname == "Body":
-                    body_comp = comp
-                elif cname == slot_name:
-                    garment_comp = comp
-
-            if body_comp is not None and garment_comp is not None:
-                body_asset = body_comp.get_skeletal_mesh_asset() if hasattr(body_comp, "get_skeletal_mesh_asset") else None
-                garment_asset = garment_comp.get_skeletal_mesh_asset() if hasattr(garment_comp, "get_skeletal_mesh_asset") else None
-                if body_asset is not None and garment_asset is not None and hasattr(body_asset, "get_bounds") and hasattr(garment_asset, "get_bounds"):
-                    bb = garment_asset.get_bounds()
-                    b_body = body_asset.get_bounds()
-                    diff_x = (bb.box_extent.x - b_body.box_extent.x)
-                    diff_y = (bb.box_extent.y - b_body.box_extent.y)
-                    estimated_margin = min(diff_x, diff_y)
-
-                    if estimated_margin < -0.5:
-                        min_clearance = float(estimated_margin)
-                        median_clearance = float(estimated_margin + 1.0)
-                        penetration_detected = True
-                        warnings.append(
-                            f"Garment penetration detected: {min_clearance:.2f} cm inside body bounds."
-                        )
-                    else:
-                        min_clearance = max(0.2, float(estimated_margin))
-                        median_clearance = max(min_clearance + 0.5, 1.8)
-        except Exception as exc:
-            warnings.append(f"Clearance measurement fallback: {exc}")
-
-    is_ok = not penetration_detected and min_clearance >= 0.0
-
-    res: dict[str, Any] = {
-        "min_clearance_cm": round(min_clearance, 2),
-        "median_clearance_cm": round(median_clearance, 2),
-        "penetration_detected": penetration_detected,
-        "body_trimmed": body_trimmed,
-        "ok": is_ok,
-        "warnings": warnings,
-    }
+        full_skm, reason = _full_body_for(body_skm, actor)
+        res = (
+            _clearance_error(garment_kind, reason)
+            if full_skm is None
+            else clearance.measure_assets(garment_skm, body_skm, full_skm, garment_kind, zone)
+        )
+        res["garment_kind"] = garment_kind
     return res
 
 
@@ -289,79 +293,72 @@ def check_cloth_linkage(actor_or_label: Any, garment_kind: str) -> dict[str, Any
     return res
 
 
+CAPTURE_VIEWS = (("front", 0.0), ("side", 90.0), ("back", 180.0))
+
+
+def _captures_dir(actor_label: str, output_dir: str | None) -> str:
+    """Carpeta absoluta de las capturas: dentro de ``Saved/`` del proyecto, nunca relativa al motor."""
+    chosen = output_dir
+    if not chosen and HAS_UNREAL:
+        saved = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir())
+        chosen = os.path.join(saved, "DBVUnrealAI", "outfits", "captures", actor_label)
+    return os.path.abspath(chosen or os.path.join("Saved", "DBVUnrealAI", "outfits", "captures", actor_label))
+
+
 def capture_three_angles(
     actor_label: str,
     output_dir: str | None = None,
-    distance_cm: float = 220.0,
-    height_cm: float = 110.0,
-) -> dict[str, str]:
-    """Captura instantáneas del personaje vestido desde tres perspectivas: frente, lado y espalda.
+    distance_cm: float = 300.0,
+    height_cm: float = 100.0,
+) -> dict[str, Any]:
+    """Captura de frente, lado y espalda del personaje, solo él, en ficheros PNG del proyecto.
 
+    Cada vista se renderiza en el momento con un ``SceneCapture2D`` temporal (no con la
+    cámara del visor, que es asíncrona y solo guardaba la última). El actor temporal se
+    borra siempre. Solo se devuelven las rutas de ficheros que existen.
     @spec REQ-89
     """
-    dest_dir = output_dir or os.path.join("Saved", "DBVUnrealAI", "outfits", "captures")
-    _ensure_dir(dest_dir)
-
-    screenshots: dict[str, str] = {
-        "front": os.path.join(dest_dir, f"{actor_label}_front.png"),
-        "side": os.path.join(dest_dir, f"{actor_label}_side.png"),
-        "back": os.path.join(dest_dir, f"{actor_label}_back.png"),
-    }
-
+    dest_dir = _captures_dir(actor_label, output_dir)
+    files: dict[str, str] = {}
+    errors: list[str] = []
     actor = _find_level_actor(actor_label)
-    if actor is not None and HAS_UNREAL:
+    if not HAS_UNREAL:
+        errors.append("Las capturas solo se pueden hacer dentro del editor de Unreal.")
+    elif actor is None:
+        errors.append(f"No se encuentra el actor «{actor_label}» en el nivel.")
+    else:
+        _ensure_dir(dest_dir)
+        actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+        world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+        target = actor.get_actor_location()
+        look_at = unreal.Vector(target.x, target.y, target.z + height_cm)
+        render_target = unreal.RenderingLibrary.create_render_target2d(world, 1024, 1024, unreal.TextureRenderTargetFormat.RTF_RGBA8)
+        capture = actors.spawn_actor_from_class(unreal.SceneCapture2D, target)
         try:
-            ue_sub = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem) if hasattr(unreal, "UnrealEditorSubsystem") else None
-            a_loc = actor.get_actor_location()
-            a_rot = actor.get_actor_rotation()
-            yaw_rad = math.radians(a_rot.yaw)
-
-            # Frente: enfrente del personaje (offset +cos(yaw), +sin(yaw)), mirando hacia el personaje
-            front_loc = unreal.Vector(
-                a_loc.x + distance_cm * math.cos(yaw_rad),
-                a_loc.y + distance_cm * math.sin(yaw_rad),
-                a_loc.z + height_cm,
-            )
-            front_rot = unreal.Rotator(roll=0.0, pitch=-5.0, yaw=a_rot.yaw + 180.0)
-
-            # Lado: a la derecha del personaje (+90 deg)
-            side_yaw_rad = math.radians(a_rot.yaw + 90.0)
-            side_loc = unreal.Vector(
-                a_loc.x + distance_cm * math.cos(side_yaw_rad),
-                a_loc.y + distance_cm * math.sin(side_yaw_rad),
-                a_loc.z + height_cm,
-            )
-            side_rot = unreal.Rotator(roll=0.0, pitch=-5.0, yaw=a_rot.yaw - 90.0)
-
-            # Espalda: detrás del personaje (-cos(yaw), -sin(yaw)), mirando hacia la espalda
-            back_loc = unreal.Vector(
-                a_loc.x - distance_cm * math.cos(yaw_rad),
-                a_loc.y - distance_cm * math.sin(yaw_rad),
-                a_loc.z + height_cm,
-            )
-            back_rot = unreal.Rotator(roll=0.0, pitch=-5.0, yaw=a_rot.yaw)
-
-            views = [
-                ("front", front_loc, front_rot),
-                ("side", side_loc, side_rot),
-                ("back", back_loc, back_rot),
-            ]
-
-            auto_lib = getattr(unreal, "AutomationLibrary", None)
-            for angle_name, cam_loc, cam_rot in views:
-                if ue_sub is not None and hasattr(ue_sub, "set_level_viewport_camera_info"):
-                    ue_sub.set_level_viewport_camera_info(cam_loc, cam_rot)
-                elif hasattr(unreal, "EditorLevelLibrary"):
-                    unreal.EditorLevelLibrary.set_level_viewport_camera_info(cam_loc, cam_rot)
-
-                target_file = screenshots[angle_name]
-                if auto_lib is not None and hasattr(auto_lib, "take_high_res_screenshot"):
-                    auto_lib.take_high_res_screenshot(1280, 720, target_file)
-
-        except Exception:
-            pass
-
-    return screenshots
+            comp = capture.capture_component2d
+            comp.texture_target = render_target
+            comp.capture_source = unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR
+            comp.capture_every_frame = False
+            comp.fov_angle = 40.0
+            comp.primitive_render_mode = unreal.SceneCapturePrimitiveRenderMode.PRM_USE_SHOW_ONLY_LIST
+            comp.show_only_actor_components(actor)
+            # El MetaHuman mira hacia +Y de su actor: el frente está a yaw + 90°.
+            base_yaw = actor.get_actor_rotation().yaw + 90.0
+            for name, offset in CAPTURE_VIEWS:
+                angle = math.radians(base_yaw + offset)
+                cam = unreal.Vector(target.x + distance_cm * math.cos(angle), target.y + distance_cm * math.sin(angle), look_at.z)
+                capture.set_actor_location_and_rotation(cam, unreal.MathLibrary.find_look_at_rotation(cam, look_at), False, False)
+                comp.capture_scene()
+                unreal.RenderingLibrary.export_render_target(world, render_target, dest_dir, f"{name}.png")
+                path = os.path.join(dest_dir, f"{name}.png")
+                if os.path.isfile(path):
+                    files[name] = path
+                else:
+                    errors.append(f"No se guardó la captura «{name}» en {path}.")
+        finally:
+            actors.destroy_actor(capture)
+    res: dict[str, Any] = {"files": files, "folder": dest_dir, "errors": errors, "ok": len(files) == len(CAPTURE_VIEWS)}
+    return res
 
 
 def run_walk_validation_pie(duration_seconds: float = 2.0) -> dict[str, Any]:
@@ -424,6 +421,7 @@ def validate_outfit(
     run_pie: bool = False,
     capture_angles: bool = True,
     output_dir: str | None = None,
+    zone: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Orquesta la validación completa de una prenda equipada y genera su informe.
 
@@ -443,12 +441,11 @@ def validate_outfit(
             has_fatal_error = True
 
     # 2. Medición de holgura y penetraciones
-    clearance_res = measure_body_clearance(actor_label, garment_kind, body_trimmed=body_trimmed)
+    clearance_res = measure_body_clearance(actor_label, garment_kind, body_trimmed=body_trimmed, zone=zone)
     steps_executed.append("clearance_measurement")
-    if not clearance_res["ok"]:
-        all_warnings.extend(clearance_res["warnings"])
-        if clearance_res.get("min_clearance_cm", 0.0) < -2.0:
-            has_fatal_error = True
+    all_warnings.extend(clearance_res.get("warnings", []))
+    if clearance_res.get("result") == "error":
+        has_fatal_error = True
 
     # 3. Verificación de enlace de tela y huesos
     linkage_res = check_cloth_linkage(actor_label, garment_kind)
@@ -472,7 +469,9 @@ def validate_outfit(
     screenshots: dict[str, str] = {}
     if capture_angles:
         steps_executed.append("three_angle_captures")
-        screenshots = capture_three_angles(actor_label, output_dir=output_dir)
+        captures = capture_three_angles(actor_label, output_dir=output_dir)
+        screenshots = captures["files"]
+        all_warnings.extend(captures["errors"])
 
     # Determinación del estado final según REQ-89
     if has_fatal_error:

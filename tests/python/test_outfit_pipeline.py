@@ -135,6 +135,7 @@ class TestOutfitPipeline(unittest.TestCase):
             patch.object(pipeline.skin, "prepare_clean_skin", return_value={"success": True}),
             patch.object(pipeline.skin, "trim_body_mesh_under_garment", return_value={"success": True}),
             patch.object(pipeline, "_equip_bones_garment", return_value={"success": True, "skeletal_mesh": "/Game/SK_Chaqueta_Rigged"}),
+            patch.object(pipeline.validate, "validate_outfit", return_value={"success": True, "result": "ok", "warnings": [], "screenshots": {}}),
         ):
             start = pipeline.dress_metahuman_start(
                 actor_label="BP_Pablo",
@@ -190,6 +191,7 @@ class TestOutfitPipeline(unittest.TestCase):
             patch.object(pipeline.skin, "prepare_clean_skin", return_value={"success": True}),
             patch.object(pipeline.skin, "trim_body_mesh_under_garment", return_value={"success": True}),
             patch.object(pipeline.cloth, "setup_cloth_for_character", return_value={"success": True, "cloth_asset": "/Game/CA_Falda", "sim_sm_path": "/Game/SM_Sim"}),
+            patch.object(pipeline.validate, "validate_outfit", return_value={"success": True, "result": "ok", "warnings": [], "screenshots": {}}),
         ):
             start = pipeline.dress_metahuman_start(
                 actor_label="BP_Victoria",
@@ -230,6 +232,7 @@ class TestOutfitPipeline(unittest.TestCase):
             patch.object(pipeline.skin, "prepare_clean_skin", return_value={"success": True}),
             patch.object(pipeline.skin, "trim_body_mesh_under_garment", return_value={"success": True}),
             patch.object(pipeline, "_equip_bones_garment", return_value={"success": True, "skeletal_mesh": "/Game/SK_Pants_Rigged"}),
+            patch.object(pipeline.validate, "validate_outfit", return_value={"success": True, "result": "ok", "warnings": [], "screenshots": {}}),
         ):
             raw = pipeline.dress_metahuman(
                 actor_label="BP_Pablo",

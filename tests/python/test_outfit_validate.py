@@ -46,30 +46,32 @@ class TestOutfitValidate(unittest.TestCase):
         self.assertGreater(len(torn_res["warnings"]), 0)
         return None
 
-    def test_measure_body_clearance_detecta_penetraciones(self) -> None:
-        """Verifica que detecta penetraciones negativas y genera avisos."""
-        # Actor con penetración simulada (-1.2 cm dentro del cuerpo)
-        mock_actor_pen = MagicMock(mock_clearance=-1.2)
-        res = validate.measure_body_clearance(mock_actor_pen, "top")
+    def test_measure_body_clearance_sin_editor_es_error_y_no_inventa_valores(self) -> None:
+        """Fuera de Unreal no se puede medir: ``error`` con motivo, sin holguras fijas (REJECTED-13)."""
+        res = validate.measure_body_clearance("BP_Pablo", "top")
+        self.assertEqual(res["result"], "error")
         self.assertFalse(res["ok"])
-        self.assertTrue(res["penetration_detected"])
-        self.assertLess(res["min_clearance_cm"], 0.0)
-        self.assertGreater(len(res["warnings"]), 0)
-
-        # Actor con holgura limpia (1.5 cm)
-        mock_actor_clean = MagicMock(mock_clearance=1.5)
-        res_clean = validate.measure_body_clearance(mock_actor_clean, "top")
-        self.assertTrue(res_clean["ok"])
-        self.assertFalse(res_clean["penetration_detected"])
-        self.assertGreaterEqual(res_clean["min_clearance_cm"], 0.0)
+        self.assertEqual(res["clearance"], {"measured_vertices": 0, "over_hidden_skin_vertices": 0})
+        self.assertIn("No se pudo medir", res["warnings"][0])
         return None
 
-    def test_measure_body_clearance_con_cuerpo_recortado(self) -> None:
-        """Verifica que para falda/vestido con cuerpo recortado no hay penetración."""
-        res = validate.measure_body_clearance(None, "skirt", body_trimmed=True)
-        self.assertTrue(res["ok"])
-        self.assertFalse(res["penetration_detected"])
-        self.assertTrue(res["body_trimmed"])
+    def test_measure_body_clearance_falda_no_se_da_por_buena_sin_medir(self) -> None:
+        """El atajo «falda con cuerpo recortado = sin penetración» ya no existe."""
+        with (
+            patch.object(validate, "HAS_UNREAL", True),
+            patch.object(validate, "unreal", MagicMock()),
+            patch.object(validate, "_find_level_actor", return_value=MagicMock()),
+        ):
+            res = validate.measure_body_clearance("BP_Victoria", "skirt", body_trimmed=True)
+        self.assertEqual(res["result"], "error")
+        self.assertIn("tela", res["warnings"][0])
+        return None
+
+    def test_measure_body_clearance_sin_el_actor_es_error(self) -> None:
+        with patch.object(validate, "HAS_UNREAL", True), patch.object(validate, "_find_level_actor", return_value=None):
+            res = validate.measure_body_clearance("NoExiste", "pants")
+        self.assertEqual(res["result"], "error")
+        self.assertIn("NoExiste", res["warnings"][0])
         return None
 
     def test_check_cloth_linkage_valida_componente_y_leader_pose(self) -> None:
@@ -93,15 +95,14 @@ class TestOutfitValidate(unittest.TestCase):
         return None
 
     def test_capture_three_angles_genera_rutas_correctas(self) -> None:
-        """Verifica que capture_three_angles genera los nombres para frente, lado y espalda."""
+        """Sin capturas reales no se devuelven rutas de ficheros que no existen. @spec REQ-89"""
         with patch.object(validate, "_find_level_actor", return_value=None):
             caps = validate.capture_three_angles("BP_Pablo", output_dir="Saved/Captures")
-            self.assertIn("front", caps)
-            self.assertIn("side", caps)
-            self.assertIn("back", caps)
-            self.assertTrue(caps["front"].endswith("BP_Pablo_front.png"))
-            self.assertTrue(caps["side"].endswith("BP_Pablo_side.png"))
-            self.assertTrue(caps["back"].endswith("BP_Pablo_back.png"))
+        self.assertEqual(caps["files"], {})
+        self.assertFalse(caps["ok"])
+        self.assertTrue(caps["errors"])
+        self.assertTrue(caps["folder"].endswith("Captures"))
+        self.assertEqual([name for name, _ in validate.CAPTURE_VIEWS], ["front", "side", "back"])
         return None
 
     def test_run_walk_validation_pie_limpieza_segura(self) -> None:
@@ -114,10 +115,12 @@ class TestOutfitValidate(unittest.TestCase):
 
     def test_validate_outfit_resultado_ok(self) -> None:
         """Verifica un informe con resultado 'ok' cuando todo está correcto."""
-        mock_actor = MagicMock(mock_clearance=1.5, mock_cloth_ok=True, mock_leader_linked=True, mock_physics_ok=True)
+        mock_actor = MagicMock(mock_cloth_ok=True, mock_leader_linked=True, mock_physics_ok=True)
         with (
             patch.object(validate, "_find_level_actor", return_value=mock_actor),
             patch.object(validate, "compare_open_borders", return_value={"ok": True, "delta": 0, "warnings": []}),
+            patch.object(validate, "measure_body_clearance", return_value={"result": "ok", "ok": True, "warnings": [], "clearance": {"measured_vertices": 100}}),
+            patch.object(validate, "capture_three_angles", return_value={"files": {"front": "f.png", "side": "s.png", "back": "b.png"}, "folder": "x", "errors": [], "ok": True}),
         ):
             report = validate.validate_outfit(
                 actor_label="BP_Pablo",
@@ -134,10 +137,11 @@ class TestOutfitValidate(unittest.TestCase):
 
     def test_validate_outfit_resultado_con_avisos(self) -> None:
         """Verifica resultado 'con_avisos' ante advertencias no críticas."""
-        mock_actor = MagicMock(mock_clearance=0.3, mock_cloth_ok=True, mock_leader_linked=True, mock_physics_ok=True)
+        mock_actor = MagicMock(mock_cloth_ok=True, mock_leader_linked=True, mock_physics_ok=True)
         with (
             patch.object(validate, "_find_level_actor", return_value=mock_actor),
             patch.object(validate, "compare_open_borders", return_value={"ok": False, "delta": 40, "warnings": ["Minor border edge increase"]}),
+            patch.object(validate, "measure_body_clearance", return_value={"result": "ok", "ok": True, "warnings": [], "clearance": {"measured_vertices": 100}}),
         ):
             report = validate.validate_outfit(
                 actor_label="BP_Pablo",
@@ -150,10 +154,11 @@ class TestOutfitValidate(unittest.TestCase):
 
     def test_validate_outfit_resultado_error(self) -> None:
         """Verifica que fallos críticos (falta de leader pose o rotura de malla) producen 'error'."""
-        mock_actor = MagicMock(mock_clearance=1.5, mock_cloth_ok=True, mock_leader_linked=False, mock_physics_ok=True)
+        mock_actor = MagicMock(mock_cloth_ok=True, mock_leader_linked=False, mock_physics_ok=True)
         with (
             patch.object(validate, "_find_level_actor", return_value=mock_actor),
             patch.object(validate, "compare_open_borders", return_value={"ok": True, "delta": 0, "warnings": []}),
+            patch.object(validate, "measure_body_clearance", return_value={"result": "ok", "ok": True, "warnings": [], "clearance": {"measured_vertices": 100}}),
         ):
             report = validate.validate_outfit(
                 actor_label="BP_Victoria",
@@ -161,6 +166,24 @@ class TestOutfitValidate(unittest.TestCase):
             )
             self.assertFalse(report["success"])
             self.assertEqual(report["result"], "error")
+        return None
+
+
+    def test_validate_outfit_con_holgura_en_error_nunca_es_ok(self) -> None:
+        """La camiseta de caja y los shorts con hueco del 2026-11-10 no pueden salir como ``ok``. @spec REQ-89"""
+        bad = {
+            "result": "error",
+            "ok": False,
+            "warnings": ["El 27.8 % de la prenda está dentro de la piel (hasta 8.7 cm): el cuerpo la atraviesa."],
+            "clearance": {"measured_vertices": 7330, "inside_pct": 27.78},
+        }
+        with (
+            patch.object(validate, "compare_open_borders", return_value={"ok": True, "delta": 0, "warnings": []}),
+            patch.object(validate, "measure_body_clearance", return_value=bad),
+        ):
+            report = validate.validate_outfit(actor_label="Pablo_Deportista", garment_kind="top", capture_angles=False)
+        self.assertEqual(report["result"], "error")
+        self.assertIn("dentro de la piel", " ".join(report["warnings"]))
         return None
 
 
