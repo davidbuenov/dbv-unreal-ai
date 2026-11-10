@@ -275,6 +275,8 @@
   - [x] `/plan` (2026-11-09): Architect Review, `D67..D73`, slices S105–S115.
   - [x] S105 · Instrucciones, receta y regla contra callbacks por fotograma (`REQ-97`) (2026-11-09): receta `runtime_diagnosis` (ES/EN/zh-CN, con comprobación «fuera de Play»), `runtimeDebugPrompt()` en el prompt de la IA (asistente y agentes) y aviso de `pythonNudge` ante un callback por fotograma. Las `session_*` aparecen en las instrucciones con «cuando estén disponibles»; en S109 se quita esa salvedad. Python +2, Vitest +2, Rust ajustado a 5 recetas. Pendiente de S105: evals con un modelo real y que `unreal_run_python` avise en la tarjeta de aprobación si el código trae un callback por fotograma (hoy solo lo dice el prompt).
   - [ ] S106 · Grabadora Python (`REQ-91`); puerta: spikes `P-23` (fin de PIE e identidad del mundo) y `P-22` (coste).
+    - [x] Puerta superada (2026-11-10, en vivo): P-23 resuelta (fin de PIE = `get_game_world()` a `None`; un mundo retenido lanza «ObjectInstance is null» al acabar) y P-22 medida (30 señales = 0,19 ms por fotograma, bajo el objetivo de 0,5 ms). **S114 (grabadora C++) se descarta.**
+    - [ ] Falta el paquete `dbv_unreal_ai/session/` (señales, presets, bloques, `finish()`, una sesión activa).
   - [ ] S107 · Almacenamiento y lector en Rust (`REQ-91`).
   - [ ] S108 · Análisis núcleo (`REQ-93`).
   - [ ] S109 · Herramientas `session_*` en el MCP y el asistente (`REQ-92`).
@@ -282,7 +284,7 @@
   - [ ] S111 · Marcas con teclado y análisis restantes (`REQ-93`, `REQ-94`).
   - [ ] S112 · Visor: VR Preview, marcas con el mando, capturas (`REQ-95`); puerta: spike `P-24`.
   - [ ] S113 · Aislar, conducir y comparar (`REQ-96`).
-  - [ ] S114 · Grabadora C++ (`REQ-91`), solo si `P-22` lo pide.
+  - [~] S114 · Grabadora C++ (`REQ-91`): descartada, P-22 midió 0,19 ms con 30 señales.
   - [ ] S115 · Evals, caso de referencia, 50 sesiones, ElecnorMIO y documentación (`REQ-97`).
 - [ ] **`/ship` v0.5.0 — Publicación en Microsoft Store** *(espera a `REQ-90` y a la puerta de `REQ-97`)*:
   - Generación de bundle MSIX firmado para Microsoft Store (`tauri-windows-bundle` / Partner Center).
