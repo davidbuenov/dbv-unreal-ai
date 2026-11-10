@@ -54,6 +54,9 @@ pub mod recipes;
 // Log local rotativo de la ventana y del `--mcp`, sin claves (RNF-08).
 #[cfg(desktop)]
 pub mod logging;
+// Caja negra: lector y almacenamiento de las sesiones que graba el plugin (REQ-91).
+#[cfg(desktop)]
+pub mod sessions;
 // Cuánto devuelven las herramientas a la IA, compartido entre la ventana y el `--mcp` (REQ-51).
 #[cfg(desktop)]
 pub mod tool_usage;

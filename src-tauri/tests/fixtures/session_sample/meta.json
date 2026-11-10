@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "status": "finished",
+  "reason": "pie_ended",
+  "columns": [
+    "a",
+    "b",
+    "c"
+  ],
+  "rows": 5,
+  "duration_s": 2.0,
+  "warnings": [],
+  "level": "/Game/Mapa"
+}
