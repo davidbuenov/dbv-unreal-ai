@@ -278,7 +278,8 @@
     - [x] Puerta superada (2026-11-10, en vivo): P-23 resuelta (fin de PIE = `get_game_world()` a `None`; un mundo retenido lanza «ObjectInstance is null» al acabar) y P-22 medida (30 señales = 0,19 ms por fotograma, bajo el objetivo de 0,5 ms). **S114 (grabadora C++) se descarta.**
     - [x] S106a (2026-11-10): `session/frames.py` (formato `frames.bin` por bloques con CRC, 6 tests).
     - [x] S106b (2026-11-10): `session/plan.py` (señales, presets, límites; un plan con errores graba lo bueno; 9 tests).
-    - [ ] Falta el paquete `dbv_unreal_ai/session/` (señales, presets, bloques, `finish()`, una sesión activa).
+    - [x] S106c (2026-11-10): `session/recorder.py`, núcleo con adaptador y 13 tests con mundo simulado (fin de PIE antes de leer, una señal que falla, reintento, límites, una sola sesión, meta con coste).
+    - [ ] S106d: adaptador real de Unreal (`session/live.py`: resolver actores, sockets, variables por reflexión, propiedades de animación), integración en `editor.py` y prueba en vivo en PIE. Falta el paquete `dbv_unreal_ai/session/` (señales, presets, bloques, `finish()`, una sesión activa).
   - [ ] S107 · Almacenamiento y lector en Rust (`REQ-91`).
   - [ ] S108 · Análisis núcleo (`REQ-93`).
   - [ ] S109 · Herramientas `session_*` en el MCP y el asistente (`REQ-92`).
