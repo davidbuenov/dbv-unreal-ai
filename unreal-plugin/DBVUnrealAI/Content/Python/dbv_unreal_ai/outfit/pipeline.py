@@ -14,6 +14,7 @@ Proporciona la orquestación por pasos (``dress_metahuman_start``,
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import time
@@ -34,6 +35,9 @@ from . import skin
 from . import validate
 
 #: Tipos de prenda admitidos según REQ-84.
+_JOB_COUNTER = itertools.count(1)
+
+
 VALID_GARMENT_KINDS = ("top", "pants", "skirt", "dress", "shoes")
 
 #: Mapeo de ranuras heredadas (REQ-84 compatibilidad).
@@ -252,7 +256,7 @@ def dress_metahuman_start(
             # Determinar método: Chaos Cloth para falda y vestido; huesos para top, pants, shoes
             method = "cloth" if clean_kind in ("skirt", "dress") else "bones"
 
-            job_id = f"outfit_{int(time.time() * 1000)}"
+            job_id = f"outfit_{int(time.time() * 1000)}_{next(_JOB_COUNTER)}"  # el contador evita dos ids en el mismo ms
             steps_def = [
                 {"name": "prepare_character", "description": "Duplicate MetaHuman BP and replace actor in level", "status": "pending"},
                 {"name": "apply_slot_rules", "description": "Clear conflicting outfit slots and restore body parts", "status": "pending"},
