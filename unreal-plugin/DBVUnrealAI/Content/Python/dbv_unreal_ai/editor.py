@@ -85,6 +85,28 @@ def _unique_name(folder_path: str, asset_name: str) -> str:
     return candidate
 
 
+def _unique_dir(folder_path: str, name: str) -> str:
+    """Subcarpeta ``folder_path/name`` (o ``name_2``…) que aún no existe."""
+    candidate, n = name, 2
+    while n < 1000 and unreal.EditorAssetLibrary.does_directory_exist(f"{folder_path}/{candidate}") is True:
+        candidate, n = f"{name}_{n}", n + 1
+    return f"{folder_path}/{candidate}"
+
+
+def _run_import(source_file: str, folder_path: str, name: str) -> list[str]:
+    """Importa con Interchange y devuelve las rutas creadas."""
+    task = unreal.AssetImportTask()
+    task.filename = source_file
+    task.destination_path = folder_path
+    task.destination_name = name
+    task.replace_existing = False
+    task.automated = True
+    task.save = True
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    paths = [str(p) for p in task.get_editor_property("imported_object_paths")]
+    return paths
+
+
 def _classify(paths: list[str]) -> dict[str, list[str]]:
     """Separa lo importado por tipo: mallas estáticas, esqueléticas, esqueletos y animaciones."""
     kinds: dict[str, list[str]] = {"static": [], "skeletal": [], "skeleton": [], "animation": []}
@@ -117,15 +139,11 @@ def import_model(source_file: str, folder_path: str = "/Game/DBV/Generated", ass
         unreal.EditorAssetLibrary.make_directory(folder_path)
     base = asset_name.strip() or os.path.splitext(os.path.basename(source_file))[0]
     name = _unique_name(folder_path, base)
-    task = unreal.AssetImportTask()
-    task.filename = source_file
-    task.destination_path = folder_path
-    task.destination_name = name
-    task.replace_existing = False
-    task.automated = True
-    task.save = True
-    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
-    paths = [str(p) for p in task.get_editor_property("imported_object_paths")]
+    paths = _run_import(source_file, folder_path, name)
+    if not paths:
+        # Interchange nombra texturas y materiales de un GLB de Tripo por los ID de sus nodos, que se
+        # repiten en cada importación: la segunda choca con la primera y no crea nada (2026-11-10).
+        paths = _run_import(source_file, _unique_dir(folder_path, name), name)
     kinds = _classify(paths)
     primary = (kinds["skeletal"] or kinds["static"] or paths or [None])[0]
     result = {
@@ -502,8 +520,9 @@ def equip_metahuman_outfit(
     scale_multiplier: float = 1.05,
     z_offset: float = 0.0,
     smoothing_iterations: int = 5,
+    clearance_cm: float | None = None,
 ) -> str:
-    """Transfiere pesos del cuerpo MetaHuman a una prenda con ``GeometryScript`` (``INPAINT_WEIGHTS``) y la equipa. @spec REQ-81"""
+    """Equipa una prenda en un MetaHuman: tops y pantalones como carcasa del cuerpo, faldas y calzado por huesos. @spec REQ-81, REQ-98"""
     return metahuman.equip_metahuman_outfit(
         actor_label,
         garment_source,
@@ -515,6 +534,7 @@ def equip_metahuman_outfit(
         smoothing_iterations=smoothing_iterations,
         import_model_fn=import_model,
         unique_name_fn=_unique_name,
+        clearance_cm=clearance_cm,
     )
 
 

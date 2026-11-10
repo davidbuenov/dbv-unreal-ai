@@ -142,6 +142,7 @@ class TestOutfitValidate(unittest.TestCase):
             patch.object(validate, "_find_level_actor", return_value=mock_actor),
             patch.object(validate, "compare_open_borders", return_value={"ok": False, "delta": 40, "warnings": ["Minor border edge increase"]}),
             patch.object(validate, "measure_body_clearance", return_value={"result": "ok", "ok": True, "warnings": [], "clearance": {"measured_vertices": 100}}),
+            patch.object(validate, "capture_three_angles", return_value={"files": {"front": "f.png", "side": "s.png", "back": "b.png"}, "folder": "x", "errors": [], "ok": True}),
         ):
             report = validate.validate_outfit(
                 actor_label="BP_Pablo",
@@ -159,6 +160,7 @@ class TestOutfitValidate(unittest.TestCase):
             patch.object(validate, "_find_level_actor", return_value=mock_actor),
             patch.object(validate, "compare_open_borders", return_value={"ok": True, "delta": 0, "warnings": []}),
             patch.object(validate, "measure_body_clearance", return_value={"result": "ok", "ok": True, "warnings": [], "clearance": {"measured_vertices": 100}}),
+            patch.object(validate, "capture_three_angles", return_value={"files": {"front": "f.png", "side": "s.png", "back": "b.png"}, "folder": "x", "errors": [], "ok": True}),
         ):
             report = validate.validate_outfit(
                 actor_label="BP_Victoria",

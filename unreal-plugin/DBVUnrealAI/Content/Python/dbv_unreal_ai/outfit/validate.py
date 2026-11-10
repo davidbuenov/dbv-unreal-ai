@@ -299,7 +299,7 @@ CAPTURE_VIEWS = (("front", 0.0), ("side", 90.0), ("back", 180.0))
 def _captures_dir(actor_label: str, output_dir: str | None) -> str:
     """Carpeta absoluta de las capturas: dentro de ``Saved/`` del proyecto, nunca relativa al motor."""
     chosen = output_dir
-    if not chosen and HAS_UNREAL:
+    if not chosen and HAS_UNREAL and hasattr(getattr(unreal, "Paths", None), "project_saved_dir"):
         saved = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir())
         chosen = os.path.join(saved, "DBVUnrealAI", "outfits", "captures", actor_label)
     return os.path.abspath(chosen or os.path.join("Saved", "DBVUnrealAI", "outfits", "captures", actor_label))

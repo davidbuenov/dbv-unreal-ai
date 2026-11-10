@@ -537,6 +537,10 @@ class MetaHumanCompFake:
         """Asigna un material explícito a una ranura del componente."""
         self.assigned_materials[index] = mat
 
+    def get_material(self, index: int):  # noqa: ANN201
+        """Material asignado a una ranura (o ``None``)."""
+        return self.assigned_materials.get(index)
+
     def set_leader_pose_component(self, body, force_update: bool = False) -> None:  # noqa: ANN001
         """Sincroniza con Body."""
         self.leader = (body, force_update)
@@ -625,6 +629,35 @@ class MetaHumanTests(unittest.TestCase):
             comps={c.get_name(): c for c in comps},
         )
 
+    def _shell_patches(self):  # noqa: ANN202
+        """Sustituye la geometría de la carcasa (REQ-98, probada en vivo) para probar el cableado del equipado."""
+        from unittest.mock import patch
+
+        from dbv_unreal_ai import metahuman as mh_mod
+        from dbv_unreal_ai.outfit import clearance as clearance_mod
+        from dbv_unreal_ai.outfit import shell as shell_mod
+
+        def fake_build(full_skm, garment_sm, kind, folder, base_name, clearance_cm=None):  # noqa: ANN001, ANN202
+            skm = types.SimpleNamespace(get_path_name=lambda: f"{folder}/{base_name}.{base_name}")
+            body = types.SimpleNamespace(pos=[(0.0, 0.0, 120.0)], normal=[(0.0, 1.0, 0.0)])
+            return {
+                "success": True, "skeletal_mesh": skm, "material": types.SimpleNamespace(get_path_name=lambda: f"{folder}/MI_x"),
+                "textures": {}, "offset_cm": 1.0, "placement": {}, "zone": {"covered_vertices": 1}, "warnings": [],
+                "covered": [True], "inner_covered": [True], "body": body,
+            }
+
+        skel = types.SimpleNamespace(get_path_name=lambda: "/Game/MetaHumans/Common/Female/Medium/NormalWeight/Body/metahuman_base_skel")
+        full = types.SimpleNamespace(
+            get_path_name=lambda: "/Game/MetaHumans/Common/Common/f_med_nrw_body_preview",
+            get_editor_property=lambda name: skel if name == "skeleton" else None,
+            get_bounds=lambda: types.SimpleNamespace(origin=Vec3Fake(0.0, 8.9, 85.0), box_extent=Vec3Fake(45.3, 13.2, 85.0)),
+        )
+        return [
+            patch.object(mh_mod, "_find_full_body_asset", side_effect=lambda arch: (full, f"/Game/MetaHumans/Common/Common/{arch}_body_preview")),
+            patch.object(shell_mod, "build_garment_shell", side_effect=fake_build),
+            patch.object(clearance_mod, "measure_assets", return_value={"result": "ok", "ok": True, "warnings": [], "clearance": {"measured_vertices": 1}}),
+        ]
+
     def test_list_metahumans_detecta_cuerpo_y_ranuras(self) -> None:
         """@spec REQ-81"""
         ACTORS.append(self._make_mh_actor("BP_Victoria_med_nrw_55"))
@@ -643,7 +676,13 @@ class MetaHumanTests(unittest.TestCase):
         sm.get_editor_property = lambda name: [types.SimpleNamespace(material_slot_name="M_Jacket", material_interface=object())] if name == "static_materials" else None
         ASSETS["/Game/DBV/Generated/Chaqueta"] = sm
 
-        report = json.loads(editor.equip_metahuman_outfit("BP_Pablo", "/Game/DBV/Generated/Chaqueta", slot="Torso", asset_name="ChaquetaCuero"))
+        from contextlib import ExitStack
+
+        with ExitStack() as stack:
+            for p in self._shell_patches():
+                stack.enter_context(p)
+            report = json.loads(editor.equip_metahuman_outfit("BP_Pablo", "/Game/DBV/Generated/Chaqueta", slot="Torso", asset_name="ChaquetaCuero"))
+        self.assertEqual(report["method"], "body_shell", "REQ-98: los tops se construyen desde el cuerpo")
         self.assertTrue(report["success"], report)
         self.assertEqual(report["actor"], "BP_Pablo")
         self.assertEqual(report["slot"], "Torso")
@@ -663,6 +702,12 @@ class MetaHumanTests(unittest.TestCase):
         sm.get_editor_property = lambda name: [types.SimpleNamespace(material_slot_name="M_Top", material_interface=mat_obj)] if name == "static_materials" else None
         ASSETS["/Game/DBV/MetaHumanOutfits/TopHalter"] = sm
 
+        from contextlib import ExitStack
+
+        stack = ExitStack()
+        for p in self._shell_patches():
+            stack.enter_context(p)
+        self.addCleanup(stack.close)
         # 1. Llamada con argumentos por nombre tal como la genera la app / MCP
         kw_report = json.loads(
             editor.equip_metahuman_outfit(
@@ -674,7 +719,8 @@ class MetaHumanTests(unittest.TestCase):
             )
         )
         self.assertTrue(kw_report["success"], kw_report)
-        self.assertEqual(mh.comps["Torso"].assigned_materials.get(0), mat_obj)
+        # REQ-98: el material es el de la carcasa (con el color horneado), no el de Tripo.
+        self.assertTrue(mh.comps["Torso"].assigned_materials.get(0).get_path_name().endswith("MI_x"))
 
         # 2. Llamada posicional heredada de 5 argumentos (scale_multiplier en 4º lugar)
         pos_report = json.loads(
@@ -707,6 +753,12 @@ class MetaHumanTests(unittest.TestCase):
         sm.get_editor_property = lambda name: [types.SimpleNamespace(material_slot_name="M_Top", material_interface=object())] if name == "static_materials" else None
         ASSETS["/Game/DBV/MetaHumanOutfits/Top"] = sm
 
+        from contextlib import ExitStack
+
+        stack = ExitStack()
+        for p in self._shell_patches():
+            stack.enter_context(p)
+        self.addCleanup(stack.close)
         sin_destino = json.loads(editor.equip_metahuman_outfit("", "/Game/DBV/MetaHumanOutfits/Top", slot="Torso"))
         self.assertFalse(sin_destino["success"], sin_destino)
         self.assertEqual(sin_destino["available"], ["BP_Uno", "BP_Dos", "BP_Tres"])
