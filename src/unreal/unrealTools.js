@@ -373,6 +373,83 @@ export function createUnrealTools(deps) {
     },
   };
 
+  const dressMetahuman = {
+    name: 'unreal_dress_metahuman',
+    description: 'Dress a MetaHuman character with a garment (top, pants, skirt, dress, shoes) using the deterministic pipeline (REQ-88): creates/reuses character copy (<BP>_DBV), clears/restores outfit slots, cleans underwear skin, and applies bone weights (GeometryScript) for top/pants/shoes or Chaos Cloth for skirt/dress.',
+    parameters: object(
+      {
+        actor_label: { type: 'string', description: 'Label of the MetaHuman to dress, as returned by unreal_list_metahumans. Required: the app never picks one by itself. If the user has not said which and there is more than one, ask them.' },
+        source: { type: 'string', description: 'Local .glb/.fbx path or /Game/... StaticMesh path.' },
+        garment_kind: { type: 'string', enum: ['top', 'pants', 'skirt', 'dress', 'shoes'], description: 'Garment kind (default: top).' },
+        garment_cut: { type: 'string', enum: ['male', 'female', 'neutral'], description: 'Garment cut to match body build (optional).' },
+        scale_multiplier: { type: 'number', description: 'Scale margin over the target body slot (default 1.05).' },
+        z_offset: { type: 'number', description: 'Vertical offset in cm (default 0.0).' },
+        purpose: { type: 'string', description: 'One sentence for the user: what garment is being equipped and on whom.' },
+      },
+      ['actor_label', 'source'],
+    ),
+    label: (args) => `Unreal: dress ${args.garment_kind ?? 'top'}${args.actor_label ? ` → ${args.actor_label}` : ''}`,
+    run: async ({ actor_label: actorLabel = '', source = '', garment_kind: garmentKind = 'top', garment_cut: garmentCut = null, scale_multiplier: scaleMultiplier = 1.05, z_offset: zOffset = 0, purpose = '' }) => {
+      const dbv = await dbvToolset();
+      if (!dbv) return 'error: the DBV Unreal AI toolset is not installed in this project.';
+      // REQ-83: sin destino no se pide permiso ni se ejecuta nada; la IA debe elegir (o preguntar) primero.
+      if (!String(actorLabel).trim()) return 'error: no target MetaHuman was chosen. Call unreal_list_metahumans: if there is exactly one, use it and tell the user; if there are several, ask the user which one before equipping.';
+      const safeArgs = {
+        actor_label: String(actorLabel),
+        source: String(source),
+        garment_kind: String(garmentKind || 'top'),
+        garment_cut: garmentCut ? String(garmentCut) : null,
+        scale_multiplier: Number(scaleMultiplier) || 1.05,
+        z_offset: Number(zOffset) || 0,
+      };
+      if (!(await approved({ kind: 'tool', toolset: dbv, tool: 'dress_metahuman', args: safeArgs, purpose }))) {
+        return 'The user DENIED this action. It was not executed.';
+      }
+      const hex = toHex({
+        actor_label: safeArgs.actor_label,
+        garment_source: safeArgs.source,
+        garment_kind: safeArgs.garment_kind,
+        garment_cut: safeArgs.garment_cut,
+        scale_multiplier: safeArgs.scale_multiplier,
+        z_offset: safeArgs.z_offset,
+      });
+      const code = `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.dress_metahuman(actor_label=_p["actor_label"], garment_source=_p["garment_source"], garment_kind=_p.get("garment_kind", "top"), garment_cut=_p.get("garment_cut"), scale_multiplier=float(_p.get("scale_multiplier", 1.05)), z_offset=float(_p.get("z_offset", 0.0)))\n`;
+      const ran = await invoke(dbv, 'run_python', { code }, 'modify', PYTHON_TIMEOUT_SECS);
+      const val = valueOf(ran);
+      return clip(JSON.stringify(val?.result ?? val));
+    },
+  };
+
+  const validateMetahumanOutfit = {
+    name: 'unreal_validate_metahuman_outfit',
+    description: 'Validate open border edges, clearance with body, cloth leader pose linkage, and optional PIE playtest / 3-angle captures for an equipped MetaHuman outfit (REQ-89).',
+    parameters: object(
+      {
+        actor_label: { type: 'string', description: 'Label of the MetaHuman to validate, as returned by unreal_list_metahumans.' },
+        garment_kind: { type: 'string', enum: ['top', 'pants', 'skirt', 'dress', 'shoes'], description: 'Garment kind (default: top).' },
+        run_pie: { type: 'boolean', description: 'Whether to run a non-blocking PIE walk test (default: false).' },
+        capture_angles: { type: 'boolean', description: 'Whether to take front, side, and back camera captures (default: true).' },
+      },
+      ['actor_label'],
+    ),
+    label: (args) => `Unreal: validate outfit → ${args.actor_label ?? 'MetaHuman'}`,
+    run: async ({ actor_label: actorLabel = '', garment_kind: garmentKind = 'top', run_pie: runPie = false, capture_angles: captureAngles = true }) => {
+      const dbv = await dbvToolset();
+      if (!dbv) return 'error: the DBV Unreal AI toolset is not installed in this project.';
+      if (!String(actorLabel).trim()) return 'error: actor_label is required.';
+      const hex = toHex({
+        actor_label: String(actorLabel),
+        garment_kind: String(garmentKind || 'top'),
+        run_pie: Boolean(runPie),
+        capture_angles: Boolean(captureAngles),
+      });
+      const code = `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.validate_metahuman_outfit(actor_label=_p["actor_label"], garment_kind=_p.get("garment_kind", "top"), run_pie=_p.get("run_pie", False), capture_angles=_p.get("capture_angles", True))\n`;
+      const ran = await invoke(dbv, 'run_python', { code }, 'read', PYTHON_TIMEOUT_SECS);
+      const val = valueOf(ran);
+      return clip(JSON.stringify(val?.result ?? val));
+    },
+  };
+
   const playtest = {
     name: 'unreal_playtest',
     description: 'Run an autonomous Play-In-Editor (PIE) playtest: starts PIE, drives the PlayerPawn across Slate ticks (forward/backward/left/right/jump), measures start/end location, distance moved, whether it fell out of the world, average FPS and recent Warning/Error log entries, captures the PIE viewport screenshot, and always stops PIE.',
@@ -439,7 +516,7 @@ export function createUnrealTools(deps) {
     },
   };
 
-  const tools = [listToolsets, describeToolset, callTool, runPython, sceneSummary, describeApi, projectInfo, listMetahumans, equipMetahumanOutfit, playtest];
+  const tools = [listToolsets, describeToolset, callTool, runPython, sceneSummary, describeApi, projectInfo, listMetahumans, equipMetahumanOutfit, dressMetahuman, validateMetahumanOutfit, playtest];
   return deps.vision && deps.backend.captureViewport ? [...tools, captureViewport] : tools;
 }
 
@@ -502,14 +579,14 @@ export function runtimeDebugPrompt() {
 
 export function unrealPrompt({ projectName = '', engineVersion = '', agent = false, convai = false, copyrightHolder = '' } = {}) {
   const how = agent
-    ? 'You act on the Unreal Editor through the tools of the `dbv-unreal-ai` MCP server: unreal_list_toolsets, unreal_describe_toolset, unreal_call_tool, unreal_run_python, unreal_scene_summary, unreal_describe_python_api, unreal_capture_viewport (look at the viewport to check your work), unreal_list_metahumans, unreal_equip_metahuman_outfit, unreal_playtest (autonomous PIE playtest with Pawn movement, telemetry, log check and viewport screenshot), unreal_import_sound (import sound effects as USoundWave in /Game/DBV/Audio), library_list, library_rename, library_import, library_send_to_unreal, generate_3d_model, generate_metahuman_outfit, image_to_3d_model, rig_model, animate_model, tripo_run, tripo_operations, tripo_balance, generate_world, export_world_mesh, worldlabs_balance (World Labs credits are a separate account from Tripo), generation_jobs, level_zones_propose and level_zones_list (named places of the level), compile_project_code (compile the project C++ after you changed it), recipes_list and recipe_check (guided recipes for common tasks, with a final check in the editor), search_unreal_guides (offline Unreal guides with their URL, if the user set them up). Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits. Your working folder is the Unreal project: you can read its Python, C++ and .ini files. Use only these tools for Unreal: if you also see another MCP server for the editor (for example unreal-mcp, from the project .mcp.json), do not use it — it skips the app check of the Python and the user approvals. If the project instructions (for example in CLAUDE.md or AGENTS.md) mention list_toolsets, describe_toolset or calling a toolset, do it with unreal_list_toolsets, unreal_describe_toolset and unreal_call_tool.'
-    : 'You act on the editor through tools. Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Use unreal_list_metahumans and unreal_equip_metahuman_outfit for MetaHuman characters, and unreal_playtest to test the level in Play-In-Editor (PIE). Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits.';
+    ? 'You act on the Unreal Editor through the tools of the `dbv-unreal-ai` MCP server: unreal_list_toolsets, unreal_describe_toolset, unreal_call_tool, unreal_run_python, unreal_scene_summary, unreal_describe_python_api, unreal_capture_viewport (look at the viewport to check your work), unreal_list_metahumans, unreal_dress_metahuman, unreal_validate_metahuman_outfit, unreal_equip_metahuman_outfit, unreal_playtest (autonomous PIE playtest with Pawn movement, telemetry, log check and viewport screenshot), unreal_import_sound (import sound effects as USoundWave in /Game/DBV/Audio), library_list, library_rename, library_import, library_send_to_unreal, generate_3d_model, generate_metahuman_outfit, image_to_3d_model, rig_model, animate_model, tripo_run, tripo_operations, tripo_balance, generate_world, export_world_mesh, worldlabs_balance (World Labs credits are a separate account from Tripo), generation_jobs, level_zones_propose and level_zones_list (named places of the level), compile_project_code (compile the project C++ after you changed it), recipes_list and recipe_check (guided recipes for common tasks, with a final check in the editor), search_unreal_guides (offline Unreal guides with their URL, if the user set them up). Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits. Your working folder is the Unreal project: you can read its Python, C++ and .ini files. Use only these tools for Unreal: if you also see another MCP server for the editor (for example unreal-mcp, from the project .mcp.json), do not use it — it skips the app check of the Python and the user approvals. If the project instructions (for example in CLAUDE.md or AGENTS.md) mention list_toolsets, describe_toolset or calling a toolset, do it with unreal_list_toolsets, unreal_describe_toolset and unreal_call_tool.'
+    : 'You act on the editor through tools. Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Use unreal_list_metahumans, unreal_dress_metahuman, unreal_validate_metahuman_outfit and unreal_equip_metahuman_outfit for MetaHuman characters, and unreal_playtest to test the level in Play-In-Editor (PIE). Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits.';
   const approval = agent
     ? 'The app asks the user to approve every action that modifies the project. Tripo tools cost credits: call them first without confirm_cost to get the exact price, tell the user, and call again with confirm_cost=true only if they accept. If the user denies an action, do not insist.'
     : 'Actions that modify the project need the user approval: explain in `purpose` what each one does. If the user denies an action, do not insist.';
   // Lo que el agente creía imposible (riggear) porque nadie se lo decía (REQ-33).
   const tripo =
-    'Tripo can do much more than generate: generate_metahuman_outfit (hollow garment in A-pose with automatic quad retopology for MetaHumans: Torso, Legs or Feet), image_to_3d_model (from a reference image), rig_model (skeleton; the default rig supports 101 animations including dances), animate_model (up to 5 animations per call on a rig), and tripo_run for any other operation (convert to FBX/USDZ, retopology, texture, segmentation, multiview, text_to_image…; see tripo_operations). Every result goes to the app library with a short name in the user\'s language and a link to its source asset. When a MetaHuman garment is sent with library_send_to_unreal (passing `metahuman`) or equipped with unreal_equip_metahuman_outfit, the app auto-rigs it to the MetaHuman Body skeleton using GeometryScript INPAINT_WEIGHTS and attaches it with set_leader_pose_component(Body). WHO to dress is never your guess and never "the first one": call unreal_list_metahumans first; if the level has exactly one, use it and tell the user who is being dressed; if it has several and the user has not said which, ask them before equipping; if it has none, import the garment only. Do not redo the equipping with unreal_run_python. While Tripo works the user sees the progress in the app; if a call returns running jobs, keep waiting with generation_jobs.';
+    'Tripo can do much more than generate: generate_metahuman_outfit (hollow garment in A-pose with automatic quad retopology for MetaHumans: Torso, Legs or Feet), image_to_3d_model (from a reference image), rig_model (skeleton; the default rig supports 101 animations including dances), animate_model (up to 5 animations per call on a rig), and tripo_run for any other operation (convert to FBX/USDZ, retopology, texture, segmentation, multiview, text_to_image…; see tripo_operations). Every result goes to the app library with a short name in the user\'s language and a link to its source asset. When dressing a MetaHuman, use unreal_dress_metahuman (or unreal_equip_metahuman_outfit): it executes the deterministic pipeline (creates copy, applies slot rules, cleans skin, applies bone weights or Chaos Cloth). WHO to dress is never your guess and never "the first one": call unreal_list_metahumans first; if the level has exactly one, use it and tell the user who is being dressed; if it has several and the user has not said which, ask them before equipping; if it has none, import the garment only. Do not redo the equipping with unreal_run_python while unreal_dress_metahuman exists. While Tripo works the user sees the progress in the app; if a call returns running jobs, keep waiting with generation_jobs.';
   const worldlabs =
     'The app library also contains World Labs scenarios (kind "world"): generate them with generate_world (or export high-res meshes with export_world_mesh). Each scenario provides both a photorealistic visual 3D Gaussian Splat (.spz/.ply) and a 3D physical collider mesh (.glb for ground and collision). Check library assets with library_list. When sent to Unreal with library_send_to_unreal, the collider mesh is imported as a Static Mesh for physics.';
 

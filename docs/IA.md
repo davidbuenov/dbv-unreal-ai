@@ -318,3 +318,19 @@ Con el plugin **Convai** (desde Fab, UE 5.8 o posterior) un MetaHuman puede conv
 - **También los `.md`.** Además de `Source/`, `Content/Python/` y `Config/*.ini`, la IA puede proponer cambios en el `README.md` y los demás `.md` de la raíz del proyecto de Unreal y en los de `docs/`, con el mismo diff que revisas antes de que se escriba nada. En el resto de carpetas, los `.md` siguen rechazados.
 - **Cabecera de DBV en lo que crea.** Todo fichero nuevo que la IA cree en `Source/`, `Content/Python/` o en los `.md` permitidos empieza con la cabecera estándar de 6 líneas de DBV Unreal AI (nombre, copyright, licencia MIT y dbv-specs-ops).
 - **Mundos de World Labs que no se pierden.** Si cierras la app, o un agente cierra su sesión, con un mundo a medias, al volver a abrirla se reanuda y se descarga a la biblioteca. Si aún no has guardado la clave de World Labs, queda «en curso» hasta que la pongas.
+
+### Novedades de la v0.5.0 para la IA: Vestir MetaHumans y Play-Testing Autónomo
+
+- **Vestir un MetaHuman con una sola herramienta (`unreal_dress_metahuman`).** La IA utiliza un pipeline determinista único (`outfit/pipeline.py`) en vez de inventar código con `run_python`. El proceso ejecuta 5 pasos ordenados:
+  1. *Copia segura del personaje:* genera `BP_<Nombre>_DBV` para preservar el Blueprint original intacto.
+  2. *Reglas de ranura:* retira o enmascara prendas que chocan (por ejemplo, oculta `Legs` con un vestido largo).
+  3. *Piel limpia y recorte anatómico:* sustituye texturas de ropa interior pintada y recorta triángulos corporales que puedan asomar.
+  4. *Ajuste y deformación esquelética:* transfiere pesos de huesos (`INPAINT_WEIGHTS`) para tops, pantalones y calzado, o monta tela física con Chaos Cloth para faldas y vestidos.
+  5. *Validación final:* mide holguras, penetraciones y bordes abiertos.
+- **Destino explícito del MetaHuman (`REQ-83`).** La IA nunca adivina ni equipa a ciegas sobre «el primero del nivel». Consulta `unreal_list_metahumans`: si hay un solo personaje, lo selecciona y te informa; si hay varios, te pregunta antes de equipar; si no hay ninguno en el nivel, se limita a importar la prenda a la biblioteca.
+- **Tipos de prenda y corte (`REQ-84`).** Soporta cinco categorías con ajuste anatómico específico: `top`, `pants`, `skirt`, `dress` y `shoes`, distinguiendo complexiones (`male`, `female`, `neutral`) en cualquier arquetipo MetaHuman (`f_med_nrw`, `m_tal_nrw`, etc.).
+- **Materiales de dos caras, soldadura y 4 LODs (`REQ-81`).** Las prendas se sellan con soldadura de vértices, configuran materiales con `override_two_sided=True` para evitar espaldas o cuellos invisibles, y generan automáticamente 4 niveles de LOD sincronizados con el cuerpo MetaHuman.
+- **Tela automática con Chaos Cloth (`REQ-87`).** Para faldas y vestidos, construye proceduralmente el grafo Dataflow y el activo Cloth Asset enlazando `ChaosClothComponent` en `BeginPlay`, permitiendo vuelo dinámico con el movimiento del personaje en Play.
+- **Validación automática e informe (`unreal_validate_metahuman_outfit` / `REQ-89`).** Mide holgura corporal mínima y mediana, comprueba colisiones físicas y captura el resultado en 3 ángulos (frente, lado y espalda). Si el informe devuelve avisos o penetraciones, la IA te los explica con total transparencia en lugar de darlos por buenos.
+- **Límites de empaquetado (`P-20` / `R-39`).** La vestimenta basada en deformación ósea (`InpaintWeights`) empaqueta y funciona directamente en Windows, Android y Meta Quest VR. La simulación de tela requiere que el proyecto incluya los plugins en tiempo de ejecución de Chaos Cloth.
+- **Play-testing autónomo en PIE (`unreal_playtest` / `REQ-82`).** Permite ejecutar pruebas de juego en Play-In-Editor sin bloquear el hilo principal de Unreal, registrando telemetría, capturas y detectando fallos como caídas al vacío (`fell_out_of_world`).

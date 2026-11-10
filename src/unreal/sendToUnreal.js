@@ -61,6 +61,40 @@ export function equipMetahumanCode(actorLabel, garmentSource, slot, scaleMultipl
   return `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.equip_metahuman_outfit(actor_label=_p["actor_label"], garment_source=_p["garment_source"], slot=_p["slot"], scale_multiplier=float(_p["scale_multiplier"]), z_offset=float(_p["z_offset"]))\n`;
 }
 
+/** Código fijo para vestir a un MetaHuman mediante el pipeline determinista unificado. @spec REQ-88 */
+export function dressMetahumanCode(actorLabel, garmentSource, garmentKind = 'top', garmentCut = null, scaleMultiplier = 1.05, zOffset = 0) {
+  const hex = Array.from(
+    new TextEncoder().encode(
+      JSON.stringify({
+        actor_label: String(actorLabel ?? ''),
+        garment_source: String(garmentSource ?? ''),
+        garment_kind: String(garmentKind ?? 'top'),
+        garment_cut: garmentCut ? String(garmentCut) : null,
+        scale_multiplier: Number(scaleMultiplier) || 1.05,
+        z_offset: Number(zOffset) || 0,
+      }),
+    ),
+    (b) => b.toString(16).padStart(2, '0'),
+  ).join('');
+  return `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.dress_metahuman(actor_label=_p["actor_label"], garment_source=_p["garment_source"], garment_kind=_p.get("garment_kind", "top"), garment_cut=_p.get("garment_cut"), scale_multiplier=float(_p.get("scale_multiplier", 1.05)), z_offset=float(_p.get("z_offset", 0.0)))\n`;
+}
+
+/** Código fijo para validar una prenda equipada en un MetaHuman. @spec REQ-89 */
+export function validateMetahumanOutfitCode(actorLabel, garmentKind = 'top', runPie = false, captureAngles = true) {
+  const hex = Array.from(
+    new TextEncoder().encode(
+      JSON.stringify({
+        actor_label: String(actorLabel ?? ''),
+        garment_kind: String(garmentKind ?? 'top'),
+        run_pie: Boolean(runPie),
+        capture_angles: Boolean(captureAngles),
+      }),
+    ),
+    (b) => b.toString(16).padStart(2, '0'),
+  ).join('');
+  return `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.validate_metahuman_outfit(actor_label=_p["actor_label"], garment_kind=_p.get("garment_kind", "top"), run_pie=_p.get("run_pie", False), capture_angles=_p.get("capture_angles", True))\n`;
+}
+
 const LIST_METAHUMANS_CODE = 'import dbv_unreal_ai.editor as _e\nresult = _e.list_metahumans()\n';
 
 /**

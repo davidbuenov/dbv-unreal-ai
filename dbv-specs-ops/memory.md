@@ -9,15 +9,19 @@
 
 ## 🎯 Contexto Activo
 
-- **Punto de retorno (2026-11-09, fin de sesión):** ver «SNAPSHOT DE FIN DE SESIÓN» en `task.md`. Todo commiteado en la rama `v0.5.0` (`c76bb83`, sin push); hechos S94, S95, S96 y S105; caja negra aprobada (la Store incluye S112 y S113); `DBVMCPFirst` preparado; chaqueta de Pablo generada y sin equipar.
-- **Foco inmediato (2026-11-09):** vestir un MetaHuman desde la app (S94–S96 hechos: destino explícito, tipos de prenda y corte, plugins para vestir en «Preparar») y **caja negra** añadida a la v0.5.0 (`REQ-91..REQ-97`, plan §15, pendiente de aprobación). Antes (2026-11-08): `S88..S91`, `REQ-80..REQ-82`.
-- **Estado de la integración de Ropa para MetaHumans (`REQ-80`, `REQ-81`):**
-  - El pipeline procedural en `metahuman.py` (`equip_metahuman_outfit`) está completamente integrado y cubierto por tests (52 Python, 247 Rust, 389 Vitest).
-  - Resueltos los bloqueos técnicos de runtime: robustez de argumentos MCP, purga de override materials en slots MetaHuman y reemplazo dinámico de mallas corporales recortadas (`f_med_nrw_body` de 30.455 vértices).
-  - **Ajuste estático resuelto (2026-11-08, ver ADR-V050-003):** la «hendidura» de hombros era `NeckHideScale` y la falda abombada venía de bugs concretos, no de un límite del enfoque. Queda por verificar la prenda **en movimiento** (sin Chaos Cloth una falda seguirá a los muslos) y los LOD de la ropa.
-  - **Próximo bloque:** prueba del usuario generando un vestido desde la app, vídeo y `/ship` de v0.5.0. UEFN y Verse pasan a v0.6.0 (ADR-V050-004).
+- **Punto de retorno (2026-11-10, guardado de estado):** ver «SNAPSHOT DE FIN DE SESIÓN» en `task.md`. Ropa de Pablo Deportista completada con éxito (`SK_Top_Pablo_Deportista_v5` y `SK_Shorts_Pablo_Deportista_v5`). Nivel `Metahumans.umap` y paquetes guardados en Unreal Editor. Corregido el bug de vértices dispersos (*tombstones*) en `FDynamicMesh3`, la aserción de cuelgue `Map.h.inl:651` y el clasificador de pantalones cortos frente a faldas. 126 tests de Python (`pytest tests/python`) y linter `dbv-lint.py` en verde al 100%.
+- **Estado de la integración de Ropa para MetaHumans (`REQ-80`, `REQ-81`, `REQ-84`):**
+  - El pipeline procedural en `metahuman.py` (`equip_metahuman_outfit`) está completamente integrado y cubierto por tests (126 Python, 247 Rust, 406 Vitest).
+  - Resuelto el bug crítico de índices de vértices tras `weld_mesh_edges`: invocación de `compact_mesh` obligatoria tras soldar.
+  - Resuelto el fallo de cuelgue `Map.h.inl:651`: precopiado de esqueleto con `copy_bones_from_mesh` y fallback en la transferencia de pesos.
+  - Resuelto el clasificador de pantalones cortos (`_is_skirt_shape`) para no aplicar recortes ni vuelos tubulares cónicos a shorts deportivos.
 
 ## 🏗️ Log de Decisiones Técnicas (ADR Ligero)
+
+- **2026-11-10 - ADR-V050-006 · Corrección de IDs dispersos en DynamicMesh (compact_mesh), prevención de aserción Map.h.inl:651 y clasificación de pantalones cortos (REQ-81, REQ-84):**
+  1. **Compactación obligatoria tras soldadura (`compact_mesh`):** En Unreal Engine 5.8 (`FDynamicMesh3`), soldar bordes con `weld_mesh_edges` o rellenar huecos crea identificadores dispersos con *tombstones* (`max_vertex_id() > vertex_count()`). Si el deformador itera sobre `range(vertex_count())`, los vértices eliminados son ignorados y los vértices finales (superiores al recuento) nunca se reposicionan, quedando estirados hacia la cota cero en el suelo. Se exige `unreal.GeometryScript_MeshRepair.compact_mesh()` tras toda soldadura o reparación geométrica en `fit.py` y `metahuman.py`.
+  2. **Prevención de cuelgues por aserción (`Map.h.inl:651`):** Cuando existen vértices residuales fuera del volumen anatómico esquelético, el solver Laplaciano de `INPAINT_WEIGHTS` en `TransferBoneWeights.cpp` dispara `check(Pair != nullptr)` en `TMap::FindChecked`. La compactación densa previa elimina estos vértices extraviados, y se añade precopiado de huesos (`copy_bones_from_mesh`) junto a un bloque de rescate con fallback a `CLOSEST_POINT_ON_SURFACE` para garantizar tolerancia absoluta a fallos.
+  3. **Clasificación y patronaje de pantalones cortos:** `_is_skirt_shape` comprueba el nombre del activo para descartar palabras clave como `short`, `pantalon`, `boxer` o `correr`, evitando que un pantalón corto sea tratado como falda tubular de una pieza. En su lugar, se deforma con envolventes anatómicas independientes para las piernas entre la cintura (\(Z \approx 103\)) y medio muslo (\(Z \approx 75\)), asegurando solape con el top y envolventes cilíndricas limpias.
 
 - **2026-11-09 - ADR-V050-005 · Caja negra dentro de la v0.5.0, Python primero, y decisiones de S94–S96:**
   1. **Caja negra (`REQ-91..REQ-97`) entra en la v0.5.0** por petición del usuario, que la quiere «para todos los proyectos». Nació de la sesión de depuración de ElecnorMIO (2026-11-08): medir por fotograma mientras el usuario juega encontró en minutos una composición de transformaciones invertida, un bucle de dos valores y una nota de la memoria falsa. `/ship` espera a `REQ-90` y a la puerta de `REQ-97`; grabar en paquetes del visor (módulo sin `UnrealEd` y `adb`) pasa a la v0.6.0 (D73).

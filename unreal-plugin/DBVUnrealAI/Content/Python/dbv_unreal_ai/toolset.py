@@ -247,6 +247,127 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             smoothing_iterations,
         )
 
+    @toolset_registry.tool_call
+    @staticmethod
+    def dress_metahuman(
+        actor_label: str,
+        garment_source: str,
+        garment_kind: str = "top",
+        garment_cut: str = "",
+        destination_folder: str = "/Game/DBV/MetaHumanOutfits",
+        asset_name: str = "",
+        scale_multiplier: float = 1.05,
+        z_offset: float = 0.0,
+        force: bool = False,
+    ) -> str:
+        """Dress a MetaHuman with a garment using the deterministic pipeline (creates copy, applies slot rules, cleans skin, fits bones/cloth).
+
+        Args:
+            actor_label: Label of the MetaHuman actor in the open level.
+            garment_source: Local file path (.glb/.fbx) or /Game/... StaticMesh path.
+            garment_kind: Garment kind ('top', 'pants', 'skirt', 'dress', 'shoes'). Default 'top'.
+            garment_cut: Cut of garment ('male', 'female', 'neutral') to match body.
+            destination_folder: Content Browser folder for generated assets.
+            asset_name: Optional asset name.
+            scale_multiplier: Slight inflation factor (default 1.05).
+            z_offset: Vertical offset in cm (default 0.0).
+            force: Force restart if another job was in progress.
+
+        Returns:
+            JSON with success, actor, blueprint, garment_kind, method, rigged_asset or cloth_asset.
+        """
+        return editor.dress_metahuman(
+            actor_label=actor_label,
+            garment_source=garment_source,
+            garment_kind=garment_kind,
+            garment_cut=garment_cut or None,
+            destination_folder=destination_folder,
+            asset_name=asset_name,
+            scale_multiplier=scale_multiplier,
+            z_offset=z_offset,
+            force=force,
+        )
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def dress_metahuman_start(
+        actor_label: str,
+        garment_source: str,
+        garment_kind: str = "top",
+        garment_cut: str = "",
+        destination_folder: str = "/Game/DBV/MetaHumanOutfits",
+        asset_name: str = "",
+        scale_multiplier: float = 1.05,
+        z_offset: float = 0.0,
+        force: bool = False,
+    ) -> str:
+        """Start a step-by-step MetaHuman outfit dressing job.
+
+        Args:
+            actor_label: Label of the MetaHuman actor.
+            garment_source: Local file path or /Game/... StaticMesh path.
+            garment_kind: Garment kind ('top', 'pants', 'skirt', 'dress', 'shoes').
+            garment_cut: Cut of garment ('male', 'female', 'neutral').
+            destination_folder: Content Browser folder.
+            asset_name: Optional asset name.
+            scale_multiplier: Inflation factor (default 1.05).
+            z_offset: Vertical offset in cm.
+            force: Force restart if previous job was active.
+
+        Returns:
+            JSON with success, job_id, current_step, warnings.
+        """
+        return editor.dress_metahuman_start(
+            actor_label=actor_label,
+            garment_source=garment_source,
+            garment_kind=garment_kind,
+            garment_cut=garment_cut or None,
+            destination_folder=destination_folder,
+            asset_name=asset_name,
+            scale_multiplier=scale_multiplier,
+            z_offset=z_offset,
+            force=force,
+        )
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def dress_metahuman_step(job_id: str) -> str:
+        """Advance one step in an active MetaHuman outfit dressing job.
+
+        Args:
+            job_id: ID of the outfit job returned by dress_metahuman_start.
+
+        Returns:
+            JSON with success, job_id, step_name, done, progress, message.
+        """
+        return editor.dress_metahuman_step(job_id)
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def validate_metahuman_outfit(
+        actor_label: str,
+        garment_kind: str = "top",
+        run_pie: bool = False,
+        capture_angles: bool = True,
+    ) -> str:
+        """Validate open borders, clearance, cloth leader pose and captures for an equipped MetaHuman outfit.
+
+        Args:
+            actor_label: Label of the MetaHuman actor.
+            garment_kind: Kind of garment ('top', 'pants', 'skirt', 'dress', 'shoes').
+            run_pie: Whether to run a non-blocking PIE walk test.
+            capture_angles: Whether to capture front, side and back screenshots.
+
+        Returns:
+            JSON with success, result ('ok', 'con_avisos', 'error'), measurements, warnings, screenshots.
+        """
+        return editor.validate_metahuman_outfit(
+            actor_label=actor_label,
+            garment_kind=garment_kind,
+            run_pie=run_pie,
+            capture_angles=capture_angles,
+        )
+
 
 
 

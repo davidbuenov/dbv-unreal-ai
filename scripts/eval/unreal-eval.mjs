@@ -162,6 +162,32 @@ const TASKS = [
     prompt: 'Make BP_VictoriaNew (/Game/MetaHumans/VictoriaNew/BP_VictoriaNew) be Victoria with Convai.',
     judge: (_text, _truth, run) => run.approvals.some((a) => a.tool === 'SetupConvaiCharacter' && a.args?.characterId === 'c1fca5ca-03b4-11ef-ae52-42010a7be00e'),
   },
+  // REQ-88: vestir un MetaHuman usa unreal_dress_metahuman y nunca improvisa con run_python.
+  {
+    id: 'dress-metahuman-tool-preferred',
+    prompt: 'Dress the MetaHuman BP_Pablo with the trousers from /Game/DBV/MetaHumanOutfits/SM_Pantalones_Pablo_v2.',
+    judge: (_text, _truth, run) => {
+      const usedDressTool = run.calls.some((c) => c === 'unreal_dress_metahuman' || c === 'unreal_equip_metahuman_outfit' || /^approve:.*(dress_metahuman|equip_metahuman_outfit)/.test(c));
+      const usedPython = run.calls.some((c) => c === 'unreal_run_python' || c === 'run_python' || /^approve:.*run_python/.test(c));
+      return usedDressTool && !usedPython;
+    },
+  },
+  // REQ-83: ante varios MetaHumans y sin destino explícito, la IA pregunta o lista los personajes antes de equipar.
+  {
+    id: 'dress-metahuman-ambiguous-dest',
+    prompt: 'Equip the new leather jacket on the character.',
+    judge: (text, _truth, run) => {
+      const equippedBlindly = run.calls.some((c) => c === 'unreal_dress_metahuman' || c === 'unreal_equip_metahuman_outfit');
+      const listedOrAsked = run.calls.includes('unreal_list_metahumans') || /which|who|character|pablo|victoria/i.test(text);
+      return !equippedBlindly && listedOrAsked;
+    },
+  },
+  // REQ-84: mapeo correcto del tipo de prenda (garment_kind) desde el prompt en lenguaje natural.
+  {
+    id: 'dress-metahuman-kind-mapping',
+    prompt: 'Dress BP_Victoria with a red pleated skirt /Game/DBV/MetaHumanOutfits/SM_Falda.',
+    judge: (_text, _truth, run) => run.approvals.some((a) => (a.tool === 'unreal_dress_metahuman' || a.tool === 'unreal_equip_metahuman_outfit') && (a.args?.garment_kind === 'skirt' || a.args?.slot === 'Legs')),
+  },
 ];
 
 async function registerToolset(code) {

@@ -369,6 +369,75 @@ describe('MetaHumans y playtest autónomo (REQ-80, REQ-81, REQ-82)', () => {
     expect(tool(tools, 'unreal_equip_metahuman_outfit').parameters.required).toContain('actor_label');
   });
 
+  it('unreal_dress_metahuman ejecuta el pipeline determinista y pide aprobación @spec REQ-88', async () => {
+    const backend = fakeBackend({
+      responses: {
+        run_python: (args) => {
+          if (args.code.includes('dress_metahuman')) {
+            return { text: '', isError: false, value: { success: true, result: { success: true, actor: 'BP_Victoria', garment_kind: 'skirt', method: 'cloth', cloth_asset: '/Game/DBV/MetaHumanOutfits/CA_Skirt' } } };
+          }
+          return { text: '', isError: false, value: { success: true, result: { success: true } } };
+        },
+      },
+    });
+    const askApproval = vi.fn(async () => 'once');
+    const tools = createUnrealTools({ backend, askApproval });
+
+    const noTarget = await tool(tools, 'unreal_dress_metahuman').run({ source: '/Game/DBV/Generated/Falda', garment_kind: 'skirt' });
+    expect(noTarget).toContain('no target MetaHuman was chosen');
+    expect(askApproval).not.toHaveBeenCalled();
+
+    const dressed = await tool(tools, 'unreal_dress_metahuman').run({
+      actor_label: 'BP_Victoria',
+      source: '/Game/DBV/Generated/Falda',
+      garment_kind: 'skirt',
+      purpose: 'Dress Victoria with Chaos Cloth skirt',
+    });
+    expect(dressed).toContain('CA_Skirt');
+    expect(askApproval).toHaveBeenCalledTimes(1);
+    expect(backend.calls.some((c) => c.tool === 'run_python' && String(c.args.code).includes('dress_metahuman'))).toBe(true);
+    expect(tool(tools, 'unreal_dress_metahuman').parameters.required).toContain('actor_label');
+  });
+
+  it('unreal_validate_metahuman_outfit valida la prenda y genera el informe estructurado @spec REQ-89', async () => {
+    const backend = fakeBackend({
+      responses: {
+        run_python: (args) => {
+          if (args.code.includes('validate_metahuman_outfit')) {
+            return {
+              text: '',
+              isError: false,
+              value: {
+                success: true,
+                result: {
+                  result: 'ok',
+                  actor: 'BP_Pablo',
+                  garment_kind: 'top',
+                  measurements: {
+                    open_borders: { delta: 0, ok: true },
+                    clearance: { min_clearance_cm: 1.5, ok: true },
+                    linkage: { leader_linked: true, ok: true },
+                  },
+                  screenshots: { front: '/path/front.png', side: '/path/side.png', back: '/path/back.png' },
+                },
+              },
+            };
+          }
+          return { text: '', isError: false, value: { success: true } };
+        },
+      },
+    });
+    const tools = createUnrealTools({ backend });
+
+    const noTarget = await tool(tools, 'unreal_validate_metahuman_outfit').run({});
+    expect(noTarget).toContain('actor_label is required');
+
+    const res = await tool(tools, 'unreal_validate_metahuman_outfit').run({ actor_label: 'BP_Pablo', garment_kind: 'top' });
+    expect(res).toContain('"result":"ok"');
+    expect(res).toContain('/path/front.png');
+    expect(tool(tools, 'unreal_validate_metahuman_outfit').parameters.required).toContain('actor_label');
+  });
+
   it('unreal_playtest arranca PIE, mide telemetría, captura el viewport y detiene siempre PIE @spec REQ-82', async () => {
     const capture = { mime: 'image/jpeg', base64: 'BBBB', width: 1024, height: 576, info: {}, text: 'PIE capture' };
     const backend = {

@@ -111,4 +111,75 @@ def equip_metahuman_outfit(
     )
 
 
+def dress_metahuman(
+    actor_label: str,
+    garment_source: str,
+    garment_kind: str = "",
+    garment_cut: str = "",
+    destination_folder: str = "",
+    asset_name: str = "",
+    scale_multiplier: str = "",
+    z_offset: str = "",
+    force: str = "",
+) -> str:
+    """Ver ``editor.dress_metahuman``."""
+    return editor.dress_metahuman(
+        actor_label=_text(actor_label),
+        garment_source=_text(garment_source),
+        garment_kind=_text(garment_kind) or "top",
+        garment_cut=_text(garment_cut) or None,
+        destination_folder=_text(destination_folder) or "/Game/DBV/MetaHumanOutfits",
+        asset_name=_text(asset_name),
+        scale_multiplier=float(_text(scale_multiplier) or "1.05") if scale_multiplier else 1.05,
+        z_offset=float(_text(z_offset) or "0.0") if z_offset else 0.0,
+        force=_text(force).lower() in ("true", "1", "yes") if force else False,
+    )
+
+
+def dress_metahuman_start(
+    actor_label: str,
+    garment_source: str,
+    garment_kind: str = "",
+    garment_cut: str = "",
+    destination_folder: str = "",
+    asset_name: str = "",
+    scale_multiplier: str = "",
+    z_offset: str = "",
+    force: str = "",
+) -> str:
+    """Ver ``editor.dress_metahuman_start``."""
+    return editor.dress_metahuman_start(
+        actor_label=_text(actor_label),
+        garment_source=_text(garment_source),
+        garment_kind=_text(garment_kind) or "top",
+        garment_cut=_text(garment_cut) or None,
+        destination_folder=_text(destination_folder) or "/Game/DBV/MetaHumanOutfits",
+        asset_name=_text(asset_name),
+        scale_multiplier=float(_text(scale_multiplier) or "1.05") if scale_multiplier else 1.05,
+        z_offset=float(_text(z_offset) or "0.0") if z_offset else 0.0,
+        force=_text(force).lower() in ("true", "1", "yes") if force else False,
+    )
+
+
+def dress_metahuman_step(job_id: str) -> str:
+    """Ver ``editor.dress_metahuman_step``."""
+    return editor.dress_metahuman_step(_text(job_id))
+
+
+def validate_metahuman_outfit(
+    actor_label: str,
+    garment_kind: str = "",
+    run_pie: str = "",
+    capture_angles: str = "",
+) -> str:
+    """Ver ``editor.validate_metahuman_outfit``."""
+    return editor.validate_metahuman_outfit(
+        actor_label=_text(actor_label),
+        garment_kind=_text(garment_kind) or "top",
+        run_pie=_text(run_pie).lower() in ("true", "1", "yes") if run_pie else False,
+        capture_angles=_text(capture_angles).lower() not in ("false", "0", "no") if capture_angles else True,
+    )
+
+
+
 

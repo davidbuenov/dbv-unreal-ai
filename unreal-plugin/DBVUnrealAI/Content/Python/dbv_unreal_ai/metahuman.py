@@ -14,9 +14,15 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from typing import Any, Callable
 
 import unreal
+
+try:
+    from .outfit import fit
+except ImportError:
+    fit = None  # type: ignore[assignment]
 
 METAHUMAN_SLOTS = ("Torso", "Legs", "Feet")
 NECK_HIDE_PARAM = "NeckHideScale"
@@ -47,10 +53,70 @@ def metahuman_components(actor: Any) -> dict[str, Any]:
     return {c.get_name(): c for c in comps}
 
 
-def body_build(body_skm: Any) -> str:
-    """Complexión del cuerpo (``f_med_nrw``, ``m_tal_nrw``…), tomada del nombre de su malla. @spec REQ-81, REQ-84"""
-    path = body_skm.get_path_name() if body_skm else ""
-    return os.path.splitext(os.path.basename(path or ""))[0].replace("_body", "")
+ARCHETYPE_RE = re.compile(r"(?:^|[/_])([mf]_(?:tal|med|sht)_(?:nrw|ovw))(?:[/_.]|$)", re.IGNORECASE)
+
+
+def resolve_full_body_archetype(body_skm: Any, target_actor: Any = None) -> str:
+    """Resuelve la complexión arquetípica de MetaHuman (``m_tal_nrw``, ``f_med_nrw``...) incluso para cuerpos derivados. @spec REQ-81, REQ-84"""
+    if body_skm is None and target_actor is None:
+        return "m_med_nrw"
+
+    arch = ""
+    if body_skm is not None and hasattr(unreal, "EditorAssetLibrary") and hasattr(unreal.EditorAssetLibrary, "get_metadata_tag"):
+        tag = unreal.EditorAssetLibrary.get_metadata_tag(body_skm, "source_full_body") or ""
+        if tag:
+            m_tag = ARCHETYPE_RE.search(tag)
+            if m_tag:
+                arch = m_tag.group(1).lower()
+
+    if not arch and body_skm is not None:
+        path = body_skm.get_path_name() if hasattr(body_skm, "get_path_name") else ""
+        m_path = ARCHETYPE_RE.search(path)
+        if m_path:
+            arch = m_path.group(1).lower()
+
+    if not arch and body_skm is not None and hasattr(body_skm, "get_editor_property"):
+        pa = body_skm.get_editor_property("physics_asset")
+        if pa is not None and hasattr(pa, "get_path_name"):
+            m_pa = ARCHETYPE_RE.search(pa.get_path_name())
+            if m_pa:
+                arch = m_pa.group(1).lower()
+
+    if not arch and target_actor is not None and hasattr(target_actor, "get_components_by_class"):
+        comps = target_actor.get_components_by_class(unreal.SkeletalMeshComponent) if hasattr(unreal, "SkeletalMeshComponent") else []
+        for c in comps:
+            skm = c.get_skeletal_mesh_asset() if hasattr(c, "get_skeletal_mesh_asset") else None
+            if skm is not None and hasattr(skm, "get_path_name"):
+                m_c = ARCHETYPE_RE.search(skm.get_path_name())
+                if m_c:
+                    arch = m_c.group(1).lower()
+                    break
+
+    if not arch and target_actor is not None and fit is not None and hasattr(target_actor, "get_components_by_class"):
+        body_comp = next((c for c in target_actor.get_components_by_class(unreal.SkeletalMeshComponent) if c.get_name() == "Body"), None)
+        if body_comp is not None:
+            lm = fit.measure_body_landmarks(body_comp, target_actor)
+            if lm.get("success") and lm.get("landmarks"):
+                marks = lm["landmarks"]
+                head_z = marks.get("head_z", 150.0)
+                pa_name = marks.get("physics_asset") or ""
+                pa_str = pa_name.get_path_name() if hasattr(pa_name, "get_path_name") else str(pa_name)
+                gender = "f" if "/Female/" in pa_str or "f_" in pa_str else "m"
+                height = "tal" if head_z > 158.0 else ("sht" if head_z < 145.0 else "med")
+                arch = f"{gender}_{height}_nrw"
+
+    if not arch:
+        path = body_skm.get_path_name() if body_skm and hasattr(body_skm, "get_path_name") else ""
+        raw = os.path.splitext(os.path.basename(path or ""))[0].replace("_body", "")
+        arch = raw if raw else "m_med_nrw"
+
+    return arch
+
+
+def body_build(body_skm: Any, target_actor: Any = None) -> str:
+    """Complexión del cuerpo (``f_med_nrw``, ``m_tal_nrw``…), resuelta de su arquetipo anatómico. @spec REQ-81, REQ-84"""
+    arch = resolve_full_body_archetype(body_skm, target_actor)
+    return arch
 
 
 def list_metahumans() -> str:
@@ -64,7 +130,7 @@ def list_metahumans() -> str:
         if body_comp is not None and has_slots:
             body_skm = body_comp.get_skeletal_mesh_asset()
             body_path = body_skm.get_path_name() if body_skm else None
-            build = body_build(body_skm)
+            build = body_build(body_skm, actor)
             slots = {}
             for slot in METAHUMAN_SLOTS:
                 comp = by_name.get(slot)
@@ -123,33 +189,167 @@ def _get_bone_local(body_comp: Any, name: str, fallback_z: float) -> Any:
     return pos
 
 
-def _ensure_full_body(body_comp: Any, body_skm: Any, build: str) -> tuple[Any, Any, bool]:
-    """Sustituye un ``Body`` recortado (< 20.000 vértices) por la malla completa de ``/Game/MetaHumans/Common``. @spec REQ-81"""
-    asset_utils = unreal.GeometryScript_AssetUtils
-    lod = unreal.GeometryScriptMeshReadLOD()
-    dyn = unreal.DynamicMesh()
-    dyn, _ = asset_utils.copy_mesh_from_skeletal_mesh(body_skm, dyn, unreal.GeometryScriptCopyMeshFromAssetOptions(), lod)
-    vcount = dyn.get_vertex_count() if hasattr(dyn, "get_vertex_count") else 30000
-    restored = False
-    chosen_skm = body_skm
-    if vcount < 20000 and hasattr(unreal.EditorAssetLibrary, "list_assets"):
-        raw_candidates = unreal.EditorAssetLibrary.list_assets("/Game/MetaHumans/Common", recursive=True) or []
-        exact = [str(p).split(".")[0] for p in raw_candidates if str(p).split(".")[0].endswith(f"/{build}_body")]
-        preview = [str(p).split(".")[0] for p in raw_candidates if str(p).split(".")[0].endswith(f"/{build}_body_preview")]
-        for base in exact + preview:
-            cand = unreal.load_asset(base)
+def check_body_coverage(body_dyn: Any, slot: str, garment_dyn: Any = None) -> tuple[bool, float, str]:
+    """Comprueba si ``body_dyn`` contiene geometría en la región requerida para la prenda. @spec REQ-81"""
+    if body_dyn is None:
+        return (False, 0.0, "body mesh is None")
+
+    if not hasattr(body_dyn, "get_vertex_count"):
+        return (True, 1.0, "mock mesh without get_vertex_count")
+
+    vc = int(body_dyn.get_vertex_count())
+    if vc == 0:
+        return (False, 0.0, "body mesh is empty (0 vertices)")
+
+    mq = getattr(unreal, "GeometryScript_MeshQueries", None)
+    if mq is None or not hasattr(mq, "get_vertex_position"):
+        return (True, 1.0, f"mock mesh has {vc} vertices")
+
+    clean_slot = slot.strip().capitalize() if isinstance(slot, str) else "Torso"
+    if clean_slot not in ("Torso", "Legs", "Feet") and garment_dyn is None:
+        return (True, 1.0, f"slot '{slot}' does not require specific regional coverage")
+
+    count = 0
+    if garment_dyn is not None and hasattr(garment_dyn, "get_vertex_count") and hasattr(mq, "get_mesh_bounding_box"):
+        g_box = mq.get_mesh_bounding_box(garment_dyn)
+        z_min = float(g_box.min.z) - 3.0
+        z_max = float(g_box.max.z) + 3.0
+        x_min = float(g_box.min.x) - 6.0
+        x_max = float(g_box.max.x) + 6.0
+        y_min = float(g_box.min.y) - 6.0
+        y_max = float(g_box.max.y) + 6.0
+        for i in range(vc):
+            v, ok = mq.get_vertex_position(body_dyn, i)
+            if ok and z_min <= float(v.z) <= z_max and x_min <= float(v.x) <= x_max and y_min <= float(v.y) <= y_max:
+                count += 1
+        expected = 3000.0
+        min_required = 150
+    elif clean_slot == "Torso":
+        for i in range(vc):
+            v, ok = mq.get_vertex_position(body_dyn, i)
+            if ok and 80.0 <= float(v.z) <= 140.0 and abs(float(v.x)) <= 28.0:
+                count += 1
+        expected = 5000.0
+        min_required = 500
+    elif clean_slot == "Legs":
+        for i in range(vc):
+            v, ok = mq.get_vertex_position(body_dyn, i)
+            if ok and 20.0 <= float(v.z) <= 85.0 and abs(float(v.x)) <= 30.0:
+                count += 1
+        expected = 4000.0
+        min_required = 500
+    else:  # Feet
+        for i in range(vc):
+            v, ok = mq.get_vertex_position(body_dyn, i)
+            if ok and -5.0 <= float(v.z) <= 18.0 and abs(float(v.x)) <= 25.0:
+                count += 1
+        expected = 1000.0
+        min_required = 100
+
+    ratio = min(1.0, count / max(expected, 1.0))
+    is_ok = count >= min_required
+    desc = f"{count} vertices in {clean_slot} region (ratio={ratio:.2f}, required>={min_required})"
+    return (is_ok, ratio, desc)
+
+
+def _find_full_body_asset(archetype: str) -> tuple[Any, str]:
+    """Localiza el asset ``USkeletalMesh`` de cuerpo completo en ``/Game/MetaHumans/Common``. @spec REQ-81"""
+    if not archetype:
+        return (None, "")
+
+    clean_arch = archetype.lower().strip()
+    gender = "Female" if clean_arch.startswith("f_") else "Male"
+    height = "Tall" if "_tal_" in clean_arch else ("Short" if "_sht_" in clean_arch else "Medium")
+    weight = "Overweight" if "_ovw" in clean_arch else "NormalWeight"
+
+    direct_candidates = [
+        f"/Game/MetaHumans/Common/Common/{clean_arch}_body_preview",
+        f"/Game/MetaHumans/Common/{gender}/{height}/{weight}/Body/{clean_arch}_body",
+        f"/Game/MetaHumans/Common/Common/{clean_arch}_body",
+    ]
+    chosen_asset = None
+    chosen_path = ""
+    for p in direct_candidates:
+        if hasattr(unreal, "load_asset"):
+            cand = unreal.load_asset(p)
             if cand is not None and isinstance(cand, getattr(unreal, "SkeletalMesh", object)):
-                cand_dyn = unreal.DynamicMesh()
-                cand_dyn, _ = asset_utils.copy_mesh_from_skeletal_mesh(cand, cand_dyn, unreal.GeometryScriptCopyMeshFromAssetOptions(), lod)
-                if hasattr(cand_dyn, "get_vertex_count") and cand_dyn.get_vertex_count() >= 20000:
-                    skin_mat = body_comp.get_material(0) if hasattr(body_comp, "get_material") else None
-                    body_comp.modify()
-                    body_comp.set_skeletal_mesh_asset(cand)
-                    if skin_mat is not None and hasattr(body_comp, "set_material"):
-                        body_comp.set_material(0, skin_mat)
-                    chosen_skm, dyn, restored = cand, cand_dyn, True
+                chosen_asset = cand
+                chosen_path = p
+                break
+
+    if chosen_asset is None and hasattr(unreal, "EditorAssetLibrary") and hasattr(unreal.EditorAssetLibrary, "list_assets"):
+        raw = unreal.EditorAssetLibrary.list_assets("/Game/MetaHumans", recursive=True) or []
+        for cand_path in raw:
+            clean = str(cand_path).split(".")[0]
+            if clean.lower().endswith(f"/{clean_arch}_body") or clean.lower().endswith(f"/{clean_arch}_body_preview"):
+                cand = unreal.load_asset(clean) if hasattr(unreal, "load_asset") else None
+                if cand is not None and isinstance(cand, getattr(unreal, "SkeletalMesh", object)):
+                    chosen_asset = cand
+                    chosen_path = clean
                     break
-    return (chosen_skm, dyn, restored)
+
+    if chosen_asset is None:
+        fallback_p = "/Game/MetaHumans/Common/Common/m_tal_nrw_body_preview" if gender == "Male" else "/Game/MetaHumans/Common/Common/f_med_nrw_body_preview"
+        fallback_cand = unreal.load_asset(fallback_p) if hasattr(unreal, "load_asset") else None
+        if fallback_cand is not None and isinstance(fallback_cand, getattr(unreal, "SkeletalMesh", object)):
+            chosen_asset = fallback_cand
+            chosen_path = fallback_p
+
+    return (chosen_asset, chosen_path)
+
+
+def _ensure_full_body(
+    body_comp: Any,
+    body_skm: Any,
+    build: str = "",
+    slot: str = "Torso",
+    target_actor: Any = None,
+    garment_dyn: Any = None,
+) -> tuple[Any, Any, bool, str]:
+    """Comprueba la cobertura geométrica del cuerpo para ``slot`` y sustituye o devuelve la malla completa. @spec REQ-81"""
+    if body_skm is None:
+        return (None, None, False, "")
+
+    asset_utils = getattr(unreal, "GeometryScript_AssetUtils", None)
+    lod = unreal.GeometryScriptMeshReadLOD() if hasattr(unreal, "GeometryScriptMeshReadLOD") else None
+    dyn = unreal.DynamicMesh() if hasattr(unreal, "DynamicMesh") else None
+    if asset_utils is not None and dyn is not None and hasattr(asset_utils, "copy_mesh_from_skeletal_mesh"):
+        dyn, _ = asset_utils.copy_mesh_from_skeletal_mesh(body_skm, dyn, unreal.GeometryScriptCopyMeshFromAssetOptions(), lod)
+
+    vcount = dyn.get_vertex_count() if dyn is not None and hasattr(dyn, "get_vertex_count") else 30000
+    is_covered, ratio, desc = check_body_coverage(dyn, slot, garment_dyn)
+
+    body_path = body_skm.get_path_name() if hasattr(body_skm, "get_path_name") else ""
+    is_derived = any(sub in body_path for sub in ("_spike", "SK_Body_", "Runway/Cloth"))
+    needs_replacement = (not is_covered) or (vcount < 20000) or is_derived
+
+    chosen_skm = body_skm
+    chosen_path = body_path
+    restored = False
+
+    if needs_replacement:
+        arch = resolve_full_body_archetype(body_skm, target_actor) if not build or build == os.path.splitext(os.path.basename(body_path))[0].replace("_body", "") else build
+        cand_skm, cand_path = _find_full_body_asset(arch)
+        if cand_skm is not None and asset_utils is not None and hasattr(asset_utils, "copy_mesh_from_skeletal_mesh"):
+            cand_dyn = unreal.DynamicMesh() if hasattr(unreal, "DynamicMesh") else None
+            if cand_dyn is not None:
+                cand_dyn, _ = asset_utils.copy_mesh_from_skeletal_mesh(cand_skm, cand_dyn, unreal.GeometryScriptCopyMeshFromAssetOptions(), lod)
+                c_ok, c_ratio, _ = check_body_coverage(cand_dyn, slot, garment_dyn)
+                if c_ok or (hasattr(cand_dyn, "get_vertex_count") and cand_dyn.get_vertex_count() >= 20000):
+                    if not is_covered and body_comp is not None:
+                        skin_mat = body_comp.get_material(0) if hasattr(body_comp, "get_material") else None
+                        if hasattr(body_comp, "modify"):
+                            body_comp.modify()
+                        if hasattr(body_comp, "set_skeletal_mesh_asset"):
+                            body_comp.set_skeletal_mesh_asset(cand_skm)
+                        if skin_mat is not None and hasattr(body_comp, "set_material"):
+                            body_comp.set_material(0, skin_mat)
+                        restored = True
+                    chosen_skm = cand_skm
+                    dyn = cand_dyn
+                    chosen_path = cand_path
+
+    return (chosen_skm, dyn, restored, chosen_path)
 
 
 def _smooth_1d(arr: list[float], passes: int = 4) -> list[float]:
@@ -248,14 +448,16 @@ def _collect_body_points(by_name: dict[str, Any], body_dyn: Any, head_z: float) 
 
 
 def _clean_and_orient_garment(garment_dyn: Any, slot: str) -> Any:
-    """Centra la prenda en el origen y rota +90° en Z para alinear glTF (+X frente, Y ancho) con MetaHuman (+Y frente, X ancho)."""
+    """Centra la prenda en el origen y rota si es necesario para alinear con MetaHuman (+Y frente, X ancho)."""
     _ = slot
     mesh_queries = unreal.GeometryScript_MeshQueries
     mesh_xform = unreal.GeometryScript_MeshTransforms
     g_box0 = mesh_queries.get_mesh_bounding_box(garment_dyn)
     g_center0 = (g_box0.max + g_box0.min) * 0.5
     garment_dyn = mesh_xform.translate_mesh(garment_dyn, g_center0 * -1.0)
-    if hasattr(mesh_xform, "transform_mesh") and hasattr(unreal, "Transform") and hasattr(unreal, "Rotator"):
+    dx = float(g_box0.max.x - g_box0.min.x)
+    dy = float(g_box0.max.y - g_box0.min.y)
+    if dy > dx * 1.05 and hasattr(mesh_xform, "transform_mesh") and hasattr(unreal, "Transform") and hasattr(unreal, "Rotator"):
         rot_xf = unreal.Transform(
             location=unreal.Vector(0.0, 0.0, 0.0),
             rotation=unreal.Rotator(roll=0.0, pitch=0.0, yaw=90.0),
@@ -580,8 +782,11 @@ def _reference_bone_z(skeleton: Any, bone: str) -> float:
     return height
 
 
-def _is_skirt_shape(slot: str, height: float, width: float) -> bool:
+def _is_skirt_shape(slot: str, height: float, width: float, asset_name: str = "") -> bool:
     """Una prenda de ``Legs`` poco esbelta es una falda; una muy esbelta, un pantalón."""
+    name = (asset_name or "").lower()
+    if any(k in name for k in ("pantalon", "short", "boxer", "calzon", "slacks", "trouser")):
+        return False
     return slot == "Legs" and (height / max(width, 1.0)) <= 1.45
 
 
@@ -793,6 +998,7 @@ def _deform_garment_to_slices(
     slot: str,
     scale_mult: float,
     z_off: float,
+    asset_name: str = "",
 ) -> tuple[Any, float]:
     """Adapta vértice a vértice una prenda de ``Torso`` o ``Legs`` al perfil anatómico del MetaHuman."""
     mq = unreal.GeometryScript_MeshQueries
@@ -808,6 +1014,7 @@ def _deform_garment_to_slices(
     neck_z = float(_get_bone_local(body_comp, "neck_01", b_h * 0.86).z)
     clav_z = float(_get_bone_local(body_comp, "clavicle_l", b_h * 0.82).z)
     waist_z = float(_get_bone_local(body_comp, "spine_02", b_h * 0.60).z)
+    spine1_z = float(_get_bone_local(body_comp, "spine_01", waist_z - 7.0).z)
     calf_z = float(_get_bone_local(body_comp, "calf_l", b_h * 0.28).z)
     ankle_z = float(_get_bone_local(body_comp, "foot_l", 7.2).z)
     shoulder_x = abs(float(_get_bone_local(body_comp, "upperarm_l", 14.0).x)) or 14.0
@@ -815,13 +1022,19 @@ def _deform_garment_to_slices(
     norm_scale = scale_mult / 1.05 if scale_mult > 0.1 else 1.0
     is_skirt = False
     if slot == "Torso":
-        z_min = waist_z + 0.8 + z_off
-        z_max = neck_z + 0.5 + z_off
+        z_min = min(waist_z + 0.8, spine1_z + 1.0) + z_off
+        z_max = min(neck_z + 0.5, clav_z + 2.5) + z_off
     else:
         z_max = waist_z + 3.0 + z_off
-        is_skirt = _is_skirt_shape(slot, g_h, g_w)
+        is_skirt = _is_skirt_shape(slot, g_h, g_w, asset_name)
         is_pants = not is_skirt
-        z_min = (ankle_z + 2.0 + z_off) if is_pants else (z_max - (z_max - calf_z) * 0.56 * norm_scale)
+        is_shorts = is_pants and ((g_h / max(g_w, 1.0)) <= 1.35)
+        if is_shorts:
+            z_min = z_max - (z_max - calf_z) * 0.60 + z_off
+        elif is_pants:
+            z_min = ankle_z + 2.0 + z_off
+        else:
+            z_min = z_max - (z_max - calf_z) * 0.56 * norm_scale
 
     body_pts = _collect_body_points(by_name, body_dyn, head_z)
     if is_skirt:
@@ -851,6 +1064,9 @@ def _deform_by_envelopes(
     """Adapta prendas de ``Torso`` y pantalones por envolventes de franjas y corrección polar hacia fuera."""
     mq = unreal.GeometryScript_MeshQueries
     me = unreal.GeometryScript_MeshEdits
+    repair = getattr(unreal, "GeometryScript_MeshRepair", None)
+    if repair is not None and hasattr(repair, "compact_mesh"):
+        garment_dyn = repair.compact_mesh(garment_dyn)
     g_vc = int(garment_dyn.get_vertex_count())
     g_verts: list[tuple[float, float, float]] = []
     for vid in range(g_vc):
@@ -929,6 +1145,7 @@ def _fit_garment_to_body(
     slot: str,
     scale_mult: float,
     z_off: float,
+    asset_name: str = "",
 ) -> tuple[Any, list[float], list[float], float]:
     """Adapta y posiciona la prenda sobre el cuerpo (o usa ``target_slot_bounds`` en dobles de test y calzado)."""
     mesh_queries = unreal.GeometryScript_MeshQueries
@@ -956,7 +1173,9 @@ def _fit_garment_to_body(
         garment_dyn = mesh_xform.translate_mesh(garment_dyn, offset)
         fitted = (garment_dyn, target_center, target_size, uniform_scale)
     else:
-        garment_dyn, avg_scale = _deform_garment_to_slices(by_name, body_comp, body_dyn, garment_dyn, slot, scale_mult, z_off)
+        garment_dyn, avg_scale = _deform_garment_to_slices(
+            by_name, body_comp, body_dyn, garment_dyn, slot, scale_mult, z_off, asset_name
+        )
         final_box = mesh_queries.get_mesh_bounding_box(garment_dyn)
         f_center = (final_box.max + final_box.min) * 0.5
         f_size = final_box.max - final_box.min
@@ -1040,8 +1259,21 @@ def _create_and_equip_skeletal_garment(
     target_size: list[float],
     uniform_scale: float,
     skirt_hip_z: float | None = None,
+    source_body_name: str = "",
 ) -> dict[str, Any]:
     """Transfiere pesos, crea el ``SkeletalMesh``, limpia override materials y enlaza ``LeaderPoseComponent``."""
+    is_covered, ratio, desc = check_body_coverage(body_dyn, clean_slot, garment_dyn)
+    if not is_covered:
+        body_label = source_body_name or (body_comp.get_skeletal_mesh_asset().get_name() if (body_comp and hasattr(body_comp, "get_skeletal_mesh_asset") and body_comp.get_skeletal_mesh_asset()) else "Body")
+        return {
+            "success": False,
+            "error": f"Body '{body_label}' no cubre la zona de {clean_slot}; no se pueden transferir pesos ({desc})",
+        }
+
+    if hasattr(unreal, "GeometryScript_BoneWeights") and hasattr(unreal.GeometryScript_BoneWeights, "copy_bones_from_mesh"):
+        copy_opts = unreal.GeometryScriptCopyBonesFromMeshOptions()
+        garment_dyn = unreal.GeometryScript_BoneWeights.copy_bones_from_mesh(body_dyn, garment_dyn, copy_opts)
+
     transfer_opts = unreal.GeometryScriptTransferBoneWeightsOptions()
     transfer_opts.transfer_method = unreal.TransferBoneWeightsMethod.INPAINT_WEIGHTS
     if hasattr(transfer_opts, "num_smoothing_iterations"):
@@ -1049,7 +1281,12 @@ def _create_and_equip_skeletal_garment(
     if hasattr(transfer_opts, "smoothing_strength"):
         transfer_opts.smoothing_strength = 0.5
 
-    garment_dyn = unreal.GeometryScript_BoneWeights.transfer_bone_weights_from_mesh(body_dyn, garment_dyn, transfer_opts)
+    try:
+        garment_dyn = unreal.GeometryScript_BoneWeights.transfer_bone_weights_from_mesh(body_dyn, garment_dyn, transfer_opts)
+    except Exception:
+        fallback_opts = unreal.GeometryScriptTransferBoneWeightsOptions()
+        fallback_opts.transfer_method = unreal.TransferBoneWeightsMethod.CLOSEST_POINT_ON_SURFACE
+        garment_dyn = unreal.GeometryScript_BoneWeights.transfer_bone_weights_from_mesh(body_dyn, garment_dyn, fallback_opts)
     if skirt_hip_z is not None:
         garment_dyn = _apply_skirt_weights(garment_dyn, skirt_hip_z)
     _, has_weights = unreal.GeometryScript_BoneWeights.mesh_has_bone_weights(garment_dyn)
@@ -1067,11 +1304,18 @@ def _create_and_equip_skeletal_garment(
     if new_skm is None:
         outcome: dict[str, Any] = {"success": False, "error": f"GeometryScript failed to create SkeletalMesh at {dest_skm_path}"}
     else:
+        if fit is not None:
+            fit.apply_two_sided_materials(new_skm)
+            fit.setup_garment_lods(new_skm, target_lod_count=4)
+        if source_body_name and hasattr(unreal, "EditorAssetLibrary") and hasattr(unreal.EditorAssetLibrary, "set_metadata_tag"):
+            unreal.EditorAssetLibrary.set_metadata_tag(new_skm, "source_full_body", source_body_name)
         unreal.EditorAssetLibrary.save_loaded_asset(new_skm, False)
         with unreal.ScopedEditorTransaction("DBV Unreal AI: equip MetaHuman outfit"):
             target_actor.modify()
             slot_comp.modify()
             slot_comp.set_skeletal_mesh_asset(new_skm)
+            if hasattr(slot_comp, "set_editor_property"):
+                slot_comp.set_editor_property("visible", True)
             if hasattr(slot_comp, "empty_override_materials"):
                 slot_comp.empty_override_materials()
             if sm_mats and hasattr(slot_comp, "set_material"):
@@ -1095,6 +1339,9 @@ def _create_and_equip_skeletal_garment(
             "target_center": [round(v, 1) for v in target_center],
             "target_size": [round(v, 1) for v in target_size],
             "uniform_scale": round(uniform_scale, 3),
+            "two_sided_materials": True,
+            "lod_count": 4,
+            "source_body": source_body_name,
         }
     return outcome
 
@@ -1147,8 +1394,10 @@ def equip_metahuman_outfit(
                 elif mesh_err is not None or garment_sm is None:
                     result["error"] = mesh_err or "garment StaticMesh could not be loaded"
                 else:
-                    build = body_build(body_skm)
-                    full_skm, body_dyn, restored_skin = _ensure_full_body(body_comp, body_skm, build)
+                    build = body_build(body_skm, target_actor)
+                    full_skm, body_dyn, restored_skin, source_body_path = _ensure_full_body(
+                        body_comp, body_skm, build, clean_slot, target_actor
+                    )
                     by_name = metahuman_components(target_actor)
                     body_comp = by_name.get("Body")
                     slot_comp = by_name.get(clean_slot)
@@ -1168,21 +1417,26 @@ def equip_metahuman_outfit(
                             garment_sm, garment_dyn, unreal.GeometryScriptCopyMeshFromAssetOptions(), lod, True
                         )
                         garment_dyn = _clean_and_orient_garment(garment_dyn, clean_slot)
+                        if clean_slot in ("Torso", "Legs") and fit is not None:
+                            garment_dyn = fit.weld_top_dynamic_mesh(garment_dyn)
                         oriented = unreal.GeometryScript_MeshQueries.get_mesh_bounding_box(garment_dyn)
                         oriented_size = oriented.max - oriented.min
-                        is_skirt = _is_skirt_shape(clean_slot, float(oriented_size.z), float(oriented_size.x))
+                        is_skirt = _is_skirt_shape(clean_slot, float(oriented_size.z), float(oriented_size.x), clean_asset or garment_source)
                         skirt_hip_z = _reference_bone_z(skeleton, "thigh_l") + SKIRT_HIP_MARGIN_CM if is_skirt else None
                         garment_dyn, target_center, target_size, uniform_scale = _fit_garment_to_body(
-                            by_name, body_comp, body_dyn, full_skm, slot_comp, garment_dyn, clean_slot, clean_scale, clean_z
+                            by_name, body_comp, body_dyn, full_skm, slot_comp, garment_dyn, clean_slot, clean_scale, clean_z,
+                            asset_name=clean_asset or garment_source,
                         )
                         result = _create_and_equip_skeletal_garment(
                             target_actor, body_comp, slot_comp, body_dyn, garment_dyn, garment_sm,
                             skeleton, dest_skm_path, clean_slot, smoothing_iterations,
                             restored_skin, target_center, target_size, uniform_scale,
                             skirt_hip_z,
+                            source_body_name=source_body_path or (full_skm.get_path_name() if full_skm else ""),
                         )
                         if result.get("success"):
                             result["build"] = build  # REQ-84: la app compara el corte de la prenda con este cuerpo
+                            result["source_body"] = source_body_path or (full_skm.get_path_name() if full_skm else "")
         except Exception as exc:  # noqa: BLE001 — devolvemos error corto y legible sin volcar traceback entero
             result["error"] = f"{type(exc).__name__}: {exc}"
     return _json(result)

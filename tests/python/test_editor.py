@@ -1011,6 +1011,101 @@ class SkirtFitTests(unittest.TestCase):
         self.assertEqual(metahuman._disable_neck_hide(face), [], "es idempotente")
         self.assertEqual(metahuman._disable_neck_hide(None), [])
 
+    def test_resolve_full_body_archetype_derivados_y_metadatos(self) -> None:
+        """Resuelve complexión para assets directos, physics asset y metadatos. @spec REQ-81"""
+        # 1. Directo por ruta estándar
+        skm_direct = types.SimpleNamespace(get_path_name=lambda: "/Game/MetaHumans/Common/Male/Tall/NormalWeight/Body/m_tal_nrw_body.m_tal_nrw_body")
+        self.assertEqual(metahuman.resolve_full_body_archetype(skm_direct), "m_tal_nrw")
+
+        # 2. Asset derivado (SK_Body_Pablo) con physics_asset
+        pa = types.SimpleNamespace(get_path_name=lambda: "/Game/MetaHumans/Common/Male/Tall/NormalWeight/Body/m_tal_nrw_body_Physics.m_tal_nrw_body_Physics")
+        skm_derived = types.SimpleNamespace(
+            get_path_name=lambda: "/Game/DBV/MetaHumansOutfits/_spike/SK_Body_Pablo.SK_Body_Pablo",
+            get_editor_property=lambda name: pa if name == "physics_asset" else None,
+        )
+        self.assertEqual(metahuman.resolve_full_body_archetype(skm_derived), "m_tal_nrw")
+
+        # 3. Asset con etiqueta de metadatos source_full_body
+        self.unreal_mod.EditorAssetLibrary.get_metadata_tag = lambda asset, tag: "/Game/MetaHumans/Common/Female/Medium/NormalWeight/Body/f_med_nrw_body" if tag == "source_full_body" else ""
+        skm_tagged = types.SimpleNamespace(get_path_name=lambda: "/Game/Custom/MyBody.MyBody", get_editor_property=lambda _n: None)
+        self.assertEqual(metahuman.resolve_full_body_archetype(skm_tagged), "f_med_nrw")
+
+    def test_check_body_coverage_detecta_cuerpos_incompletos(self) -> None:
+        """Distingue geométricamente entre cuerpo completo y cuerpo recortado sin torso. @spec REQ-81"""
+        class DynMeshMock:
+            def __init__(self, verts: list[Vec3Fake]) -> None:
+                self.verts = verts
+            def get_vertex_count(self) -> int:
+                return len(self.verts)
+
+        orig_mq = getattr(self.unreal_mod, "GeometryScript_MeshQueries", None)
+        mq_mock = types.SimpleNamespace(
+            get_vertex_position=lambda dyn, i: (dyn.verts[i], True) if i < len(dyn.verts) else (None, False),
+            get_mesh_bounding_box=lambda dyn: types.SimpleNamespace(min=Vec3Fake(-20, -10, 80), max=Vec3Fake(20, 10, 140)),
+        )
+        self.unreal_mod.GeometryScript_MeshQueries = mq_mock
+        try:
+            # Cuerpo recortado: solo 8 vértices en torso
+            pablo_culled = DynMeshMock([Vec3Fake(0, 0, 90 + i) for i in range(8)])
+            ok, ratio, desc = metahuman.check_body_coverage(pablo_culled, "Torso")
+            self.assertFalse(ok, f"Cuerpo recortado debe fallar: {desc}")
+            self.assertLess(ratio, 0.05)
+
+            # Cuerpo completo: 1000 vértices en torso
+            full_body = DynMeshMock([Vec3Fake(0, 0, 85 + (i % 50)) for i in range(1000)])
+            ok_full, ratio_full, _ = metahuman.check_body_coverage(full_body, "Torso")
+            self.assertTrue(ok_full, "Cuerpo completo debe pasar cobertura de Torso")
+            self.assertGreaterEqual(ratio_full, 0.2)
+        finally:
+            self.unreal_mod.GeometryScript_MeshQueries = orig_mq
+
+    def test_guardrail_evita_crash_si_no_hay_cobertura(self) -> None:
+        """_create_and_equip_skeletal_garment aborta limpiamente sin llamar a transfer si el cuerpo no cubre. @spec REQ-81"""
+        class DynMeshMock:
+            def __init__(self, count: int) -> None:
+                self.count = count
+            def get_vertex_count(self) -> int:
+                return self.count
+
+        orig_mq = getattr(self.unreal_mod, "GeometryScript_MeshQueries", None)
+        mq_mock = types.SimpleNamespace(
+            get_vertex_position=lambda dyn, i: (Vec3Fake(0, 0, 10.0), True),
+            get_mesh_bounding_box=lambda dyn: types.SimpleNamespace(min=Vec3Fake(-15, -10, 90), max=Vec3Fake(15, 10, 140)),
+        )
+        self.unreal_mod.GeometryScript_MeshQueries = mq_mock
+
+        called_transfer: list[Any] = []
+        orig_transfer = self.unreal_mod.GeometryScript_BoneWeights.transfer_bone_weights_from_mesh
+        self.unreal_mod.GeometryScript_BoneWeights.transfer_bone_weights_from_mesh = lambda b, g, opts: called_transfer.append((b, g)) or g
+
+        try:
+            body_dyn = DynMeshMock(50)
+            garment_dyn = DynMeshMock(500)
+            res = metahuman._create_and_equip_skeletal_garment(
+                target_actor=types.SimpleNamespace(get_actor_label=lambda: "BP_Pablo"),
+                body_comp=types.SimpleNamespace(get_skeletal_mesh_asset=lambda: types.SimpleNamespace(get_name=lambda: "SK_Body_Pablo")),
+                slot_comp=types.SimpleNamespace(),
+                body_dyn=body_dyn,
+                garment_dyn=garment_dyn,
+                garment_sm=types.SimpleNamespace(get_editor_property=lambda _n: None),
+                skeleton=types.SimpleNamespace(get_path_name=lambda: "/Game/Skel"),
+                dest_skm_path="/Game/Out/SK_Top",
+                clean_slot="Torso",
+                smoothing_iterations=5,
+                restored_skin=False,
+                target_center=[0, 0, 110],
+                target_size=[40, 20, 50],
+                uniform_scale=1.0,
+                source_body_name="SK_Body_Pablo",
+            )
+            self.assertFalse(res["success"])
+            self.assertIn("SK_Body_Pablo", res["error"])
+            self.assertIn("no cubre la zona de Torso", res["error"])
+            self.assertEqual(len(called_transfer), 0, "NUNCA debe llamar a transfer_bone_weights_from_mesh sin cobertura")
+        finally:
+            self.unreal_mod.GeometryScript_MeshQueries = orig_mq
+            self.unreal_mod.GeometryScript_BoneWeights.transfer_bone_weights_from_mesh = orig_transfer
+
 
 if __name__ == "__main__":
     unittest.main()

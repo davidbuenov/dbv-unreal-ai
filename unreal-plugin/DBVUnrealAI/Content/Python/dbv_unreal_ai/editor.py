@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 import unreal
 
-from dbv_unreal_ai import analysis, metahuman
+from dbv_unreal_ai import analysis, metahuman, outfit
 
 #: Versión del contrato de herramientas (la app la compara con la que trae).
 TOOLSET_VERSION = "0.4.0"
@@ -516,6 +516,84 @@ def equip_metahuman_outfit(
         import_model_fn=import_model,
         unique_name_fn=_unique_name,
     )
+
+
+def dress_metahuman(
+    actor_label: str,
+    garment_source: str,
+    garment_kind: str = "top",
+    garment_cut: str | None = None,
+    destination_folder: str = "/Game/DBV/MetaHumanOutfits",
+    asset_name: str = "",
+    scale_multiplier: float = 1.05,
+    z_offset: float = 0.0,
+    force: bool = False,
+) -> str:
+    """Ejecuta el pipeline unificado y determinista para vestir un MetaHuman. @spec REQ-88"""
+    return outfit.dress_metahuman(
+        actor_label=actor_label,
+        garment_source=garment_source,
+        garment_kind=garment_kind,
+        garment_cut=garment_cut,
+        destination_folder=destination_folder,
+        asset_name=asset_name,
+        scale_multiplier=scale_multiplier,
+        z_offset=z_offset,
+        force=force,
+    )
+
+
+def dress_metahuman_start(
+    actor_label: str,
+    garment_source: str,
+    garment_kind: str = "top",
+    garment_cut: str | None = None,
+    destination_folder: str = "/Game/DBV/MetaHumanOutfits",
+    asset_name: str = "",
+    scale_multiplier: float = 1.05,
+    z_offset: float = 0.0,
+    force: bool = False,
+) -> str:
+    """Inicia el trabajo de vestimenta por pasos. @spec REQ-88, D59"""
+    return _json(
+        outfit.dress_metahuman_start(
+            actor_label=actor_label,
+            garment_source=garment_source,
+            garment_kind=garment_kind,
+            garment_cut=garment_cut,
+            destination_folder=destination_folder,
+            asset_name=asset_name,
+            scale_multiplier=scale_multiplier,
+            z_offset=z_offset,
+            force=force,
+        )
+    )
+
+
+def dress_metahuman_step(job_id: str) -> str:
+    """Avanza un paso en el trabajo de vestimenta activo. @spec REQ-88, D59"""
+    return _json(outfit.dress_metahuman_step(job_id))
+
+
+def dress_metahuman_status(job_id: str) -> str:
+    """Consulta el estado del trabajo de vestimenta activo. @spec REQ-88"""
+    return _json(outfit.dress_metahuman_status(job_id))
+
+
+def validate_metahuman_outfit(
+    actor_label: str,
+    garment_kind: str = "top",
+    run_pie: bool = False,
+    capture_angles: bool = True,
+) -> str:
+    """Valida la geometría, holgura, enlace de tela y capturas de una prenda en un MetaHuman. @spec REQ-89"""
+    res = outfit.validate_outfit(
+        actor_label=actor_label,
+        garment_kind=garment_kind,
+        run_pie=run_pie,
+        capture_angles=capture_angles,
+    )
+    return _json(res)
 
 
 _PLAYTEST_STATE: dict[str, Any] = {}

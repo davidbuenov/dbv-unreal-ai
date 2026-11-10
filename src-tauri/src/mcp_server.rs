@@ -29,15 +29,19 @@ use serde_json::{json, Value};
 
 use crate::ai::secrets::Secrets;
 use crate::generation::commands::GenerationSettings;
-use crate::generation::jobs::{describe, resume_orphans, start_jobs, Cancels, JobBoard, JobContext, JobRecord};
+use crate::generation::jobs::{
+    describe, resume_orphans, start_jobs, Cancels, JobBoard, JobContext, JobRecord,
+};
 use crate::generation::tripo::TripoClient;
 use crate::generation::worldlabs::WorldLabsClient;
 use crate::generation::{key_account, service_keys, tools, within_budget, Polling};
-use crate::project_memory::tools as memory_tools;
 use crate::library::{now_secs, Library};
-use crate::unreal::discovery;
+use crate::project_memory::tools as memory_tools;
 use crate::unreal::compact;
-use crate::unreal::mcp_client::{endpoint_url, McpSession, ToolResult, ToolsetSummary, DEFAULT_TIMEOUT};
+use crate::unreal::discovery;
+use crate::unreal::mcp_client::{
+    endpoint_url, McpSession, ToolResult, ToolsetSummary, DEFAULT_TIMEOUT,
+};
 use crate::unreal::UnrealError;
 
 /// Cómo usar este servidor sin gastar contexto (REQ-51): lo recibe el cliente en `initialize`.
@@ -88,18 +92,25 @@ pub const DEFAULT_MAX_WAIT: Duration = Duration::from_secs(45);
 
 /// Lee `--flag valor`.
 fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned()
+    args.iter()
+        .position(|a| a == name)
+        .and_then(|i| args.get(i + 1))
+        .cloned()
 }
 
 /// Configuración a partir de la línea de comandos y de las carpetas de la app.
 pub fn config_from_args(args: &[String]) -> ServerConfig {
     let port = flag(args, "--port").and_then(|p| p.parse::<u16>().ok());
-    let project_dir = flag(args, "--project").and_then(|p| PathBuf::from(p).parent().map(PathBuf::from));
+    let project_dir =
+        flag(args, "--project").and_then(|p| PathBuf::from(p).parent().map(PathBuf::from));
     let project_settings = project_dir.as_deref().map(discovery::read_mcp_settings);
     let (port, path) = match (port, project_settings) {
         (Some(port), _) => (port, discovery::DEFAULT_MCP_PATH.to_string()),
         (None, Some(settings)) => (settings.port, settings.path),
-        (None, None) => (discovery::DEFAULT_MCP_PORT, discovery::DEFAULT_MCP_PATH.to_string()),
+        (None, None) => (
+            discovery::DEFAULT_MCP_PORT,
+            discovery::DEFAULT_MCP_PATH.to_string(),
+        ),
     };
     let data = crate::paths::data_dir().unwrap_or_else(|| PathBuf::from("."));
     let config_dir = crate::paths::config_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -125,13 +136,14 @@ const fn schema_object() -> &'static str {
 /// Herramientas que solo consultan (REQ-12): se publican con `readOnlyHint` y, cuando un agente de la conversación
 /// pide permiso para usarlas, la app lo concede sola. Lo que modifica, ejecuta Python o gasta créditos sigue
 /// preguntando (pedido por el usuario el 2026-11-01: las aprobaciones de simples consultas eran muy pesadas).
-pub const READ_ONLY_TOOLS: [&str; 18] = [
+pub const READ_ONLY_TOOLS: [&str; 19] = [
     "unreal_list_toolsets",
     "unreal_describe_toolset",
     "unreal_capture_viewport",
     "unreal_scene_summary",
     "unreal_describe_python_api",
     "unreal_list_metahumans",
+    "unreal_validate_metahuman_outfit",
     "library_list",
     "generation_jobs",
     "tripo_operations",
@@ -149,7 +161,10 @@ pub const READ_ONLY_TOOLS: [&str; 18] = [
 /// Las herramientas de solo lectura, para que la ventana apruebe sola sus permisos. @spec REQ-12
 #[tauri::command]
 pub fn app_mcp_read_only_tools() -> Vec<String> {
-    READ_ONLY_TOOLS.iter().map(|name| name.to_string()).collect()
+    READ_ONLY_TOOLS
+        .iter()
+        .map(|name| name.to_string())
+        .collect()
 }
 
 /// Herramientas que publica el servidor.
@@ -237,6 +252,30 @@ pub fn tool_specs() -> Vec<Value> {
             json!(["actor_label", "source"]),
         ),
         tool(
+            "unreal_dress_metahuman",
+            "Dress a MetaHuman character with a 3D garment (library asset id, local .glb/.fbx path, or /Game/... StaticMesh) using the deterministic pipeline (REQ-88): creates/reuses character copy (<BP>_DBV), clears/restores outfit slots, cleans underwear skin, and applies bone weights (GeometryScript) for top/pants/shoes or Chaos Cloth for skirt/dress.",
+            json!({
+                "actor_label": { "type": "string", "description": "Label of the MetaHuman to dress, from unreal_list_metahumans. Required: nothing is dressed without a target. If the user has not said which and there are several, ask them." },
+                "source": { "type": "string", "description": "Library asset id, local .glb/.fbx path, or /Game/... StaticMesh path." },
+                "garment_kind": { "type": "string", "enum": ["top", "pants", "skirt", "dress", "shoes"], "description": "Garment kind (default: top, or from library asset)." },
+                "garment_cut": { "type": "string", "enum": ["male", "female", "neutral"], "description": "Garment cut to match body build (optional)." },
+                "scale_multiplier": { "type": "number", "description": "Scale margin over target body (default 1.05)." },
+                "z_offset": { "type": "number", "description": "Vertical offset in cm (default 0.0)." }
+            }),
+            json!(["actor_label", "source"]),
+        ),
+        tool(
+            "unreal_validate_metahuman_outfit",
+            "Validate open border edges, clearance with body, cloth leader pose linkage, and optional PIE playtest / 3-angle captures for an equipped MetaHuman outfit (REQ-89).",
+            json!({
+                "actor_label": { "type": "string", "description": "Label of the MetaHuman actor to validate." },
+                "garment_kind": { "type": "string", "enum": ["top", "pants", "skirt", "dress", "shoes"], "description": "Garment kind (default: top)." },
+                "run_pie": { "type": "boolean", "description": "Whether to run a non-blocking PIE walk test (default: false)." },
+                "capture_angles": { "type": "boolean", "description": "Whether to take front, side, and back camera captures (default: true)." }
+            }),
+            json!(["actor_label"]),
+        ),
+        tool(
             "unreal_playtest",
             "Run an autonomous Play-In-Editor (PIE) playtest: starts PIE, drives the PlayerPawn across Slate ticks (forward/backward/left/right/jump), measures start/end location, distance moved, whether it fell out of the world, average FPS and recent Warning/Error log entries, captures the PIE viewport screenshot, and always stops PIE.",
             json!({
@@ -271,7 +310,9 @@ pub fn tool_specs() -> Vec<Value> {
     specs.push(crate::convai_characters::spec());
     // Anotación estándar de MCP: algunos agentes ya no preguntan por lo que solo consulta.
     for spec in &mut specs {
-        let read_only = spec["name"].as_str().is_some_and(|name| READ_ONLY_TOOLS.contains(&name));
+        let read_only = spec["name"]
+            .as_str()
+            .is_some_and(|name| READ_ONLY_TOOLS.contains(&name));
         spec["annotations"] = json!({ "readOnlyHint": read_only });
     }
     specs
@@ -282,15 +323,28 @@ fn text_result(text: String, is_error: bool) -> Value {
 }
 
 fn format(result: &ToolResult) -> String {
-    result.value.as_ref().map(Value::to_string).unwrap_or_else(|| result.text.clone())
+    result
+        .value
+        .as_ref()
+        .map(Value::to_string)
+        .unwrap_or_else(|| result.text.clone())
 }
 
 /// Nombre completo de un toolset: exacto o por su final si es único.
 pub fn resolve_toolset(wanted: &str, names: &[String]) -> Option<String> {
     let lower = wanted.trim().to_lowercase();
     let exact = names.iter().find(|n| n.to_lowercase() == lower);
-    let by_suffix: Vec<&String> = names.iter().filter(|n| n.to_lowercase().rsplit('.').next() == Some(lower.as_str())).collect();
-    exact.cloned().or_else(|| if by_suffix.len() == 1 { Some(by_suffix[0].clone()) } else { None })
+    let by_suffix: Vec<&String> = names
+        .iter()
+        .filter(|n| n.to_lowercase().rsplit('.').next() == Some(lower.as_str()))
+        .collect();
+    exact.cloned().or_else(|| {
+        if by_suffix.len() == 1 {
+            Some(by_suffix[0].clone())
+        } else {
+            None
+        }
+    })
 }
 
 fn is_dbv(name: &str) -> bool {
@@ -300,7 +354,14 @@ fn is_dbv(name: &str) -> bool {
 impl McpServer {
     pub fn new(config: ServerConfig) -> Self {
         let board = JobBoard::new(&config.data_dir);
-        Self { config, session: None, toolsets: None, board, cancels: Cancels::default(), started_at: now_secs() }
+        Self {
+            config,
+            session: None,
+            toolsets: None,
+            board,
+            cancels: Cancels::default(),
+            started_at: now_secs(),
+        }
     }
 
     fn session(&mut self) -> Result<McpSession, UnrealError> {
@@ -313,7 +374,10 @@ impl McpServer {
     }
 
     /// Llama al editor reabriendo la sesión una vez si caducó.
-    fn editor<T>(&mut self, work: impl Fn(&McpSession) -> Result<T, UnrealError>) -> Result<T, UnrealError> {
+    fn editor<T>(
+        &mut self,
+        work: impl Fn(&McpSession) -> Result<T, UnrealError>,
+    ) -> Result<T, UnrealError> {
         let first = work(&self.session()?);
         match first {
             Err(UnrealError::Expired(_)) => {
@@ -337,7 +401,11 @@ impl McpServer {
     }
 
     fn toolset_names(&mut self) -> Result<Vec<String>, UnrealError> {
-        Ok(self.toolset_list(false)?.into_iter().map(|t| t.name).collect())
+        Ok(self
+            .toolset_list(false)?
+            .into_iter()
+            .map(|t| t.name)
+            .collect())
     }
 
     /// Nombre completo de un toolset; si no está en la caché, se vuelve a preguntar al editor una vez.
@@ -346,7 +414,15 @@ impl McpServer {
         let cached = self.toolset_names().map_err(err)?;
         let found = match resolve_toolset(wanted, &cached) {
             Some(name) => Some(name),
-            None => resolve_toolset(wanted, &self.toolset_list(true).map_err(err)?.into_iter().map(|t| t.name).collect::<Vec<_>>()),
+            None => resolve_toolset(
+                wanted,
+                &self
+                    .toolset_list(true)
+                    .map_err(err)?
+                    .into_iter()
+                    .map(|t| t.name)
+                    .collect::<Vec<_>>(),
+            ),
         };
         found.ok_or_else(|| format!("unknown toolset: {wanted}"))
     }
@@ -360,7 +436,19 @@ impl McpServer {
         let text = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
         let err = |e: UnrealError| e.to_string();
         let result = match name {
-            "unreal_list_toolsets" => self.toolset_list(false).map_err(err)?.iter().map(|t| format!("- {}: {}", t.name, t.description.lines().next().unwrap_or(""))).collect::<Vec<_>>().join("\n"),
+            "unreal_list_toolsets" => self
+                .toolset_list(false)
+                .map_err(err)?
+                .iter()
+                .map(|t| {
+                    format!(
+                        "- {}: {}",
+                        t.name,
+                        t.description.lines().next().unwrap_or("")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
             "unreal_describe_toolset" => {
                 let full = self.resolve(&text(args, "toolset"))?;
                 let info = self.editor(|s| s.describe_toolset(&full)).map_err(err)?;
@@ -372,16 +460,37 @@ impl McpServer {
                 }
             }
             "unreal_scene_summary" => {
-                let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
-                let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(100).clamp(1, 500);
+                let dbv = self.dbv_toolset().map_err(err)?.ok_or(
+                    "the DBV Unreal AI toolset is not installed: prepare the project in the app",
+                )?;
+                let limit = args
+                    .get("limit")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(100)
+                    .clamp(1, 500);
                 let scene_args = json!({ "name_filter": text(args, "name_filter"), "class_filter": text(args, "class_filter"), "limit": limit });
-                format(&self.editor(|s| s.call_toolset_tool(&dbv, "get_scene_summary", scene_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?)
+                format(
+                    &self
+                        .editor(|s| {
+                            s.call_toolset_tool(
+                                &dbv,
+                                "get_scene_summary",
+                                scene_args.clone(),
+                                DEFAULT_TIMEOUT,
+                            )
+                        })
+                        .map_err(err)?,
+                )
             }
             "unreal_call_tool" => {
                 let full = self.resolve(&text(args, "toolset"))?;
                 let tool = text(args, "tool");
                 let arguments = args.get("arguments").cloned().unwrap_or_else(|| json!({}));
-                let result = self.editor(|s| s.call_toolset_tool(&full, &tool, arguments.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
+                let result = self
+                    .editor(|s| {
+                        s.call_toolset_tool(&full, &tool, arguments.clone(), DEFAULT_TIMEOUT)
+                    })
+                    .map_err(err)?;
                 if result.is_error {
                     Err(format(&result))?
                 } else {
@@ -390,9 +499,22 @@ impl McpServer {
             }
             "unreal_run_python" => self.run_python(&text(args, "code"))?,
             "unreal_describe_python_api" => {
-                let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+                let dbv = self.dbv_toolset().map_err(err)?.ok_or(
+                    "the DBV Unreal AI toolset is not installed: prepare the project in the app",
+                )?;
                 let target = text(args, "name");
-                format(&self.editor(|s| s.call_toolset_tool(&dbv, "describe_python_api", json!({ "name": target }), DEFAULT_TIMEOUT)).map_err(err)?)
+                format(
+                    &self
+                        .editor(|s| {
+                            s.call_toolset_tool(
+                                &dbv,
+                                "describe_python_api",
+                                json!({ "name": target }),
+                                DEFAULT_TIMEOUT,
+                            )
+                        })
+                        .map_err(err)?,
+                )
             }
             "library_list" => {
                 let needle = text(args, "filter").to_lowercase();
@@ -401,24 +523,70 @@ impl McpServer {
                     .library
                     .list()
                     .into_iter()
-                    .filter(|e| needle.is_empty() || format!("{} {}", e.name, e.prompt).to_lowercase().contains(&needle))
+                    .filter(|e| {
+                        needle.is_empty()
+                            || format!("{} {}", e.name, e.prompt)
+                                .to_lowercase()
+                                .contains(&needle)
+                    })
                     .map(|e| {
                         let details = if e.kind == "world" || e.provider == "worldlabs" {
-                            let splat = e.parameters.get("splat_file").and_then(Value::as_str)
-                                .or_else(|| e.files.iter().find(|f| f.ends_with(".spz") || f.ends_with(".ply")).map(String::as_str));
-                            let collider = e.parameters.get("collider_file").and_then(Value::as_str)
-                                .or_else(|| e.files.iter().find(|f| f.ends_with(".glb") || f.ends_with(".fbx")).map(String::as_str));
+                            let splat = e
+                                .parameters
+                                .get("splat_file")
+                                .and_then(Value::as_str)
+                                .or_else(|| {
+                                    e.files
+                                        .iter()
+                                        .find(|f| f.ends_with(".spz") || f.ends_with(".ply"))
+                                        .map(String::as_str)
+                                });
+                            let collider = e
+                                .parameters
+                                .get("collider_file")
+                                .and_then(Value::as_str)
+                                .or_else(|| {
+                                    e.files
+                                        .iter()
+                                        .find(|f| f.ends_with(".glb") || f.ends_with(".fbx"))
+                                        .map(String::as_str)
+                                });
                             let mut parts = Vec::new();
-                            if let Some(s) = splat { parts.push(format!("visual Gaussian Splat: {s}")); }
-                            if let Some(c) = collider { parts.push(format!("physical collider mesh: {c}")); }
-                            if let Some(scale) = e.parameters.get("metric_scale_factor").and_then(Value::as_f64) {
+                            if let Some(s) = splat {
+                                parts.push(format!("visual Gaussian Splat: {s}"));
+                            }
+                            if let Some(c) = collider {
+                                parts.push(format!("physical collider mesh: {c}"));
+                            }
+                            if let Some(scale) = e
+                                .parameters
+                                .get("metric_scale_factor")
+                                .and_then(Value::as_f64)
+                            {
                                 parts.push(format!("scale: {scale}"));
                             }
-                            if parts.is_empty() { String::new() } else { format!(" [{}]", parts.join(", ")) }
+                            if parts.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" [{}]", parts.join(", "))
+                            }
                         } else {
                             String::new()
                         };
-                        format!("- {}: \"{}\" ({} {}{}{}, files: {}, prompt: \"{}\")", e.id, e.name, e.provider, e.kind, e.parent.as_ref().map(|p| format!(" from {p}")).unwrap_or_default(), details, e.files.join(", "), e.prompt)
+                        format!(
+                            "- {}: \"{}\" ({} {}{}{}, files: {}, prompt: \"{}\")",
+                            e.id,
+                            e.name,
+                            e.provider,
+                            e.kind,
+                            e.parent
+                                .as_ref()
+                                .map(|p| format!(" from {p}"))
+                                .unwrap_or_default(),
+                            details,
+                            e.files.join(", "),
+                            e.prompt
+                        )
                     })
                     .collect();
                 if entries.is_empty() {
@@ -428,30 +596,67 @@ impl McpServer {
                 }
             }
             "library_rename" => {
-                let entry = self.config.library.rename(&text(args, "id"), &text(args, "name")).map_err(err)?;
+                let entry = self
+                    .config
+                    .library
+                    .rename(&text(args, "id"), &text(args, "name"))
+                    .map_err(err)?;
                 format!("Renamed {} to \"{}\"", entry.id, entry.name)
             }
             "library_import" => {
                 let name = text(args, "name");
-                let entry = self.config.library.import_file(std::path::Path::new(&text(args, "path")), Some(name.as_str()).filter(|n| !n.is_empty())).map_err(err)?;
-                format!("Imported as {} (\"{}\", {}: {})", entry.id, entry.name, entry.kind, entry.files.join(", "))
+                let entry = self
+                    .config
+                    .library
+                    .import_file(
+                        std::path::Path::new(&text(args, "path")),
+                        Some(name.as_str()).filter(|n| !n.is_empty()),
+                    )
+                    .map_err(err)?;
+                format!(
+                    "Imported as {} (\"{}\", {}: {})",
+                    entry.id,
+                    entry.name,
+                    entry.kind,
+                    entry.files.join(", ")
+                )
             }
-            "library_send_to_unreal" => self.send_to_unreal(&text(args, "id"), args.get("place").and_then(Value::as_bool).unwrap_or(true), text(args, "metahuman").trim())?,
+            "library_send_to_unreal" => self.send_to_unreal(
+                &text(args, "id"),
+                args.get("place").and_then(Value::as_bool).unwrap_or(true),
+                text(args, "metahuman").trim(),
+            )?,
             "unreal_list_metahumans" => self.list_metahumans()?,
             "unreal_equip_metahuman_outfit" => self.equip_metahuman_outfit(args)?,
+            "unreal_dress_metahuman" => self.dress_metahuman(args)?,
+            "unreal_validate_metahuman_outfit" => self.validate_metahuman_outfit(args)?,
             "unreal_import_sound" => {
                 let path = text(args, "path");
                 let asset_name = text(args, "asset_name");
-                let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+                let dbv = self.dbv_toolset().map_err(err)?.ok_or(
+                    "the DBV Unreal AI toolset is not installed: prepare the project in the app",
+                )?;
                 let res = self.editor(|s| s.call_toolset_tool(&dbv, "import_sound", json!({ "source_file": path, "folder_path": "/Game/DBV/Audio", "asset_name": asset_name }), std::time::Duration::from_secs(60))).map_err(err)?;
                 res.value.map(|v| v.to_string()).unwrap_or(res.text)
             }
             "generation_jobs" => self.jobs(args)?,
             // REQ-22: el agente edita con sus herramientas; aquí solo se compila (con su permiso, que pone el cliente).
             crate::unreal::compile::MCP_TOOL => {
-                let files: Vec<String> = args.get("files").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+                let files: Vec<String> = args
+                    .get("files")
+                    .and_then(Value::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 let dir = self.project_dir()?;
-                crate::unreal::compile::compile_for_agent(&dir, &files, || self.editor(crate::unreal::compile::live_coding)).map_err(err)?
+                crate::unreal::compile::compile_for_agent(&dir, &files, || {
+                    self.editor(crate::unreal::compile::live_coding)
+                })
+                .map_err(err)?
             }
             "tripo_operations" => tools::operations_text(args)?,
             "tripo_balance" => self.balance()?,
@@ -460,20 +665,39 @@ impl McpServer {
             "project_memory_read" => memory_tools::read_text(&self.project_dir()?, args)?,
             "project_memory_propose" => memory_tools::propose_and_save(&self.project_dir()?, args)?,
             "project_tasks_list" => memory_tools::tasks_text(&self.project_dir()?)?,
-            "project_tasks_propose" => memory_tools::propose_plan_and_save(&self.project_dir()?, args)?,
+            "project_tasks_propose" => {
+                memory_tools::propose_plan_and_save(&self.project_dir()?, args)?
+            }
             // En el MCP la aprobación la pone el cliente (permiso por herramienta, D6); el código es fijo de la app.
             "level_zones_propose" => {
                 let zones = crate::zones::validate(args)?;
                 crate::zones::report_text(&self.run_fixed(&crate::zones::apply_code(&zones))?)
             }
-            "level_zones_list" => crate::zones::report_text(&self.run_fixed(&crate::zones::list_code())?),
-            "search_unreal_guides" => crate::guides::search_text(&self.config.config_dir, &text(args, "query"), args.get("limit").and_then(Value::as_u64).unwrap_or(3) as usize),
-            "recipes_list" | "recipe_check" => crate::recipes::run_tool(name, args, |code| self.run_fixed(code))?,
-            "convai_characters" => crate::convai_characters::text(&crate::convai_characters::load(&self.config.config_dir)),
+            "level_zones_list" => {
+                crate::zones::report_text(&self.run_fixed(&crate::zones::list_code())?)
+            }
+            "search_unreal_guides" => crate::guides::search_text(
+                &self.config.config_dir,
+                &text(args, "query"),
+                args.get("limit").and_then(Value::as_u64).unwrap_or(3) as usize,
+            ),
+            "recipes_list" | "recipe_check" => {
+                crate::recipes::run_tool(name, args, |code| self.run_fixed(code))?
+            }
+            "convai_characters" => crate::convai_characters::text(&crate::convai_characters::load(
+                &self.config.config_dir,
+            )),
             "project_task_update" => {
                 let dir = self.project_dir()?;
                 let done = args.get("done").and_then(Value::as_bool).unwrap_or(true);
-                crate::project_memory::checks::update_task(&dir, &text(args, "task"), done, true, |code| self.check_in_editor(code))?.message
+                crate::project_memory::checks::update_task(
+                    &dir,
+                    &text(args, "task"),
+                    done,
+                    true,
+                    |code| self.check_in_editor(code),
+                )?
+                .message
             }
             other => Err(format!("unknown tool: {other}"))?,
         };
@@ -484,22 +708,47 @@ impl McpServer {
     /// que dejó en `result`. No pasa por `validate_python`: no lo escribió la IA.
     fn check_in_editor(&mut self, code: &str) -> Result<Value, String> {
         let err = |e: UnrealError| e.to_string();
-        let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
-        let ran = self.editor(|s| s.call_toolset_tool(&dbv, "run_python", json!({ "code": code }), DEFAULT_TIMEOUT)).map_err(err)?;
-        ran.value.ok_or_else(|| format!("unexpected answer from the editor: {}", ran.text))
+        let dbv = self
+            .dbv_toolset()
+            .map_err(err)?
+            .ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+        let ran = self
+            .editor(|s| {
+                s.call_toolset_tool(&dbv, "run_python", json!({ "code": code }), DEFAULT_TIMEOUT)
+            })
+            .map_err(err)?;
+        ran.value
+            .ok_or_else(|| format!("unexpected answer from the editor: {}", ran.text))
     }
 
     /// Anota cuánto devolvió una llamada, para el contador de la ventana (REQ-51). Solo tamaños, nunca contenido.
     fn record_usage(&self, tool: &str, result: &Value) {
-        let content = result.get("content").and_then(Value::as_array).cloned().unwrap_or_default();
-        let texts: Vec<&str> = content.iter().filter_map(|c| c.get("text").and_then(Value::as_str)).collect();
+        let content = result
+            .get("content")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let texts: Vec<&str> = content
+            .iter()
+            .filter_map(|c| c.get("text").and_then(Value::as_str))
+            .collect();
         let entry = crate::tool_usage::UsageRecord {
             at: crate::tool_usage::now_ms(),
             pid: std::process::id(),
-            project: crate::tool_usage::project_key(&self.config.project_dir.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()),
+            project: crate::tool_usage::project_key(
+                &self
+                    .config
+                    .project_dir
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+            ),
             tool: tool.to_string(),
             text: texts.iter().map(|t| t.chars().count()).sum(),
-            images: content.iter().filter(|c| c.get("type").and_then(Value::as_str) == Some("image")).count(),
+            images: content
+                .iter()
+                .filter(|c| c.get("type").and_then(Value::as_str) == Some("image"))
+                .count(),
             clipped: texts.iter().any(|t| t.contains("… (truncated: ")),
         };
         crate::tool_usage::record(&self.config.data_dir, &entry);
@@ -509,14 +758,29 @@ impl McpServer {
     /// `validate_python`. Devuelve el informe de `run_python`.
     fn run_fixed(&mut self, code: &str) -> Result<Value, String> {
         let err = |e: UnrealError| e.to_string();
-        let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
-        let ran = self.editor(|s| s.call_toolset_tool(&dbv, "run_python", json!({ "code": code }), std::time::Duration::from_secs(120))).map_err(err)?;
-        ran.value.ok_or_else(|| format!("unexpected answer from the editor: {}", ran.text))
+        let dbv = self
+            .dbv_toolset()
+            .map_err(err)?
+            .ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+        let ran = self
+            .editor(|s| {
+                s.call_toolset_tool(
+                    &dbv,
+                    "run_python",
+                    json!({ "code": code }),
+                    std::time::Duration::from_secs(120),
+                )
+            })
+            .map_err(err)?;
+        ran.value
+            .ok_or_else(|| format!("unexpected answer from the editor: {}", ran.text))
     }
 
     /// Carpeta del proyecto, que el agente recibe con `--project` (REQ-38).
     fn project_dir(&self) -> Result<PathBuf, String> {
-        self.config.project_dir.clone().ok_or_else(|| "no project: this server was started without --project <.uproject>".to_string())
+        self.config.project_dir.clone().ok_or_else(|| {
+            "no project: this server was started without --project <.uproject>".to_string()
+        })
     }
 
     fn run_python(&mut self, code: &str) -> Result<String, String> {
@@ -524,14 +788,33 @@ impl McpServer {
             return Err("empty code".into());
         }
         let err = |e: UnrealError| e.to_string();
-        let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+        let dbv = self
+            .dbv_toolset()
+            .map_err(err)?
+            .ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
         let code_value = json!({ "code": code });
-        let report = self.editor(|s| s.call_toolset_tool(&dbv, "validate_python", code_value.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
-        let blocking = report.value.as_ref().is_some_and(|v| v.get("ok") == Some(&json!(false)));
+        let report = self
+            .editor(|s| {
+                s.call_toolset_tool(&dbv, "validate_python", code_value.clone(), DEFAULT_TIMEOUT)
+            })
+            .map_err(err)?;
+        let blocking = report
+            .value
+            .as_ref()
+            .is_some_and(|v| v.get("ok") == Some(&json!(false)));
         let result = if blocking {
             Err(format!("NOT run: the code does not pass the check against this engine version. Fix it and retry: {}", format(&report)))
         } else {
-            self.editor(|s| s.call_toolset_tool(&dbv, "run_python", code_value.clone(), std::time::Duration::from_secs(180))).map(|ran| format(&ran)).map_err(err)
+            self.editor(|s| {
+                s.call_toolset_tool(
+                    &dbv,
+                    "run_python",
+                    code_value.clone(),
+                    std::time::Duration::from_secs(180),
+                )
+            })
+            .map(|ran| format(&ran))
+            .map_err(err)
         };
         result
     }
@@ -539,10 +822,21 @@ impl McpServer {
     /// «Enviar a Unreal» desde un agente, con la misma elección de ficheros que la ventana (D25). `metahuman` es el
     /// personaje que se viste si la entrada es una prenda (vacío: solo se importa). @spec REQ-19, REQ-54, REQ-83
     fn send_to_unreal(&mut self, id: &str, place: bool, metahuman: &str) -> Result<String, String> {
-        let entry = self.config.library.get(id).ok_or_else(|| format!("no library asset with id {id}"))?;
+        let entry = self
+            .config
+            .library
+            .get(id)
+            .ok_or_else(|| format!("no library asset with id {id}"))?;
         let err = |e: UnrealError| e.to_string();
-        let dbv = self.dbv_toolset().map_err(err)?.ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
-        let name: String = entry.name.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+        let dbv = self
+            .dbv_toolset()
+            .map_err(err)?
+            .ok_or("the DBV Unreal AI toolset is not installed: prepare the project in the app")?;
+        let name: String = entry
+            .name
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
         let name = name.trim_matches('_').to_string();
         let result = match crate::library::send_plan(&entry) {
             crate::library::SendPlan::Splat { splat, collider } => self.send_splat(&entry, &dbv, &name, &splat, collider.as_deref(), place),
@@ -554,21 +848,46 @@ impl McpServer {
     }
 
     /// Importa un sonido a /Game/DBV/Audio como USoundWave. @spec REQ-72
-    fn send_sound(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, sound: &str) -> Result<String, String> {
-        let sound_path = self.config.library.file_path(&entry.id, sound).map_err(|e| e.to_string())?;
+    fn send_sound(
+        &mut self,
+        entry: &crate::library::LibraryEntry,
+        dbv: &str,
+        name: &str,
+        sound: &str,
+    ) -> Result<String, String> {
+        let sound_path = self
+            .config
+            .library
+            .file_path(&entry.id, sound)
+            .map_err(|e| e.to_string())?;
         let args = json!({
             "source_file": sound_path.to_string_lossy(),
             "folder_path": "/Game/DBV/Audio",
             "asset_name": name,
         });
-        let imported = self.editor(|s| s.call_toolset_tool(dbv, "import_sound", args.clone(), std::time::Duration::from_secs(60))).map_err(|e| e.to_string())?;
+        let imported = self
+            .editor(|s| {
+                s.call_toolset_tool(
+                    dbv,
+                    "import_sound",
+                    args.clone(),
+                    std::time::Duration::from_secs(60),
+                )
+            })
+            .map_err(|e| e.to_string())?;
         let report = imported.value.clone().unwrap_or(Value::Null);
         if imported.is_error || report.get("success") != Some(&json!(true)) {
             Err(format!("the sound was not imported: {}", format(&imported)))
         } else {
-            let primary = report.get("primary").and_then(Value::as_str).unwrap_or(name);
+            let primary = report
+                .get("primary")
+                .and_then(Value::as_str)
+                .unwrap_or(name);
             if let Some(dir) = &self.config.project_dir {
-                let _ = self.config.library.record_sent(&entry.id, &dir.to_string_lossy(), primary);
+                let _ = self
+                    .config
+                    .library
+                    .record_sent(&entry.id, &dir.to_string_lossy(), primary);
             }
             Ok(format!("Sound imported as USoundWave at {primary}"))
         }
@@ -578,10 +897,23 @@ impl McpServer {
     const SPLAT_TIMEOUT_SECS: u64 = 600;
 
     /// Un Gaussian Splat con el componente del toolset DBV y, si la hay, su malla de colisión. @spec REQ-54
-    fn send_splat(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, splat: &str, collider: Option<&str>, place: bool) -> Result<String, String> {
-        let splat_path = self.config.library.file_path(&entry.id, splat).map_err(|e| e.to_string())?;
+    fn send_splat(
+        &mut self,
+        entry: &crate::library::LibraryEntry,
+        dbv: &str,
+        name: &str,
+        splat: &str,
+        collider: Option<&str>,
+        place: bool,
+    ) -> Result<String, String> {
+        let splat_path = self
+            .config
+            .library
+            .file_path(&entry.id, splat)
+            .map_err(|e| e.to_string())?;
         let label = format!("{name}_Splat");
-        let splat_args = json!({ "source_file": splat_path.to_string_lossy(), "actor_label": label });
+        let splat_args =
+            json!({ "source_file": splat_path.to_string_lossy(), "actor_label": label });
         // Un .ply de varios GB tarda en leerse; si aun así se agota la espera, el editor sigue cargándolo.
         let loaded = self.editor(|s| s.call_toolset_tool(dbv, "load_gaussian_splat", splat_args.clone(), std::time::Duration::from_secs(Self::SPLAT_TIMEOUT_SECS))).map_err(|e| match e {
             UnrealError::Timeout(_) => "the editor is still loading the Gaussian Splat (large file): check with unreal_scene_summary in a minute before sending it again".to_string(),
@@ -589,19 +921,41 @@ impl McpServer {
         })?;
         let report = loaded.value.clone().unwrap_or(Value::Null);
         let result = if loaded.is_error || report.get("success") != Some(&json!(true)) {
-            let missing = loaded.text.contains("load_gaussian_splat") && loaded.text.to_lowercase().contains("not found");
-            Err(if missing { "the DBV toolset of this project cannot load Gaussian Splats yet: ask the user to prepare the project again in the app".to_string() } else { format!("the splat was not loaded: {}", format(&loaded)) })
+            let missing = loaded.text.contains("load_gaussian_splat")
+                && loaded.text.to_lowercase().contains("not found");
+            Err(if missing {
+                "the DBV toolset of this project cannot load Gaussian Splats yet: ask the user to prepare the project again in the app".to_string()
+            } else {
+                format!("the splat was not loaded: {}", format(&loaded))
+            })
         } else {
-            let message = format!("Gaussian Splat loaded as actor {}", report.get("actor").and_then(Value::as_str).unwrap_or(&label));
+            let message = format!(
+                "Gaussian Splat loaded as actor {}",
+                report
+                    .get("actor")
+                    .and_then(Value::as_str)
+                    .unwrap_or(&label)
+            );
             // Un mundo de World Labs con escala y suelo se coloca con `place_world` (REQ-18): su colisión se importa sin
             // colocarla delante de la cámara, y luego se alinea con el splat.
             let is_placed_world = place && crate::library::world_metadata(entry).is_some();
             let (collider_note, collider_asset) = match collider {
-                Some(collider) => self.send_collider(entry, dbv, name, collider, place && !is_placed_world)?,
+                Some(collider) => {
+                    self.send_collider(entry, dbv, name, collider, place && !is_placed_world)?
+                }
                 None => (String::new(), None),
             };
-            let world_note = match crate::library::world_place_code(entry, &label, collider_asset.as_deref(), name).filter(|_| place) {
-                Some(code) => self.run_fixed(&code).map(|placed| format!("; world placed at its metric scale with the ground at Z = 0: {placed}"))?,
+            let world_note = match crate::library::world_place_code(
+                entry,
+                &label,
+                collider_asset.as_deref(),
+                name,
+            )
+            .filter(|_| place)
+            {
+                Some(code) => self.run_fixed(&code).map(|placed| {
+                    format!("; world placed at its metric scale with the ground at Z = 0: {placed}")
+                })?,
                 None => String::new(),
             };
             self.record_sent(&entry.id, dbv, &label);
@@ -611,43 +965,130 @@ impl McpServer {
     }
 
     /// La malla de colisión de un mundo, importada y, si se pide, colocada. Devuelve la nota para el mensaje y el asset.
-    fn send_collider(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, collider: &str, place: bool) -> Result<(String, Option<String>), String> {
+    fn send_collider(
+        &mut self,
+        entry: &crate::library::LibraryEntry,
+        dbv: &str,
+        name: &str,
+        collider: &str,
+        place: bool,
+    ) -> Result<(String, Option<String>), String> {
         let err = |e: UnrealError| e.to_string();
-        let mesh = self.config.library.file_path(&entry.id, collider).map_err(|e| e.to_string())?;
+        let mesh = self
+            .config
+            .library
+            .file_path(&entry.id, collider)
+            .map_err(|e| e.to_string())?;
         let import_args = json!({ "source_file": mesh.to_string_lossy(), "folder_path": "/Game/DBV/Generated", "asset_name": format!("{name}_Collider") });
-        let imported = self.editor(|s| s.call_toolset_tool(dbv, "import_model", import_args.clone(), std::time::Duration::from_secs(300))).map_err(err)?;
-        let primary = imported.value.as_ref().and_then(|v| v.get("primary")).and_then(Value::as_str).map(str::to_string);
+        let imported = self
+            .editor(|s| {
+                s.call_toolset_tool(
+                    dbv,
+                    "import_model",
+                    import_args.clone(),
+                    std::time::Duration::from_secs(300),
+                )
+            })
+            .map_err(err)?;
+        let primary = imported
+            .value
+            .as_ref()
+            .and_then(|v| v.get("primary"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
         let note = match (primary.clone(), place) {
             (Some(primary), true) => {
-                let place_args = json!({ "asset_path": primary, "distance": 0.0, "folder": "DBV/Generated" });
-                let placed = self.editor(|s| s.call_toolset_tool(dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
-                format!(", with its collider mesh {primary} placed: {}", format(&placed))
+                let place_args =
+                    json!({ "asset_path": primary, "distance": 0.0, "folder": "DBV/Generated" });
+                let placed = self
+                    .editor(|s| {
+                        s.call_toolset_tool(dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)
+                    })
+                    .map_err(err)?;
+                format!(
+                    ", with its collider mesh {primary} placed: {}",
+                    format(&placed)
+                )
             }
             (Some(primary), false) => format!(", with its collider mesh imported as {primary}"),
-            (None, _) => format!("; the collider mesh was not imported: {}", format(&imported)),
+            (None, _) => format!(
+                "; the collider mesh was not imported: {}",
+                format(&imported)
+            ),
         };
         Ok((note, primary))
     }
 
     /// Anota en la biblioteca a qué proyecto se envió.
     fn record_sent(&mut self, id: &str, dbv: &str, asset: &str) {
-        let project = self.editor(|s| s.call_toolset_tool(dbv, "get_project_info", json!({}), DEFAULT_TIMEOUT)).ok().and_then(|r| r.value).and_then(|v| v.get("project_dir").and_then(Value::as_str).map(str::to_string)).unwrap_or_default();
+        let project = self
+            .editor(|s| s.call_toolset_tool(dbv, "get_project_info", json!({}), DEFAULT_TIMEOUT))
+            .ok()
+            .and_then(|r| r.value)
+            .and_then(|v| {
+                v.get("project_dir")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+            .unwrap_or_default();
         let _ = self.config.library.record_sent(id, &project, asset);
     }
 
     /// Un modelo (Static o Skeletal Mesh) importado y colocado delante de la cámara; una prenda solo se equipa en el
     /// MetaHuman indicado y, sin él, se importa y se avisa (nunca se elige «el primero»). @spec REQ-19, REQ-81, REQ-83
-    fn send_model(&mut self, entry: &crate::library::LibraryEntry, dbv: &str, name: &str, file: &str, place: bool, metahuman: &str) -> Result<String, String> {
+    fn send_model(
+        &mut self,
+        entry: &crate::library::LibraryEntry,
+        dbv: &str,
+        name: &str,
+        file: &str,
+        place: bool,
+        metahuman: &str,
+    ) -> Result<String, String> {
         let id = entry.id.as_str();
-        let path = self.config.library.file_path(id, file).map_err(|e| e.to_string())?;
+        let path = self
+            .config
+            .library
+            .file_path(id, file)
+            .map_err(|e| e.to_string())?;
         let err = |e: UnrealError| e.to_string();
         // Mismas carpetas que `sendToUnreal.js`: una prenda va con el `SK_` que crea `equip_metahuman_outfit`.
-        let folder = if entry.parameters.get("garment_slot").is_some_and(Value::is_string) { "/Game/DBV/MetaHumanOutfits" } else { "/Game/DBV/Generated" };
+        let folder = if entry
+            .parameters
+            .get("garment_slot")
+            .is_some_and(Value::is_string)
+        {
+            "/Game/DBV/MetaHumanOutfits"
+        } else {
+            "/Game/DBV/Generated"
+        };
         let import_args = json!({ "source_file": path.to_string_lossy(), "folder_path": folder, "asset_name": name });
-        let imported = self.editor(|s| s.call_toolset_tool(dbv, "import_model", import_args.clone(), std::time::Duration::from_secs(300))).map_err(err)?;
-        let primary = imported.value.as_ref().and_then(|v| v.get("primary")).and_then(Value::as_str).map(str::to_string).ok_or_else(|| format!("import failed: {}", format(&imported)))?;
+        let imported = self
+            .editor(|s| {
+                s.call_toolset_tool(
+                    dbv,
+                    "import_model",
+                    import_args.clone(),
+                    std::time::Duration::from_secs(300),
+                )
+            })
+            .map_err(err)?;
+        let primary = imported
+            .value
+            .as_ref()
+            .and_then(|v| v.get("primary"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| format!("import failed: {}", format(&imported)))?;
         let report = imported.value.clone().unwrap_or(Value::Null);
-        let animations: Vec<String> = report.get("animations").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+        let animations: Vec<String> = report
+            .get("animations")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect();
         let mut message = format!("Imported as {primary}");
         let garment_slot = entry.parameters.get("garment_slot").and_then(Value::as_str);
         if place && garment_slot.is_some() {
@@ -655,26 +1096,56 @@ impl McpServer {
             if metahuman.is_empty() {
                 message.push_str(". It is a MetaHuman garment and no target was given, so it was only imported and NOT equipped: call unreal_list_metahumans, ask the user which character to dress (or use the only one and say so) and call unreal_equip_metahuman_outfit");
             } else {
-                let ran = self.run_fixed(&Self::equip_metahuman_code(metahuman, &primary, slot, 1.05, 0.0))?;
+                let ran = self.run_fixed(&Self::equip_metahuman_code(
+                    metahuman, &primary, slot, 1.05, 0.0,
+                ))?;
                 let res = ran.get("result").cloned().unwrap_or(Value::Null);
                 if res.get("success") != Some(&json!(true)) {
-                    let reason = res.get("error").and_then(Value::as_str).unwrap_or("the garment could not be equipped");
+                    let reason = res
+                        .get("error")
+                        .and_then(Value::as_str)
+                        .unwrap_or("the garment could not be equipped");
                     return Err(format!("imported as {primary}, but not equipped: {reason}"));
                 }
-                let actor = res.get("actor").and_then(Value::as_str).unwrap_or(metahuman);
+                let actor = res
+                    .get("actor")
+                    .and_then(Value::as_str)
+                    .unwrap_or(metahuman);
                 let slot = res.get("slot").and_then(Value::as_str).unwrap_or(slot);
-                let rigged = res.get("rigged_asset").and_then(Value::as_str).unwrap_or(&primary);
-                message.push_str(&format!(" and auto-rigged + equipped on MetaHuman {actor} ({slot}) as {rigged}"));
+                let rigged = res
+                    .get("rigged_asset")
+                    .and_then(Value::as_str)
+                    .unwrap_or(&primary);
+                message.push_str(&format!(
+                    " and auto-rigged + equipped on MetaHuman {actor} ({slot}) as {rigged}"
+                ));
             }
         } else if place {
-            let place_args = json!({ "asset_path": primary, "distance": 300.0, "folder": "DBV/Generated" });
-            let placed = self.editor(|s| s.call_toolset_tool(dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)).map_err(err)?;
+            let place_args =
+                json!({ "asset_path": primary, "distance": 300.0, "folder": "DBV/Generated" });
+            let placed = self
+                .editor(|s| {
+                    s.call_toolset_tool(dbv, "place_asset", place_args.clone(), DEFAULT_TIMEOUT)
+                })
+                .map_err(err)?;
             message.push_str(&format!(" and placed: {}", format(&placed)));
             // Un personaje de Tripo con animaciones se pone a reproducir la primera en el viewport (toolset 0.2.0).
-            let actor = placed.value.as_ref().and_then(|v| v.get("actor")).and_then(Value::as_str).map(str::to_string);
-            if let (Some(actor), Some(first), true) = (actor, animations.first(), report.get("kind").and_then(Value::as_str) == Some("skeletal")) {
-                let play_args = json!({ "actor_label": actor, "animation_path": first, "looping": true });
-                let played = self.editor(|s| s.call_toolset_tool(dbv, "play_animation", play_args.clone(), DEFAULT_TIMEOUT));
+            let actor = placed
+                .value
+                .as_ref()
+                .and_then(|v| v.get("actor"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            if let (Some(actor), Some(first), true) = (
+                actor,
+                animations.first(),
+                report.get("kind").and_then(Value::as_str) == Some("skeletal"),
+            ) {
+                let play_args =
+                    json!({ "actor_label": actor, "animation_path": first, "looping": true });
+                let played = self.editor(|s| {
+                    s.call_toolset_tool(dbv, "play_animation", play_args.clone(), DEFAULT_TIMEOUT)
+                });
                 message.push_str(&match played {
                     Ok(result) if !result.is_error => format!(". Skeletal mesh with {} animation(s); playing {first}", animations.len()),
                     _ => format!(". Skeletal mesh with {} animation(s); the project's DBV toolset is outdated, so it is not playing: ask the user to prepare the project again in the app", animations.len()),
@@ -686,11 +1157,21 @@ impl McpServer {
     }
 
     fn hex_json(payload: &Value) -> String {
-        serde_json::to_string(payload).unwrap_or_else(|_| "{}".into()).bytes().map(|b| format!("{b:02x}")).collect()
+        serde_json::to_string(payload)
+            .unwrap_or_else(|_| "{}".into())
+            .bytes()
+            .map(|b| format!("{b:02x}"))
+            .collect()
     }
 
     /// Código fijo para riggear y equipar una prenda en un MetaHuman del nivel. @spec REQ-81
-    pub fn equip_metahuman_code(actor_label: &str, garment_source: &str, slot: &str, scale_multiplier: f64, z_offset: f64) -> String {
+    pub fn equip_metahuman_code(
+        actor_label: &str,
+        garment_source: &str,
+        slot: &str,
+        scale_multiplier: f64,
+        z_offset: f64,
+    ) -> String {
         let hex = Self::hex_json(&json!({
             "actor_label": actor_label,
             "garment_source": garment_source,
@@ -705,64 +1186,329 @@ impl McpServer {
 
     /// Lista los actores MetaHuman del nivel abierto. @spec REQ-81
     fn list_metahumans(&mut self) -> Result<String, String> {
-        let ran = self.run_fixed("import dbv_unreal_ai.editor as _e\nresult = _e.list_metahumans()\n")?;
+        let ran =
+            self.run_fixed("import dbv_unreal_ai.editor as _e\nresult = _e.list_metahumans()\n")?;
         if ran.get("success") == Some(&json!(true)) {
-            Ok(ran.get("result").cloned().unwrap_or(Value::Null).to_string())
+            Ok(ran
+                .get("result")
+                .cloned()
+                .unwrap_or(Value::Null)
+                .to_string())
         } else {
-            Err(ran.get("error").and_then(Value::as_str).unwrap_or("failed to list MetaHumans").to_string())
+            Err(ran
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("failed to list MetaHumans")
+                .to_string())
         }
     }
 
     /// Riggea y equipa una prenda en un MetaHuman del nivel. @spec REQ-81
     fn equip_metahuman_outfit(&mut self, args: &Value) -> Result<String, String> {
-        let raw_source = args.get("source").and_then(Value::as_str).unwrap_or("").trim();
+        let raw_source = args
+            .get("source")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
         if raw_source.is_empty() {
             return Err("`source` is required (library asset id, local .glb/.fbx path, or /Game/... StaticMesh path)".into());
         }
         // REQ-83: sin destino no se hace nada; el editor enumera los MetaHumans disponibles en el error.
-        let actor_label = args.get("actor_label").and_then(Value::as_str).unwrap_or("").trim();
-        let explicit_slot = args.get("slot").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+        let actor_label = args
+            .get("actor_label")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        let explicit_slot = args
+            .get("slot")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
         let (garment_source, inferred_slot) = match self.config.library.get(raw_source) {
             Some(entry) => {
                 let model = entry
                     .files
                     .iter()
-                    .find(|f| f.ends_with(".glb") || f.ends_with(".gltf") || f.ends_with(".fbx") || f.ends_with(".obj"))
+                    .find(|f| {
+                        f.ends_with(".glb")
+                            || f.ends_with(".gltf")
+                            || f.ends_with(".fbx")
+                            || f.ends_with(".obj")
+                    })
                     .ok_or_else(|| format!("library asset {raw_source} has no 3D mesh file"))?;
-                let path = self.config.library.file_path(&entry.id, model).map_err(|e| e.to_string())?;
-                let slot = entry.parameters.get("garment_slot").and_then(Value::as_str).unwrap_or("Torso").to_string();
+                let path = self
+                    .config
+                    .library
+                    .file_path(&entry.id, model)
+                    .map_err(|e| e.to_string())?;
+                let slot = entry
+                    .parameters
+                    .get("garment_slot")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Torso")
+                    .to_string();
                 (path.to_string_lossy().to_string(), slot)
             }
             None => (raw_source.to_string(), "Torso".to_string()),
         };
         let slot = explicit_slot.unwrap_or(&inferred_slot);
-        let scale_multiplier = args.get("scale_multiplier").and_then(Value::as_f64).unwrap_or(1.05).clamp(0.5, 2.0);
-        let z_offset = args.get("z_offset").and_then(Value::as_f64).unwrap_or(0.0).clamp(-200.0, 200.0);
-        let ran = self.run_fixed(&Self::equip_metahuman_code(actor_label, &garment_source, slot, scale_multiplier, z_offset))?;
+        let scale_multiplier = args
+            .get("scale_multiplier")
+            .and_then(Value::as_f64)
+            .unwrap_or(1.05)
+            .clamp(0.5, 2.0);
+        let z_offset = args
+            .get("z_offset")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0)
+            .clamp(-200.0, 200.0);
+        let ran = self.run_fixed(&Self::equip_metahuman_code(
+            actor_label,
+            &garment_source,
+            slot,
+            scale_multiplier,
+            z_offset,
+        ))?;
         let res = ran.get("result").cloned().unwrap_or(Value::Null);
         if ran.get("success") == Some(&json!(true)) && res.get("success") != Some(&json!(false)) {
             Ok(res.to_string())
         } else {
-            let msg = res.get("error").and_then(Value::as_str).or_else(|| ran.get("error").and_then(Value::as_str)).unwrap_or("failed to equip MetaHuman outfit");
+            let msg = res
+                .get("error")
+                .and_then(Value::as_str)
+                .or_else(|| ran.get("error").and_then(Value::as_str))
+                .unwrap_or("failed to equip MetaHuman outfit");
+            Err(msg.to_string())
+        }
+    }
+
+    /// Código fijo para vestir a un MetaHuman usando el pipeline determinista. @spec REQ-88
+    fn dress_metahuman_code(
+        actor_label: &str,
+        garment_source: &str,
+        garment_kind: &str,
+        garment_cut: Option<&str>,
+        scale_multiplier: f64,
+        z_offset: f64,
+    ) -> String {
+        let hex = Self::hex_json(&json!({
+            "actor_label": actor_label,
+            "garment_source": garment_source,
+            "garment_kind": garment_kind,
+            "garment_cut": garment_cut,
+            "scale_multiplier": scale_multiplier,
+            "z_offset": z_offset,
+        }));
+        format!(
+            "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode(\"utf-8\"))\nresult = _e.dress_metahuman(actor_label=_p[\"actor_label\"], garment_source=_p[\"garment_source\"], garment_kind=_p.get(\"garment_kind\", \"top\"), garment_cut=_p.get(\"garment_cut\"), scale_multiplier=float(_p.get(\"scale_multiplier\", 1.05)), z_offset=float(_p.get(\"z_offset\", 0.0)))\n"
+        )
+    }
+
+    /// Viste a un MetaHuman mediante el pipeline determinista unificado. @spec REQ-88
+    fn dress_metahuman(&mut self, args: &Value) -> Result<String, String> {
+        let raw_source = args
+            .get("source")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        if raw_source.is_empty() {
+            return Err("`source` is required (library asset id, local .glb/.fbx path, or /Game/... StaticMesh path)".into());
+        }
+        let actor_label = args
+            .get("actor_label")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        if actor_label.is_empty() {
+            return Err("`actor_label` is required (see unreal_list_metahumans). Nothing is dressed without an explicit target MetaHuman.".into());
+        }
+        let explicit_kind = args
+            .get("garment_kind")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let explicit_cut = args
+            .get("garment_cut")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+
+        let (garment_source, inferred_kind, inferred_cut) =
+            match self.config.library.get(raw_source) {
+                Some(entry) => {
+                    let model = entry
+                        .files
+                        .iter()
+                        .find(|f| {
+                            f.ends_with(".glb")
+                                || f.ends_with(".gltf")
+                                || f.ends_with(".fbx")
+                                || f.ends_with(".obj")
+                        })
+                        .ok_or_else(|| format!("library asset {raw_source} has no 3D mesh file"))?;
+                    let path = self
+                        .config
+                        .library
+                        .file_path(&entry.id, model)
+                        .map_err(|e| e.to_string())?;
+                    let kind = entry
+                        .parameters
+                        .get("garment_kind")
+                        .and_then(Value::as_str)
+                        .or_else(|| {
+                            entry
+                                .parameters
+                                .get("garment_slot")
+                                .and_then(Value::as_str)
+                                .map(|s| match s {
+                                    "Torso" => "top",
+                                    "Legs" => "pants",
+                                    "Feet" => "shoes",
+                                    _ => "top",
+                                })
+                        })
+                        .unwrap_or("top")
+                        .to_string();
+                    let cut = entry
+                        .parameters
+                        .get("garment_cut")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                    (path.to_string_lossy().to_string(), kind, cut)
+                }
+                None => (raw_source.to_string(), "top".to_string(), None),
+            };
+
+        let kind = explicit_kind.unwrap_or(&inferred_kind);
+        let cut = explicit_cut.or(inferred_cut.as_deref());
+        let scale_multiplier = args
+            .get("scale_multiplier")
+            .and_then(Value::as_f64)
+            .unwrap_or(1.05)
+            .clamp(0.5, 2.0);
+        let z_offset = args
+            .get("z_offset")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0)
+            .clamp(-200.0, 200.0);
+
+        let ran = self.run_fixed(&Self::dress_metahuman_code(
+            actor_label,
+            &garment_source,
+            kind,
+            cut,
+            scale_multiplier,
+            z_offset,
+        ))?;
+        let res = ran.get("result").cloned().unwrap_or(Value::Null);
+        if ran.get("success") == Some(&json!(true)) && res.get("success") != Some(&json!(false)) {
+            Ok(res.to_string())
+        } else {
+            let msg = res
+                .get("error")
+                .and_then(Value::as_str)
+                .or_else(|| ran.get("error").and_then(Value::as_str))
+                .unwrap_or("failed to dress MetaHuman");
+            Err(msg.to_string())
+        }
+    }
+
+    /// Código fijo para validar una prenda equipada en un MetaHuman. @spec REQ-89
+    fn validate_metahuman_outfit_code(
+        actor_label: &str,
+        garment_kind: &str,
+        run_pie: bool,
+        capture_angles: bool,
+    ) -> String {
+        let hex = Self::hex_json(&json!({
+            "actor_label": actor_label,
+            "garment_kind": garment_kind,
+            "run_pie": run_pie,
+            "capture_angles": capture_angles,
+        }));
+        format!(
+            "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode('utf-8'))\nprint(_e.validate_metahuman_outfit(_p['actor_label'], _p.get('garment_kind', 'top'), _p.get('run_pie', False), _p.get('capture_angles', True)))\n"
+        )
+    }
+
+    /// Valida bordes abiertos, holgura, enlace de tela y capturas de una prenda. @spec REQ-89
+    fn validate_metahuman_outfit(&mut self, args: &Value) -> Result<String, String> {
+        let actor_label = args
+            .get("actor_label")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        if actor_label.is_empty() {
+            return Err("`actor_label` is required (see unreal_list_metahumans).".into());
+        }
+        let garment_kind = args
+            .get("garment_kind")
+            .and_then(Value::as_str)
+            .unwrap_or("top")
+            .trim();
+        let run_pie = args
+            .get("run_pie")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let capture_angles = args
+            .get("capture_angles")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+
+        let ran = self.run_fixed(&Self::validate_metahuman_outfit_code(
+            actor_label,
+            garment_kind,
+            run_pie,
+            capture_angles,
+        ))?;
+        let res = ran.get("result").cloned().unwrap_or(Value::Null);
+        if ran.get("success") == Some(&json!(true)) && res.get("success") != Some(&json!(false)) {
+            Ok(res.to_string())
+        } else {
+            let msg = res
+                .get("error")
+                .and_then(Value::as_str)
+                .or_else(|| ran.get("error").and_then(Value::as_str))
+                .unwrap_or("failed to validate MetaHuman outfit");
             Err(msg.to_string())
         }
     }
 
     /// Ejecuta un playtest autónomo en PIE y garantiza detener siempre la sesión (`StopPIE`). @spec REQ-82
     fn playtest(&mut self, args: &Value) -> Value {
-        let duration_secs = args.get("duration_seconds").and_then(Value::as_u64).unwrap_or(5).clamp(1, 15);
+        let duration_secs = args
+            .get("duration_seconds")
+            .and_then(Value::as_u64)
+            .unwrap_or(5)
+            .clamp(1, 15);
         let actions: Vec<String> = args
             .get("actions")
             .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
             .filter(|a: &Vec<String>| !a.is_empty())
             .unwrap_or_else(|| vec!["forward".into(), "jump".into()]);
         let fast_test = self.config.polling.interval < Duration::from_millis(100);
-        let start_res = self.editor(|s| s.call_toolset_tool("EditorToolset.EditorAppToolset", "StartPIE", json!({ "bSimulateInEditor": false }), DEFAULT_TIMEOUT));
+        let start_res = self.editor(|s| {
+            s.call_toolset_tool(
+                "EditorToolset.EditorAppToolset",
+                "StartPIE",
+                json!({ "bSimulateInEditor": false }),
+                DEFAULT_TIMEOUT,
+            )
+        });
         if let Err(err) = start_res {
             return text_result(format!("Could not start PIE: {err}"), true);
         }
-        std::thread::sleep(if fast_test { self.config.polling.interval } else { Duration::from_millis(400) });
+        std::thread::sleep(if fast_test {
+            self.config.polling.interval
+        } else {
+            Duration::from_millis(400)
+        });
         let hex = Self::hex_json(&json!({ "duration_seconds": duration_secs, "actions": actions }));
         let start_code = format!(
             "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode(\"utf-8\"))\nresult = _e.start_pie_playtest_tracker(float(_p[\"duration_seconds\"]), _p[\"actions\"])\n"
@@ -774,7 +1520,9 @@ impl McpServer {
             Duration::from_millis(duration_secs * 1000 + 250)
         });
         let telemetry = self
-            .run_fixed("import dbv_unreal_ai.editor as _e\nresult = _e.read_pie_playtest_telemetry()\n")
+            .run_fixed(
+                "import dbv_unreal_ai.editor as _e\nresult = _e.read_pie_playtest_telemetry()\n",
+            )
             .ok()
             .and_then(|ran| ran.get("result").cloned())
             .unwrap_or_else(|| json!({ "pawn_spawned": false }));
@@ -794,8 +1542,17 @@ impl McpServer {
             })
             .and_then(|r| r.value)
             .unwrap_or_else(|| json!([]));
-        let capture = self.editor(|s| crate::unreal::capture::capture(s, false, false)).ok();
-        let stop_res = self.editor(|s| s.call_toolset_tool("EditorToolset.EditorAppToolset", "StopPIE", json!({}), DEFAULT_TIMEOUT));
+        let capture = self
+            .editor(|s| crate::unreal::capture::capture(s, false, false))
+            .ok();
+        let stop_res = self.editor(|s| {
+            s.call_toolset_tool(
+                "EditorToolset.EditorAppToolset",
+                "StopPIE",
+                json!({}),
+                DEFAULT_TIMEOUT,
+            )
+        });
         let stopped_pie = stop_res.is_ok();
         let report = json!({
             "telemetry": telemetry,
@@ -816,7 +1573,8 @@ impl McpServer {
     }
 
     fn session_spent(&self, service: &str) -> f64 {
-        self.board.spent_since(self.board.session_start(self.started_at), service)
+        self.board
+            .spent_since(self.board.session_start(self.started_at), service)
     }
 
     /// Espera a que los trabajos `ids` terminen (o se acabe `wait`) y devuelve su estado.
@@ -833,7 +1591,10 @@ impl McpServer {
 
     /// Texto para el modelo: el estado de cada trabajo y qué hacer a continuación.
     fn report(&self, records: &[JobRecord]) -> Result<String, String> {
-        let lines: Vec<String> = records.iter().map(|r| describe(r, &self.config.library)).collect();
+        let lines: Vec<String> = records
+            .iter()
+            .map(|r| describe(r, &self.config.library))
+            .collect();
         let running = records.iter().any(JobRecord::is_active);
         let done = records.iter().any(|r| r.stage == "done");
         let text = if running {
@@ -843,11 +1604,17 @@ impl McpServer {
         } else {
             lines.join("\n")
         };
-        if running || done { Ok(text) } else { Err(text) }
+        if running || done {
+            Ok(text)
+        } else {
+            Err(text)
+        }
     }
 
     fn tripo_key(&self) -> Result<String, String> {
-        (self.config.key)("tripo").ok_or_else(|| "there is no Tripo API key: add it in the DBV Unreal AI settings".to_string())
+        (self.config.key)("tripo").ok_or_else(|| {
+            "there is no Tripo API key: add it in the DBV Unreal AI settings".to_string()
+        })
     }
 
     fn client(&self) -> Result<TripoClient, String> {
@@ -865,7 +1632,9 @@ impl McpServer {
 
     /// Saldo de World Labs, con su clave: es otra cuenta y otros créditos que los de Tripo. @spec REQ-18
     fn worldlabs_balance(&self) -> Result<String, String> {
-        let key = (self.config.key)("worldlabs").ok_or("there is no World Labs API key: add it in DBV Unreal AI → Settings → World Labs")?;
+        let key = (self.config.key)("worldlabs").ok_or(
+            "there is no World Labs API key: add it in DBV Unreal AI → Settings → World Labs",
+        )?;
         let client = match &self.config.tripo_base {
             Some(base) => WorldLabsClient::with_base_url(&key, base),
             None => WorldLabsClient::new(&key),
@@ -883,10 +1652,20 @@ impl McpServer {
         let service = crate::generation::service_of(launch.operation.category);
         let name = crate::generation::service_name(service);
         if !free && args.get("confirm_cost").and_then(Value::as_bool) != Some(true) {
-            let each = if launch.variants > 1 { format!(" ({} x {})", launch.variants, total / f64::from(launch.variants)) } else { String::new() };
+            let each = if launch.variants > 1 {
+                format!(
+                    " ({} x {})",
+                    launch.variants,
+                    total / f64::from(launch.variants)
+                )
+            } else {
+                String::new()
+            };
             return Err(format!("not run: {} costs about {total} {name} credits{each}. Tell the user and call again with confirm_cost=true only if they accept.", launch.operation.name));
         }
-        let client_key = (self.config.key)(service).ok_or_else(|| format!("there is no {name} API key: add it in DBV Unreal AI → Settings → {name}"))?;
+        let client_key = (self.config.key)(service).ok_or_else(|| {
+            format!("there is no {name} API key: add it in DBV Unreal AI → Settings → {name}")
+        })?;
         let settings = GenerationSettings::load(&self.config.config_dir);
         let budget = settings.budget_for(service);
         let spent = self.session_spent(service);
@@ -894,7 +1673,14 @@ impl McpServer {
             return Err(format!("not run: it would exceed the {name} session cap of {budget} credits ({spent} already used). The user can raise it in DBV Unreal AI → Settings → {name}. Tripo and World Labs have separate caps and credits."));
         }
         let context = self.job_context(client_key);
-        let ids = start_jobs(&context, launch.operation, &launch.params, &launch.name, launch.variants, launch.parent.clone());
+        let ids = start_jobs(
+            &context,
+            launch.operation,
+            &launch.params,
+            &launch.name,
+            launch.variants,
+            launch.parent.clone(),
+        );
         self.report(&self.wait_for(&ids, self.config.max_wait))
     }
 
@@ -917,11 +1703,23 @@ impl McpServer {
         if !keys.is_empty() {
             resume_orphans(&self.job_context(String::new()), &keys);
         }
-        let wait = Duration::from_secs(args.get("wait_seconds").and_then(Value::as_u64).unwrap_or(0).min(self.config.max_wait.as_secs()));
+        let wait = Duration::from_secs(
+            args.get("wait_seconds")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                .min(self.config.max_wait.as_secs()),
+        );
         let since = self.board.session_start(self.started_at);
         let ids: Vec<String> = match args.get("job_id").and_then(Value::as_str) {
             Some(id) => vec![id.to_string()],
-            None => self.board.list().into_iter().filter(|r| r.started_at >= since).map(|r| r.id).take(20).collect(),
+            None => self
+                .board
+                .list()
+                .into_iter()
+                .filter(|r| r.started_at >= since)
+                .map(|r| r.id)
+                .take(20)
+                .collect(),
         };
         if ids.is_empty() {
             return Ok("no generation jobs in this session".into());
@@ -955,14 +1753,26 @@ impl McpServer {
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": tool_specs() })),
             "tools/call" => {
-                let name = params.get("name").and_then(Value::as_str).unwrap_or("").to_string();
-                let arguments = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+                let name = params
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let arguments = params
+                    .get("arguments")
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
                 // La captura es la única que devuelve una imagen (contenido `image` de MCP, REQ-13).
                 let result = if name == "unreal_capture_viewport" {
-                    let annotate = arguments.get("annotate").and_then(Value::as_bool).unwrap_or(false);
+                    let annotate = arguments
+                        .get("annotate")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
                     let high = arguments.get("detail").and_then(Value::as_str) == Some("high");
                     match self.editor(|s| crate::unreal::capture::capture(s, annotate, high)) {
-                        Ok(capture) => json!({ "content": [{ "type": "image", "data": capture.base64, "mimeType": capture.mime }, { "type": "text", "text": crate::unreal::capture::describe(&capture) }], "isError": false }),
+                        Ok(capture) => {
+                            json!({ "content": [{ "type": "image", "data": capture.base64, "mimeType": capture.mime }, { "type": "text", "text": crate::unreal::capture::describe(&capture) }], "isError": false })
+                        }
                         Err(error) => text_result(error.to_string(), true),
                     }
                 } else if name == "unreal_playtest" {
@@ -981,7 +1791,9 @@ impl McpServer {
         };
         let response = match outcome {
             Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
-            Err((code, message)) => json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } }),
+            Err((code, message)) => {
+                json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+            }
         };
         Some(response.to_string())
     }
@@ -997,14 +1809,28 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
     let mut server = McpServer::new(config_from_args(args));
-    crate::logging::info(&format!("start v{} packaged={} library={} project={}", env!("CARGO_PKG_VERSION"), crate::logging::is_packaged(), server.config.library.root.display(), server.config.project_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_default()));
+    crate::logging::info(&format!(
+        "start v{} packaged={} library={} project={}",
+        env!("CARGO_PKG_VERSION"),
+        crate::logging::is_packaged(),
+        server.config.library.root.display(),
+        server
+            .config
+            .project_dir
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default()
+    ));
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
         let Ok(line) = line else { break };
         if let Some(response) = server.handle(&line) {
             // `to_string` de serde_json nunca mete saltos de línea: una respuesta por línea.
-            if writeln!(stdout, "{response}").and_then(|_| stdout.flush()).is_err() {
+            if writeln!(stdout, "{response}")
+                .and_then(|_| stdout.flush())
+                .is_err()
+            {
                 break;
             }
         }
@@ -1022,10 +1848,20 @@ mod tests {
     fn las_consultas_van_anotadas_como_solo_lectura() {
         let specs = tool_specs();
         for name in READ_ONLY_TOOLS {
-            let spec = specs.iter().find(|s| s["name"] == name).unwrap_or_else(|| panic!("{name} no existe"));
+            let spec = specs
+                .iter()
+                .find(|s| s["name"] == name)
+                .unwrap_or_else(|| panic!("{name} no existe"));
             assert_eq!(spec["annotations"]["readOnlyHint"], true, "{name}");
         }
-        for name in ["unreal_call_tool", "unreal_run_python", "library_send_to_unreal", "generate_3d_model", "compile_project_code", "project_memory_propose"] {
+        for name in [
+            "unreal_call_tool",
+            "unreal_run_python",
+            "library_send_to_unreal",
+            "generate_3d_model",
+            "compile_project_code",
+            "project_memory_propose",
+        ] {
             let spec = specs.iter().find(|s| s["name"] == name).unwrap();
             assert_eq!(spec["annotations"]["readOnlyHint"], false, "{name}");
         }
@@ -1037,7 +1873,10 @@ mod tests {
             library: Library::new(dir.join("library")),
             config_dir: dir.to_path_buf(),
             data_dir: dir.to_path_buf(),
-            polling: Polling { interval: Duration::from_millis(1), max_wait: Duration::from_secs(5) },
+            polling: Polling {
+                interval: Duration::from_millis(1),
+                max_wait: Duration::from_secs(5),
+            },
             max_wait: Duration::from_secs(5),
             key: Box::new(|_| None),
             tripo_base: None,
@@ -1046,7 +1885,15 @@ mod tests {
     }
 
     fn rpc(server: &mut McpServer, method: &str, params: Value) -> Value {
-        serde_json::from_str(&server.handle(&json!({ "jsonrpc": "2.0", "id": 7, "method": method, "params": params }).to_string()).unwrap()).unwrap()
+        serde_json::from_str(
+            &server
+                .handle(
+                    &json!({ "jsonrpc": "2.0", "id": 7, "method": method, "params": params })
+                        .to_string(),
+                )
+                .unwrap(),
+        )
+        .unwrap()
     }
 
     /// @spec REQ-20
@@ -1054,12 +1901,33 @@ mod tests {
     fn se_presenta_y_lista_sus_herramientas() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        let init = rpc(&mut s, "initialize", json!({ "protocolVersion": "2025-03-26" }));
+        let init = rpc(
+            &mut s,
+            "initialize",
+            json!({ "protocolVersion": "2025-03-26" }),
+        );
         assert_eq!(init["result"]["protocolVersion"], "2025-03-26");
         assert_eq!(init["result"]["serverInfo"]["name"], "dbv-unreal-ai");
         let tools = rpc(&mut s, "tools/list", json!({}));
-        let names: Vec<&str> = tools["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-        for expected in ["unreal_run_python", "generate_3d_model", "image_to_3d_model", "rig_model", "animate_model", "tripo_run", "tripo_operations", "tripo_balance", "worldlabs_balance", "generation_jobs", "library_send_to_unreal"] {
+        let names: Vec<&str> = tools["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
+        for expected in [
+            "unreal_run_python",
+            "generate_3d_model",
+            "image_to_3d_model",
+            "rig_model",
+            "animate_model",
+            "tripo_run",
+            "tripo_operations",
+            "tripo_balance",
+            "worldlabs_balance",
+            "generation_jobs",
+            "library_send_to_unreal",
+        ] {
             assert!(names.contains(&expected), "{expected}");
         }
     }
@@ -1069,10 +1937,20 @@ mod tests {
     fn respeta_las_reglas_de_stdio() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        assert_eq!(s.handle(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#), None, "no se responde a una notificación");
-        assert_eq!(s.handle(r#"{"jsonrpc":"2.0","id":null,"method":"ping"}"#), None, "nunca se responde con id null");
+        assert_eq!(
+            s.handle(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#),
+            None,
+            "no se responde a una notificación"
+        );
+        assert_eq!(
+            s.handle(r#"{"jsonrpc":"2.0","id":null,"method":"ping"}"#),
+            None,
+            "nunca se responde con id null"
+        );
         assert_eq!(s.handle("   "), None);
-        let response = s.handle(r#"{"jsonrpc":"2.0","id":"a","method":"ping"}"#).unwrap();
+        let response = s
+            .handle(r#"{"jsonrpc":"2.0","id":"a","method":"ping"}"#)
+            .unwrap();
         assert!(!response.contains('\n'), "una respuesta por línea");
         assert_eq!(serde_json::from_str::<Value>(&response).unwrap()["id"], "a");
         let unknown = rpc(&mut s, "resources/list", json!({}));
@@ -1084,15 +1962,36 @@ mod tests {
     fn generar_exige_confirmar_el_coste_y_una_clave() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "variants": 3 } }));
+        let call = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "variants": 3 } }),
+        );
         assert_eq!(call["result"]["isError"], true);
         let text = call["result"]["content"][0]["text"].as_str().unwrap();
-        assert!(text.contains("confirm_cost=true") && text.contains("60") && text.contains("3 x 20"), "avisa del coste TOTAL de las variantes: {text}");
-        let no_key = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "confirm_cost": true } }));
-        assert!(no_key["result"]["content"][0]["text"].as_str().unwrap().contains("no Tripo API key"));
+        assert!(
+            text.contains("confirm_cost=true") && text.contains("60") && text.contains("3 x 20"),
+            "avisa del coste TOTAL de las variantes: {text}"
+        );
+        let no_key = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "confirm_cost": true } }),
+        );
+        assert!(no_key["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("no Tripo API key"));
         // REQ-28: sin nombre no se genera; el modelo debe dar uno corto, no el prompt.
-        let nameless = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "confirm_cost": true } }));
-        assert!(nameless["result"]["content"][0]["text"].as_str().unwrap().contains("`name` is required"));
+        let nameless = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "confirm_cost": true } }),
+        );
+        assert!(nameless["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("`name` is required"));
     }
 
     /// Un agente lee y guarda la memoria del proyecto que le dio `--project`; el asistente integrado ve las
@@ -1102,18 +2001,45 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
         let listed = rpc(&mut s, "tools/list", json!({}));
-        let names: Vec<String> = listed["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect();
+        let names: Vec<String> = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap().to_string())
+            .collect();
         for spec in memory_tools::specs() {
-            assert!(names.contains(&spec["name"].as_str().unwrap().to_string()), "{}", spec["name"]);
+            assert!(
+                names.contains(&spec["name"].as_str().unwrap().to_string()),
+                "{}",
+                spec["name"]
+            );
         }
-        let none = rpc(&mut s, "tools/call", json!({ "name": "project_memory_read", "arguments": {} }));
-        assert!(none["result"]["content"][0]["text"].as_str().unwrap().contains("has no memory yet"));
+        let none = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "project_memory_read", "arguments": {} }),
+        );
+        assert!(none["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("has no memory yet"));
         std::fs::create_dir_all(dir.path().join("project")).unwrap();
         crate::project_memory::activate(&dir.path().join("project")).unwrap();
-        let saved = rpc(&mut s, "tools/call", json!({ "name": "project_memory_propose", "arguments": { "section": "Conventions", "entry": "Props go in /Game/DBV/Props" } }));
+        let saved = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "project_memory_propose", "arguments": { "section": "Conventions", "entry": "Props go in /Game/DBV/Props" } }),
+        );
         assert_eq!(saved["result"]["isError"], false, "{saved}");
-        let read = rpc(&mut s, "tools/call", json!({ "name": "project_memory_read", "arguments": { "file": "memory" } }));
-        assert!(read["result"]["content"][0]["text"].as_str().unwrap().contains("- Props go in /Game/DBV/Props"));
+        let read = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "project_memory_read", "arguments": { "file": "memory" } }),
+        );
+        assert!(read["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("- Props go in /Game/DBV/Props"));
     }
 
     /// @spec REQ-20, REQ-17
@@ -1121,12 +2047,44 @@ mod tests {
     fn lista_la_biblioteca_y_explica_un_editor_apagado() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        s.config.library.add(LibraryEntry { id: "cofre-1".into(), name: "Cofre".into(), provider: "tripo".into(), kind: "model".into(), prompt: "treasure chest".into(), parameters: Value::Null, task_id: "t".into(), created_at: 1, credits: None, files: vec!["model.glb".into()], thumbnail: None, sent_to: vec![], parent: None, output: Value::Null }).unwrap();
-        let listed = rpc(&mut s, "tools/call", json!({ "name": "library_list", "arguments": { "filter": "chest" } }));
-        assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("cofre-1"));
-        let offline = rpc(&mut s, "tools/call", json!({ "name": "unreal_list_toolsets", "arguments": {} }));
+        s.config
+            .library
+            .add(LibraryEntry {
+                id: "cofre-1".into(),
+                name: "Cofre".into(),
+                provider: "tripo".into(),
+                kind: "model".into(),
+                prompt: "treasure chest".into(),
+                parameters: Value::Null,
+                task_id: "t".into(),
+                created_at: 1,
+                credits: None,
+                files: vec!["model.glb".into()],
+                thumbnail: None,
+                sent_to: vec![],
+                parent: None,
+                output: Value::Null,
+            })
+            .unwrap();
+        let listed = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "library_list", "arguments": { "filter": "chest" } }),
+        );
+        assert!(listed["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("cofre-1"));
+        let offline = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "unreal_list_toolsets", "arguments": {} }),
+        );
         assert_eq!(offline["result"]["isError"], true);
-        assert!(offline["result"]["content"][0]["text"].as_str().unwrap().contains("no se pudo conectar"));
+        assert!(offline["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("no se pudo conectar"));
     }
 
     /// Si Tripo rechaza la petición no se crea tarea: el tope de la sesión no se consume (hallazgo de `/code-simplify`).
@@ -1138,22 +2096,68 @@ mod tests {
         use crate::unreal::mcp_client::tests::{fake_server, http};
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        s.config.key = Box::new(|service| Some(if service == "worldlabs" { "wl-key".into() } else { "tripo-key".into() }));
-        let ask = rpc(&mut s, "tools/call", json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad" } }));
-        assert!(ask["result"]["content"][0]["text"].as_str().unwrap().contains("1580 World Labs credits"), "{ask}");
+        s.config.key = Box::new(|service| {
+            Some(if service == "worldlabs" {
+                "wl-key".into()
+            } else {
+                "tripo-key".into()
+            })
+        });
+        let ask = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad" } }),
+        );
+        assert!(
+            ask["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("1580 World Labs credits"),
+            "{ask}"
+        );
 
         // El tope de Tripo por defecto es 300 y un mundo cuesta 1.580: no lo frena (World Labs tiene el suyo, 2.000).
-        let (api, handle) = fake_server(vec![http("401 Unauthorized", "", r#"{"error":{"message":"No API key found in request"}}"#)]);
+        let (api, handle) = fake_server(vec![http(
+            "401 Unauthorized",
+            "",
+            r#"{"error":{"message":"No API key found in request"}}"#,
+        )]);
         s.config.tripo_base = Some(api.trim_end_matches("/mcp").to_string());
-        rpc(&mut s, "tools/call", json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad", "confirm_cost": true } }));
+        rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad", "confirm_cost": true } }),
+        );
         let seen = handle.join().unwrap();
-        assert!(seen[0].starts_with("POST /marble/v1/worlds:generate"), "{}", seen[0]);
-        assert!(seen[0].contains("wlt-api-key: wl-key") && !seen[0].contains("tripo-key"), "la clave de World Labs, con su cabecera, no la de Tripo");
+        assert!(
+            seen[0].starts_with("POST /marble/v1/worlds:generate"),
+            "{}",
+            seen[0]
+        );
+        assert!(
+            seen[0].contains("wlt-api-key: wl-key") && !seen[0].contains("tripo-key"),
+            "la clave de World Labs, con su cabecera, no la de Tripo"
+        );
 
         // Con su tope por debajo del coste, se frena y lo dice con su nombre.
-        GenerationSettings { worldlabs_budget_credits: 1000.0, ..GenerationSettings::default() }.save(dir.path()).unwrap();
-        let capped = rpc(&mut s, "tools/call", json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad", "confirm_cost": true } }));
-        assert!(capped["result"]["content"][0]["text"].as_str().unwrap().contains("World Labs session cap of 1000"), "{capped}");
+        GenerationSettings {
+            worldlabs_budget_credits: 1000.0,
+            ..GenerationSettings::default()
+        }
+        .save(dir.path())
+        .unwrap();
+        let capped = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generate_world", "arguments": { "prompt": "ciudad", "name": "Ciudad", "confirm_cost": true } }),
+        );
+        assert!(
+            capped["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("World Labs session cap of 1000"),
+            "{capped}"
+        );
     }
 
     /// El agente consulta el saldo de World Labs con su clave, no el de Tripo (2026-11-01: Antigravity llamaba a
@@ -1164,30 +2168,72 @@ mod tests {
         assert!(READ_ONLY_TOOLS.contains(&"worldlabs_balance"));
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        let none = rpc(&mut s, "tools/call", json!({ "name": "worldlabs_balance", "arguments": {} }));
-        assert!(none["result"]["content"][0]["text"].as_str().unwrap().contains("no World Labs API key"), "{none}");
+        let none = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "worldlabs_balance", "arguments": {} }),
+        );
+        assert!(
+            none["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("no World Labs API key"),
+            "{none}"
+        );
 
-        s.config.key = Box::new(|service| Some(if service == "worldlabs" { "wl-key".into() } else { "tripo-key".into() }));
+        s.config.key = Box::new(|service| {
+            Some(if service == "worldlabs" {
+                "wl-key".into()
+            } else {
+                "tripo-key".into()
+            })
+        });
         let (api, handle) = fake_server(vec![http("200 OK", "", r#"{"remaining_credits":4200}"#)]);
         s.config.tripo_base = Some(api.trim_end_matches("/mcp").to_string());
-        let ok = rpc(&mut s, "tools/call", json!({ "name": "worldlabs_balance", "arguments": {} }));
-        assert!(ok["result"]["content"][0]["text"].as_str().unwrap().contains("World Labs balance: 4200 credits available"), "{ok}");
+        let ok = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "worldlabs_balance", "arguments": {} }),
+        );
+        assert!(
+            ok["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("World Labs balance: 4200 credits available"),
+            "{ok}"
+        );
         let seen = handle.join().unwrap();
-        assert!(seen[0].starts_with("GET /marble/v1/credits") && seen[0].contains("wlt-api-key: wl-key"), "{}", seen[0]);
+        assert!(
+            seen[0].starts_with("GET /marble/v1/credits")
+                && seen[0].contains("wlt-api-key: wl-key"),
+            "{}",
+            seen[0]
+        );
     }
 
     /// @spec RNF-04
     #[test]
     fn un_rechazo_de_tripo_no_consume_el_tope() {
         use crate::unreal::mcp_client::tests::{fake_server, http};
-        let (api, handle) = fake_server(vec![http("401 Unauthorized", "", r#"{"code":1002,"message":"invalid api key"}"#)]);
+        let (api, handle) = fake_server(vec![http(
+            "401 Unauthorized",
+            "",
+            r#"{"code":1002,"message":"invalid api key"}"#,
+        )]);
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
         s.config.key = Box::new(|_| Some("sk-mala".into()));
         s.config.tripo_base = Some(api.trim_end_matches("/mcp").to_string());
-        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "confirm_cost": true } }));
+        let call = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generate_3d_model", "arguments": { "prompt": "cofre", "name": "Cofre", "confirm_cost": true } }),
+        );
         assert_eq!(call["result"]["isError"], true);
-        assert!(call["result"]["content"][0]["text"].as_str().unwrap().contains("invalid api key"));
+        assert!(call["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("invalid api key"));
         assert_eq!(s.session_spent("tripo"), 0.0);
         handle.join().unwrap();
     }
@@ -1212,7 +2258,14 @@ mod tests {
                     received.extend_from_slice(&buffer[..read]);
                     let text = String::from_utf8_lossy(&received).to_string();
                     let complete = text.find("\r\n\r\n").is_some_and(|end| {
-                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
+                        let length = text[..end]
+                            .lines()
+                            .find_map(|l| {
+                                l.to_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                            })
+                            .unwrap_or(0);
                         received.len() >= end + 4 + length
                     });
                     if complete || read == 0 {
@@ -1225,7 +2278,9 @@ mod tests {
                 } else if request.starts_with("GET /m.glb") {
                     "glb".to_string()
                 } else {
-                    format!(r#"{{"code":0,"data":{{"status":"success","progress":100,"output":{{"model_url":"{model_url}"}}}}}}"#)
+                    format!(
+                        r#"{{"code":0,"data":{{"status":"success","progress":100,"output":{{"model_url":"{model_url}"}}}}}}"#
+                    )
                 };
                 let _ = write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
             }
@@ -1241,18 +2296,47 @@ mod tests {
         let mut s = server(dir.path());
         s.config.key = Box::new(|_| Some("sk-ok".into()));
         s.config.tripo_base = Some(api);
-        let call = rpc(&mut s, "tools/call", json!({ "name": "generate_3d_model", "arguments": { "prompt": "stylized pirate in T-pose", "name": "Pirata", "variants": 2, "confirm_cost": true } }));
-        let text = call["result"]["content"][0]["text"].as_str().unwrap().to_string();
+        let call = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generate_3d_model", "arguments": { "prompt": "stylized pirate in T-pose", "name": "Pirata", "variants": 2, "confirm_cost": true } }),
+        );
+        let text = call["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert_eq!(call["result"]["isError"], false, "{text}");
-        assert!(text.contains("\"Pirata\"") && text.contains("\"Pirata 2\""), "{text}");
+        assert!(
+            text.contains("\"Pirata\"") && text.contains("\"Pirata 2\""),
+            "{text}"
+        );
         assert_eq!(s.config.library.list().len(), 2);
         let jobs = s.board.list();
         assert_eq!(jobs.len(), 2);
-        assert!(jobs.iter().all(|j| j.source == "agent" && j.stage == "done" && j.request["prompt"] == "stylized pirate in T-pose" && j.log.iter().any(|l| l.contains("POST /generation/text-to-model"))));
-        assert!(!serde_json::to_string(&jobs).unwrap().contains("sk-ok"), "la clave nunca llega a los ficheros de trabajo");
-        assert_eq!(s.session_spent("tripo"), 40.0, "2 × 20 (texto con textura, tabla oficial)");
-        let listed = rpc(&mut s, "tools/call", json!({ "name": "generation_jobs", "arguments": {} }));
-        assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("[done"));
+        assert!(jobs.iter().all(|j| j.source == "agent"
+            && j.stage == "done"
+            && j.request["prompt"] == "stylized pirate in T-pose"
+            && j.log
+                .iter()
+                .any(|l| l.contains("POST /generation/text-to-model"))));
+        assert!(
+            !serde_json::to_string(&jobs).unwrap().contains("sk-ok"),
+            "la clave nunca llega a los ficheros de trabajo"
+        );
+        assert_eq!(
+            s.session_spent("tripo"),
+            40.0,
+            "2 × 20 (texto con textura, tabla oficial)"
+        );
+        let listed = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "generation_jobs", "arguments": {} }),
+        );
+        assert!(listed["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("[done"));
         api_handle.join().unwrap();
     }
 
@@ -1268,65 +2352,136 @@ mod tests {
         s.config.tripo_base = Some(api);
         let call = |s: &mut McpServer, name: &str, args: Value| {
             let response = rpc(s, "tools/call", json!({ "name": name, "arguments": args }));
-            (response["result"]["isError"] == true, response["result"]["content"][0]["text"].as_str().unwrap_or("").to_string())
+            (
+                response["result"]["isError"] == true,
+                response["result"]["content"][0]["text"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string(),
+            )
         };
-        let (_, made) = call(&mut s, "generate_3d_model", json!({ "prompt": "pirate in T-pose", "name": "Pirata", "confirm_cost": true }));
+        let (_, made) = call(
+            &mut s,
+            "generate_3d_model",
+            json!({ "prompt": "pirate in T-pose", "name": "Pirata", "confirm_cost": true }),
+        );
         let model = s.config.library.list()[0].clone();
         assert!(made.contains(&model.id));
 
         let (refused, price) = call(&mut s, "rig_model", json!({ "id": model.id }));
-        assert!(refused && price.contains("25"), "sin confirmar no gasta y dice el precio: {price}");
-        let (failed, rigged) = call(&mut s, "rig_model", json!({ "id": model.id, "confirm_cost": true }));
+        assert!(
+            refused && price.contains("25"),
+            "sin confirmar no gasta y dice el precio: {price}"
+        );
+        let (failed, rigged) = call(
+            &mut s,
+            "rig_model",
+            json!({ "id": model.id, "confirm_cost": true }),
+        );
         assert!(!failed, "{rigged}");
-        let rig = s.config.library.list().into_iter().find(|e| e.kind == "rig").unwrap();
-        assert_eq!((rig.name.as_str(), rig.parent.as_deref()), ("Pirata (rig)", Some(model.id.as_str())));
+        let rig = s
+            .config
+            .library
+            .list()
+            .into_iter()
+            .find(|e| e.kind == "rig")
+            .unwrap();
+        assert_eq!(
+            (rig.name.as_str(), rig.parent.as_deref()),
+            ("Pirata (rig)", Some(model.id.as_str()))
+        );
 
-        let (failed, danced) = call(&mut s, "animate_model", json!({ "id": rig.id, "animations": ["dance_01", "wave_goodbye_01"], "confirm_cost": true }));
+        let (failed, danced) = call(
+            &mut s,
+            "animate_model",
+            json!({ "id": rig.id, "animations": ["dance_01", "wave_goodbye_01"], "confirm_cost": true }),
+        );
         assert!(!failed, "{danced}");
-        let animation = s.config.library.list().into_iter().find(|e| e.kind == "animation").unwrap();
+        let animation = s
+            .config
+            .library
+            .list()
+            .into_iter()
+            .find(|e| e.kind == "animation")
+            .unwrap();
         assert_eq!(animation.parent.as_deref(), Some(rig.id.as_str()));
         let jobs = s.board.list();
         let rig_job = jobs.iter().find(|j| j.kind == "rig").unwrap();
-        assert_eq!(rig_job.request["input"], model.task_id, "el rig usa la tarea del modelo");
+        assert_eq!(
+            rig_job.request["input"], model.task_id,
+            "el rig usa la tarea del modelo"
+        );
         assert_eq!(rig_job.request["spec"], "tripo");
         let retarget = jobs.iter().find(|j| j.kind == "retarget").unwrap();
-        assert_eq!(retarget.request["input"], rig.task_id, "las animaciones usan la tarea del rig");
-        assert_eq!(retarget.request["animations"], json!(["preset:biped:dance_01", "preset:biped:wave_goodbye_01"]));
+        assert_eq!(
+            retarget.request["input"], rig.task_id,
+            "las animaciones usan la tarea del rig"
+        );
+        assert_eq!(
+            retarget.request["animations"],
+            json!(["preset:biped:dance_01", "preset:biped:wave_goodbye_01"])
+        );
         assert_eq!(s.session_spent("tripo"), 20.0 + 25.0 + 20.0);
         api_handle.join().unwrap();
     }
 
     #[test]
     fn resuelve_toolsets_por_su_final() {
-        let names = vec!["editor_toolset.toolsets.scene.SceneTools".to_string(), "EditorToolset.EditorAppToolset".to_string()];
-        assert_eq!(resolve_toolset("SceneTools", &names).as_deref(), Some("editor_toolset.toolsets.scene.SceneTools"));
-        assert_eq!(resolve_toolset("editortoolset.editorapptoolset", &names).as_deref(), Some("EditorToolset.EditorAppToolset"));
+        let names = vec![
+            "editor_toolset.toolsets.scene.SceneTools".to_string(),
+            "EditorToolset.EditorAppToolset".to_string(),
+        ];
+        assert_eq!(
+            resolve_toolset("SceneTools", &names).as_deref(),
+            Some("editor_toolset.toolsets.scene.SceneTools")
+        );
+        assert_eq!(
+            resolve_toolset("editortoolset.editorapptoolset", &names).as_deref(),
+            Some("EditorToolset.EditorAppToolset")
+        );
         assert_eq!(resolve_toolset("Nope", &names), None);
     }
 
     #[test]
     fn lee_los_argumentos_de_la_linea_de_comandos() {
-        let args: Vec<String> = ["app", "--mcp", "--port", "8123"].iter().map(|s| s.to_string()).collect();
-        assert_eq!(config_from_args(&args).unreal_url, "http://127.0.0.1:8123/mcp");
+        let args: Vec<String> = ["app", "--mcp", "--port", "8123"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(
+            config_from_args(&args).unreal_url,
+            "http://127.0.0.1:8123/mcp"
+        );
     }
 
-    const RECORDED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/unreal-mcp/ue-5.8.4");
+    const RECORDED: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../tests/fixtures/unreal-mcp/ue-5.8.4"
+    );
 
     /// Una respuesta grabada del editor real (JSON-RPC entero).
     fn recorded(file: &str) -> Value {
-        serde_json::from_str(&std::fs::read_to_string(format!("{RECORDED}/{file}")).unwrap()).unwrap()
+        serde_json::from_str(&std::fs::read_to_string(format!("{RECORDED}/{file}")).unwrap())
+            .unwrap()
     }
 
     /// Texto de una respuesta `tools/call` grabada.
     fn recorded_text(file: &str) -> String {
-        recorded(file)["result"]["content"][0]["text"].as_str().unwrap().to_string()
+        recorded(file)["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string()
     }
 
     /// PNG del tamaño de una captura real del editor (1944×617).
     fn capture_png() -> String {
-        let image = image::RgbImage::from_fn(1944, 617, |x, y| image::Rgb([(x % 251) as u8, (y % 241) as u8, ((x + y) % 239) as u8]));
+        let image = image::RgbImage::from_fn(1944, 617, |x, y| {
+            image::Rgb([(x % 251) as u8, (y % 241) as u8, ((x + y) % 239) as u8])
+        });
         let mut out = std::io::Cursor::new(Vec::new());
-        image::DynamicImage::ImageRgb8(image).write_to(&mut out, image::ImageFormat::Png).unwrap();
+        image::DynamicImage::ImageRgb8(image)
+            .write_to(&mut out, image::ImageFormat::Png)
+            .unwrap();
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, out.into_inner())
     }
 
@@ -1352,7 +2507,14 @@ mod tests {
                     received.extend_from_slice(&buffer[..read]);
                     let text = String::from_utf8_lossy(&received).to_string();
                     let complete = text.find("\r\n\r\n").is_some_and(|end| {
-                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
+                        let length = text[..end]
+                            .lines()
+                            .find_map(|l| {
+                                l.to_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                            })
+                            .unwrap_or(0);
                         received.len() >= end + 4 + length
                     });
                     if complete || read == 0 {
@@ -1360,7 +2522,10 @@ mod tests {
                     }
                 }
                 let request = String::from_utf8_lossy(&received).to_string();
-                let body: Value = request.split_once("\r\n\r\n").and_then(|(_, b)| serde_json::from_str(b).ok()).unwrap_or(Value::Null);
+                let body: Value = request
+                    .split_once("\r\n\r\n")
+                    .and_then(|(_, b)| serde_json::from_str(b).ok())
+                    .unwrap_or(Value::Null);
                 let id = body.get("id").cloned().unwrap_or(Value::Null);
                 let params = &body["params"];
                 let reply = |text: String| json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": text }] } });
@@ -1384,8 +2549,8 @@ mod tests {
                                 let code = args["arguments"]["code"].as_str().unwrap_or("");
                                 let result_val = if code.contains("list_metahumans") {
                                     json!({ "count": 2, "metahumans": [{ "label": "BP_Victoria_med_nrw_55", "build": "f_med_nrw", "slots": { "Torso": "/Game/MetaHumans/Common/Shirt" } }] })
-                                } else if code.contains("equip_metahuman_outfit") {
-                                    json!({ "success": true, "actor": "BP_Victoria_med_nrw_55", "slot": "Torso", "rigged_asset": "/Game/DBV/MetaHumanOutfits/Chaqueta_Rigged_f_med_nrw", "has_bone_weights": true })
+                                } else if code.contains("equip_metahuman_outfit") || code.contains("dress_metahuman") {
+                                    json!({ "success": true, "actor": "BP_Victoria_med_nrw_55", "slot": "Torso", "garment_kind": "top", "method": "bones", "rigged_asset": "/Game/DBV/MetaHumanOutfits/Chaqueta_Rigged_f_med_nrw", "has_bone_weights": true })
                                 } else if code.contains("read_pie_playtest_telemetry") {
                                     json!({ "pawn_spawned": true, "pawn_class": "BP_ThirdPersonCharacter_C", "start_location": [0.0, 0.0, 91.7], "end_location": [618.0, 0.0, 101.6], "distance_moved_cm": 618.0, "fell_out_of_world": false, "avg_fps": 60.0, "frames": 300, "actions_executed": ["forward", "jump"] })
                                 } else {
@@ -1413,7 +2578,17 @@ mod tests {
 
     /// Caracteres que vuelven al modelo en un resultado MCP: texto más el base64 de las imágenes.
     fn returned(result: &Value) -> usize {
-        result["content"].as_array().unwrap().iter().map(|c| c["text"].as_str().or(c["data"].as_str()).map_or(0, |t| t.chars().count())).sum()
+        result["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| {
+                c["text"]
+                    .as_str()
+                    .or(c["data"].as_str())
+                    .map_or(0, |t| t.chars().count())
+            })
+            .sum()
     }
 
     /// El guion fijo de REQ-51 contra el editor simulado con respuestas reales: la v0.3.0 devuelve como mucho la mitad
@@ -1425,12 +2600,26 @@ mod tests {
         let mut s = server(dir.path());
         s.config.unreal_url = fake_editor().0;
         s.config.project_dir = Some(dir.path().join("Demo"));
-        let describes = ["EditorToolset.EditorAppToolset", "ConvaiToolset.ConvaiSetupToolset", "NiagaraToolsets.NiagaraToolset_System"];
+        let describes = [
+            "EditorToolset.EditorAppToolset",
+            "ConvaiToolset.ConvaiSetupToolset",
+            "NiagaraToolsets.NiagaraToolset_System",
+        ];
         let mut script: Vec<(&str, Value)> = vec![("unreal_list_toolsets", json!({}))];
-        script.extend(describes.iter().map(|t| ("unreal_describe_toolset", json!({ "toolset": t.rsplit('.').next().unwrap() }))));
+        script.extend(describes.iter().map(|t| {
+            (
+                "unreal_describe_toolset",
+                json!({ "toolset": t.rsplit('.').next().unwrap() }),
+            )
+        }));
         script.push(("unreal_scene_summary", json!({})));
         script.push(("unreal_capture_viewport", json!({})));
-        script.extend((0..5).map(|i| ("unreal_run_python", json!({ "code": format!("import unreal\nresult = {i}") }))));
+        script.extend((0..5).map(|i| {
+            (
+                "unreal_run_python",
+                json!({ "code": format!("import unreal\nresult = {i}") }),
+            )
+        }));
 
         let mut now = 0;
         let mut now_text = 0;
@@ -1438,36 +2627,78 @@ mod tests {
         let mut python_text = 0;
         let mut capture_text = 0;
         for (name, args) in &script {
-            let response = rpc(&mut s, "tools/call", json!({ "name": name, "arguments": args }));
+            let response = rpc(
+                &mut s,
+                "tools/call",
+                json!({ "name": name, "arguments": args }),
+            );
             let result = &response["result"];
             assert_eq!(result["isError"], false, "{name}: {result}");
             let size = returned(result);
             now += size;
-            now_text += result["content"].as_array().unwrap().iter().filter_map(|c| c["text"].as_str()).map(|t| t.chars().count()).sum::<usize>();
+            now_text += result["content"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|c| c["text"].as_str())
+                .map(|t| t.chars().count())
+                .sum::<usize>();
             match *name {
                 "unreal_list_toolsets" => list_text = size,
                 "unreal_run_python" => python_text += size,
-                "unreal_capture_viewport" => capture_text = result["content"][1]["text"].as_str().unwrap().chars().count(),
+                "unreal_capture_viewport" => {
+                    capture_text = result["content"][1]["text"]
+                        .as_str()
+                        .unwrap()
+                        .chars()
+                        .count()
+                }
                 _ => {}
             }
         }
 
         // La v0.2.4: mismo listado y mismo Python; cada toolset en JSON entero; la escena por `unreal_call_tool` con el
         // valor entero; la captura a 1568 px y calidad 85.
-        let described: usize = describes.iter().map(|t| serde_json::to_string(&crate::unreal::mcp_client::parse_toolset_info(&recorded_text(&format!("describe_toolset.{t}.response.json"))).unwrap()).unwrap().chars().count()).sum();
-        let scene = crate::unreal::mcp_client::unwrap_value(serde_json::from_str(&recorded_text("call_tool.get_scene_summary.response.json")).unwrap()).to_string().chars().count();
-        let png = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, capture_png()).unwrap();
+        let described: usize = describes
+            .iter()
+            .map(|t| {
+                serde_json::to_string(
+                    &crate::unreal::mcp_client::parse_toolset_info(&recorded_text(&format!(
+                        "describe_toolset.{t}.response.json"
+                    )))
+                    .unwrap(),
+                )
+                .unwrap()
+                .chars()
+                .count()
+            })
+            .sum();
+        let scene = crate::unreal::mcp_client::unwrap_value(
+            serde_json::from_str(&recorded_text("call_tool.get_scene_summary.response.json"))
+                .unwrap(),
+        )
+        .to_string()
+        .chars()
+        .count();
+        let png = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, capture_png())
+            .unwrap();
         let (jpeg, _, _) = crate::unreal::capture::shrink(&png, true).unwrap();
-        let old_capture = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, jpeg).len() + capture_text;
+        let old_capture = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, jpeg)
+            .len()
+            + capture_text;
         let baseline = list_text + described + scene + old_capture + python_text;
 
         // La cifra de la prueba de consumo, visible con `cargo test el_guion_fijo -- --nocapture`.
         let baseline_text = list_text + described + scene + capture_text + python_text;
         println!("REQ-51 · guion fijo: v0.2.4 = {baseline} caracteres, v0.3.0 = {now} ({} % menos); solo texto: {baseline_text} → {now_text} ({} % menos)", 100 - now * 100 / baseline, 100 - now_text * 100 / baseline_text);
-        assert!(now * 2 <= baseline, "v0.3.0 = {now} caracteres, v0.2.4 = {baseline}: no baja la mitad");
+        assert!(
+            now * 2 <= baseline,
+            "v0.3.0 = {now} caracteres, v0.2.4 = {baseline}: no baja la mitad"
+        );
         // Sin contar la imagen (se paga por píxeles, no por caracteres): el texto del guion entero, ~10.000 tokens.
         assert!(now_text < 40_000, "texto del guion: {now_text} caracteres");
-        let usage = crate::tool_usage::since(dir.path(), &dir.path().join("Demo").to_string_lossy(), 0);
+        let usage =
+            crate::tool_usage::since(dir.path(), &dir.path().join("Demo").to_string_lossy(), 0);
         assert_eq!(usage.calls, script.len());
         assert_eq!(usage.images, 1);
         assert_eq!(usage.clipped, 0, "el formato compacto evita el recorte");
@@ -1480,7 +2711,11 @@ mod tests {
         let mut s = server(dir.path());
         let init = rpc(&mut s, "initialize", json!({}));
         let instructions = init["result"]["instructions"].as_str().unwrap();
-        assert!(instructions.contains("unreal_scene_summary") && instructions.contains("ONE unreal_run_python") && instructions.contains("unreal-mcp"));
+        assert!(
+            instructions.contains("unreal_scene_summary")
+                && instructions.contains("ONE unreal_run_python")
+                && instructions.contains("unreal-mcp")
+        );
     }
 
     /// Un `.ply` suelto y un mundo con colisión se envían desde un agente como desde la ventana (antes: «the asset has
@@ -1496,25 +2731,88 @@ mod tests {
             for f in files {
                 std::fs::write(folder.join(f), b"data").unwrap();
             }
-            s.config.library.add(LibraryEntry { id: id.clone(), name: name.into(), provider: "import".into(), kind: "world".into(), prompt: String::new(), parameters: Value::Null, task_id: String::new(), created_at: 1, credits: None, files: files.iter().map(|f| f.to_string()).collect(), thumbnail: None, sent_to: vec![], parent: None, output: Value::Null }).unwrap();
+            s.config
+                .library
+                .add(LibraryEntry {
+                    id: id.clone(),
+                    name: name.into(),
+                    provider: "import".into(),
+                    kind: "world".into(),
+                    prompt: String::new(),
+                    parameters: Value::Null,
+                    task_id: String::new(),
+                    created_at: 1,
+                    credits: None,
+                    files: files.iter().map(|f| f.to_string()).collect(),
+                    thumbnail: None,
+                    sent_to: vec![],
+                    parent: None,
+                    output: Value::Null,
+                })
+                .unwrap();
             id
         };
         let ply = add(&mut s, "Isla", &["scene.ply"]);
-        let sent = rpc(&mut s, "tools/call", json!({ "name": "library_send_to_unreal", "arguments": { "id": ply } }));
+        let sent = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "library_send_to_unreal", "arguments": { "id": ply } }),
+        );
         assert_eq!(sent["result"]["isError"], false, "{}", sent["result"]);
-        assert!(sent["result"]["content"][0]["text"].as_str().unwrap().contains("Isla_Splat"));
-        let tools: Vec<String> = calls.lock().unwrap().iter().map(|(t, _)| t.clone()).collect();
-        assert!(tools.contains(&"load_gaussian_splat".to_string()) && !tools.contains(&"import_model".to_string()), "{tools:?}");
-        let (_, splat_args) = calls.lock().unwrap().iter().find(|(t, _)| t == "load_gaussian_splat").cloned().unwrap();
-        assert!(splat_args["source_file"].as_str().unwrap().ends_with("scene.ply"));
+        assert!(sent["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Isla_Splat"));
+        let tools: Vec<String> = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(t, _)| t.clone())
+            .collect();
+        assert!(
+            tools.contains(&"load_gaussian_splat".to_string())
+                && !tools.contains(&"import_model".to_string()),
+            "{tools:?}"
+        );
+        let (_, splat_args) = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(t, _)| t == "load_gaussian_splat")
+            .cloned()
+            .unwrap();
+        assert!(splat_args["source_file"]
+            .as_str()
+            .unwrap()
+            .ends_with("scene.ply"));
 
         calls.lock().unwrap().clear();
         let world = add(&mut s, "Mundo", &["world.spz", "collider.glb"]);
-        let sent = rpc(&mut s, "tools/call", json!({ "name": "library_send_to_unreal", "arguments": { "id": world } }));
-        assert!(sent["result"]["content"][0]["text"].as_str().unwrap().contains("collider mesh"), "{}", sent["result"]);
-        let tools: Vec<String> = calls.lock().unwrap().iter().map(|(t, _)| t.clone()).collect();
+        let sent = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "library_send_to_unreal", "arguments": { "id": world } }),
+        );
+        assert!(
+            sent["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("collider mesh"),
+            "{}",
+            sent["result"]
+        );
+        let tools: Vec<String> = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(t, _)| t.clone())
+            .collect();
         let position = |name: &str| tools.iter().position(|t| t == name).unwrap();
-        assert!(position("load_gaussian_splat") < position("import_model") && position("import_model") < position("place_asset"), "{tools:?}");
+        assert!(
+            position("load_gaussian_splat") < position("import_model")
+                && position("import_model") < position("place_asset"),
+            "{tools:?}"
+        );
         assert_eq!(s.config.library.get(&world).unwrap().sent_to.len(), 1);
     }
 
@@ -1526,15 +2824,42 @@ mod tests {
         let mut s = server(dir.path());
         let (url, calls) = fake_editor();
         s.config.unreal_url = url;
-        let names: Vec<String> = tool_specs().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect();
-        assert!(names.contains(&"level_zones_propose".to_string()) && names.contains(&"level_zones_list".to_string()));
-        let bad = rpc(&mut s, "tools/call", json!({ "name": "level_zones_propose", "arguments": { "zones": [{ "name": "", "x": 0, "y": 0 }] } }));
+        let names: Vec<String> = tool_specs()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            names.contains(&"level_zones_propose".to_string())
+                && names.contains(&"level_zones_list".to_string())
+        );
+        let bad = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "level_zones_propose", "arguments": { "zones": [{ "name": "", "x": 0, "y": 0 }] } }),
+        );
         assert_eq!(bad["result"]["isError"], true);
-        assert!(calls.lock().unwrap().iter().all(|(t, _)| t != "run_python"), "una propuesta inválida no llega al editor");
-        let ok = rpc(&mut s, "tools/call", json!({ "name": "level_zones_propose", "arguments": { "zones": [{ "name": "Cocina", "description": "El horno", "x": 3, "y": 1 }] } }));
+        assert!(
+            calls.lock().unwrap().iter().all(|(t, _)| t != "run_python"),
+            "una propuesta inválida no llega al editor"
+        );
+        let ok = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "level_zones_propose", "arguments": { "zones": [{ "name": "Cocina", "description": "El horno", "x": 3, "y": 1 }] } }),
+        );
         assert_eq!(ok["result"]["isError"], false, "{}", ok["result"]);
-        let ran: Vec<(String, Value)> = calls.lock().unwrap().iter().filter(|(t, _)| t == "run_python" || t == "validate_python").cloned().collect();
-        assert_eq!(ran.len(), 1, "solo run_python, sin validate_python: {ran:?}");
+        let ran: Vec<(String, Value)> = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(t, _)| t == "run_python" || t == "validate_python")
+            .cloned()
+            .collect();
+        assert_eq!(
+            ran.len(),
+            1,
+            "solo run_python, sin validate_python: {ran:?}"
+        );
         let code = ran[0].1["code"].as_str().unwrap();
         assert!(code.contains("bytes.fromhex(\"") && !code.contains("El horno"));
     }
@@ -1544,11 +2869,33 @@ mod tests {
     fn el_agente_ve_los_personajes_de_convai() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
-        let empty = rpc(&mut s, "tools/call", json!({ "name": "convai_characters", "arguments": {} }));
-        assert!(empty["result"]["content"][0]["text"].as_str().unwrap().contains("No Convai characters"));
-        crate::convai_characters::save(dir.path(), &[crate::convai_characters::ConvaiCharacter { name: "Victoria".into(), character_id: "c1fca5ca-03b4-11ef-ae52-42010a7be00e".into(), notes: String::new() }]).unwrap();
-        let listed = rpc(&mut s, "tools/call", json!({ "name": "convai_characters", "arguments": {} }));
-        assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("- Victoria: c1fca5ca-03b4-11ef-ae52-42010a7be00e"));
+        let empty = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "convai_characters", "arguments": {} }),
+        );
+        assert!(empty["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("No Convai characters"));
+        crate::convai_characters::save(
+            dir.path(),
+            &[crate::convai_characters::ConvaiCharacter {
+                name: "Victoria".into(),
+                character_id: "c1fca5ca-03b4-11ef-ae52-42010a7be00e".into(),
+                notes: String::new(),
+            }],
+        )
+        .unwrap();
+        let listed = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "convai_characters", "arguments": {} }),
+        );
+        assert!(listed["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("- Victoria: c1fca5ca-03b4-11ef-ae52-42010a7be00e"));
     }
 
     /// Lista MetaHumans del nivel y equipa una prenda de la biblioteca o al enviarla con `library_send_to_unreal`. @spec REQ-81
@@ -1558,52 +2905,215 @@ mod tests {
         let mut s = server(dir.path());
         let (url, calls) = fake_editor();
         s.config.unreal_url = url;
-        let listed = rpc(&mut s, "tools/call", json!({ "name": "unreal_list_metahumans", "arguments": {} }));
+        let listed = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "unreal_list_metahumans", "arguments": {} }),
+        );
         assert_eq!(listed["result"]["isError"], false, "{listed}");
-        assert!(listed["result"]["content"][0]["text"].as_str().unwrap().contains("BP_Victoria_med_nrw_55"));
+        assert!(listed["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("BP_Victoria_med_nrw_55"));
 
         let (id, folder) = s.config.library.new_entry_dir("Chaqueta").unwrap();
         std::fs::write(folder.join("model.glb"), b"glb").unwrap();
-        s.config.library.add(LibraryEntry {
-            id: id.clone(),
-            name: "Chaqueta".into(),
-            provider: "tripo".into(),
-            kind: "model".into(),
-            prompt: "jacket".into(),
-            parameters: json!({ "garment_slot": "Torso", "quad_remeshed": true }),
-            task_id: "t-1".into(),
-            created_at: 1,
-            credits: Some(30.0),
-            files: vec!["model.glb".into()],
-            thumbnail: None,
-            sent_to: vec![],
-            parent: None,
-            output: Value::Null,
-        }).unwrap();
+        s.config
+            .library
+            .add(LibraryEntry {
+                id: id.clone(),
+                name: "Chaqueta".into(),
+                provider: "tripo".into(),
+                kind: "model".into(),
+                prompt: "jacket".into(),
+                parameters: json!({ "garment_slot": "Torso", "quad_remeshed": true }),
+                task_id: "t-1".into(),
+                created_at: 1,
+                credits: Some(30.0),
+                files: vec!["model.glb".into()],
+                thumbnail: None,
+                sent_to: vec![],
+                parent: None,
+                output: Value::Null,
+            })
+            .unwrap();
 
         // REQ-83: sin destino la prenda solo se importa; nunca se equipa en «el primero» del nivel.
         calls.lock().unwrap().clear();
-        let sent = rpc(&mut s, "tools/call", json!({ "name": "library_send_to_unreal", "arguments": { "id": id } }));
+        let sent = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "library_send_to_unreal", "arguments": { "id": id } }),
+        );
         assert_eq!(sent["result"]["isError"], false, "{sent}");
         let sent_text = sent["result"]["content"][0]["text"].as_str().unwrap();
-        assert!(sent_text.contains("NOT equipped") && !sent_text.contains("auto-rigged"), "{sent_text}");
+        assert!(
+            sent_text.contains("NOT equipped") && !sent_text.contains("auto-rigged"),
+            "{sent_text}"
+        );
         let seen: Vec<(String, Value)> = calls.lock().unwrap().clone();
-        assert!(!seen.iter().any(|(_, args)| args["code"].as_str().is_some_and(|c| c.contains("equip_metahuman_outfit"))), "sin destino no se ejecuta el equipado: {seen:?}");
-        assert!(!seen.iter().any(|(tool, _)| tool == "place_asset"), "una prenda no se coloca delante de la cámara");
+        assert!(
+            !seen.iter().any(|(_, args)| args["code"]
+                .as_str()
+                .is_some_and(|c| c.contains("equip_metahuman_outfit"))),
+            "sin destino no se ejecuta el equipado: {seen:?}"
+        );
+        assert!(
+            !seen.iter().any(|(tool, _)| tool == "place_asset"),
+            "una prenda no se coloca delante de la cámara"
+        );
 
         calls.lock().unwrap().clear();
-        let sent = rpc(&mut s, "tools/call", json!({ "name": "library_send_to_unreal", "arguments": { "id": id, "metahuman": "BP_Victoria_med_nrw_55" } }));
+        let sent = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "library_send_to_unreal", "arguments": { "id": id, "metahuman": "BP_Victoria_med_nrw_55" } }),
+        );
         assert_eq!(sent["result"]["isError"], false, "{sent}");
         let sent_text = sent["result"]["content"][0]["text"].as_str().unwrap();
-        assert!(sent_text.contains("auto-rigged + equipped on MetaHuman BP_Victoria_med_nrw_55 (Torso)"), "{sent_text}");
+        assert!(
+            sent_text
+                .contains("auto-rigged + equipped on MetaHuman BP_Victoria_med_nrw_55 (Torso)"),
+            "{sent_text}"
+        );
         let seen: Vec<(String, Value)> = calls.lock().unwrap().clone();
-        let equip_code = seen.iter().find_map(|(_, args)| args["code"].as_str().filter(|c| c.contains("equip_metahuman_outfit"))).expect("ejecuta el equipado");
-        let hex: String = "BP_Victoria_med_nrw_55".bytes().map(|b| format!("{b:02x}")).collect();
-        assert!(equip_code.contains(&hex), "el destino viaja en el código fijo");
+        let equip_code = seen
+            .iter()
+            .find_map(|(_, args)| {
+                args["code"]
+                    .as_str()
+                    .filter(|c| c.contains("equip_metahuman_outfit"))
+            })
+            .expect("ejecuta el equipado");
+        let hex: String = "BP_Victoria_med_nrw_55"
+            .bytes()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert!(
+            equip_code.contains(&hex),
+            "el destino viaja en el código fijo"
+        );
 
-        let equipped = rpc(&mut s, "tools/call", json!({ "name": "unreal_equip_metahuman_outfit", "arguments": { "source": id, "actor_label": "BP_Victoria_med_nrw_55" } }));
+        let equipped = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "unreal_equip_metahuman_outfit", "arguments": { "source": id, "actor_label": "BP_Victoria_med_nrw_55" } }),
+        );
         assert_eq!(equipped["result"]["isError"], false, "{equipped}");
-        assert!(equipped["result"]["content"][0]["text"].as_str().unwrap().contains("Chaqueta_Rigged_f_med_nrw"));
+        assert!(equipped["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Chaqueta_Rigged_f_med_nrw"));
+    }
+
+    /// `unreal_dress_metahuman` invoca el pipeline determinista para vestir un MetaHuman. @spec REQ-88
+    #[test]
+    fn viste_metahuman_con_pipeline_determinista() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let (url, calls) = fake_editor();
+        s.config.unreal_url = url;
+
+        let (id, folder) = s.config.library.new_entry_dir("Falda").unwrap();
+        std::fs::write(folder.join("skirt.glb"), b"glb").unwrap();
+        s.config
+            .library
+            .add(LibraryEntry {
+                id: id.clone(),
+                name: "Falda".into(),
+                provider: "tripo".into(),
+                kind: "model".into(),
+                prompt: "pleated skirt".into(),
+                parameters: json!({ "garment_kind": "skirt", "garment_cut": "female" }),
+                task_id: "t-2".into(),
+                created_at: 1,
+                credits: Some(30.0),
+                files: vec!["skirt.glb".into()],
+                thumbnail: None,
+                sent_to: vec![],
+                parent: None,
+                output: Value::Null,
+            })
+            .unwrap();
+
+        // Sin actor_label debe fallar según REQ-83
+        let no_target = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "unreal_dress_metahuman", "arguments": { "source": id } }),
+        );
+        assert_eq!(no_target["result"]["isError"], true, "{no_target}");
+
+        // Con actor_label debe generar llamada fija con dress_metahuman
+        calls.lock().unwrap().clear();
+        let dressed = rpc(
+            &mut s,
+            "tools/call",
+            json!({
+                "name": "unreal_dress_metahuman",
+                "arguments": { "source": id, "actor_label": "BP_Victoria_med_nrw_55", "garment_kind": "skirt" }
+            }),
+        );
+        assert_eq!(dressed["result"]["isError"], false, "{dressed}");
+        assert!(dressed["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("BP_Victoria_med_nrw_55"));
+        let seen: Vec<(String, Value)> = calls.lock().unwrap().clone();
+        let dress_code = seen
+            .iter()
+            .find_map(|(_, args)| {
+                args["code"]
+                    .as_str()
+                    .filter(|c| c.contains("dress_metahuman"))
+            })
+            .expect("ejecuta dress_metahuman");
+        assert!(
+            dress_code.contains("bytes.fromhex("),
+            "el payload viaja codificado en hex"
+        );
+    }
+
+    /// `unreal_validate_metahuman_outfit` valida bordes, holgura, enlace de tela y capturas. @spec REQ-89
+    #[test]
+    fn valida_outfit_metahuman_con_informe() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let (url, calls) = fake_editor();
+        s.config.unreal_url = url;
+
+        // Sin actor_label debe fallar
+        let no_target = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "unreal_validate_metahuman_outfit", "arguments": {} }),
+        );
+        assert_eq!(no_target["result"]["isError"], true, "{no_target}");
+
+        // Con actor_label genera llamada fija con validate_metahuman_outfit
+        calls.lock().unwrap().clear();
+        let validated = rpc(
+            &mut s,
+            "tools/call",
+            json!({
+                "name": "unreal_validate_metahuman_outfit",
+                "arguments": { "actor_label": "BP_Pablo", "garment_kind": "top" }
+            }),
+        );
+        assert_eq!(validated["result"]["isError"], false, "{validated}");
+        let seen: Vec<(String, Value)> = calls.lock().unwrap().clone();
+        let val_code = seen
+            .iter()
+            .find_map(|(_, args)| {
+                args["code"]
+                    .as_str()
+                    .filter(|c| c.contains("validate_metahuman_outfit"))
+            })
+            .expect("ejecuta validate_metahuman_outfit");
+        assert!(
+            val_code.contains("bytes.fromhex("),
+            "el payload viaja codificado en hex"
+        );
     }
 
     /// `unreal_playtest` arranca PIE, registra movimiento por ticks, captura el viewport y detiene siempre PIE. @spec REQ-82
@@ -1613,14 +3123,29 @@ mod tests {
         let mut s = server(dir.path());
         let (url, calls) = fake_editor();
         s.config.unreal_url = url;
-        let res = rpc(&mut s, "tools/call", json!({ "name": "unreal_playtest", "arguments": { "duration_seconds": 3, "actions": ["forward", "jump"] } }));
+        let res = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "unreal_playtest", "arguments": { "duration_seconds": 3, "actions": ["forward", "jump"] } }),
+        );
         assert_eq!(res["result"]["isError"], false, "{res}");
         let content = res["result"]["content"].as_array().unwrap();
         assert_eq!(content.len(), 2, "devuelve captura más telemetría JSON");
         assert_eq!(content[0]["type"], "image");
         let text = content[1]["text"].as_str().unwrap();
-        assert!(text.contains("\"distance_moved_cm\":618.0") && text.contains("\"stopped_pie\":true"), "{text}");
-        let seen: Vec<String> = calls.lock().unwrap().iter().map(|(t, _)| t.clone()).collect();
-        assert!(seen.contains(&"StartPIE".to_string()) && seen.contains(&"StopPIE".to_string()), "{seen:?}");
+        assert!(
+            text.contains("\"distance_moved_cm\":618.0") && text.contains("\"stopped_pie\":true"),
+            "{text}"
+        );
+        let seen: Vec<String> = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(t, _)| t.clone())
+            .collect();
+        assert!(
+            seen.contains(&"StartPIE".to_string()) && seen.contains(&"StopPIE".to_string()),
+            "{seen:?}"
+        );
     }
 }

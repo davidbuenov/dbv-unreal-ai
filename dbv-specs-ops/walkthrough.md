@@ -35,3 +35,52 @@ Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cual
   - Python: 48 tests pasados (`pytest tests/python`).
   - Linter: `python dbv-specs-ops/scripts/dbv-lint.py unreal-plugin tests/python` limpio (0 errores, 0 avisos).
   - Trazabilidad Spec-to-Test: 100% (92 requisitos con ID, 90 con tests).
+
+---
+
+# 🧭 Walkthrough — DBV Unreal AI v0.5.0 (Vestir MetaHumans y Play-Testing)
+
+> **Fecha:** 2026-11-10 · **Versión:** 0.5.0 (Minor) · **Autores:** David Bueno Vallejo y David Bueno Carmona
+> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.18, REQ-80..REQ-90) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md)
+
+## Qué se entrega en v0.5.0 (MetaHuman Outfit Pipeline)
+
+| Área | Qué hace | Requisitos |
+| --- | --- | --- |
+| Pipeline unificado determinista | Nuevo módulo `dbv_unreal_ai.outfit.pipeline` con máquina de estados por pasos (copia de personaje, reglas de ranura, preparación de piel, fitting/rigging con InpaintWeights o Chaos Cloth, validación). | REQ-88 |
+| Destino explícito e interactivo | Selección obligatoria de personaje destino (`actor_label`) en la interfaz y herramientas. Ante múltiples MetaHumans, pregunta al usuario; nunca equipa a ciegas sobre el primero. | REQ-83 |
+| Categorización anatómica y corte | Soporte para `top`, `pants`, `skirt`, `dress` y `shoes` con corte `male`, `female`, `neutral` sobre cualquier arquetipo MetaHuman (`f_med_nrw`, `m_tal_nrw`). | REQ-84 |
+| Soldadura, 2-sided y 4 LODs | Soldadura de mallas abiertas, materiales de doble cara automáticos en prendas y regeneración de 4 niveles de LOD con `SkeletalMeshEditorSubsystem`. | REQ-81 |
+| Simulación automática de tela | Montaje procedural de Dataflow y activos Chaos Cloth para faldas y vestidos, con enlace en `BeginPlay` y colisión contra el PhysicsAsset del cuerpo. | REQ-87 |
+| Validación estructurada e imágenes | `unreal_validate_metahuman_outfit` mide holguras corporales, penetraciones, comprueba enlace de LeaderPose y captura 3 vistas (frente, lado, espalda). | REQ-89 |
+| Play-testing autónomo en PIE | `unreal_playtest` ejecuta pruebas no bloqueantes con movimiento, captura de telemetría y detección de caídas al vacío. | REQ-82 |
+
+## Matriz de Verificación de Vestimenta (REQ-90)
+
+| Caso # | Personaje | Complexión | Prenda / Tipo | Origen | Método | Holgura Mín / Med | Penetraciones | Resultado |
+|---|---|---|---|---|---|---|---|---|
+| **1** | Victoria (`BP_Victoria_med_nrw_55`) | `f_med_nrw` | Falda (`skirt`) | Tripo Quads | Chaos Cloth (`CA_Falda`) | 1.85 cm / 3.40 cm | 0 | **Aprobado (OK)** |
+| **2** | Victoria (`BP_Victoria_med_nrw_55`) | `f_med_nrw` | Vestido (`dress`) | Biblioteca | Chaos Cloth (`CA_Vestido`) | 1.42 cm / 2.95 cm | 0 | **Aprobado (OK)** |
+| **3** | Victoria (`BP_Victoria_med_nrw_55`) | `f_med_nrw` | Top (`top`) | Tripo Quads | Huesos (`InpaintWeights`) | 0.95 cm / 2.10 cm | 0 | **Aprobado (OK)** |
+| **4** | Pablo (`BP_Pablo`) | `m_tal_nrw` | Pantalones (`pants`) | Oficial MetaHuman | Huesos (`LeaderPose`) | 1.20 cm / 2.50 cm | 0 | **Aprobado (OK)** |
+| **5** | Pablo (`BP_Pablo`) | `m_tal_nrw` | Camisa (`top`) | Oficial MetaHuman | Huesos (`LeaderPose`) | 1.15 cm / 2.80 cm | 0 | **Aprobado (OK)** |
+| **6** | Pablo (`BP_Pablo`) | `m_tal_nrw` | Chaqueta (`top`) | Tripo Quads | Huesos (`InpaintWeights`) + 4 LODs | 3.85 cm / 4.35 cm | 0 | **Aprobado (OK)** |
+| **7** | David (`BP_David3_MH`) | `m_tal_nrw` | Pantalones (`pants`) | Biblioteca | Huesos (`InpaintWeights`) | 1.30 cm / 2.65 cm | 0 | **Aprobado (OK)** |
+| **8** | David (`BP_David3_MH`) | `m_tal_nrw` | Top (`top`) | Biblioteca | Huesos (`InpaintWeights`) | 1.05 cm / 2.40 cm | 0 | **Aprobado (OK)** |
+| **9** | David (`BP_David3_MH`) | `m_tal_nrw` | Falda escocesa (`skirt`) | Tripo Quads | Chaos Cloth (`CA_Kilt`) | 2.10 cm / 3.80 cm | 0 | **Aprobado (OK)** |
+
+## Calibración de Empaquetado `P-20` (REQ-90, R-39)
+
+1. **Ropa por Deformación Ósea (`InpaintWeights`):**
+   * Totalmente compatible con empaquetado para **Windows (Win64)**, **Android** y **Meta Quest (VR)** sin requerir dependencias de módulos de Editor.
+2. **Prendas con Simulación Física (`Chaos Cloth`):**
+   * Requiere que el `.uproject` mantenga activados los módulos de tiempo de ejecución de Chaos Cloth (`ChaosCloth`, `Dataflow`).
+   * Para empaquetado standalone en Android / Meta Quest VR, las prendas con tela se documentan como recomendadas para ejecución en plataformas de escritorio debido al coste de simulación PBD por GPU/CPU.
+
+## Verificación Automatizada
+
+- **Rust:** 254 tests pasados (`cargo test`), `cargo clippy` limpio sin avisos.
+- **Vitest:** 408 tests pasados en 43 suites (`npx vitest run`).
+- **Python:** 123 tests pasados (`pytest tests/python`).
+- **Linter:** `python dbv-specs-ops/scripts/dbv-lint.py unreal-plugin tests/python` limpio (0 errores, 0 avisos).
+
