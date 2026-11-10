@@ -11,8 +11,10 @@
 // función con su resultado tipado, que dice qué columnas usó y con cuántas muestras (para poder dudar de él) y trata
 // igual los fotogramas sin dato (`NaN`) o excluidos (pausas): un incremento solo cuenta si sus dos extremos valen.
 
+pub mod events;
 pub mod frame;
 pub mod motion;
+pub mod relative;
 
 use std::path::Path;
 
