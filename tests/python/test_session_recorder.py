@@ -47,6 +47,9 @@ class FakeAdapter:
         self.unregistered = 0
         self.readers: dict[str, object] = {}
         self.reader_calls = 0
+        self.supported_events = frozenset({"pause", "movement_mode"})
+        self.event_values: dict[str, object] = {}
+        self.event_errors: set[str] = set()
 
     def game_world(self):
         return self.world
@@ -59,6 +62,11 @@ class FakeAdapter:
 
     def make_reader(self, world, signal):
         return self.readers.get(signal.name)
+
+    def poll_event(self, world, kind):
+        if kind in self.event_errors:
+            raise RuntimeError("sin personaje")
+        return self.event_values.pop(kind, None)
 
     def register_tick(self, callback):
         self.callback = callback
@@ -292,10 +300,65 @@ class RecorderTest(unittest.TestCase):
         self.adapter.readers["A"] = lambda: [1.0]
         r = self._rec(_plan([_sig("A")]))
         r.start()
-        for _ in range(40):
+        for _ in range(80):
             self.adapter.tick(0.125)  # 8 FPS, como el editor sin foco medido el 2026-11-10
         self.assertEqual(len([w for w in self.warnings if "va muy lento" in w]), 1)
         r.finish()
+
+    def test_startup_hitches_do_not_trigger_the_slow_editor_warning(self) -> None:
+        self.adapter.readers["A"] = lambda: [1.0]
+        r = self._rec(_plan([_sig("A")]))
+        r.start()
+        for _ in range(12):
+            self.adapter.tick(0.15)  # tirones de carga al empezar PIE (1,8 s)
+        for _ in range(120):
+            self.adapter.tick(DT)  # luego va fluido
+        self.assertEqual([w for w in self.warnings if "va muy lento" in w], [])
+        r.finish()
+
+    def _events(self):
+        path = self.folder / "events.jsonl"
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+    def test_state_change_events_are_written_with_their_time(self) -> None:
+        self.adapter.readers["A"] = lambda: [0.0]
+        p = plan_mod.parse_plan({"presets": ["gameplay_events"], "signals": [_sig("A")]})
+        r = self._rec(p)
+        r.start()
+        self.adapter.tick()
+        self.adapter.event_values["movement_mode"] = {"from": "MOVE_WALKING", "to": "MOVE_FALLING"}
+        self.adapter.tick()
+        self.adapter.event_values["pause"] = {"paused": True}
+        self.adapter.tick()
+        r.finish()
+        ev = self._events()
+        self.assertEqual([e["type"] for e in ev], ["movement_mode", "pause"])
+        self.assertEqual(ev[0]["to"], "MOVE_FALLING")
+        self.assertTrue(ev[1]["paused"])
+        self.assertGreater(ev[1]["t"], ev[0]["t"])
+
+    def test_unsupported_event_kinds_warn_once_and_the_rest_keep_working(self) -> None:
+        p = plan_mod.parse_plan({"presets": ["gameplay_events"]})  # incluye movement_base y log_error: no soportados
+        r = self._rec(p)
+        r.start()
+        for _ in range(3):
+            self.adapter.tick()
+        self.assertEqual(len([w for w in self.warnings if "«movement_base»" in w]), 1)
+        self.assertEqual(len([w for w in self.warnings if "«log_error»" in w]), 1)
+        self.assertEqual(r.status, "recording")
+
+    def test_a_failing_event_source_is_turned_off_once(self) -> None:
+        self.adapter.event_errors.add("movement_mode")
+        p = plan_mod.parse_plan({"presets": ["gameplay_events"]})
+        r = self._rec(p)
+        r.start()
+        for _ in range(3):
+            self.adapter.tick()
+        self.assertEqual(len([w for w in self.warnings if "«movement_mode» apagado" in w]), 1)
+        self.adapter.event_values["pause"] = {"paused": True}
+        self.adapter.tick()
+        r.finish()
+        self.assertEqual([e["type"] for e in self._events()], ["pause"])  # la pausa sigue funcionando
 
     def test_cost_is_stored_in_meta(self) -> None:
         self.adapter.readers["A"] = lambda: [0.0]

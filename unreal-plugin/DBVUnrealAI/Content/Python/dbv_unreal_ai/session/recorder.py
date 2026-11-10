@@ -37,7 +37,8 @@ META_VERSION = 1
 RESOLVE_SECONDS = 5.0  # los actores que aparecen tarde se reintentan unos segundos
 RETRY_SECONDS = 0.25  # cada cuánto se reintenta resolver un objetivo ausente (buscar actores no es gratis)
 FLUSH_SECONDS = 1.0  # a disco al menos cada segundo, aunque el bloque no esté lleno (FPS bajos)
-SLOW_CHECK_TICKS = 30
+SLOW_CHECK_TICKS = 30  # fotogramas de la ventana con la que se juzga si el editor va lento
+SLOW_WARMUP_S = 2.0  # al empezar PIE hay tirones de carga: no cuentan para el aviso
 SLOW_FRACTION = 0.5
 ARM_SECONDS = 60.0  # armada sin que empiece PIE en este tiempo: se cierra sola
 MAX_EVENTS = 20000
@@ -55,6 +56,12 @@ class Adapter(Protocol):
 
     def make_reader(self, world: Any, signal: Signal) -> Callable[[], list[float]] | None:
         """Devuelve un lector de la señal, o ``None`` si todavía no existe el objetivo."""
+
+    supported_events: frozenset[str]
+    """Tipos de evento que sabe emitir (los demás del plan se avisan una vez y se ignoran)."""
+
+    def poll_event(self, world: Any, kind: str) -> dict[str, Any] | None:
+        """Mira si ``kind`` cambió desde la última vez y devuelve los datos del evento, o ``None``."""
 
     def register_tick(self, callback: Callable[[float], None]) -> Any: ...
 
@@ -99,8 +106,10 @@ class Recorder:
         self._costs: list[float] = []
         self._gaps = 0
         self._ticks = 0
+        self._recent: list[float] = []
         self._last_flush = 0.0
         self._next_try: dict[int, float] = {}
+        self._dead_events: set[str] = set()
         self._started_at = ""
 
     # ------------------------------------------------------------------ ciclo de vida
@@ -184,17 +193,36 @@ class Recorder:
         if dt > LOW_FRAME_DT:
             self._gaps += 1
         now = self._clock() - self._t0
+        self._poll_events(world)
         values = self._read_all(world, dt)
         assert self._writer is not None
         self._writer.append(now, values)
         if now - self._last_flush >= FLUSH_SECONDS:
             self._writer.flush()
             self._last_flush = now
-        self._check_slow_editor()
+        self._check_slow_editor(dt)
         if now >= self.plan.limits.max_seconds:
             self.finish("limit_seconds")
         elif self._writer.bytes_written >= self.plan.limits.max_bytes:
             self.finish("limit_bytes")
+
+    def _poll_events(self, world: Any) -> None:
+        """Emite los eventos de cambio de estado del plan. Un tipo que falla se apaga solo, con un aviso (R2)."""
+        for kind in self.plan.events:
+            if kind in self._dead_events:
+                continue
+            if kind not in self.adapter.supported_events:
+                self._dead_events.add(kind)
+                self._warn_once(f"evento «{kind}» todavía no disponible en esta variante: se ignora")
+                continue
+            try:
+                data = self.adapter.poll_event(world, kind)
+            except Exception as exc:  # noqa: BLE001 - objetivo destruido, API distinta…
+                self._dead_events.add(kind)
+                self._warn_once(f"evento «{kind}» apagado: {type(exc).__name__}: {exc}")
+                continue
+            if data is not None:
+                self.event(kind, **data)
 
     def _read_all(self, world: Any, dt: float) -> list[float]:
         out: list[float] = []
@@ -232,9 +260,18 @@ class Recorder:
             return missing
         return [float(v) if v is not None else NAN for v in vals]
 
-    def _check_slow_editor(self) -> None:
-        """R5: si casi todos los fotogramas son lentos, la medición no es fiable: se avisa una vez."""
-        if self._ticks != SLOW_CHECK_TICKS or self._gaps / self._ticks < SLOW_FRACTION:
+    def _check_slow_editor(self, dt: float) -> None:
+        """R5: si la mitad de los últimos fotogramas es lenta, la medición no es fiable: se avisa una vez.
+
+        Se mira una ventana móvil y se saltan los primeros segundos, donde el arranque de PIE da tirones normales.
+        """
+        if self._clock() - self._world_t0 < SLOW_WARMUP_S:
+            return
+        self._recent.append(dt)
+        del self._recent[:-SLOW_CHECK_TICKS]
+        if len(self._recent) < SLOW_CHECK_TICKS:
+            return
+        if sum(1 for d in self._recent if d > LOW_FRAME_DT) / len(self._recent) < SLOW_FRACTION:
             return
         self._warn_once(
             "el editor va muy lento durante la grabación (fotogramas de más de 100 ms): la medición no es fiable. "

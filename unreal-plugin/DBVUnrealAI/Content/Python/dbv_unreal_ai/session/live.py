@@ -37,6 +37,7 @@ except ImportError:
     unreal = None  # type: ignore[assignment]
 
 ROT_CHANNELS = ("yaw", "pitch", "roll")
+_UNSET = object()  # «todavía no se ha leído»: distinto de un valor vacío
 
 
 def _to_float(value: Any) -> float:
@@ -80,8 +81,12 @@ def _get_property(obj: Any, name: str) -> Any:
 class UnrealAdapter:
     """Implementa ``recorder.Adapter`` sobre la API de Python de Unreal."""
 
+    supported_events = frozenset({"pause", "movement_mode", "movement_base"})
+
     def __init__(self) -> None:
         self._ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+        self._last: dict[str, Any] = {}
+        self._pawn: Any = None
 
     def game_world(self) -> Any | None:
         return self._ues.get_game_world()
@@ -117,6 +122,41 @@ class UnrealAdapter:
         if signal.kind == "anim_property":
             return self._anim_reader(actor, signal)
         raise ValueError(f"tipo de señal sin lector: {signal.kind}")
+
+    # ------------------------------------------------------------------ eventos
+    def poll_event(self, world: Any, kind: str) -> dict[str, Any] | None:
+        """Detecta el cambio de ``pause``, ``movement_mode`` o ``movement_base`` desde la última comprobación."""
+        try:
+            now = self._state_of(world, kind)
+        except Exception:
+            self._pawn = None  # el personaje pudo reaparecer: se vuelve a buscar la próxima vez
+            raise
+        before = self._last.get(kind, _UNSET)
+        self._last[kind] = now
+        if before is _UNSET:  # primera lectura: línea base; solo una pausa ya activa merece evento
+            return {"paused": True} if kind == "pause" and now else None
+        if now == before:
+            return None
+        return {"paused": bool(now)} if kind == "pause" else {"from": before, "to": now}
+
+    def _state_of(self, world: Any, kind: str) -> Any:
+        if kind == "pause":
+            return bool(unreal.GameplayStatics.is_game_paused(world))
+        if self._pawn is None:
+            self._pawn = unreal.GameplayStatics.get_player_pawn(world, 0)
+        if self._pawn is None:
+            raise ValueError("no hay personaje del jugador")
+        mv = self._pawn.get_component_by_class(unreal.CharacterMovementComponent)
+        if mv is None:
+            raise ValueError("el personaje no tiene CharacterMovementComponent")
+        if kind == "movement_mode":
+            mode = mv.get_editor_property("movement_mode")
+            return str(getattr(mode, "name", mode))
+        base = mv.get_movement_base()  # movement_base: componente sobre el que se apoya (una cesta, el suelo…)
+        if base is None:
+            return ""
+        owner = base.get_owner()
+        return base.get_name() if owner is None else f"{owner.get_name()}.{base.get_name()}"
 
     # ------------------------------------------------------------------ lectores
     @staticmethod
