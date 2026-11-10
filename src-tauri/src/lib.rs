@@ -405,6 +405,10 @@ pub fn run() {
             #[cfg(desktop)]
             recipes::recipes_run_tool,
             #[cfg(desktop)]
+            sessions::commands::sessions_tool_specs,
+            #[cfg(desktop)]
+            sessions::commands::sessions_run_tool,
+            #[cfg(desktop)]
             project_memory::commands::memory_tool_specs,
             #[cfg(desktop)]
             project_memory::commands::memory_plan_preview,

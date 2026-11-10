@@ -462,5 +462,62 @@ describe('MetaHumans y playtest autónomo (REQ-80, REQ-81, REQ-82)', () => {
     const calledTools = backend.calls.map((c) => c.tool);
     expect(calledTools[0]).toBe('StartPIE');
     expect(calledTools[calledTools.length - 1]).toBe('StopPIE');
+    // El esquema real de StartPIE exige `options` (comprobado en UE 5.8.2).
+    expect(backend.calls[0].args.options).toEqual({ bSimulate: false, playMode: 'PlayMode_InViewPort', warmupSeconds: 0 });
+  });
+});
+
+describe('caja negra en el asistente (REQ-92)', () => {
+  const sessionSpecs = [
+    { name: 'session_list', description: 'list', inputSchema: { type: 'object', properties: { limit: { type: 'integer' } }, required: [] } },
+    { name: 'session_start', description: 'start', inputSchema: { type: 'object', properties: { plan: { type: 'object' } }, required: ['plan'] } },
+    { name: 'session_delete', description: 'delete', inputSchema: { type: 'object', properties: { session: { type: 'string' }, confirm: { type: 'boolean' } }, required: ['session'] } },
+  ];
+  const build = (askApproval, sessionRun) => createUnrealTools({ backend: fakeBackend(), askApproval, sessionSpecs, sessionRun });
+
+  it('publica las herramientas de Rust y no las duplica si no hay definiciones @spec REQ-92', () => {
+    const run = vi.fn(async () => ({ ok: true, value: '{}' }));
+    expect(build(vi.fn(), run).map((t) => t.name)).toEqual(expect.arrayContaining(['session_list', 'session_start', 'session_delete']));
+    expect(createUnrealTools({ backend: fakeBackend(), askApproval: vi.fn() }).some((t) => t.name.startsWith('session_'))).toBe(false);
+  });
+
+  it('leer no pide aprobación y devuelve el texto de Rust @spec REQ-92', async () => {
+    const askApproval = vi.fn(async () => 'deny');
+    const run = vi.fn(async () => ({ ok: true, value: '{"total":0}' }));
+    const out = await tool(build(askApproval, run), 'session_list').run({ limit: 3 });
+    expect(out).toBe('{"total":0}');
+    expect(askApproval).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledWith('session_list', { limit: 3 });
+  });
+
+  it('grabar pide aprobación con su frase y, si se deniega, no se ejecuta @spec REQ-92', async () => {
+    const run = vi.fn(async () => ({ ok: true, value: 'ok' }));
+    const denied = await tool(build(vi.fn(async () => 'deny'), run), 'session_start').run({ plan: { presets: ['player'] }, purpose: 'Grabar el temblor' });
+    expect(denied).toContain('DENIED');
+    expect(run).not.toHaveBeenCalled();
+    const askApproval = vi.fn(async () => 'once');
+    const out = await tool(build(askApproval, run), 'session_start').run({ plan: { presets: ['player'] }, purpose: 'Grabar el temblor' });
+    expect(out).toBe('ok');
+    expect(askApproval.mock.calls[0][0]).toMatchObject({ tool: 'session_start', purpose: 'Grabar el temblor' });
+    expect(run).toHaveBeenCalledWith('session_start', { plan: { presets: ['player'] } }); // `purpose` es para la persona
+  });
+
+  it('borrar solo pide aprobación al confirmar y los errores vuelven como texto @spec REQ-92', async () => {
+    const askApproval = vi.fn(async () => 'once');
+    const run = vi.fn(async () => ({ ok: false, error: { message: 'no session' } }));
+    const tools = build(askApproval, run);
+    await tool(tools, 'session_delete').run({ session: 'x' });
+    expect(askApproval).not.toHaveBeenCalled();
+    const failed = await tool(tools, 'session_delete').run({ session: 'x', confirm: true });
+    expect(askApproval).toHaveBeenCalledTimes(1);
+    expect(failed).toBe('error: no session');
+  });
+
+  it('el prompt de depuración cita el flujo y la regla de fiabilidad @spec REQ-97', async () => {
+    const { runtimeDebugPrompt } = await import('../../src/unreal/unrealTools.js');
+    const text = runtimeDebugPrompt();
+    expect(text).toContain('session_plan');
+    expect(text).toContain('ALWAYS read gaps first');
+    expect(text).not.toContain('when the app offers them');
   });
 });

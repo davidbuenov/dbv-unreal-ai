@@ -100,41 +100,45 @@ class Plan:
         return [col for s in self.signals for col in s.columns]
 
 
+def _check_signal(raw: Any, index: int) -> tuple[str | None, list[str]]:
+    """Valida una señal escrita a mano. Devuelve ``(error, canales)``; sin error, los canales ya están elegidos."""
+    error: str | None = None
+    channels: list[str] = []
+    kind = raw.get("kind") if isinstance(raw, dict) else None
+    target = (raw.get("target") or {}) if isinstance(raw, dict) else {}
+    if not isinstance(raw, dict):
+        error = f"señal {index}: debe ser un objeto"
+    elif kind not in KINDS:
+        error = f"señal {index}: tipo «{kind}» desconocido (válidos: {', '.join(KINDS)})"
+    elif kind != "frame" and not isinstance(target, dict):
+        error = f"señal {index}: «target» debe ser un objeto"
+    elif kind != "frame" and not target:
+        error = f"señal {index}: falta «target» (actor_label, actor_class, player o player_camera)"
+    elif kind in ("variable", "anim_property") and not raw.get("name"):
+        error = f"señal {index}: falta «name» (nombre de la variable o propiedad)"
+    elif kind in ("transform", "frame"):
+        allowed = TRANSFORM_CHANNELS if kind == "transform" else FRAME_CHANNELS
+        channels = list(raw.get("channels") or allowed)
+        bad = [c for c in channels if c not in allowed]
+        if bad:
+            error = f"señal {index}: canales {'de fotograma ' if kind == 'frame' else ''}desconocidos {bad}"
+    return error, channels
+
+
 def _signal_from_dict(raw: Any, index: int) -> tuple[Signal | None, str | None]:
     """Convierte una señal escrita a mano. Devuelve ``(señal, error)``."""
-    if not isinstance(raw, dict):
-        return None, f"señal {index}: debe ser un objeto"
-    kind = raw.get("kind")
-    if kind not in KINDS:
-        return None, f"señal {index}: tipo «{kind}» desconocido (válidos: {', '.join(KINDS)})"
-    target = raw.get("target") or {}
-    if kind != "frame" and not isinstance(target, dict):
-        return None, f"señal {index}: «target» debe ser un objeto"
-    if kind != "frame" and not target:
-        return None, f"señal {index}: falta «target» (actor_label, actor_class, player o player_camera)"
-    channels: list[str] = []
-    if kind == "transform":
-        channels = list(raw.get("channels") or TRANSFORM_CHANNELS)
-        bad = [c for c in channels if c not in TRANSFORM_CHANNELS]
-        if bad:
-            return None, f"señal {index}: canales desconocidos {bad}"
-    if kind == "frame":
-        channels = list(raw.get("channels") or FRAME_CHANNELS)
-        bad = [c for c in channels if c not in FRAME_CHANNELS]
-        if bad:
-            return None, f"señal {index}: canales de fotograma desconocidos {bad}"
-    if kind in ("variable", "anim_property") and not raw.get("name"):
-        return None, f"señal {index}: falta «name» (nombre de la variable o propiedad)"
-    default_name = raw.get("alias") or raw.get("name") or _target_label(target) or kind
-    extra = {k: v for k, v in raw.items() if k in ("socket", "source", "component", "name") and v}
-    return Signal(kind, str(default_name), dict(target), channels, extra), None
+    error, channels = _check_signal(raw, index)
+    signal: Signal | None = None
+    if error is None:
+        kind, target = raw["kind"], raw.get("target") or {}
+        default_name = raw.get("alias") or raw.get("name") or _target_label(target) or kind
+        extra = {k: v for k, v in raw.items() if k in ("socket", "source", "component", "name") and v}
+        signal = Signal(kind, str(default_name), dict(target), channels, extra)
+    return signal, error
 
 
 def _target_label(target: dict[str, Any]) -> str:
-    for key in ("actor_label", "actor_class", "player", "player_camera"):
-        if key in target:
-            return str(target[key])
-    return ""
+    return next((str(target[key]) for key in ("actor_label", "actor_class", "player", "player_camera") if key in target), "")
 
 
 def parse_plan(raw: Any) -> Plan:

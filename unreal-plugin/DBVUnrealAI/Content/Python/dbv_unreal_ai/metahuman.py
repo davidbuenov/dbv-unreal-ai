@@ -1385,7 +1385,7 @@ def _equip_shell_garment(
             with unreal.ScopedEditorTransaction("DBV Unreal AI: equip MetaHuman outfit"):
                 target_actor.modify()
                 # La carcasa solo tapa su zona: el resto de la piel tiene que estar. Un cuerpo de
-                # fábrica recortado no tiene muslos ni torso (Pablo), así que se dibuja el completo.
+                # fábrica recortado no tiene muslos ni torso, así que se dibuja el completo.
                 if body_comp.get_skeletal_mesh_asset().get_path_name() != full_skm.get_path_name():
                     skin_material = body_comp.get_material(0)
                     body_comp.modify()

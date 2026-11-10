@@ -37,7 +37,7 @@ use crate::generation::worldlabs::WorldLabsClient;
 use crate::generation::{key_account, service_keys, tools, within_budget, Polling};
 use crate::library::{now_secs, Library};
 use crate::project_memory::tools as memory_tools;
-use crate::sessions::{control as session_control, tools as session_tools};
+use crate::sessions::{self, control as session_control};
 use crate::unreal::compact;
 use crate::unreal::discovery;
 use crate::unreal::mcp_client::{
@@ -317,8 +317,7 @@ pub fn tool_specs() -> Vec<Value> {
     // Personajes de Convai registrados en Ajustes (REQ-58).
     specs.push(crate::convai_characters::spec());
     // Caja negra (REQ-91..REQ-93): la misma definición que el asistente integrado (D69).
-    specs.extend(session_tools::specs());
-    specs.extend(session_control::specs());
+    specs.extend(sessions::specs());
     // Anotación estándar de MCP: algunos agentes ya no preguntan por lo que solo consulta.
     for spec in &mut specs {
         let read_only = spec["name"]
@@ -362,12 +361,6 @@ fn is_dbv(name: &str) -> bool {
     name.contains("DBVUnrealAIToolset") || name.contains("DBVUnrealAICppToolset")
 }
 
-/// Argumentos de `StartPIE` según el esquema real de UE 5.8 (`options` es obligatorio): PIE en el visor y sin espera
-/// extra. Lo usan `unreal_playtest` y la caja negra. @spec REQ-82, REQ-92
-fn start_pie_args() -> Value {
-    json!({ "options": { "bSimulate": false, "playMode": "PlayMode_InViewPort", "warmupSeconds": 0 } })
-}
-
 /// El editor visto por las herramientas de la caja negra: Python por `run_python` y Play por `StartPIE`/`StopPIE`,
 /// la misma ruta que `unreal_playtest` (D71). @spec REQ-92
 struct McpEditor<'a>(&'a mut McpServer);
@@ -380,7 +373,7 @@ impl session_control::Editor for McpEditor<'_> {
     fn start_pie(&mut self) -> Result<(), String> {
         self.0
             .editor(|s| {
-                s.call_toolset_tool("EditorToolset.EditorAppToolset", "StartPIE", start_pie_args(), DEFAULT_TIMEOUT)
+                s.call_toolset_tool("EditorToolset.EditorAppToolset", "StartPIE", session_control::start_pie_args(), DEFAULT_TIMEOUT)
             })
             .map(|_| ())
             .map_err(|e| e.to_string())
@@ -702,20 +695,9 @@ impl McpServer {
                 .map_err(err)?
             }
             // Caja negra (REQ-92): lo que lee ficheros no necesita el editor; lo que graba o para Play lo gobierna por Python.
-            "session_list" => session_tools::list_text(&self.sessions_root()?, args)?,
-            "session_analyze" => session_tools::analyze_text(&self.sessions_root()?, args)?,
-            "session_query" => session_tools::query_text(&self.sessions_root()?, args)?,
-            "session_wait" => {
-                session_tools::wait_text(&self.sessions_root()?, args, Duration::from_millis(500))?
-            }
-            "session_delete" => session_tools::delete_text(&self.sessions_root()?, args)?,
-            "session_plan" => session_control::plan_text(args)?,
-            "session_start" => session_control::start_text(&mut McpEditor(self), args)?,
-            "session_status" => session_control::status_text(&mut McpEditor(self))?,
-            "session_mark" => session_control::mark_text(&mut McpEditor(self), args)?,
-            "session_stop" => {
+            tool if sessions::is_tool(tool) => {
                 let root = self.sessions_root()?;
-                session_control::stop_text(&mut McpEditor(self), &root, args)?
+                sessions::run_tool(tool, args, &root, &mut McpEditor(self))?
             }
             "tripo_operations" => tools::operations_text(args)?,
             "tripo_balance" => self.balance()?,
@@ -837,7 +819,7 @@ impl McpServer {
 
     /// Carpeta de las sesiones grabadas del proyecto (`Saved/DBVUnrealAI/Sessions`). @spec REQ-91
     fn sessions_root(&self) -> Result<PathBuf, String> {
-        Ok(session_tools::sessions_root(&self.project_dir()?))
+        Ok(sessions::tools::sessions_root(&self.project_dir()?))
     }
 
     /// Carpeta del proyecto, que el agente recibe con `--project` (REQ-38).
@@ -1561,7 +1543,7 @@ impl McpServer {
             s.call_toolset_tool(
                 "EditorToolset.EditorAppToolset",
                 "StartPIE",
-                start_pie_args(),
+                session_control::start_pie_args(),
                 DEFAULT_TIMEOUT,
             )
         });

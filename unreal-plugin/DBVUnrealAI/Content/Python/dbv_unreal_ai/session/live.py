@@ -57,25 +57,31 @@ def _vec_channel(vec: Any, channel: str) -> float:
 
 
 def _find_actor(world: Any, target: dict[str, Any]) -> Any | None:
-    if "player" in target:
-        return unreal.GameplayStatics.get_player_pawn(world, int(target["player"]))
-    if "player_camera" in target:
-        return unreal.GameplayStatics.get_player_camera_manager(world, int(target["player_camera"]))
     label, cls = target.get("actor_label"), target.get("actor_class")
-    for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor):
-        if label is not None and actor.get_actor_label() == label:
-            return actor
-        if cls is not None and actor.get_class().get_name() == cls:
-            return actor
-    return None
+    if "player" in target:
+        found = unreal.GameplayStatics.get_player_pawn(world, int(target["player"]))
+    elif "player_camera" in target:
+        found = unreal.GameplayStatics.get_player_camera_manager(world, int(target["player_camera"]))
+    else:
+        found = next(
+            (
+                a
+                for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor)
+                if (label is not None and a.get_actor_label() == label)
+                or (cls is not None and a.get_class().get_name() == cls)
+            ),
+            None,
+        )
+    return found
 
 
 def _get_property(obj: Any, name: str) -> Any:
     """Lee una propiedad por reflexión; prueba el nombre tal cual (con espacios) y en snake_case."""
     try:
-        return obj.get_editor_property(name)
+        value = obj.get_editor_property(name)
     except Exception:  # noqa: BLE001 - se reintenta con otro formato de nombre
-        return obj.get_editor_property(name.strip().replace(" ", "_").lower())
+        value = obj.get_editor_property(name.strip().replace(" ", "_").lower())
+    return value
 
 
 class UnrealAdapter:
@@ -92,18 +98,22 @@ class UnrealAdapter:
         return self._ues.get_game_world()
 
     def world_alive(self, world: Any) -> bool:
+        alive = True
         try:
             world.get_path_name()
-            return True
         except Exception:  # noqa: BLE001 - «ObjectInstance is null» (P-23)
-            return False
+            alive = False
+        return alive
 
     def level_name(self) -> str:
         world = self._ues.get_game_world() or self._ues.get_editor_world()
+        name = ""
         try:
-            return str(world.get_path_name()) if world is not None else ""
-        except Exception:  # noqa: BLE001
-            return ""
+            if world is not None:
+                name = str(world.get_path_name())
+        except Exception:  # noqa: BLE001 - un mundo que ya no existe no tiene nombre
+            name = ""
+        return name
 
     def register_tick(self, callback: Callable[[float], None]) -> Any:
         return unreal.register_slate_post_tick_callback(callback)
@@ -133,15 +143,16 @@ class UnrealAdapter:
             raise
         before = self._last.get(kind, _UNSET)
         self._last[kind] = now
+        event: dict[str, Any] | None = None
         if before is _UNSET:  # primera lectura: línea base; solo una pausa ya activa merece evento
-            return {"paused": True} if kind == "pause" and now else None
-        if now == before:
-            return None
-        return {"paused": bool(now)} if kind == "pause" else {"from": before, "to": now}
+            if kind == "pause" and now:
+                event = {"paused": True}
+        elif now != before:
+            event = {"paused": bool(now)} if kind == "pause" else {"from": before, "to": now}
+        return event
 
-    def _state_of(self, world: Any, kind: str) -> Any:
-        if kind == "pause":
-            return bool(unreal.GameplayStatics.is_game_paused(world))
+    def _movement(self, world: Any) -> Any:
+        """El ``CharacterMovementComponent`` del personaje del jugador (se guarda el personaje entre llamadas)."""
         if self._pawn is None:
             self._pawn = unreal.GameplayStatics.get_player_pawn(world, 0)
         if self._pawn is None:
@@ -149,14 +160,19 @@ class UnrealAdapter:
         mv = self._pawn.get_component_by_class(unreal.CharacterMovementComponent)
         if mv is None:
             raise ValueError("el personaje no tiene CharacterMovementComponent")
-        if kind == "movement_mode":
-            mode = mv.get_editor_property("movement_mode")
-            return str(getattr(mode, "name", mode))
-        base = mv.get_movement_base()  # movement_base: componente sobre el que se apoya (una cesta, el suelo…)
-        if base is None:
-            return ""
-        owner = base.get_owner()
-        return base.get_name() if owner is None else f"{owner.get_name()}.{base.get_name()}"
+        return mv
+
+    def _state_of(self, world: Any, kind: str) -> Any:
+        if kind == "pause":
+            state: Any = bool(unreal.GameplayStatics.is_game_paused(world))
+        elif kind == "movement_mode":
+            mode = self._movement(world).get_editor_property("movement_mode")
+            state = str(getattr(mode, "name", mode))
+        else:  # movement_base: componente sobre el que se apoya (una cesta, el suelo…)
+            base = self._movement(world).get_movement_base()
+            owner = None if base is None else base.get_owner()
+            state = "" if base is None else (base.get_name() if owner is None else f"{owner.get_name()}.{base.get_name()}")
+        return state
 
     # ------------------------------------------------------------------ lectores
     @staticmethod
@@ -206,42 +222,44 @@ def sessions_dir() -> Path:
 
 
 def _playtest_busy() -> bool:
+    busy = False
     try:
         from .. import editor  # noqa: PLC0415 - import tardío: evita ciclos al importar el paquete
 
-        st = getattr(editor, "_PLAYTEST_STATE", {}) or {}
-        return st.get("handle") is not None
-    except Exception:  # noqa: BLE001
-        return False
+        busy = (getattr(editor, "_PLAYTEST_STATE", {}) or {}).get("handle") is not None
+    except Exception:  # noqa: BLE001 - sin editor.py no hay playtest que excluir
+        busy = False
+    return busy
 
 
 def start_recording(plan_json: str, name: str = "") -> str:
     """Arranca una grabación con el plan dado. Devuelve JSON con la carpeta, las columnas y los avisos."""
     global _SESSION  # noqa: PLW0603
+    result: dict[str, Any]
     try:
         raw = json.loads(plan_json) if plan_json else {}
     except json.JSONDecodeError as exc:
-        return json.dumps({"success": False, "error": f"plan no es JSON válido: {exc}"})
-    plan = parse_plan(raw)
-    sid = time.strftime("%Y%m%d-%H%M%S") + (f"-{name}" if name else "")
-    rec = rec_mod.Recorder(plan, sessions_dir() / sid, UnrealAdapter(), busy=_playtest_busy)
-    try:
-        rec.start()
-    except rec_mod.SessionBusyError as exc:
-        return json.dumps({"success": False, "error": str(exc)})
-    _SESSION = rec
-    return json.dumps(
-        {
-            "success": True,
-            "id": sid,
-            "folder": str(rec.folder),
-            "columns": plan.columns,
-            "errors": plan.errors,
-            "warnings": plan.warnings,
-            "waiting_for_pie": rec.adapter.game_world() is None,
-        },
-        ensure_ascii=False,
-    )
+        raw = None
+        result = {"success": False, "error": f"plan no es JSON válido: {exc}"}
+    if raw is not None:
+        plan = parse_plan(raw)
+        sid = time.strftime("%Y%m%d-%H%M%S") + (f"-{name}" if name else "")
+        rec = rec_mod.Recorder(plan, sessions_dir() / sid, UnrealAdapter(), busy=_playtest_busy)
+        try:
+            rec.start()
+            _SESSION = rec
+            result = {
+                "success": True,
+                "id": sid,
+                "folder": str(rec.folder),
+                "columns": plan.columns,
+                "errors": plan.errors,
+                "warnings": plan.warnings,
+                "waiting_for_pie": rec.adapter.game_world() is None,
+            }
+        except rec_mod.SessionBusyError as exc:
+            result = {"success": False, "error": str(exc)}
+    return json.dumps(result, ensure_ascii=False)
 
 
 def status() -> str:

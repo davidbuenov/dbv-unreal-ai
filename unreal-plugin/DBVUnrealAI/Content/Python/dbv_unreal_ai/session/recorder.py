@@ -168,16 +168,14 @@ class Recorder:
 
     # ------------------------------------------------------------------ tick
     def _on_tick(self, dt: float) -> None:
-        if self.status != "recording":
-            return
-        t0 = self._clock()
-        try:
-            self._tick(dt)
-        except Exception as exc:  # un callback de Slate que falla se traga en silencio: se cuenta y se cierra
-            self._warn_once(f"error interno de la grabadora: {type(exc).__name__}: {exc}")
-            self.finish("internal_error")
-            return
-        self._costs.append(self._clock() - t0)
+        if self.status == "recording":
+            t0 = self._clock()
+            try:
+                self._tick(dt)
+                self._costs.append(self._clock() - t0)
+            except Exception as exc:  # un callback de Slate que falla se traga en silencio: se cuenta y se cierra
+                self._warn_once(f"error interno de la grabadora: {type(exc).__name__}: {exc}")
+                self.finish("internal_error")
 
     def _tick(self, dt: float) -> None:
         world = self.adapter.game_world()
@@ -235,51 +233,57 @@ class Recorder:
         return out
 
     def _read_one(self, world: Any, i: int, sig: Signal, dt: float, n: int) -> list[float]:
-        missing = [NAN] * n
+        out = [NAN] * n
         if sig.name in self.disabled:
-            return missing
+            return out
         if sig.kind == "frame":
             return self._frame_values(sig, dt)
+        reader = self._reader_for(world, i, sig)
+        if reader is not None:
+            out = self._call_reader(reader, sig, n)
+        return out
+
+    def _reader_for(self, world: Any, i: int, sig: Signal) -> Callable[[], list[float]] | None:
+        """El lector de la señal; si el objetivo todavía no existe, se reintenta cada ``RETRY_SECONDS``."""
         reader = self._readers.get(i)
-        if reader is None:
-            now = self._clock()
-            if now < self._next_try.get(i, 0.0):
-                return missing
+        now = self._clock()
+        if reader is None and now >= self._next_try.get(i, 0.0):
             reader = self.adapter.make_reader(world, sig)
             if reader is None:
                 self._next_try[i] = now + RETRY_SECONDS
                 if now - self._world_t0 > RESOLVE_SECONDS:
                     self._disable(sig, "no se encontró el objetivo")
-                return missing
-            self._readers[i] = reader
+            else:
+                self._readers[i] = reader
+        return reader
+
+    def _call_reader(self, reader: Callable[[], list[float]], sig: Signal, n: int) -> list[float]:
+        out = [NAN] * n
         try:
             vals = list(reader())
-        except Exception as exc:  # objetivo destruido o propiedad inexistente (R2)
+            if len(vals) == n:
+                out = [float(v) if v is not None else NAN for v in vals]
+            else:
+                self._disable(sig, f"devolvió {len(vals)} valores y se esperaban {n}")
+        except Exception as exc:  # objetivo destruido, propiedad inexistente o valor no numérico (R2)
             self._disable(sig, f"{type(exc).__name__}: {exc}")
-            return missing
-        if len(vals) != n:
-            self._disable(sig, f"devolvió {len(vals)} valores y se esperaban {n}")
-            return missing
-        return [float(v) if v is not None else NAN for v in vals]
+        return out
 
     def _check_slow_editor(self, dt: float) -> None:
         """R5: si la mitad de los últimos fotogramas es lenta, la medición no es fiable: se avisa una vez.
 
         Se mira una ventana móvil y se saltan los primeros segundos, donde el arranque de PIE da tirones normales.
         """
-        if self._clock() - self._world_t0 < SLOW_WARMUP_S:
-            return
-        self._recent.append(dt)
-        del self._recent[:-SLOW_CHECK_TICKS]
-        if len(self._recent) < SLOW_CHECK_TICKS:
-            return
-        if sum(1 for d in self._recent if d > LOW_FRAME_DT) / len(self._recent) < SLOW_FRACTION:
-            return
-        self._warn_once(
-            "el editor va muy lento durante la grabación (fotogramas de más de 100 ms): la medición no es fiable. "
-            "Trae la ventana del editor al frente, desactiva «Use Less CPU when in Background» "
-            "y revisa la memoria de vídeo (puede haber una GPU saturada)"
-        )
+        if self._clock() - self._world_t0 >= SLOW_WARMUP_S:
+            self._recent.append(dt)
+            del self._recent[:-SLOW_CHECK_TICKS]
+            full = len(self._recent) >= SLOW_CHECK_TICKS
+            if full and sum(1 for d in self._recent if d > LOW_FRAME_DT) / len(self._recent) >= SLOW_FRACTION:
+                self._warn_once(
+                    "el editor va muy lento durante la grabación (fotogramas de más de 100 ms): la medición no es fiable. "
+                    "Trae la ventana del editor al frente, desactiva «Use Less CPU when in Background» "
+                    "y revisa la memoria de vídeo (puede haber una GPU saturada)"
+                )
 
     @staticmethod
     def _frame_values(sig: Signal, dt: float) -> list[float]:

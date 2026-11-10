@@ -28,6 +28,12 @@ pub trait Editor {
     fn stop_pie(&mut self) -> Result<(), String>;
 }
 
+/// Argumentos de `StartPIE` según el esquema real de UE 5.8 (`options` es obligatorio): PIE en el visor y sin espera
+/// extra. Lo usan `unreal_playtest` y la caja negra, en las dos superficies. @spec REQ-82, REQ-92
+pub fn start_pie_args() -> Value {
+    json!({ "options": { "bSimulate": false, "playMode": "PlayMode_InViewPort", "warmupSeconds": 0 } })
+}
+
 /// Modos de `session_start`. `vr_preview` y `simulate` llegan con la comprobación con visor (S112).
 pub const MODES: [&str; 2] = ["pie", "attach"];
 

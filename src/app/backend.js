@@ -37,6 +37,9 @@ export const recipesAll = () => call('recipes_all');
 export const recipesPrompt = (id) => call('recipes_prompt', { id });
 export const recipesToolSpecs = () => call('recipes_tool_specs');
 export const recipesRunTool = (endpoint, name, args) => call('recipes_run_tool', { endpoint, name, args });
+/** Caja negra (REQ-92): las definiciones de `session_*` y su ejecución desde el asistente (D69). */
+export const sessionsToolSpecs = () => call('sessions_tool_specs');
+export const sessionsRunTool = (project, endpoint, name, args) => call('sessions_run_tool', { project: project ?? null, endpoint: endpoint ?? null, name, args });
 /** Guías de Unreal sin red (REQ-25): estado de la copia local, elegir su carpeta, buscar y la definición de la herramienta. */
 export const guidesStatus = () => call('guides_status');
 export const guidesSetFolder = (folder) => call('guides_set_folder', { folder });
