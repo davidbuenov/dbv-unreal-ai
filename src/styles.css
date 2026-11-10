@@ -494,3 +494,40 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .help-box { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12px; }
 .help-kbd { display: inline-block; padding: 2px 6px; font-family: var(--font-mono); font-size: 11px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 1px 1px var(--shadow); }
 
+
+/* Caja negra (REQ-94): el botón de la barra del compositor y su desplegable de modos. */
+.ai-panel__blackbox {
+  position: relative;
+  display: inline-block;
+}
+
+.ai-panel__blackbox-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 14rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.18));
+  border-radius: 8px;
+  background: var(--surface, #1e2230);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.ai-panel__blackbox-item {
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-panel__blackbox-item:hover,
+.ai-panel__blackbox-item:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}

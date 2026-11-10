@@ -382,6 +382,11 @@ export function start() {
         if (state.connection?.status !== 'online') return toast(t('unreal.pill.offline'), 'error');
         return ask(t('unreal.playtestPrompt'), { label: `▶️ ${t('ai.playtest')}` });
       },
+      // Caja negra (REQ-94): le pide a la IA que proponga el plan, lo grabe mientras la persona juega y lo analice.
+      runBlackbox: async ({ ask, mode }) => {
+        if (state.connection?.status !== 'online') return toast(t('unreal.pill.offline'), 'error');
+        return ask(t(`unreal.blackboxPrompt.${mode}`), { label: `⏺ ${t(`ai.blackbox.${mode}`)}` });
+      },
       beforeTurn: async () => {
         let startUndo = null;
         if (state.connection?.status === 'online') {

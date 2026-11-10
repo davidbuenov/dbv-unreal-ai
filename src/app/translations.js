@@ -481,6 +481,9 @@ export const APP_TRANSLATIONS = {
     'lib.dressCutMismatch': 'Aviso: la prenda tiene {garment} y este cuerpo es {body}; puede no ajustarse bien.',
     'lib.bodyFemale': 'de mujer',
     'lib.bodyMale': 'de hombre',
+    'unreal.blackboxPrompt.pie': 'Quiero depurar algo que ocurre mientras juego. Pregúntame primero qué he notado y cuándo (una o dos preguntas cortas). Luego usa la caja negra: propón un plan con session_plan, enséñamelo para que lo ajuste y, cuando lo acepte, empieza con session_start (modo pie). Mientras juego, espera con session_wait y apunta mis marcas con session_mark. Al terminar, para con session_stop, analiza con session_analyze (mira gaps primero) y respóndeme en tres bloques: lo que noté / lo que dicen los datos / conclusión.',
+    'unreal.blackboxPrompt.attach': 'Ya tengo una partida en marcha en el editor y quiero depurar algo que ocurre en ella. Pregúntame qué he notado, propón un plan con session_plan, enséñamelo y, cuando lo acepte, graba esa partida con session_start (modo attach, sin arrancar otra). Apunta mis marcas con session_mark, para con session_stop al acabar, analiza con session_analyze (gaps primero) y respóndeme en tres bloques: lo que noté / lo que dicen los datos / conclusión.',
+    'unreal.blackboxPrompt.choose': 'Quiero grabar una partida con la caja negra pero antes decidir qué se graba. Pregúntame qué fallo noto, qué objetos intervienen y cuándo ocurre; propón con session_plan las señales y qué debo hacer yo, déjame editarlas y no empieces a grabar hasta que te diga que sí.',
     'unreal.playtestPrompt': 'Ejecuta unreal_playtest para arrancar Play-In-Editor (PIE), mover el personaje durante 5 segundos, revisar errores/warnings del log y la captura del viewport, y dime si el nivel es jugable o si hay algún problema.',
   },
   en: {
@@ -953,6 +956,9 @@ export const APP_TRANSLATIONS = {
     'lib.dressCutMismatch': 'Warning: the garment has a {garment} and this body is {body}; it may not fit well.',
     'lib.bodyFemale': 'female',
     'lib.bodyMale': 'male',
+    'unreal.blackboxPrompt.pie': 'I want to debug something that happens while I play. First ask me what I noticed and when (one or two short questions). Then use the black box: propose a plan with session_plan, show it so I can adjust it and, once I accept, start with session_start (mode pie). While I play, wait with session_wait and note my marks with session_mark. When I finish, stop with session_stop, analyse with session_analyze (read gaps first) and answer in three blocks: what I noticed / what the data says / conclusion.',
+    'unreal.blackboxPrompt.attach': 'I already have a Play session running in the editor and want to debug something that happens in it. Ask me what I noticed, propose a plan with session_plan, show it and, once I accept, record that session with session_start (mode attach, without starting another). Note my marks with session_mark, stop with session_stop when done, analyse with session_analyze (gaps first) and answer in three blocks: what I noticed / what the data says / conclusion.',
+    'unreal.blackboxPrompt.choose': 'I want to record a game session with the black box but decide first what gets recorded. Ask me what failure I notice, which objects are involved and when it happens; propose the signals and what I should do with session_plan, let me edit them and do not start recording until I say yes.',
     'unreal.playtestPrompt': 'Run unreal_playtest to start Play-In-Editor (PIE), move the character for 5 seconds, check log errors/warnings and the viewport screenshot, and tell me whether the level is playable or if there are any issues.',
   },
 };

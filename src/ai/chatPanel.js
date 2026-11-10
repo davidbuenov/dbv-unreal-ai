@@ -107,6 +107,37 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   // «Probar en Play» (@spec REQ-82): lanza una prueba autónoma en PIE con movimiento, telemetría y captura.
   const playtest = button(`▶️ ${t('ai.playtest')}`, () => callbacks.onPlaytest?.(), 'button button--compact button--ghost ai-panel__playtest', t('ai.playtestHint'));
   if (!callbacks.onPlaytest) playtest.classList.add('hidden');
+  // «Caja negra» (@spec REQ-94): grabar lo que ocurre mientras la persona juega, con un desplegable de modos.
+  const blackboxWrap = el('span', 'ai-panel__blackbox');
+  const blackboxMenu = el('div', 'ai-panel__blackbox-menu hidden');
+  blackboxMenu.setAttribute('role', 'menu');
+  const closeBlackboxMenu = () => {
+    blackboxMenu.classList.add('hidden');
+    blackbox.setAttribute('aria-expanded', 'false');
+  };
+  const blackbox = button(`⏺ ${t('ai.blackbox')}`, () => {
+    const opening = blackboxMenu.classList.contains('hidden');
+    blackboxMenu.classList.toggle('hidden', !opening);
+    blackbox.setAttribute('aria-expanded', String(opening));
+  }, 'button button--compact button--ghost ai-panel__blackbox-button', t('ai.blackboxHint'));
+  blackbox.setAttribute('aria-haspopup', 'menu');
+  blackbox.setAttribute('aria-expanded', 'false');
+  for (const mode of ['pie', 'attach', 'choose']) {
+    const item = button(t(`ai.blackbox.${mode}`), () => {
+      closeBlackboxMenu();
+      callbacks.onBlackbox?.(mode);
+    }, 'ai-panel__blackbox-item', t(`ai.blackbox.${mode}Hint`));
+    item.setAttribute('role', 'menuitem');
+    item.dataset.mode = mode;
+    blackboxMenu.append(item);
+  }
+  blackboxWrap.append(blackbox, blackboxMenu);
+  if (!callbacks.onBlackbox) blackboxWrap.classList.add('hidden');
+  // Esc o un clic fuera lo cierra.
+  blackboxWrap.addEventListener('keydown', (event) => event.key === 'Escape' && closeBlackboxMenu());
+  document.addEventListener('click', (event) => {
+    if (!blackboxWrap.contains(event.target)) closeBlackboxMenu();
+  });
   // «Capturar viewport» (@spec REQ-73): solo si el host puede capturar el editor.
   const captureViewport = button('📷', () => callbacks.onCaptureViewport?.(), 'button button--compact button--ghost ai-panel__capture-viewport', t('ai.captureViewportHint'));
   if (!callbacks.onCaptureViewport) captureViewport.classList.add('hidden');
@@ -115,7 +146,7 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   const speed = el('span', 'ai-panel__usage ai-panel__speed');
   const stopButton = button(t('ai.stop'), () => callbacks.onStop(), 'button button--compact hidden');
   const sendButton = button(t('ai.send'), () => send(), 'button button--primary button--compact');
-  composerActions.append(attachFiles, captureViewport, attachSection, remember, recipes, playtest, attachments, speed, usage, stopButton, sendButton);
+  composerActions.append(attachFiles, captureViewport, attachSection, remember, recipes, playtest, blackboxWrap, attachments, speed, usage, stopButton, sendButton);
   composer.append(mentionList, input, composerActions);
   host.append(header, destination, warning, contextBar, messages, composer);
 

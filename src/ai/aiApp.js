@@ -239,6 +239,8 @@ export function createAiApp(deps) {
       onRecipes: host.openRecipes ? () => host.openRecipes({ panel, ask }) : undefined,
       // Prueba autónoma en Play (REQ-82): arranca PIE, mueve el Pawn y analiza telemetría y captura.
       onPlaytest: host.runPlaytest ? () => host.runPlaytest({ panel, ask }) : undefined,
+      // Caja negra (REQ-94): grabar lo que pasa mientras la persona juega; `mode` es pie, attach o choose.
+      onBlackbox: host.runBlackbox ? (mode) => host.runBlackbox({ panel, ask, mode }) : undefined,
       onCopy: (code) => navigator.clipboard.writeText(code).then(() => host.toast(t('ai.copied'))),
       onInsert: (code) => insertAtCursor(code),
     },
