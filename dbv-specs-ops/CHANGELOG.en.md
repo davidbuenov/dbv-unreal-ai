@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Known issues
+- **Tight tops and pants on MetaHumans (REQ-98): experimental.** The body-shell garment with draping measures well (no vertices inside the skin) but does not look presentable (crumpled cloth and texture baked over the anatomy). It does not block v0.5.0; loose garments, skirts and dresses work. To be revisited in v0.6.0 with MetaHuman-ready garments and Chaos Outfit.
+
 ### Added
 - **Drape for tops and trousers (REQ-98):** the shell no longer copies the anatomy. For each height band it takes the convex hull of the body (bridging the sternum and the spine) and lets it hang: going down, the fabric only moves 0.1 cm closer per cm on a top. It only moves away from the skin, never into it. On Pablo's tank top the median clearance goes from 0.98 to 2.93 cm and the abs no longer show.
 - **Tops and trousers built from the character's own body (REQ-98):** `outfit/shell.py`. The Tripo garment is no longer deformed: it is placed on the full body with a single scale and position, decides which skin it covers (armholes, neckline and length come from the garment; the crotch is always covered; the arm stays out if it has no sleeves), and the garment is that skin lifted 1 cm (top) or 0.6 cm (trousers), so the top sits outside at the waist. Colour and metal/roughness are baked from Tripo; the weights are the body's. It is the path used by "Send to Unreal" in the Library and by the pipeline for `Torso` and `Legs` (skirts keep their own path). On `Pablo` with the tank top and running shorts: 0 vertices inside the skin and about 6 s per garment.

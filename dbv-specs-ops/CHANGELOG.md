@@ -11,6 +11,9 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+### Conocido
+- **Camisetas y pantalones ceñidos sobre MetaHumans (REQ-98): experimental.** La carcasa del cuerpo con drapeado mide bien (sin vértices dentro de la piel) pero el aspecto no es presentable (tela arrugada y textura sobre la anatomía). No bloquea la v0.5.0; las prendas holgadas, faldas y vestidos funcionan. Se retoma en la v0.6.0 con prendas hechas para MetaHuman y Chaos Outfit.
+
 ### Añadido
 - **Drapeado de tops y pantalones (REQ-98):** la carcasa ya no copia la anatomía. Por cada franja de altura se toma la envolvente convexa del cuerpo (puentea el esternón y la columna) y se deja colgar: bajando, la tela solo se acerca 0,1 cm por cm en un top. Solo se aleja de la piel, nunca se mete. En la camiseta de tirantes de Pablo la holgura mediana pasa de 0,98 a 2,93 cm y deja de marcar los abdominales.
 - **Tops y pantalones construidos desde el cuerpo del personaje (REQ-98):** `outfit/shell.py`. La prenda de Tripo ya no se deforma: se coloca sobre el cuerpo completo con una sola escala y posición, decide qué piel tapa (las sisas, el escote y el largo salen de la prenda; la entrepierna siempre tapada; el brazo fuera si no tiene mangas), y la prenda es esa piel separada 1 cm (top) o 0,6 cm (pantalón), así que el top queda por fuera en la cintura. Color y metal/rugosidad se hornean desde Tripo; los pesos son los del cuerpo. Es la ruta de «Enviar a Unreal» en la Biblioteca y del pipeline para `Torso` y `Legs` (las faldas siguen por su camino). En `Pablo` con la camiseta de tirantes y los shorts de correr: 0 vértices dentro de la piel y unos 6 s por prenda.
