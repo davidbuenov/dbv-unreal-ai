@@ -277,6 +277,7 @@
   - [ ] S106 · Grabadora Python (`REQ-91`); puerta: spikes `P-23` (fin de PIE e identidad del mundo) y `P-22` (coste).
     - [x] Puerta superada (2026-11-10, en vivo): P-23 resuelta (fin de PIE = `get_game_world()` a `None`; un mundo retenido lanza «ObjectInstance is null» al acabar) y P-22 medida (30 señales = 0,19 ms por fotograma, bajo el objetivo de 0,5 ms). **S114 (grabadora C++) se descarta.**
     - [x] S106a (2026-11-10): `session/frames.py` (formato `frames.bin` por bloques con CRC, 6 tests).
+    - [x] S106b (2026-11-10): `session/plan.py` (señales, presets, límites; un plan con errores graba lo bueno; 9 tests).
     - [ ] Falta el paquete `dbv_unreal_ai/session/` (señales, presets, bloques, `finish()`, una sesión activa).
   - [ ] S107 · Almacenamiento y lector en Rust (`REQ-91`).
   - [ ] S108 · Análisis núcleo (`REQ-93`).
