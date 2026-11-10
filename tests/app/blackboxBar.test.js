@@ -55,9 +55,9 @@ describe('panel de grabación (REQ-94)', () => {
   });
 
   it('el botón de marcar recuerda la tecla del juego, que no le quita el foco @spec REQ-94', async () => {
-    const { bar } = barWith({ info: { id: 's1', startedAt: STARTED, marks: 0, markKey: 'F10' } });
+    const { bar } = barWith({ info: { id: 's1', startedAt: STARTED, marks: 0, markKey: 'F11' } });
     await bar.refresh();
-    expect(bar.node.querySelectorAll('button')[0].title).toBe('F10 en el juego marca sin perder el foco');
+    expect(bar.node.querySelectorAll('button')[0].title).toBe('F11 en el juego marca sin perder el foco');
   });
 
   it('«Terminar» llama a session_stop y el panel se apaga cuando la grabación ya no está activa @spec REQ-94', async () => {

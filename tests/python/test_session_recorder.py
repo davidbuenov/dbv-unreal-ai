@@ -422,8 +422,8 @@ class RecorderTest(unittest.TestCase):
         r.finish()
         marks = [e for e in self._events() if e["type"] == "mark"]
         self.assertEqual([m["label"] for m in marks], ["Momento 1", "Momento 2", "Momento 3"])
-        self.assertEqual((marks[0]["source"], marks[0]["key"]), ("key", "F9"))
-        self.assertEqual(self._meta()["mark_key"], "F9")
+        self.assertEqual((marks[0]["source"], marks[0]["key"]), ("key", "F10"))
+        self.assertEqual(self._meta()["mark_key"], "F10")
 
     def test_cost_is_stored_in_meta(self) -> None:
         self.adapter.readers["A"] = lambda: [0.0]

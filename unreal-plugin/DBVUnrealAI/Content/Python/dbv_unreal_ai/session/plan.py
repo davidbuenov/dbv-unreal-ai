@@ -32,7 +32,7 @@ FRAME_CHANNELS = ("dt_ms", "fps")
 KINDS = ("transform", "variable", "anim_property", "frame")
 RECOMMENDED_MAX_SIGNALS = 30  # medido en P-22: 30 columnas cuestan 0,19 ms por fotograma
 
-DEFAULT_MARK_KEY = "F9"  # en PIE: F8 expulsa del personaje, F9 no hace nada
+DEFAULT_MARK_KEY = "F10"  # F9 la usan muchos capturadores de pantalla (visto el 2026-11-10); en PIE F8 expulsa del personaje
 DEFAULT_MAX_SECONDS = 600.0  # 10 minutos
 DEFAULT_MAX_BYTES = 500 * 1024 * 1024  # 500 MB
 DEFAULT_KEEP_SESSIONS = 20
@@ -174,7 +174,7 @@ def parse_plan(raw: Any) -> Plan:
     if isinstance(key, str) and key.strip():
         plan.mark_key = key.strip()
     elif key not in (None, ""):
-        plan.errors.append("«mark_key» debe ser el nombre de una tecla (por ejemplo F9)")
+        plan.errors.append("«mark_key» debe ser el nombre de una tecla (por ejemplo F10)")
     if "mark_key" not in plan.events:
         plan.events.append("mark_key")  # siempre: es la forma de marcar sin quitarle el teclado al juego
     _dedupe_names(plan)

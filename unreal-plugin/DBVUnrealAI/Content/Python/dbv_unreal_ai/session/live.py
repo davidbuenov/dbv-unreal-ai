@@ -89,7 +89,7 @@ class UnrealAdapter:
 
     supported_events = frozenset({"pause", "movement_mode", "movement_base", "mark_key"})
 
-    def __init__(self, mark_key: str = "F9") -> None:
+    def __init__(self, mark_key: str = "F10") -> None:
         self._ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
         self._last: dict[str, Any] = {}
         self._pawn: Any = None
