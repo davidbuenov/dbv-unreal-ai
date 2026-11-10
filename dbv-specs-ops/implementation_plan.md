@@ -1,10 +1,11 @@
 ---
-# Frontmatter de la fase vigente: v0.5.0, vestir un MetaHuman desde la app (REQ-83..REQ-90, sección 14) y caja negra (REQ-91..REQ-97, sección 15).
+# Frontmatter de la fase vigente: v0.5.0, vestir un MetaHuman desde la app (REQ-83..REQ-90, sección 14), caja negra (REQ-91..REQ-97, sección 15) y prendas ceñidas como carcasa del cuerpo (REQ-98, REQ-89, REQ-90, sección 16).
 dependencies:
   - UE 5.8 con DBVMCPFirst y tres MetaHumans de dos cuerpos (f_med_nrw y m_tal_nrw)
   - Plugins de Epic GeometryScripting y ChaosClothAssetToolset (experimental)
   - API de Tripo para las prendas nuevas de la matriz de REQ-90 (coste en créditos, con permiso del usuario)
   - Scripts de la sesión del 2026-11-08 como referencia (fuera del repositorio; se portan, no se copian)
+  - Prendas ceñidas (sección 16): BP_Pablo_deportista_claude (BP_Pablo original) en /Game/DBV/Maps/Metahumans y cuerpos completos <complexión>_body_preview; GeometryScript (Bake, MeshSpatial, MeshEdits, BoneWeights, Normals), comprobado en vivo el 2026-11-10
   - Caja negra (sección 15): editor de pruebas con PIE y, para S112, un visor con VR Preview; ElecnorMIO como caso real de referencia; sin dependencias nuevas de Python (solo biblioteca estándar) ni de Rust salvo que S107 lo justifique
 risks:
   - "R-35: el resultado depende del modelo de Tripo -> aislar con aviso, validación automática y límite documentado"
@@ -16,10 +17,16 @@ risks:
   - "R-42: coste de muestrear desde Python -> medir en S106 (P-22) y construir la variante C++ solo si hace falta"
   - "R-43: privacidad de capturas y voz -> todo local, voz apagada por defecto, sin identidad en la sesión"
   - "R-44: la variante C++ exige recompilar -> Python es la base y cubre proyectos solo Blueprint"
+  - "R-45: el horneado depende del encaje de la prenda de Tripo -> distancia de horneado limitada, relleno desde vecinos con aviso y capturas revisadas"
+  - "R-46: se pierden capucha, cuello alto o bolsillos -> quedan pintados; aviso de prenda alejada del cuerpo y límite en la ficha"
+  - "P-28: guardar como asset la textura horneada no está comprobado -> spike S116a; si falla, color por vértice (bake_vertex)"
 rollback_strategy: >
   Un commit por slice. Ningún slice toca el Blueprint ni los assets originales del usuario, y todo lo creado queda en
   /Game/DBV/MetaHumanOutfits/<Personaje>/. Si un slice de tela no supera su puerta, equip_metahuman_outfit por huesos
   sigue funcionando y se retira skirt/dress de la interfaz. No se publica en la Store sin REQ-90.
+  Prendas ceñidas (sección 16): un commit por slice; la carcasa vive en outfit/shell.py y entra en el pipeline en un solo
+  punto (S116h). Revertir ese commit devuelve top y pants al método anterior, ya marcado como REJECTED-13, así que no se
+  publica así: sin S116 aprobado por el usuario, top y pants salen de la interfaz de la v0.5.0.
   Caja negra: un commit por slice, solo lectura sobre el proyecto (REQ-91, R4); si un slice no supera su puerta, el
   anterior sigue siendo utilizable (S105, instrucciones y receta, no depende de la grabadora) y las herramientas
   session_* de ese slice se retiran del catálogo sin tocar el resto.
@@ -553,3 +560,64 @@ Cada slice es un commit, en pasos de hasta 50 líneas, con `@spec`, tests y `CHA
 ### Cuestiones para `/code-simplify`
 
 La grabadora y los análisis deben cumplir desde el principio la regla de un solo `return` y la captura de excepciones concretas (`<coding_standards>`); se revisan función por función antes de `/ship`.
+
+---
+
+## 16. Plan de implementación — v0.5.0: prendas ceñidas como carcasa del cuerpo (REQ-98, REQ-89, REQ-90; P-27, P-28)
+
+> **Modo:** Orquestador (más de 3 ficheros y más de 150 líneas). **Fecha:** 2026-11-10. **Origen:** `/spec` v1.15 tras ver a `Pablo_Deportista` mal vestido (REJECTED-13).
+
+### Evidencia en vivo (2026-11-10, UE 5.8, `DBVMCPFirst`)
+
+- Existen: `GeometryScript_Bake.bake_texture` y `bake_vertex` (con `make_bake_type_texture` y `make_bake_type_tangent_normal`), `GeometryScript_MeshSpatial.build_bvh_for_mesh`, `find_nearest_point_on_mesh` y `find_nearest_ray_intersection_with_mesh`, `GeometryScript_MeshEdits.delete_triangles_from_mesh`, `GeometryScript_MeshModeling.apply_mesh_offset` y `apply_mesh_shell`, `GeometryScript_BoneWeights.mesh_copy_bone_weights`, `GeometryScript_Normals.compute_split_normals` y `GeometryScript_AssetUtils.copy_mesh_to_skeletal_mesh`.
+- **No existe** `create_new_texture_asset_from_render_target`. Sin comprobar cómo se guarda como asset la textura que devuelve `bake_texture`: P-28.
+- Personaje de prueba: etiqueta real **`BP_Pablo_deportista_claude`** (clase `/Game/MetaHumans/Pablo/BP_Pablo`, `Body` = `m_tal_nrw_body` recortado, camisa y pantalón de fábrica). Cuerpo completo: `/Game/MetaHumans/Common/Common/m_tal_nrw_body_preview`.
+- Chaos Outfit en Python: `ChaosOutfitAsset`, `ChaosOutfitAssetFactory`, `ChaosSizedOutfitSource` y `MetaHumanOutfitPipeline` (`apply_outfit_assembly_output_to_mesh_component`). No aparecen como clases los nodos de Outfit de Dataflow (P-27).
+
+### Diseño
+
+Módulo nuevo `dbv_unreal_ai/outfit/shell.py` con una función por paso de REQ-98; `pipeline.py` lo llama para `top` y `pants`. Todo trabaja sobre una copia en `DynamicMesh` del cuerpo completo de la complexión. **Borrar triángulos de esa copia conserva UV y pesos**, así que la carcasa hereda del cuerpo topología, UV y huesos, sin transferir nada (REJECTED-12).
+
+| Función | Qué hace | REQ-98 |
+| --- | --- | --- |
+| `place_garment(garment_dyn, landmarks, kind)` | escala uniforme y traslación por puntos anatómicos (`fit.measure_body_landmarks`); antes aísla la prenda (`fit.isolate_garment_triangles`) | 1 |
+| `covered_zone(body_dyn, garment_dyn, kind, landmarks)` | por vértice del cuerpo, rayo hacia fuera por la normal contra la prenda (BVH), con alcance máximo; mayoría entre vecinos, simetría en X, entrepierna forzada en `pants`, brazo fuera si la prenda no tiene mangas, cuello antes de la costura con `Face`; si la cobertura no es fiable, plantilla por tipo y largo, con aviso | 2 |
+| `build_shell(body_dyn, zone, clearance, outer_of)` | copia, quita lo no tapado, separa por la normal con la holgura por zona, dobladillo en los bordes (`apply_mesh_shell` o extrusión del borde) y más separación del `top` sobre el `pants` en la cintura | 3, 7 |
+| `bake_appearance(shell_dyn, garment_dyn, garment_textures)` | color y normal desde Tripo a las UV del cuerpo, con distancia máxima, relleno y aviso (R-45); material de dos caras | 4 |
+| `shell_to_skeletal_mesh(shell_dyn, body_skm, dest)` | asset de malla esquelética con el esqueleto del cuerpo y LOD como `Body` (`fit.setup_garment_lods`) | 5 |
+| `body_trim_zone(zone, border_margin)` | zona tapada menos un margen junto a los bordes, para `skin.trim_body_mesh_under_garment` | 6 |
+| `looseness_warning(garment_dyn, body_dyn, zone)` | holgura mediana de la prenda de Tripo colocada; por encima del umbral (4 cm), aviso de pérdida de volumen | 8 |
+
+**Validador (S118):** `validate.measure_signed_clearance(garment_dyn, body_dyn, zone)` mide la distancia con signo con el punto más cercano y la normal del cuerpo, y la piel destapada en la zona. Sustituye a `measure_body_clearance` (cajas envolventes y valores fijos, prohibidos por REQ-89). Si no puede medir, devuelve `error`.
+
+**Parámetro opcional:** `clearance_cm` (REQ-88), igual en `editor.py`, `toolset.py`, `cpp_bridge.py`, `mcp_server.rs` y `unrealTools.js`.
+
+### Slices (orden de ejecución)
+
+Cada slice es un commit, en pasos de hasta 50 líneas, con `@spec`, tests y `CHANGELOG` ES y EN.
+
+1. **S118a · Distancia con signo (`REQ-89`).** `measure_signed_clearance` y piel destapada en la zona; tests con mallas de prueba (esfera dentro y fuera, hueco).
+2. **S118b · Sustituir la medida por cajas (`REQ-89`).** `validate_outfit` usa la medida nueva, sin valores fijos ni atajo de faldas; guarda las capturas en disco y pone su ruta en el informe. Tests actualizados.
+3. **S118c · Puerta de regresión en vivo (`REQ-89`).** El `Pablo_Deportista` actual (camiseta de caja, shorts con hueco) da un resultado distinto de `ok`, y lo explica.
+4. **S116a · Spike de horneado (P-28), en vivo y sin tocar el plugin.** Hornear el color de la camiseta de Tripo sobre una zona del cuerpo de `m_tal_nrw` y guardarlo como asset. Medir el tiempo de BVH más rayos en unos 30.000 vértices. **Puerta:** textura guardada o, si no, color por vértice; y tiempo por debajo de 60 s, o procesar por lotes.
+5. **S116b · `place_garment` (`REQ-98`).**
+6. **S116c · `covered_zone` (`REQ-98`)**, con las reglas de mangas, entrepierna y cuello.
+7. **S116d · `build_shell` (`REQ-98`)**, con dobladillo y el top por fuera en la cintura.
+8. **S116e · `bake_appearance` (`REQ-98`)**, por la vía que elija S116a.
+9. **S116f · `shell_to_skeletal_mesh`, recorte del cuerpo y aviso de holgura (`REQ-98`).**
+10. **S116g · `clearance_cm` en toda la pila (`REQ-88`, `REQ-98`).**
+11. **S116h · Integración (`REQ-98`, `REQ-84`).** `pipeline.py` y `equip_metahuman_outfit` mandan `top` y `pants` a `shell.py`. Se borra el camino por franjas para esos tipos (`_compute_slice_envelopes` y `_deform_by_envelopes`, más el atajo de shorts en `_is_skirt_shape`). Faldas y vestidos no cambian.
+12. **S116i · Puerta en vivo con el usuario (`REQ-98`).** Desde la Biblioteca de la app, camiseta de tirantes y shorts de correr sobre `BP_Pablo_deportista_claude`, en los dos órdenes. Validación de S118, capturas de frente, lado y espalda y ciclo de andar. **Lo aprueba el usuario.** Después, top y pantalón largo en Victoria, y una sudadera ancha (`con_avisos`).
+13. **S117 · Spike de Chaos Outfit (P-27), limitado a una sesión.** Crear un `ChaosOutfitAsset` por script y comprobar si se puede ajustar a otro cuerpo con `ChaosSizedOutfitSource` o `MetaHumanOutfitPipeline`, o con un grafo de Dataflow de plantilla. Si se puede, aplicarlo a la misma camiseta y los mismos shorts, y comparar con S118 y capturas. Resultado al usuario; si no se puede, va a la Rejection Memory.
+
+Después, la matriz de 12 casos de REQ-90 (S104 reabierto) con la app instalada.
+
+### Pruebas
+
+- **Python (`tests/python/test_outfit_shell.py`, `test_outfit_validate.py`):** dobles de `unreal` con mallas pequeñas (cilindro de torso con dos cilindros de pierna). Casos: entrepierna cubierta en `pants`; brazo fuera en un top sin mangas; zona simétrica; dobladillo sin bordes abiertos nuevos; top por fuera en la cintura en los dos órdenes; aviso de holgura por encima del umbral; error sin cuerpo completo; validador con vértices dentro, hueco destapado y error sin medida (nunca valores fijos).
+- **Vitest y Rust:** `clearance_cm` opcional en el esquema de la herramienta y en la llamada de la Biblioteca.
+- **En vivo:** puertas S118c, S116a, S116i y S117; capturas guardadas en `Saved/DBVUnrealAI/outfits/<job>/`.
+
+### Cuestiones para `/code-simplify`
+
+Al quitar el camino por franjas, comprobar que no queda código muerto en `metahuman.py` (`_warp_t`, `_arm_cutoff`, `_compute_slice_envelopes`, `_deform_by_envelopes`) ni tests que solo lo cubrían. `shell.py` cumple desde el principio un solo `return` y excepciones concretas.
