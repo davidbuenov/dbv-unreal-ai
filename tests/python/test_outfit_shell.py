@@ -13,6 +13,7 @@ La parte que habla con GeometryScript se prueba en vivo (S116i).
 
 from __future__ import annotations
 
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -91,6 +92,38 @@ class TestShellPure(unittest.TestCase):
         covered = [False, True, True, True, True, True, False, False]
         inner = shell.interior(covered, ring(8), rings=1)
         self.assertEqual(inner, [False, False, True, True, True, False, False, False])
+
+    def test_envolvente_convexa_puentea_el_hueco(self) -> None:
+        # Un pecho con el surco del esternón: el hueco (0, 8) queda dentro de la envolvente.
+        pts = [(-10.0, 10.0), (0.0, 8.0), (10.0, 10.0), (10.0, -8.0), (-10.0, -8.0)]
+        hull = shell.convex_hull(pts)
+        self.assertNotIn((0.0, 8.0), hull)
+        self.assertAlmostEqual(shell.hull_radius(hull, (0.0, 0.0), math.pi / 2.0), 10.0, places=6)
+
+    def test_radio_de_la_envolvente_desde_un_centro_desplazado(self) -> None:
+        square = [(8.0, -2.0), (12.0, -2.0), (12.0, 2.0), (8.0, 2.0)]  # una pierna con centro en x = 10
+        self.assertAlmostEqual(shell.hull_radius(square, (10.0, 0.0), 0.0), 2.0, places=6)
+
+    def test_la_tela_cuelga_y_nunca_se_acerca(self) -> None:
+        radii = [[10.0, 10.0], [6.0, 12.0], [5.0, 4.0]]
+        hung = shell.hang(radii, step_cm=2.0, slope=0.5)
+        self.assertEqual(hung, [[10.0, 10.0], [9.0, 12.0], [8.0, 11.0]])
+        for before, after in zip(radii, hung):
+            self.assertTrue(all(a >= b for a, b in zip(after, before)))
+
+    def test_separacion_del_drapeado_sin_aletas(self) -> None:
+        # El vértice 2 pediría 20 cm (pliegue de la entrepierna): no se mueve y sus vecinos se suavizan.
+        wanted = {0: 1.0, 1: 1.0, 2: 20.0, 3: 1.0}
+        lifts = shell.drape_lifts(wanted, ring(4), cap=4.0, passes=3)
+        self.assertTrue(all(0.0 <= v <= 4.0 for v in lifts.values()))
+        self.assertLess(lifts[2], 1.0)
+
+    def test_radio_interpolado_entre_franjas_y_direcciones(self) -> None:
+        by_level = {0: {"centre": (0.0, 0.0), "radii": [10.0] * 4}, 1: {"centre": (0.0, 0.0), "radii": [20.0] * 4}}
+        radius, centre = shell.envelope_radius(by_level, 0.5, 0.0, bins=4)
+        self.assertAlmostEqual(radius, 15.0)
+        self.assertEqual(centre, (0.0, 0.0))
+        self.assertIsNone(shell.envelope_radius({}, 0.5, 0.0, bins=4))
 
     def test_tipos_sin_carcasa_dan_error_claro(self) -> None:
         result = shell.build_garment_shell(None, None, "skirt", "/Game/X", "SK_X")

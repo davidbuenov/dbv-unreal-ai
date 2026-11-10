@@ -59,6 +59,16 @@ SMOOTH_PASSES = 2
 # Hasta dónde busca el horneado la prenda de Tripo desde la carcasa. Con 12 cm, la piel de la
 # cadera que el pantalón tapa siempre (entrepierna) se quedaba negra (2026-11-10).
 BAKE_PROJECTION_CM = 20.0
+# Drapeado: franjas de altura, direcciones por franja y caída máxima de la tela (cm por cm al bajar).
+DRAPE_STEP_CM = 2.0
+DRAPE_BINS = 72
+# Con 0,25 la camiseta seguía marcando los abdominales; con 0,1 cae desde el pecho (2026-11-10).
+DRAPE_SLOPE = {"top": 0.1, "pants": 0.2}
+DRAPE_FAMILIES = {"top": ("spine", "clavicle", "pelvis"), "pants": ("pelvis", "thigh")}
+# Lo más que se separa la tela por el drapeado. Un vértice que pediría más es un pliegue del cuerpo
+# (la entrepierna dentro de la envolvente de las dos piernas) y no se mueve: daba aletas de 19 cm.
+DRAPE_MAX_LIFT_CM = {"top": 8.0, "pants": 5.0}
+DRAPE_SMOOTH_PASSES = 6
 TEXTURE_SIZE = 2048
 FLAT_NORMAL = "/Engine/EngineMaterials/FlatNormal"
 
@@ -143,6 +153,53 @@ def looseness(hit_distances: list[float]) -> dict[str, Any]:
     median = ordered[len(ordered) // 2] if ordered else 0.0
     report: dict[str, Any] = {"median_cm": round(median, 2), "loose": median > LOOSE_MEDIAN_CM}
     return report
+
+
+def convex_hull(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Envolvente convexa 2D (cadena monótona), en sentido antihorario."""
+    pts = sorted(set(points))
+    hull = pts
+    if len(pts) > 2:
+        def half(seq: list[tuple[float, float]]) -> list[tuple[float, float]]:
+            chain: list[tuple[float, float]] = []
+            for p in seq:
+                while len(chain) >= 2 and (chain[-1][0] - chain[-2][0]) * (p[1] - chain[-2][1]) - (chain[-1][1] - chain[-2][1]) * (p[0] - chain[-2][0]) <= 0.0:
+                    chain.pop()
+                chain.append(p)
+            return chain[:-1]
+
+        hull = half(pts) + half(list(reversed(pts)))
+    return hull
+
+
+def hull_radius(hull: list[tuple[float, float]], centre: tuple[float, float], theta: float) -> float:
+    """Distancia desde ``centre`` hasta el borde de ``hull`` en la dirección ``theta``."""
+    dx, dy = math.cos(theta), math.sin(theta)
+    cx, cy = centre
+    best = 0.0
+    for i, (ax, ay) in enumerate(hull):
+        bx, by = hull[(i + 1) % len(hull)]
+        ex, ey = bx - ax, by - ay
+        denom = dx * ey - dy * ex
+        if abs(denom) > 1e-9:
+            t = ((ax - cx) * ey - (ay - cy) * ex) / denom
+            s = ((ax - cx) * dy - (ay - cy) * dx) / denom
+            if t > best and -1e-6 <= s <= 1.0 + 1e-6:
+                best = t
+    return best
+
+
+def hang(radii_top_down: list[list[float]], step_cm: float, slope: float) -> list[list[float]]:
+    """La tela cuelga: bajando, el radio solo puede encogerse ``slope`` cm por cm. @spec REQ-98
+
+    ``radii_top_down`` va de la franja más alta a la más baja, con el mismo número de
+    direcciones en cada una. Nunca se reduce un radio: la prenda solo se aleja de la piel.
+    """
+    hung = [list(r) for r in radii_top_down]
+    for k in range(1, len(hung)):
+        for b in range(len(hung[k])):
+            hung[k][b] = max(hung[k][b], hung[k - 1][b] - slope * step_cm)
+    return hung
 
 
 def interior(covered: list[bool], neighbours: list[set[int]], rings: int = 2) -> list[bool]:
@@ -357,6 +414,138 @@ def build_shell(body: BodyModel, covered: list[bool], offset_cm: float) -> Any:
     return shell
 
 
+def _crotch_z(body: BodyModel) -> float:
+    """Altura de la entrepierna: lo más bajo que llega la piel de cadera y muslos en el centro."""
+    centre = [p[2] for p, f in zip(body.pos, body.family) if f in ("pelvis", "thigh") and abs(p[0]) < 1.5]
+    crotch = (min(centre) + 1.0) if centre else -1.0e9
+    return crotch
+
+
+def _drape_group(kind: str, x: float, z: float, crotch_z: float) -> str:
+    """En un pantalón, por debajo de la entrepierna cada pierna cuelga por su lado."""
+    group = "torso"
+    if kind == "pants":
+        group = "both" if z >= crotch_z else ("left" if x > 0.0 else "right")
+    return group
+
+
+def drape_lifts(wanted: dict[int, float], neighbours: list[set[int]], cap: float, passes: int = DRAPE_SMOOTH_PASSES) -> dict[int, float]:
+    """Separación final por vértice: se descarta lo que pasa del tope y se suaviza con los vecinos. @spec REQ-98
+
+    Nunca es negativa, así que la tela solo se aleja de la piel.
+    """
+    lifts = {i: (w if 0.0 <= w <= cap else 0.0) for i, w in wanted.items()}
+    for _ in range(passes):
+        nxt = {}
+        for i, value in lifts.items():
+            around = [lifts[j] for j in neighbours[i] if j in lifts]
+            nxt[i] = (value + sum(around)) / (1 + len(around)) if around else value
+        lifts = nxt
+    return lifts
+
+
+def envelope_radius(by_level: dict[int, dict[str, Any]], level_f: float, theta: float, bins: int = DRAPE_BINS) -> tuple[float, tuple[float, float]] | None:
+    """Radio y centro de la envolvente interpolados entre franjas y direcciones (sin escalones). @spec REQ-98"""
+    below = int(math.floor(level_f))
+    above = below + 1
+    have = [k for k in (below, above) if k in by_level]
+    result = None
+    if have:
+        weight_above = (level_f - below) if len(have) == 2 else (1.0 if have[0] == above else 0.0)
+        pos = (theta % (2.0 * math.pi)) / (2.0 * math.pi) * bins
+        b0 = int(math.floor(pos)) % bins
+        b1 = (b0 + 1) % bins
+        frac = pos - math.floor(pos)
+
+        def at(k: int) -> float:
+            radii = by_level[k]["radii"]
+            return radii[b0] * (1.0 - frac) + radii[b1] * frac
+
+        if len(have) == 2:
+            radius = at(below) * (1.0 - weight_above) + at(above) * weight_above
+            cb, ca = by_level[below]["centre"], by_level[above]["centre"]
+            centre = (cb[0] * (1.0 - weight_above) + ca[0] * weight_above, cb[1] * (1.0 - weight_above) + ca[1] * weight_above)
+        else:
+            radius = at(have[0])
+            centre = by_level[have[0]]["centre"]
+        result = (radius, centre)
+    return result
+
+
+def drape_envelope(body: BodyModel, kind: str, z_low: float, z_high: float) -> dict[str, Any]:
+    """Radios de la tela por franja, grupo y dirección: envolvente convexa del cuerpo que cuelga (REQ-98). @spec REQ-98"""
+    families = DRAPE_FAMILIES.get(kind, ())
+    crotch = _crotch_z(body) if kind == "pants" else -1.0e9
+    levels = [z_high - k * DRAPE_STEP_CM for k in range(int((z_high - z_low) / DRAPE_STEP_CM) + 2)]
+    buckets: dict[tuple[int, str], list[tuple[float, float]]] = {}
+    for p, fam in zip(body.pos, body.family):
+        if fam in families and z_low - DRAPE_STEP_CM <= p[2] <= z_high + DRAPE_STEP_CM:
+            k = max(0, min(len(levels) - 1, int(round((z_high - p[2]) / DRAPE_STEP_CM))))
+            buckets.setdefault((k, _drape_group(kind, p[0], levels[k], crotch)), []).append((p[0], p[1]))
+    slices: dict[str, dict[int, dict[str, Any]]] = {}
+    for (k, group), pts in buckets.items():
+        if len(pts) >= 3:
+            hull = convex_hull(pts)
+            centre = (sum(q[0] for q in hull) / len(hull), sum(q[1] for q in hull) / len(hull))
+            radii = [hull_radius(hull, centre, 2.0 * math.pi * b / DRAPE_BINS) for b in range(DRAPE_BINS)]
+            slices.setdefault(group, {})[k] = {"centre": centre, "radii": radii}
+    for group, by_level in slices.items():
+        ordered = sorted(by_level)
+        hung = hang([by_level[k]["radii"] for k in ordered], DRAPE_STEP_CM, DRAPE_SLOPE.get(kind, 0.3))
+        for k, radii in zip(ordered, hung):
+            by_level[k]["radii"] = radii
+    envelope: dict[str, Any] = {"levels": levels, "slices": slices, "crotch_z": crotch}
+    return envelope
+
+
+def drape_shell(shell: Any, body: BodyModel, kind: str, offset_cm: float) -> tuple[Any, dict[str, Any]]:
+    """Aleja la carcasa de la piel hasta la envolvente que cuelga; nunca la acerca. @spec REQ-98"""
+    queries = unreal.GeometryScript_MeshQueries
+    edits = unreal.GeometryScript_MeshEdits
+    from .clearance import vertex_ids
+
+    ids = vertex_ids(shell)
+    points = []
+    for i in ids:
+        p, _ = queries.get_vertex_position(shell, i)
+        points.append((i, float(p.x), float(p.y), float(p.z)))
+    z_low = min(p[3] for p in points)
+    z_high = max(p[3] for p in points)
+    envelope = drape_envelope(body, kind, z_low, z_high)
+    wanted: dict[int, float] = {}
+    direction: dict[int, tuple[float, float]] = {}
+    for i, x, y, z in points:
+        level_f = (z_high - z) / DRAPE_STEP_CM
+        by_level = envelope["slices"].get(_drape_group(kind, x, z, envelope["crotch_z"]), {})
+        nearest = by_level.get(int(round(level_f)))
+        guess = nearest["centre"] if nearest is not None else None
+        sample = envelope_radius(by_level, level_f, math.atan2(y - guess[1], x - guess[0])) if guess is not None else None
+        if sample is not None:
+            target_radius, (cx, cy) = sample
+            radius = math.hypot(x - cx, y - cy)
+            if radius > 1e-6:
+                wanted[i] = max(0.0, target_radius + offset_cm - radius)
+                direction[i] = ((x - cx) / radius, (y - cy) / radius)
+    # La carcasa conserva los ID de vértice del cuerpo: sus vecinos son los del cuerpo.
+    lifts = drape_lifts(wanted, body.neighbours, DRAPE_MAX_LIFT_CM.get(kind, 4.0))
+    moved = 0
+    by_id = {i: (x, y, z) for i, x, y, z in points}
+    for i, value in lifts.items():
+        if value > 0.01:
+            x, y, z = by_id[i]
+            dx, dy = direction[i]
+            shell = _first(edits.set_vertex_position(shell, i, unreal.Vector(x + dx * value, y + dy * value, z)))
+            moved += 1
+    shell = _first(unreal.GeometryScript_Normals.recompute_normals(shell, unreal.GeometryScriptCalculateNormalsOptions()))
+    lift = sorted(v for v in lifts.values() if v > 0.01)
+    info: dict[str, Any] = {
+        "moved_vertices": moved,
+        "median_lift_cm": round(lift[len(lift) // 2], 2) if lift else 0.0,
+        "max_lift_cm": round(lift[-1], 2) if lift else 0.0,
+    }
+    return (shell, info)
+
+
 def _save_texture(transient: Any, folder: str, name: str, linear: bool, normal_map: bool = False) -> Any:
     """Convierte una textura transitoria en asset: canvas -> render target -> textura (P-28).
 
@@ -492,6 +681,7 @@ def build_garment_shell(
         else:
             offset = shell_offset(kind, clearance_cm)
             shell = build_shell(body, covered, offset)
+            shell, draped = drape_shell(shell, body, kind, offset)
             base = base_name[3:] if base_name.startswith("SK_") else base_name
             appearance = bake_appearance(shell, garment, garment_sm, folder, base)
             skm = shell_to_skeletal_mesh(shell, full_skm, f"{folder}/SK_{base}", appearance["material"])
@@ -510,6 +700,7 @@ def build_garment_shell(
                         "textures": appearance["textures"],
                         "offset_cm": offset,
                         "placement": placed,
+                        "drape": draped,
                         "zone": zone,
                         "covered": covered,
                         "inner_covered": interior(covered, body.neighbours),

@@ -1424,6 +1424,7 @@ def _equip_shell_garment(
                 "textures": built["textures"],
                 "offset_cm": built["offset_cm"],
                 "placement": built["placement"],
+                "drape": built.get("drape"),
                 "zone": built["zone"],
                 "has_bone_weights": True,
                 "restored_full_body_skin": restored_skin,
