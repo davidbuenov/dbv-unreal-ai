@@ -278,6 +278,34 @@ fn is_recent(folder: &Path) -> bool {
     out
 }
 
+/// Una grabación en marcha ahora mismo, para el panel de la app.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ActiveSession {
+    pub id: String,
+    pub started_at: String,
+    pub marks: usize,
+}
+
+/// La grabación que se está escribiendo ahora, si hay: la sesión más reciente con estado «recording» y ficheros tocados
+/// en los últimos 10 s. Solo lee ficheros (barato: la app lo pregunta cada par de segundos y no molesta al editor).
+pub fn active_session(root: &Path) -> Option<ActiveSession> {
+    let newest = fs::read_dir(root)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .max()?;
+    let folder = root.join(&newest);
+    let meta = read_meta(&folder);
+    let recording = str_of(&meta, "status") == "recording" && is_recent(&folder);
+    let out = recording.then(|| ActiveSession {
+        id: newest,
+        started_at: str_of(&meta, "started_at"),
+        marks: read_events(&folder).iter().filter(|e| e.get("type").and_then(Value::as_str) == Some("mark")).count(),
+    });
+    out
+}
+
 /// Deja como mucho `keep` sesiones: borra las más antiguas (y nunca una que se esté grabando). Devuelve los ids borrados.
 pub fn prune_sessions(root: &Path, keep: usize) -> Vec<String> {
     let all = list_sessions(root);
@@ -432,6 +460,30 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         write_session(root.path(), "20261110-100000", r#"{"status":"recording"}"#, &two_blocks());
         assert!(delete_session(root.path(), "20261110-100000", true).is_err());
+    }
+
+    #[test]
+    fn the_active_session_is_the_newest_one_being_written_with_its_marks() {
+        let root = tempfile::tempdir().unwrap();
+        assert_eq!(active_session(root.path()), None);
+        write_session(root.path(), "20261110-100000", r#"{"status":"finished"}"#, &[]);
+        assert_eq!(active_session(root.path()), None); // la última ya terminó
+        write_session(root.path(), "20261110-110000", r#"{"status":"recording","started_at":"2026-11-10T11:00:00"}"#, &two_blocks());
+        fs::write(root.path().join("20261110-110000/events.jsonl"), "{\"t\":1.0,\"type\":\"mark\",\"label\":\"a\"}\n{\"t\":2.0,\"type\":\"pause\",\"paused\":true}\n{\"t\":3.0,\"type\":\"mark\",\"label\":\"b\"}\n").unwrap();
+        let active = active_session(root.path()).unwrap();
+        assert_eq!((active.id.as_str(), active.marks, active.started_at.as_str()), ("20261110-110000", 2, "2026-11-10T11:00:00"));
+    }
+
+    #[test]
+    fn a_recording_session_nobody_touches_any_more_is_not_active() {
+        let root = tempfile::tempdir().unwrap();
+        write_session(root.path(), "20261110-110000", r#"{"status":"recording"}"#, &two_blocks());
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        for name in ["meta.json", "frames.bin"] {
+            let file = fs::OpenOptions::new().write(true).open(root.path().join("20261110-110000").join(name)).unwrap();
+            file.set_modified(old).unwrap();
+        }
+        assert_eq!(active_session(root.path()), None); // el editor se cerró de golpe: queda «incompleta», no «grabando»
     }
 
     #[test]

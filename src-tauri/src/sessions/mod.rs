@@ -26,8 +26,8 @@ use std::time::Duration;
 use serde_json::Value;
 
 pub use store::{
-    delete_session, list_sessions, prune_sessions, read_events, read_frames, read_meta, Frames, FramesRead,
-    SessionInfo,
+    active_session, delete_session, list_sessions, prune_sessions, read_events, read_frames, read_meta, Frames, FramesRead,
+    ActiveSession, SessionInfo,
 };
 
 /// Sesiones que se conservan por proyecto (las últimas 20, REQ-91); al parar una grabación se podan las más antiguas.

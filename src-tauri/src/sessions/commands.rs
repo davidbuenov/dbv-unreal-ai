@@ -72,6 +72,15 @@ pub fn sessions_tool_specs() -> Vec<Value> {
     super::specs()
 }
 
+/// ¿Hay una grabación en marcha en el proyecto? Solo lee ficheros: el panel de la app lo pregunta cada par de segundos
+/// y funciona también cuando la grabación la lanzó un agente por el `--mcp`. @spec REQ-94
+#[tauri::command]
+pub fn sessions_active(project: Option<String>) -> Option<super::ActiveSession> {
+    let root = super::tools::sessions_root(&project_dir(&project?));
+    let out = super::active_session(&root);
+    out
+}
+
 /// Una herramienta `session_*` desde el asistente integrado. `project` es el proyecto abierto en la app y `endpoint`
 /// el editor conectado (puede faltar: las que solo leen ficheros no lo necesitan). @spec REQ-92
 #[tauri::command]

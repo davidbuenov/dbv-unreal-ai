@@ -26,6 +26,7 @@ import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
 import { createCodeCompiler } from './codeCompile.js';
 import { improvePrompt } from '../generation/promptImprover.js';
+import { createBlackboxBar } from './blackboxBar.js';
 import { createRecipeTools, localized, recipesCard } from './recipes.js';
 import { autoAllow } from '../unreal/agentPermissions.js';
 import { button, dirName, el } from './dom.js';
@@ -185,6 +186,15 @@ export function start() {
 
   // Memoria del proyecto conectado (REQ-34): su resumen va como ficha de contexto sin esperar al backend.
   // Al cambiar (se guardó algo desde la conversación) se repinta el Plan si está a la vista.
+  // Caja negra (REQ-94): panel «Marcar momento» / «Terminar» mientras se graba; la conversación está ocupada y no se puede escribir.
+  const blackboxBar = createBlackboxBar({
+    active: () => api.sessionsActive?.(state.connection?.projectPath ?? null),
+    run: (name, args) => api.sessionsRunTool(state.connection?.projectPath ?? null, state.connection?.endpoint ?? null, name, args),
+    t,
+    enabled: () => state.connection?.status === 'online' && Boolean(state.connection?.projectPath),
+  });
+  document.body.append(blackboxBar.node);
+  blackboxBar.start();
   const projectMemory = createProjectMemory({ api, getProject: () => state.connection?.projectPath ?? null, onChange: () => current === 'plan' && views.plan?.render() });
   views.project = createProjectView($('#view-project'), { state, toast, openModal, closeModal, onMemoryChanged: () => projectMemory.refresh(), showView: (name) => show(name) });
   /** Lo que se ve de un trabajo terminado: el modelo girando (o su miniatura) y el camino a la biblioteca (REQ-31). */
@@ -476,7 +486,7 @@ export function start() {
           thumb.addEventListener('click', () => openModal([el('img', { className: 'capture-full', attrs: { src, alt: t('unreal.capture') } })], { wide: true }));
           panel.addNode(thumb);
         };
-        const unreal = state.connection?.status === 'online' ? createUnrealTools({ backend: unrealBackend(), askApproval, onAction: log.add, permissions: memories.get(conversationId), vision, showImage, sessionSpecs, sessionRun: (name, args) => api.sessionsRunTool(state.connection?.projectPath ?? null, state.connection?.endpoint ?? null, name, args) }) : [];
+        const unreal = state.connection?.status === 'online' ? createUnrealTools({ backend: unrealBackend(), askApproval, onAction: log.add, permissions: memories.get(conversationId), vision, showImage, sessionSpecs, sessionRun: (name, args) => api.sessionsRunTool(state.connection?.projectPath ?? null, state.connection?.endpoint ?? null, name, args).finally(() => blackboxBar.refresh()) }) : [];
         const generation = createGenerationTools({
           specs: generationSpecs,
           status: api.generationStatus,
