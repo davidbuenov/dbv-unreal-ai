@@ -101,6 +101,14 @@ fn text<'a>(args: &'a Value, key: &str) -> &'a str {
     out
 }
 
+/// La etiqueta de una sesión: solo letras, números, `_` y `-` (40 como mucho). Llega de una IA y forma parte de la carpeta
+/// de la sesión, así que nunca puede ser una ruta (`../`, `/`, `\\`). La grabadora de Python la vuelve a limpiar.
+pub fn safe_name(name: &str) -> String {
+    let cleaned: String = name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '-' }).take(40).collect();
+    let out = cleaned.trim_matches('-').to_string();
+    out
+}
+
 /// Un texto como literal de Python: un literal de cadena JSON es también un literal válido de Python.
 fn py_str(s: &str) -> String {
     let out = serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string());
@@ -221,9 +229,10 @@ pub fn start_text(editor: &mut dyn Editor, args: &Value) -> Result<String, Strin
     }
     let plan = args.get("plan").filter(|p| p.is_object()).ok_or("`plan` must be an object (see session_plan)")?;
     let code = format!(
-        "{FRESH_IMPORT}print(live.start_recording({}, {}))",
+        "{FRESH_IMPORT}print(live.start_recording({}, {}, {}))",
         py_str(&plan.to_string()),
-        py_str(text(args, "name"))
+        py_str(&safe_name(text(args, "name"))),
+        py_str(mode)
     );
     let started = run_json(editor, &code)?;
     if started.get("success").and_then(Value::as_bool) != Some(true) {
@@ -274,13 +283,15 @@ pub fn mark_text(editor: &mut dyn Editor, args: &Value) -> Result<String, String
 pub fn stop_text(editor: &mut dyn Editor, root: &Path, args: &Value) -> Result<String, String> {
     let keep_playing = args.get("keep_playing").and_then(Value::as_bool).unwrap_or(false);
     let stopped = run_json(editor, "from dbv_unreal_ai.session import live\nprint(live.stop_recording())");
-    let pie = if keep_playing { Ok(()) } else { editor.stop_pie() };
+    // Solo se para Play si lo arrancó la grabadora (modo pie): en «attach» la partida es de la persona y sigue.
+    let ours = stopped.as_ref().map_or(true, |s| s.get("mode").and_then(Value::as_str).unwrap_or("pie") == "pie");
+    let pie = if keep_playing || !ours { Ok(()) } else { editor.stop_pie() };
     let pruned = prune_sessions(root, super::DEFAULT_KEEP_SESSIONS);
     let status = stopped?;
     let out = serde_json::to_string(&json!({
         "stopped": true,
         "status": status,
-        "play_stopped": !keep_playing && pie.is_ok(),
+        "play_stopped": !keep_playing && ours && pie.is_ok(),
         "play_stop_note": pie.err(),
         "pruned_old_sessions": pruned,
         "next": "Analyse it with session_analyze (gaps first).",
@@ -405,6 +416,35 @@ mod tests {
         let mut ed2 = FakeEditor::default();
         ed2.replies.push(Ok(json!({"success": false, "error": "ModuleNotFoundError: No module named 'dbv_unreal_ai.session'"}).to_string()));
         assert!(status_text(&mut ed2).unwrap_err().contains("prepare the project again"));
+    }
+
+    #[test]
+    fn the_session_label_can_never_be_a_path() {
+        for hostile in ["../../Windows/System32", "..\\..\\x", "/etc/passwd", "a/b", "C:\\x", "..", ".", "con espacios"] {
+            let safe = safe_name(hostile);
+            assert!(!safe.contains(['/', '\\', ':']) && !safe.contains(".."), "{hostile} -> {safe}");
+        }
+        assert_eq!(safe_name("prueba-1_ok"), "prueba-1_ok");
+        assert_eq!(safe_name(&"x".repeat(500)).len(), 40);
+        let mut ed = FakeEditor::default();
+        ed.replies.push(envelope(&json!({"success": true, "id": "s"})));
+        start_text(&mut ed, &json!({"plan": {}, "mode": "attach", "name": "../../x"})).unwrap();
+        assert!(!ed.python[0].contains("../"), "{}", ed.python[0]);
+        assert!(ed.python[0].contains("\"attach\")"), "{}", ed.python[0]); // el modo viaja a la grabadora
+    }
+
+    #[test]
+    fn stop_does_not_stop_a_play_session_the_recorder_did_not_start() {
+        let root = tempfile::tempdir().unwrap();
+        let mut attached = FakeEditor::default();
+        attached.replies.push(envelope(&json!({"active": false, "status": "finished", "mode": "attach"})));
+        let v: Value = serde_json::from_str(&stop_text(&mut attached, root.path(), &json!({})).unwrap()).unwrap();
+        assert!(!attached.pie_stopped, "la partida es de la persona");
+        assert_eq!(v["play_stopped"], false);
+        let mut ours = FakeEditor::default();
+        ours.replies.push(envelope(&json!({"active": false, "status": "finished", "mode": "pie"})));
+        stop_text(&mut ours, root.path(), &json!({})).unwrap();
+        assert!(ours.pie_stopped);
     }
 
     #[test]

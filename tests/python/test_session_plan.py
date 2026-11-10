@@ -108,6 +108,25 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(bad.mark_key, "F10")
         self.assertEqual(len(bad.errors), 1)
 
+    def test_a_plan_cannot_ask_for_endless_or_huge_recordings(self) -> None:
+        p = plan_mod.parse_plan({"limits": {"max_seconds": 10**9, "max_bytes": 10**15, "keep_sessions": 10**6}})
+        self.assertEqual(p.limits.max_seconds, plan_mod.HARD_MAX_SECONDS)
+        self.assertEqual(p.limits.max_bytes, plan_mod.HARD_MAX_BYTES)
+        self.assertEqual(p.limits.keep_sessions, plan_mod.HARD_KEEP_SESSIONS)
+        self.assertEqual(len(p.warnings), 3)
+
+    def test_the_session_name_can_never_be_a_path(self) -> None:
+        """La etiqueta de la sesión llega de una IA y forma parte de la carpeta: sin ``..`` ni separadores."""
+        for hostile in ("../../Windows/System32", "..\\..\\x", "/etc/passwd", "a/b", "C:\\x", "con espacios y ñ", "..", "."):
+            safe = plan_mod.safe_session_name(hostile)
+            self.assertNotIn("/", safe)
+            self.assertNotIn("\\", safe)
+            self.assertNotIn(":", safe)
+            self.assertNotIn("..", safe)
+        self.assertEqual(plan_mod.safe_session_name("prueba-1_ok"), "prueba-1_ok")
+        self.assertEqual(plan_mod.safe_session_name(None), "")
+        self.assertLessEqual(len(plan_mod.safe_session_name("x" * 500)), plan_mod.MAX_NAME_LENGTH)
+
     def test_non_object_plan_is_an_error_not_an_exception(self) -> None:
         self.assertEqual(plan_mod.parse_plan("hola").errors, ["el plan debe ser un objeto"])
         self.assertEqual(plan_mod.parse_plan(None).columns, [])

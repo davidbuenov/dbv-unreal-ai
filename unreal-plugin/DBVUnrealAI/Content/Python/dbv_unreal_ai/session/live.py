@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import recorder as rec_mod
-from .plan import Signal, parse_plan
+from .plan import Signal, parse_plan, safe_session_name
 
 try:
     import unreal
@@ -38,6 +38,10 @@ except ImportError:
 
 ROT_CHANNELS = ("yaw", "pitch", "roll")
 _UNSET = object()  # «todavía no se ha leído»: distinto de un valor vacío
+
+
+class _NotYet(Exception):
+    """Lo que se quiere leer aún no existe (el personaje o el controlador no han aparecido): se reintenta sin apagar nada."""
 
 
 def _to_float(value: Any) -> float:
@@ -94,6 +98,7 @@ class UnrealAdapter:
         self._last: dict[str, Any] = {}
         self._pawn: Any = None
         self._mark_key = mark_key
+        self._key: Any = None  # el `unreal.Key` de la tecla de marca, creado una vez
         self._key_was_down = False
         self._throttle: Any = None  # los ajustes del editor que se cambiaron, para devolverlos al terminar
 
@@ -161,13 +166,18 @@ class UnrealAdapter:
     # ------------------------------------------------------------------ eventos
     def poll_event(self, world: Any, kind: str) -> dict[str, Any] | None:
         """Detecta el cambio de ``pause``, ``movement_mode`` o ``movement_base``, o la tecla de marca."""
-        if kind == "mark_key":
-            return self._mark_key_pressed(world)
+        event: dict[str, Any] | None = None
         try:
-            now = self._state_of(world, kind)
+            event = self._mark_key_pressed(world) if kind == "mark_key" else self._state_change(world, kind)
+        except _NotYet:
+            self._pawn = None  # el personaje o el controlador aún no existen: se reintenta en el siguiente fotograma
         except Exception:
             self._pawn = None  # el personaje pudo reaparecer: se vuelve a buscar la próxima vez
             raise
+        return event
+
+    def _state_change(self, world: Any, kind: str) -> dict[str, Any] | None:
+        now = self._state_of(world, kind)
         before = self._last.get(kind, _UNSET)
         self._last[kind] = now
         event: dict[str, Any] | None = None
@@ -182,10 +192,11 @@ class UnrealAdapter:
         """``{}`` en el fotograma en que se pulsa la tecla (flanco: mantenerla no repite la marca)."""
         controller = unreal.GameplayStatics.get_player_controller(world, 0)
         if controller is None:
-            raise ValueError("no hay controlador del jugador")
-        key = unreal.Key()
-        key.set_editor_property("key_name", self._mark_key)
-        down = bool(controller.is_input_key_down(key))
+            raise _NotYet("no hay controlador del jugador")
+        if self._key is None:
+            self._key = unreal.Key()
+            self._key.set_editor_property("key_name", self._mark_key)
+        down = bool(controller.is_input_key_down(self._key))
         pressed = down and not self._key_was_down
         self._key_was_down = down
         return {} if pressed else None
@@ -195,7 +206,7 @@ class UnrealAdapter:
         if self._pawn is None:
             self._pawn = unreal.GameplayStatics.get_player_pawn(world, 0)
         if self._pawn is None:
-            raise ValueError("no hay personaje del jugador")
+            raise _NotYet("no hay personaje del jugador")
         mv = self._pawn.get_component_by_class(unreal.CharacterMovementComponent)
         if mv is None:
             raise ValueError("el personaje no tiene CharacterMovementComponent")
@@ -271,7 +282,7 @@ def _playtest_busy() -> bool:
     return busy
 
 
-def start_recording(plan_json: str, name: str = "") -> str:
+def start_recording(plan_json: str, name: str = "", mode: str = "pie") -> str:
     """Arranca una grabación con el plan dado. Devuelve JSON con la carpeta, las columnas y los avisos."""
     global _SESSION  # noqa: PLW0603
     result: dict[str, Any]
@@ -282,8 +293,9 @@ def start_recording(plan_json: str, name: str = "") -> str:
         result = {"success": False, "error": f"plan no es JSON válido: {exc}"}
     if raw is not None:
         plan = parse_plan(raw)
-        sid = time.strftime("%Y%m%d-%H%M%S") + (f"-{name}" if name else "")
-        rec = rec_mod.Recorder(plan, sessions_dir() / sid, UnrealAdapter(plan.mark_key), busy=_playtest_busy)
+        label = safe_session_name(name)  # el nombre llega de una IA: nunca puede salirse de la carpeta de sesiones
+        sid = time.strftime("%Y%m%d-%H%M%S") + (f"-{label}" if label else "")
+        rec = rec_mod.Recorder(plan, sessions_dir() / sid, UnrealAdapter(plan.mark_key), mode=mode, busy=_playtest_busy)
         try:
             rec.start()
             _SESSION = rec
@@ -309,6 +321,7 @@ def status() -> str:
     return json.dumps(
         {
             "active": rec.status == "recording",
+            "mode": rec.mode,
             "status": rec.status,
             "reason": rec.reason,
             "rows": rec._writer.rows_written if rec._writer else 0,

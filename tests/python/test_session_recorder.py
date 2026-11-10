@@ -51,6 +51,7 @@ class FakeAdapter:
         self.began = 0
         self.ended = 0
         self.begin_error: str | None = None
+        self.tick_error: str | None = None
         self.event_values: dict[str, object] = {}
         self.event_errors: set[str] = set()
 
@@ -81,6 +82,8 @@ class FakeAdapter:
         return self.event_values.pop(kind, None)
 
     def register_tick(self, callback):
+        if self.tick_error:
+            raise RuntimeError(self.tick_error)
         self.callback = callback
         return "h"
 
@@ -424,6 +427,24 @@ class RecorderTest(unittest.TestCase):
         self.assertEqual([m["label"] for m in marks], ["Momento 1", "Momento 2", "Momento 3"])
         self.assertEqual((marks[0]["source"], marks[0]["key"]), ("key", "F10"))
         self.assertEqual(self._meta()["mark_key"], "F10")
+
+    def test_a_start_that_fails_halfway_leaves_nothing_hooked(self) -> None:
+        self.adapter.tick_error = "no se pudo registrar el callback"
+        r = self._rec(_plan([]))
+        with self.assertRaises(RuntimeError):
+            r.start()
+        self.assertEqual(r.status, "finished")
+        self.assertIsNone(rec_mod.Recorder.active)  # no bloquea las grabaciones siguientes
+        self.assertEqual((self.adapter.began, self.adapter.ended), (1, 1))  # el editor queda como estaba
+        self.assertEqual(self._meta()["reason"], "start_error")
+        self.adapter.tick_error = None
+        self._rec(_plan([])).start()  # se puede volver a empezar
+
+    def test_the_mode_is_stored_so_that_stop_knows_whether_play_is_ours(self) -> None:
+        r = rec_mod.Recorder(_plan([]), self.folder, self.adapter, mode="attach", clock=self.clock, warn=self.warnings.append)
+        r.start()
+        r.finish()
+        self.assertEqual(self._meta()["mode"], "attach")
 
     def test_cost_is_stored_in_meta(self) -> None:
         self.adapter.readers["A"] = lambda: [0.0]

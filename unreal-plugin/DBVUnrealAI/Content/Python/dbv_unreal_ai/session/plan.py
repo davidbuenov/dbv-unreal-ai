@@ -25,6 +25,7 @@ mismo orden). Un plan con errores no se descarta entero: lo malo se devuelve en
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any
 
 TRANSFORM_CHANNELS = ("x", "y", "z", "yaw", "pitch", "roll")
@@ -36,6 +37,17 @@ DEFAULT_MARK_KEY = "F10"  # F9 la usan muchos capturadores de pantalla (visto el
 DEFAULT_MAX_SECONDS = 600.0  # 10 minutos
 DEFAULT_MAX_BYTES = 500 * 1024 * 1024  # 500 MB
 DEFAULT_KEEP_SESSIONS = 20
+# Topes duros: un plan (que puede escribir una IA) no puede pedir grabar sin fin ni llenar el disco.
+HARD_MAX_SECONDS = 3600.0
+HARD_MAX_BYTES = 2 * 1024 * 1024 * 1024
+HARD_KEEP_SESSIONS = 200
+MAX_NAME_LENGTH = 40
+
+
+def safe_session_name(name: Any) -> str:
+    """Una etiqueta para el id de la sesión: solo letras, números, ``_`` y ``-``. Nunca una ruta (``../``, ``/``, ``\\``)."""
+    text = name if isinstance(name, str) else ""
+    return re.sub(r"[^A-Za-z0-9_-]", "-", text)[:MAX_NAME_LENGTH].strip("-")
 
 # Presets: listas de señales ya resueltas. ``gameplay_events`` e ``input`` solo
 # generan eventos (no columnas), así que no añaden señales por fotograma.
@@ -63,7 +75,7 @@ PRESETS: dict[str, dict[str, Any]] = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Limits:
     """Límites de una sesión. Al llegar a uno se deja de grabar y se avisa; el juego no se toca."""
 
@@ -72,7 +84,7 @@ class Limits:
     keep_sessions: int = DEFAULT_KEEP_SESSIONS
 
 
-@dataclass
+@dataclass(slots=True)
 class Signal:
     """Una señal con nombre estable: ``name`` es el prefijo de sus columnas."""
 
@@ -89,7 +101,7 @@ class Signal:
         return [self.name]
 
 
-@dataclass
+@dataclass(slots=True)
 class Plan:
     signals: list[Signal] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
@@ -202,7 +214,12 @@ def _limits_from(raw: Any, plan: Plan) -> Limits:
     if not isinstance(raw, dict):
         return Limits()
     out: dict[str, Any] = {}
-    for key, cast, lo in (("max_seconds", float, 1.0), ("max_bytes", int, 1024), ("keep_sessions", int, 1)):
+    bounds = (
+        ("max_seconds", float, 1.0, HARD_MAX_SECONDS),
+        ("max_bytes", int, 1024, HARD_MAX_BYTES),
+        ("keep_sessions", int, 1, HARD_KEEP_SESSIONS),
+    )
+    for key, cast, lo, hi in bounds:
         if key not in raw:
             continue
         try:
@@ -213,5 +230,8 @@ def _limits_from(raw: Any, plan: Plan) -> Limits:
         if value < lo:
             plan.warnings.append(f"límite «{key}» demasiado bajo; se usa {lo}")
             value = cast(lo)
+        if value > hi:
+            plan.warnings.append(f"límite «{key}» demasiado alto; se usa el máximo, {hi}")
+            value = cast(hi)
         out[key] = value
     return Limits(**out)

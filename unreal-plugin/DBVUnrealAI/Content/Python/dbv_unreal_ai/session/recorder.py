@@ -87,11 +87,13 @@ class Recorder:
         folder: Path | str,
         adapter: Adapter,
         *,
+        mode: str = "pie",
         clock: Callable[[], float] = time.perf_counter,
         busy: Callable[[], bool] = lambda: False,
         warn: Callable[[str], None] = print,
     ) -> None:
         self.plan = plan
+        self.mode = mode  # pie (la lanzó la grabadora) o attach (ya estaba en marcha): `session_stop` solo para Play en pie
         self.folder = Path(folder)
         self.adapter = adapter
         self._clock = clock
@@ -134,14 +136,20 @@ class Recorder:
         self._started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         self.status = "recording"
         Recorder.active = self
-        self._write_meta()
-        for err in self.plan.errors:
-            self._warn_once(f"plan: {err}")
         try:
-            self._notes = list(self.adapter.begin() or [])
-        except Exception as exc:  # noqa: BLE001 - sin esto se graba igual, solo que el editor puede frenarse al perder el foco
-            self._warn_once(f"no se pudo preparar el editor: {type(exc).__name__}: {exc}")
-        self._handle = self.adapter.register_tick(self._on_tick)
+            self._write_meta()
+            for err in self.plan.errors:
+                self._warn_once(f"plan: {err}")
+            try:
+                self._notes = list(self.adapter.begin() or [])
+            except Exception as exc:  # noqa: BLE001 - sin esto se graba igual, solo que el editor puede frenarse al perder el foco
+                self._warn_once(f"no se pudo preparar el editor: {type(exc).__name__}: {exc}")
+            self._handle = self.adapter.register_tick(self._on_tick)
+        except BaseException:
+            # Si arrancar falla a medias no se deja nada colgado: ni la sesión «activa», ni los ficheros abiertos, ni el
+            # ajuste del editor sin restaurar.
+            self.finish("start_error")
+            raise
 
     def finish(self, reason: str = "stopped") -> None:
         """Cierra la sesión. Idempotente y lo primero que se hace al detectar el fin (R1)."""
@@ -339,7 +347,7 @@ class Recorder:
             "version": META_VERSION,
             "started_at": self._started_at,
             "level": self.adapter.level_name(),
-            "mode": "pie",
+            "mode": self.mode,
             "status": self.status,
             "reason": self.reason,
             "columns": self.plan.columns,
