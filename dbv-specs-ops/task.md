@@ -279,7 +279,8 @@
     - [x] S106a (2026-11-10): `session/frames.py` (formato `frames.bin` por bloques con CRC, 6 tests).
     - [x] S106b (2026-11-10): `session/plan.py` (señales, presets, límites; un plan con errores graba lo bueno; 9 tests).
     - [x] S106c (2026-11-10): `session/recorder.py`, núcleo con adaptador y 13 tests con mundo simulado (fin de PIE antes de leer, una señal que falla, reintento, límites, una sola sesión, meta con coste).
-    - [ ] S106d: adaptador real de Unreal (`session/live.py`: resolver actores, sockets, variables por reflexión, propiedades de animación), integración en `editor.py` y prueba en vivo en PIE. Falta el paquete `dbv_unreal_ai/session/` (señales, presets, bloques, `finish()`, una sesión activa).
+    - [x] S106d (2026-11-10, en vivo en `DBVMCPFirst`): `session/live.py` + núcleo ajustado (reintento cada 0,25 s, volcado cada segundo, aviso R5). Funciona de punta a punta en PIE. **Pendiente:** el coste por fotograma se midió con el editor a ~8 FPS (media 0,9 ms, p95 2,8 ms, dominado por resolver objetivos): repetir con el editor fluido y más filas para dar la cifra con 30 señales. Quedan sin probar en vivo `anim_property` y variables de Blueprint reales; falta enganchar `live` al MCP (`editor.py`/`toolset.py`, S109).
+    - [~] (cerrado) adaptador real de Unreal (`session/live.py`: resolver actores, sockets, variables por reflexión, propiedades de animación), integración en `editor.py` y prueba en vivo en PIE. Falta el paquete `dbv_unreal_ai/session/` (señales, presets, bloques, `finish()`, una sesión activa).
   - [ ] S107 · Almacenamiento y lector en Rust (`REQ-91`).
   - [ ] S108 · Análisis núcleo (`REQ-93`).
   - [ ] S109 · Herramientas `session_*` en el MCP y el asistente (`REQ-92`).

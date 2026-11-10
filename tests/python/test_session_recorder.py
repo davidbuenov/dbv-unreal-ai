@@ -153,7 +153,8 @@ class RecorderTest(unittest.TestCase):
         r = self._rec(_plan([_sig("A")]))
         r.start()
         self.adapter.tick()
-        self.adapter.readers["A"] = lambda: [7.0]  # el actor aparece un fotograma después
+        self.adapter.readers["A"] = lambda: [7.0]  # el actor aparece un poco después
+        self.clock.t += rec_mod.RETRY_SECONDS
         self.adapter.tick()
         self.assertTrue(math.isnan(self._rows_after_flush(r)[0][1][0]))
         self.assertEqual(self._rows_after_flush(r)[1][1][0], 7.0)
@@ -246,6 +247,55 @@ class RecorderTest(unittest.TestCase):
         r._on_tick(DT)
         self.assertEqual((r.reason, self.adapter.unregistered), ("stopped", 1))
         self.assertEqual(len(self._rows()), 1)
+
+    def test_armed_session_waits_for_pie_and_gives_up_after_the_window(self) -> None:
+        self.adapter.world = None  # todavía no se ha dado a Play
+        self.adapter.readers["A"] = lambda: [3.0]
+        r = self._rec(_plan([_sig("A")]))
+        r.start()
+        self.adapter.tick()
+        self.assertEqual(r.status, "recording")
+        self.adapter.world = FakeWorld()  # empieza PIE
+        self.adapter.tick()
+        self.assertEqual(len(self._rows_after_flush(r)), 1)
+        r.finish()
+
+        rec_mod.Recorder.active = None
+        self.adapter.world = None
+        self.folder = Path(self._tmp.name) / "s2"
+        r2 = self._rec(_plan([_sig("A")]))
+        r2.start()
+        self.clock.t += rec_mod.ARM_SECONDS + 1
+        self.adapter.tick()
+        self.assertEqual(r2.reason, "no_pie")
+
+    def test_missing_target_is_looked_up_at_most_every_retry_interval(self) -> None:
+        calls = []
+        self.adapter.make_reader = lambda world, signal: calls.append(1)  # type: ignore[assignment]
+        r = self._rec(_plan([_sig("Nada")]))
+        r.start()
+        for _ in range(20):  # 20 fotogramas de 1/72 s = 0,28 s
+            self.adapter.tick()
+        self.assertLessEqual(len(calls), 2)
+        r.finish()
+
+    def test_data_reaches_disk_every_second_even_with_a_partial_block(self) -> None:
+        self.adapter.readers["A"] = lambda: [1.0]
+        r = self._rec(_plan([_sig("A")]))
+        r.start()
+        for _ in range(4):
+            self.adapter.tick(0.3)  # 4 fotogramas lentos: muy lejos de un bloque de 72
+        self.assertGreaterEqual(len(self._rows()), 3)
+        r.finish()
+
+    def test_slow_editor_warns_once(self) -> None:
+        self.adapter.readers["A"] = lambda: [1.0]
+        r = self._rec(_plan([_sig("A")]))
+        r.start()
+        for _ in range(40):
+            self.adapter.tick(0.125)  # 8 FPS, como el editor sin foco medido el 2026-11-10
+        self.assertEqual(len([w for w in self.warnings if "va muy lento" in w]), 1)
+        r.finish()
 
     def test_cost_is_stored_in_meta(self) -> None:
         self.adapter.readers["A"] = lambda: [0.0]

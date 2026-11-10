@@ -1,0 +1,237 @@
+# =============================================================================
+# DBV Unreal AI — Grabadora de sesión: adaptador real de Unreal y arranque
+# Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
+# Licensed under the MIT License. See LICENSE for details.
+# Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
+# =============================================================================
+"""Une el núcleo de la grabadora con el motor. Todo lo de ``unreal`` vive aquí.
+
+Solo lee: no abre transacciones del editor, no cambia propiedades y no crea
+assets (R4). Lo medido en los spikes P-22 y P-23 (2026-11-10) manda:
+
+* El mundo de juego es ``UnrealEditorSubsystem.get_game_world()``; al terminar PIE
+  devuelve ``None`` y un mundo retenido lanza ``ObjectInstance is null`` al leerlo.
+* Un error dentro de un callback de Slate se traga en silencio, así que el núcleo
+  los captura y los cuenta.
+
+@spec REQ-91
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import time
+from pathlib import Path
+from typing import Any, Callable
+
+from . import recorder as rec_mod
+from .plan import Signal, parse_plan
+
+try:
+    import unreal
+
+    HAS_UNREAL = True
+except ImportError:
+    HAS_UNREAL = False
+    unreal = None  # type: ignore[assignment]
+
+ROT_CHANNELS = ("yaw", "pitch", "roll")
+
+
+def _to_float(value: Any) -> float:
+    """Número, booleano o enum de Unreal a ``float``. Otra cosa lanza y apaga la señal."""
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    inner = getattr(value, "value", None)  # enums de Unreal
+    if isinstance(inner, (int, float)):
+        return float(inner)
+    raise TypeError(f"valor no numérico ({type(value).__name__})")
+
+
+def _vec_channel(vec: Any, channel: str) -> float:
+    return float(getattr(vec, channel))
+
+
+def _find_actor(world: Any, target: dict[str, Any]) -> Any | None:
+    if "player" in target:
+        return unreal.GameplayStatics.get_player_pawn(world, int(target["player"]))
+    if "player_camera" in target:
+        return unreal.GameplayStatics.get_player_camera_manager(world, int(target["player_camera"]))
+    label, cls = target.get("actor_label"), target.get("actor_class")
+    for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor):
+        if label is not None and actor.get_actor_label() == label:
+            return actor
+        if cls is not None and actor.get_class().get_name() == cls:
+            return actor
+    return None
+
+
+def _get_property(obj: Any, name: str) -> Any:
+    """Lee una propiedad por reflexión; prueba el nombre tal cual (con espacios) y en snake_case."""
+    try:
+        return obj.get_editor_property(name)
+    except Exception:  # noqa: BLE001 - se reintenta con otro formato de nombre
+        return obj.get_editor_property(name.strip().replace(" ", "_").lower())
+
+
+class UnrealAdapter:
+    """Implementa ``recorder.Adapter`` sobre la API de Python de Unreal."""
+
+    def __init__(self) -> None:
+        self._ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+
+    def game_world(self) -> Any | None:
+        return self._ues.get_game_world()
+
+    def world_alive(self, world: Any) -> bool:
+        try:
+            world.get_path_name()
+            return True
+        except Exception:  # noqa: BLE001 - «ObjectInstance is null» (P-23)
+            return False
+
+    def level_name(self) -> str:
+        world = self._ues.get_game_world() or self._ues.get_editor_world()
+        try:
+            return str(world.get_path_name()) if world is not None else ""
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def register_tick(self, callback: Callable[[float], None]) -> Any:
+        return unreal.register_slate_post_tick_callback(callback)
+
+    def unregister_tick(self, handle: Any) -> None:
+        unreal.unregister_slate_post_tick_callback(handle)
+
+    def make_reader(self, world: Any, signal: Signal) -> Callable[[], list[float]] | None:
+        actor = _find_actor(world, signal.target)
+        if actor is None:
+            return None
+        if signal.kind == "transform":
+            return self._transform_reader(actor, signal)
+        if signal.kind == "variable":
+            return self._variable_reader(actor, signal)
+        if signal.kind == "anim_property":
+            return self._anim_reader(actor, signal)
+        raise ValueError(f"tipo de señal sin lector: {signal.kind}")
+
+    # ------------------------------------------------------------------ lectores
+    @staticmethod
+    def _transform_reader(actor: Any, signal: Signal) -> Callable[[], list[float]]:
+        socket = signal.extra.get("socket")
+        comp = None
+        if socket:
+            comp = actor.get_component_by_class(unreal.SkeletalMeshComponent) or actor.get_component_by_class(
+                unreal.SceneComponent
+            )
+            if comp is None:
+                raise ValueError(f"«{signal.name}» no tiene componente con sockets")
+
+        def read() -> list[float]:
+            if comp is not None:
+                loc, rot = comp.get_socket_location(socket), comp.get_socket_rotation(socket)
+            elif hasattr(actor, "get_camera_location"):  # PlayerCameraManager
+                loc, rot = actor.get_camera_location(), actor.get_camera_rotation()
+            else:
+                loc, rot = actor.get_actor_location(), actor.get_actor_rotation()
+            return [_vec_channel(rot if c in ROT_CHANNELS else loc, c) for c in signal.channels]
+
+        return read
+
+    @staticmethod
+    def _variable_reader(actor: Any, signal: Signal) -> Callable[[], list[float]]:
+        if signal.extra.get("source") == "velocity_xy":
+            return lambda: [math.hypot(actor.get_velocity().x, actor.get_velocity().y)]
+        name = signal.extra["name"]
+        return lambda: [_to_float(_get_property(actor, name))]
+
+    @staticmethod
+    def _anim_reader(actor: Any, signal: Signal) -> Callable[[], list[float]]:
+        mesh = actor.get_component_by_class(unreal.SkeletalMeshComponent)
+        if mesh is None:
+            raise ValueError(f"«{signal.name}» no tiene malla esquelética")
+        name = signal.extra["name"]
+        return lambda: [_to_float(_get_property(mesh.get_anim_instance(), name))]
+
+
+# ---------------------------------------------------------------------- arranque público
+_SESSION: rec_mod.Recorder | None = None
+
+
+def sessions_dir() -> Path:
+    return Path(unreal.Paths.project_saved_dir()).resolve() / "DBVUnrealAI" / "Sessions"
+
+
+def _playtest_busy() -> bool:
+    try:
+        from .. import editor  # noqa: PLC0415 - import tardío: evita ciclos al importar el paquete
+
+        st = getattr(editor, "_PLAYTEST_STATE", {}) or {}
+        return st.get("handle") is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def start_recording(plan_json: str, name: str = "") -> str:
+    """Arranca una grabación con el plan dado. Devuelve JSON con la carpeta, las columnas y los avisos."""
+    global _SESSION  # noqa: PLW0603
+    try:
+        raw = json.loads(plan_json) if plan_json else {}
+    except json.JSONDecodeError as exc:
+        return json.dumps({"success": False, "error": f"plan no es JSON válido: {exc}"})
+    plan = parse_plan(raw)
+    sid = time.strftime("%Y%m%d-%H%M%S") + (f"-{name}" if name else "")
+    rec = rec_mod.Recorder(plan, sessions_dir() / sid, UnrealAdapter(), busy=_playtest_busy)
+    try:
+        rec.start()
+    except rec_mod.SessionBusyError as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+    _SESSION = rec
+    return json.dumps(
+        {
+            "success": True,
+            "id": sid,
+            "folder": str(rec.folder),
+            "columns": plan.columns,
+            "errors": plan.errors,
+            "warnings": plan.warnings,
+            "waiting_for_pie": rec.adapter.game_world() is None,
+        },
+        ensure_ascii=False,
+    )
+
+
+def status() -> str:
+    rec = _SESSION
+    if rec is None:
+        return json.dumps({"active": False})
+    return json.dumps(
+        {
+            "active": rec.status == "recording",
+            "status": rec.status,
+            "reason": rec.reason,
+            "rows": rec._writer.rows_written if rec._writer else 0,
+            "disabled": rec.disabled,
+            "warnings": rec.warnings,
+            "cost_ms": rec.cost_ms(),
+            "folder": str(rec.folder),
+        },
+        ensure_ascii=False,
+    )
+
+
+def mark(label: str) -> str:
+    if _SESSION is None or _SESSION.status != "recording":
+        return json.dumps({"success": False, "error": "no hay grabación activa"})
+    _SESSION.mark(label)
+    return json.dumps({"success": True})
+
+
+def stop_recording() -> str:
+    if _SESSION is None:
+        return json.dumps({"success": False, "error": "no hay grabación"})
+    _SESSION.finish("stopped")
+    return status()

@@ -35,6 +35,11 @@ from .plan import Plan, Signal
 
 META_VERSION = 1
 RESOLVE_SECONDS = 5.0  # los actores que aparecen tarde se reintentan unos segundos
+RETRY_SECONDS = 0.25  # cada cuánto se reintenta resolver un objetivo ausente (buscar actores no es gratis)
+FLUSH_SECONDS = 1.0  # a disco al menos cada segundo, aunque el bloque no esté lleno (FPS bajos)
+SLOW_CHECK_TICKS = 30
+SLOW_FRACTION = 0.5
+ARM_SECONDS = 60.0  # armada sin que empiece PIE en este tiempo: se cierra sola
 MAX_EVENTS = 20000
 LOW_FRAME_DT = 0.1  # un fotograma de más de 100 ms cuenta como hueco en la medición
 
@@ -94,6 +99,8 @@ class Recorder:
         self._costs: list[float] = []
         self._gaps = 0
         self._ticks = 0
+        self._last_flush = 0.0
+        self._next_try: dict[int, float] = {}
         self._started_at = ""
 
     # ------------------------------------------------------------------ ciclo de vida
@@ -163,6 +170,10 @@ class Recorder:
 
     def _tick(self, dt: float) -> None:
         world = self.adapter.game_world()
+        if world is None and self._world is None:  # armada, esperando a que empiece PIE
+            if self._clock() - self._t0 > ARM_SECONDS:
+                self.finish("no_pie")
+            return
         if world is None or (self._world is not None and not self.adapter.world_alive(self._world)):
             self.finish("pie_ended")  # antes de tocar ningún objeto del juego
             return
@@ -176,6 +187,10 @@ class Recorder:
         values = self._read_all(world, dt)
         assert self._writer is not None
         self._writer.append(now, values)
+        if now - self._last_flush >= FLUSH_SECONDS:
+            self._writer.flush()
+            self._last_flush = now
+        self._check_slow_editor()
         if now >= self.plan.limits.max_seconds:
             self.finish("limit_seconds")
         elif self._writer.bytes_written >= self.plan.limits.max_bytes:
@@ -197,9 +212,13 @@ class Recorder:
             return self._frame_values(sig, dt)
         reader = self._readers.get(i)
         if reader is None:
+            now = self._clock()
+            if now < self._next_try.get(i, 0.0):
+                return missing
             reader = self.adapter.make_reader(world, sig)
             if reader is None:
-                if self._clock() - self._world_t0 > RESOLVE_SECONDS:
+                self._next_try[i] = now + RETRY_SECONDS
+                if now - self._world_t0 > RESOLVE_SECONDS:
                     self._disable(sig, "no se encontró el objetivo")
                 return missing
             self._readers[i] = reader
@@ -212,6 +231,16 @@ class Recorder:
             self._disable(sig, f"devolvió {len(vals)} valores y se esperaban {n}")
             return missing
         return [float(v) if v is not None else NAN for v in vals]
+
+    def _check_slow_editor(self) -> None:
+        """R5: si casi todos los fotogramas son lentos, la medición no es fiable: se avisa una vez."""
+        if self._ticks != SLOW_CHECK_TICKS or self._gaps / self._ticks < SLOW_FRACTION:
+            return
+        self._warn_once(
+            "el editor va muy lento durante la grabación (fotogramas de más de 100 ms): la medición no es fiable. "
+            "Trae la ventana del editor al frente, desactiva «Use Less CPU when in Background» "
+            "y revisa la memoria de vídeo (puede haber una GPU saturada)"
+        )
 
     @staticmethod
     def _frame_values(sig: Signal, dt: float) -> list[float]:
