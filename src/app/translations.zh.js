@@ -480,8 +480,8 @@ export const ZH_APP = {
   'lib.dressCutMismatch': '注意：这件服装是{garment}，而这个身体是{body}；可能不太合身。',
   'lib.bodyFemale': '女性体型',
   'lib.bodyMale': '男性体型',
-  'unreal.blackboxPrompt.pie': '我想调试游玩时出现的问题。请先问我注意到了什么以及何时发生（一两个简短的问题）。然后使用黑匣子：用 session_plan 提出方案并展示给我调整，我接受后用 session_start（pie 模式）开始。我游玩时用 session_wait 等待，并用 session_mark 记录我的标记。结束后用 session_stop 停止，用 session_analyze 分析（先看 gaps），并分三部分回答：我注意到的 / 数据显示的 / 结论。',
-  'unreal.blackboxPrompt.attach': '编辑器里已经有一局游戏在运行，我想调试其中出现的问题。请问我注意到了什么，用 session_plan 提出方案并展示给我，我接受后用 session_start（attach 模式，不要另开一局）记录这一局。用 session_mark 记录我的标记，结束后用 session_stop 停止，用 session_analyze 分析（先看 gaps），并分三部分回答：我注意到的 / 数据显示的 / 结论。',
+  'unreal.blackboxPrompt.pie': '我想调试游玩时出现的问题。请先问我注意到了什么以及何时发生（一两个简短的问题）。然后使用黑匣子：用 session_plan 提出方案并展示给我调整，我接受后用 session_start（pie 模式）开始。我游玩时无法在聊天中输入：应用会显示带有“标记时刻”和“结束”按钮的录制面板，请告诉我使用它，不要让我输入“现在”或“好了”。用 session_wait 等待（每次标记和结束时都会返回）直到结束。结束后如有需要用 session_stop 停止，用 session_analyze 分析（先看 gaps），并分三部分回答：我注意到的 / 数据显示的 / 结论。',
+  'unreal.blackboxPrompt.attach': '编辑器里已经有一局游戏在运行，我想调试其中出现的问题。请问我注意到了什么，用 session_plan 提出方案并展示给我，我接受后用 session_start（attach 模式，不要另开一局）记录这一局。我游玩时无法在聊天中输入：我使用应用的录制面板（“标记时刻”“结束”）。用 session_wait 等待直到结束，必要时用 session_stop 停止，用 session_analyze 分析（先看 gaps），并分三部分回答：我注意到的 / 数据显示的 / 结论。',
   'unreal.blackboxPrompt.choose': '我想用黑匣子记录一局游戏，但要先决定记录什么。请问我注意到什么故障、涉及哪些对象、何时发生；用 session_plan 提出信号以及我该做什么，让我编辑，在我同意之前不要开始记录。',
   'unreal.playtestPrompt': '运行 unreal_playtest 启动编辑器内运行（PIE），驱动角色移动 5 秒，检查日志警告/错误和视口截图，并告诉我关卡是否可玩或是否存在任何问题。',
 };

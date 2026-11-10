@@ -17,6 +17,9 @@ pub const LOW_FPS: f64 = 20.0;
 pub const SLOW_DT_S: f64 = 0.1;
 /// Si más de esta fracción de los fotogramas es lenta, se avisa.
 pub const SLOW_FRACTION: f64 = 0.2;
+/// Un tramo seguido de fotogramas lentos que dure esto (s) o más invalida la medición, aunque sean pocos fotogramas:
+/// 10 s a 3 FPS son unos 30 fotogramas entre miles (visto el 2026-11-10 con el editor sin foco), pero 10 s sin medir.
+pub const STRETCH_MIN_S: f64 = 1.0;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Gaps {
@@ -25,11 +28,48 @@ pub struct Gaps {
     pub slow_frames: usize,
     pub slow_fraction: f64,
     pub longest_gap_s: f64,
+    /// Fracción del TIEMPO (no de los fotogramas) que se fue en fotogramas lentos.
+    pub slow_time_fraction: f64,
+    /// Tramos seguidos de fotogramas lentos de `STRETCH_MIN_S` o más (los 5 más largos).
+    pub stretches: Vec<Stretch>,
     /// Fotogramas excluidos del análisis (PIE en pausa).
     pub excluded_frames: usize,
     pub issues: Vec<String>,
     /// `false` si hay algún problema: el resto de resultados no deben presentarse como fiables.
     pub reliable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Stretch {
+    pub t_start: f64,
+    pub t_end: f64,
+    pub fps: f64,
+}
+
+/// Tramos de fotogramas lentos consecutivos (válidos) que duran `STRETCH_MIN_S` o más, del más largo al más corto.
+fn slow_stretches(ds: &Dataset) -> Vec<Stretch> {
+    let mut found: Vec<Stretch> = Vec::new();
+    let mut run: Option<(usize, usize)> = None; // (primer fotograma anterior, último fotograma)
+    let close = |run: &mut Option<(usize, usize)>, found: &mut Vec<Stretch>| {
+        if let Some((from, to)) = run.take() {
+            let span = ds.times[to] - ds.times[from];
+            if span >= STRETCH_MIN_S {
+                found.push(Stretch { t_start: round(ds.times[from], 3), t_end: round(ds.times[to], 3), fps: round((to - from) as f64 / span, 1) });
+            }
+        }
+    };
+    for i in 1..ds.len() {
+        let slow = ds.valid[i] && ds.valid[i - 1] && ds.times[i] - ds.times[i - 1] > SLOW_DT_S;
+        match (slow, run) {
+            (true, None) => run = Some((i - 1, i)),
+            (true, Some((from, _))) => run = Some((from, i)),
+            (false, _) => close(&mut run, &mut found),
+        }
+    }
+    close(&mut run, &mut found);
+    found.sort_by(|a, b| (b.t_end - b.t_start).total_cmp(&(a.t_end - a.t_start)));
+    found.truncate(5);
+    found
 }
 
 /// Intervalos entre fotogramas contiguos y válidos, en segundos.
@@ -51,6 +91,10 @@ pub fn gaps(ds: &Dataset) -> Gaps {
     let fps = median(&mut sorted).map_or(0.0, |m| 1.0 / m);
     let fraction = if dts.is_empty() { 0.0 } else { slow as f64 / dts.len() as f64 };
     let excluded = ds.valid.iter().filter(|v| !**v).count();
+    let total_time: f64 = dts.iter().sum();
+    let slow_time: f64 = dts.iter().filter(|dt| **dt > SLOW_DT_S).sum();
+    let slow_time_fraction = if total_time > 0.0 { slow_time / total_time } else { 0.0 };
+    let stretches = slow_stretches(ds);
 
     let mut issues = Vec::new();
     if dts.len() < 2 {
@@ -62,6 +106,15 @@ pub fn gaps(ds: &Dataset) -> Gaps {
     if fraction > SLOW_FRACTION {
         issues.push(format!("{:.0} % de los fotogramas duró más de 100 ms", fraction * 100.0));
     }
+    if let Some(worst) = stretches.first() {
+        issues.push(format!(
+            "{} tramo(s) de FPS bajos de más de {STRETCH_MIN_S:.0} s (el peor, de {:.1} s a {:.1} s, a {} FPS): ahí no se midió; suele ser el editor sin foco",
+            stretches.len(),
+            worst.t_start,
+            worst.t_end,
+            worst.fps
+        ));
+    }
     if excluded > 0 {
         issues.push(format!("{excluded} fotogramas excluidos (PIE en pausa)"));
     }
@@ -71,6 +124,8 @@ pub fn gaps(ds: &Dataset) -> Gaps {
         slow_frames: slow,
         slow_fraction: round(fraction, 3),
         longest_gap_s: round(longest, 3),
+        slow_time_fraction: round(slow_time_fraction, 3),
+        stretches,
         excluded_frames: excluded,
         reliable: issues.is_empty(),
         issues,
@@ -176,6 +231,26 @@ mod tests {
         assert!((g.longest_gap_s - 0.514).abs() < 0.001, "{}", g.longest_gap_s);
         assert_eq!(g.slow_frames, 1);
         assert!(g.reliable); // un tirón aislado no invalida la medición
+    }
+
+    #[test]
+    fn ten_seconds_at_3_fps_inside_a_fast_session_make_it_unreliable() {
+        // 55 s a ~90 FPS con un tramo de 10 s (de 20 a 30) a 3 FPS: pocos fotogramas, mucho tiempo sin medir.
+        let mut times = Vec::new();
+        let mut t = 0.0;
+        while t < 55.0 {
+            times.push(t);
+            t += if (20.0..30.0).contains(&t) { 1.0 / 3.0 } else { 1.0 / 90.0 };
+        }
+        let n = times.len();
+        let ds = Dataset::new(vec!["p.x".into()], times, vec![vec![0.0; n]]);
+        let g = gaps(&ds);
+        assert!(g.slow_fraction < 0.02, "por fotogramas casi no se nota: {}", g.slow_fraction); // lo que engañaba antes
+        assert!(g.slow_time_fraction > 0.15, "{}", g.slow_time_fraction);
+        assert!(!g.reliable, "{:?}", g.issues);
+        assert_eq!(g.stretches.len(), 1);
+        assert!((g.stretches[0].t_start - 20.0).abs() < 0.1 && (g.stretches[0].fps - 3.0).abs() < 0.2, "{:?}", g.stretches);
+        assert!(g.issues.iter().any(|m| m.contains("tramo(s) de FPS bajos")));
     }
 
     #[test]
