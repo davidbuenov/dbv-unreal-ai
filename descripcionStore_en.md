@@ -41,13 +41,13 @@ Key Features:
 
 ## What's new in this version
 
-v0.4.0:
-• Sound effects (SFX) generation and search: new Sounds tab in Generate supporting local microservice (Stable Audio Open 1.0), ElevenLabs Text-to-SFX, and interactive Freesound catalog with audio preview and selective library addition.
-• Native audio import into Unreal Engine ("Send to Unreal" for Audio) as USoundWave / SoundCue assets and MCP tool to bind audio to actors and 3D events.
-• Real-time multimodal vision: new "📷 Capture Viewport" button in chat allowing vision-capable models to inspect and analyze the live editor scene.
-• Configurable Copyright authorship in Project Settings preserving immutable attribution to DBV Unreal AI and dbv-specs-ops.
-• Resilient Unreal Engine MCP port auto-detection: automatic probing of ports 8000..8005 on connection.
-• Expanded Help Center with dedicated tabs for Tripo, World Labs, and Sounds with contextual direct access.
+v0.5.0:
+• Black box: the "Black box" button records what happens while you play, without touching the project (character, camera, objects, performance and events), lets you mark moments with a key inside the game (F10) and the AI analyses it with data. Before trusting it, it checks whether the measurement is reliable.
+• Recording panel with "Mark moment" and "Finish"; ten session tools also for agents over MCP.
+• Dress MetaHumans from the app with a deterministic tool: choose who gets dressed, five garment types, a safe copy of the character, Chaos Cloth for skirts and dresses and validation with captures. Tight shirts and trousers are experimental.
+• The automatic Play test now starts on Unreal Engine 5.8.2 and collects the log.
+• Security: the name of a recorded session cannot escape its folder.
+• Includes the v0.4.x news: sound effects (SFX), ElevenLabs balance and plugins isolated for packaging games.
 
 ---
 
@@ -106,3 +106,4 @@ Artificial Intelligence features are 100% optional and disabled by default:
 - When the AI changes the project's C++ code and the user accepts the change, the app compiles it with the Unreal tools the user installed (Live Coding through the editor, or Unreal Build Tool with the editor closed) and reopens the editor. Only the project the user has open is compiled.
 - The app keeps its asset library in Documents\DBV Unreal AI\Library and a local rotating log, with no keys or personal data.
 - Images the user pastes (Ctrl+V) or drags into the conversation are saved in the system temporary folder (the last 20 at most) so the AI can use them by path; they only reach a cloud AI if the user has connected one and sends the message.
+- The optional "Black box" only reads the game the user runs in their own editor and saves its recordings in the user's Unreal project folder (Saved\DBVUnrealAI\Sessions, at most 20 sessions); it sends nothing over the network. While recording, it turns off the editor option "Use less CPU when in background" in memory and restores it when done.

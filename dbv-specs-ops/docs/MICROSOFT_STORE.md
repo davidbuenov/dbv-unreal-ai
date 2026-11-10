@@ -145,3 +145,19 @@ Identidad en `bundle.config.json`:
 2. **Fichas de Store:** actualizar *Novedades de esta versión* en español (`descripcionStore_es.md`), inglés (`descripcionStore_en.md`) y chino simplificado (`descripcionStore_zh.md`), y la característica 17 y la viñeta de pegar imágenes. Las capturas no cambian.
 3. **Notas para la certificación:** las de `descripcionStore_en.md`, que ahora explican también dónde se guardan las imágenes pegadas.
 4. **Enviar a certificación.**
+
+---
+
+## 8. Envío de la v0.5.0 (2026-11-10)
+
+> ⚠️ **REQ-90 sigue abierto.** La spec dice que la v0.5.0 no se publica en la Store sin la matriz de 12 casos de ropa ejecutada con la app instalada (MSIX), un juego empaquetado y un vídeo de pasarela. **No se ha ejecutado.** El paquete y la ficha están preparados, pero enviar a certificación es una decisión de la persona responsable sabiendo que ese criterio sigue sin cumplirse (las camisetas y pantalones ceñidos son experimentales y la ficha lo dice).
+
+**Paquete:** `npm run tauri:windows:build` genera `src-tauri/target/msix/dbv-unreal-ai_0.5.0.0.msixbundle` (el que se sube a Partner Center) y el `.msix` x64 que lleva dentro. Antes de subirlo: comprobar `Identity` (`davidbuenov.DBVUnrealAI`, `CN=13EE2A5D-F49E-48C9-8873-941069B15D63`, `Version="0.5.0.0"`, `x64`) y `python scripts/generate-store-assets.py` (assets sin rectángulos de relleno).
+
+**Capacidades:** sin cambios (`runFullTrust` e `internetClient`). La caja negra solo lee el juego del usuario y escribe en `Saved/DBVUnrealAI/Sessions/` de su proyecto de Unreal, sin red.
+
+**Pasos en Partner Center:**
+1. **Paquetes:** subir `dbv-unreal-ai_0.5.0.0.msixbundle` y retirar del envío el de la 0.3.1 (o el último enviado).
+2. **Fichas de Store:** pegar *Novedades de esta versión*, la descripción, las características y las notas para la certificación de `descripcionStore_es.md`, `descripcionStore_en.md` y `descripcionStore_zh.md` (ya actualizadas a la v0.5.0).
+3. **Capturas:** conviene añadir una de la caja negra (botón y panel de grabación) y renovar las que muestren la versión anterior.
+4. **Enviar a certificación.**

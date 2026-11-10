@@ -41,13 +41,13 @@ Características principales:
 
 ## Novedades de esta versión
 
-v0.4.0:
-• Generación y búsqueda de efectos de sonido (SFX): nueva pestaña Sonidos en Generar compatible con microservicio local (Stable Audio Open 1.0), ElevenLabs Text-to-SFX y catálogo interactivo de Freesound con preescucha directa y guardado selectivo en biblioteca.
-• Importación directa de audio a Unreal Engine («Enviar a Unreal» de Audio) como assets USoundWave / SoundCue y herramienta MCP para asociar audio a actores y eventos 3D.
-• Visión multimodal en tiempo real: nuevo botón «📷 Capturar viewport» en la conversación para que los modelos con visión analicen la escena actual del editor.
-• Configuración de Copyright personalizada en Ajustes de Proyecto preservando la atribución inmutable de DBV Unreal AI y dbv-specs-ops.
-• Autodetección resiliente del puerto MCP del editor: sondeo automático de puertos 8000..8005 al conectar.
-• Centro de Ayuda ampliado con secciones para Tripo, World Labs y Sonidos con accesos contextuales directos.
+v0.5.0:
+• Caja negra: el botón «Caja negra» graba lo que ocurre mientras juegas, sin tocar el proyecto (personaje, cámara, objetos, rendimiento y eventos), te deja marcar momentos con una tecla dentro del juego (F10) y la IA lo analiza con datos. Antes de fiarse, comprueba si la medición es fiable.
+• Panel de grabación con «Marcar momento» y «Terminar»; diez herramientas de sesión también para agentes por MCP.
+• Vestir MetaHumans desde la app con una herramienta determinista: elegir a quién se viste, cinco tipos de prenda, copia segura del personaje, tela con Chaos Cloth para faldas y vestidos y validación con capturas. Las camisetas y pantalones ceñidos son experimentales.
+• La prueba automática en Play arranca ahora en Unreal Engine 5.8.2 y recoge el log.
+• Seguridad: el nombre de una sesión grabada no puede salirse de su carpeta.
+• Incluye las novedades de la v0.4.x: efectos de sonido (SFX), saldo de ElevenLabs y plugins aislados para empaquetar juegos.
 
 ---
 
@@ -106,3 +106,4 @@ Las funciones de Inteligencia Artificial son 100% opcionales y están desactivad
 - Cuando la IA cambia el código C++ del proyecto y el usuario acepta el cambio, la app compila con las herramientas de Unreal instaladas por el usuario (Live Coding a través del editor, o Unreal Build Tool con el editor cerrado) y vuelve a abrir el editor. Solo se compila el proyecto que el usuario tiene abierto.
 - La app guarda su biblioteca de assets en Documentos\DBV Unreal AI\Library y un registro local rotativo, sin claves ni datos personales.
 - Las imágenes que el usuario pega (Ctrl+V) o arrastra a la conversación se guardan en la carpeta temporal del sistema (como máximo las 20 últimas) para que la IA pueda usarlas por su ruta; solo llegan a una IA en la nube si el usuario ha conectado una y envía el mensaje.
+- La «Caja negra» (opcional) solo lee el juego que el usuario ejecuta en su editor y guarda sus grabaciones en la carpeta del proyecto de Unreal del usuario (Saved\DBVUnrealAI\Sessions, con un máximo de 20 sesiones); no envía nada a la red. Mientras graba, desactiva en memoria la opción del editor «Usar menos CPU en segundo plano» y la restaura al terminar.
