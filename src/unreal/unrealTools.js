@@ -487,7 +487,7 @@ export function createUnrealTools(deps) {
         telemetry = valueOf(readRes)?.result ?? telemetry;
         const resolvedLogs = resolveToolset('LogsToolset', await loadToolsets());
         if (resolvedLogs.name) {
-          const logRes = await invoke(resolvedLogs.name, 'GetLogEntries', { categories: null, verbosity: 'Warning', searchString: null, tailLines: 50 }, 'read');
+          const logRes = await invoke(resolvedLogs.name, 'GetLogEntries', { category: '', pattern: 'Warning|Error', maxEntries: 50 }, 'read');
           logs = valueOf(logRes) ?? [];
         }
         if (deps.vision && deps.backend.captureViewport) {

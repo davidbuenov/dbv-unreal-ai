@@ -293,7 +293,7 @@
   - [ ] S113 · Aislar, conducir y comparar (`REQ-96`).
   - [~] S114 · Grabadora C++ (`REQ-91`): descartada, P-22 midió 0,19 ms con 30 señales.
   - [ ] **Propuesta (2026-11-10, aceptada por el usuario): informe de memoria gráfica (REQ-99 por definir en `/spec`).** Botón en la app y herramienta del MCP, solo lectura: VRAM total y libre, uso por proceso (contador `GPU Process Memory` de Windows; macOS/Linux solo el total, marcado «no disponible»), desglose de Unreal (pool de texturas, escalabilidad) y sugerencias sin aplicar nada. Alimenta el aviso R5 de la caja negra. Tras S107 y antes de `/ship`; si la caja negra se alarga, pasa a la v0.5.1. Origen: «Video memory has been exhausted (424 MB over budget)» al dar Play; el editor pasó de 9,4 a 6,5 GB al cerrar NVIDIA Overlay y actualizar drivers.
-  - [ ] S115 · Evals, caso de referencia, 50 sesiones, ElecnorMIO y documentación (`REQ-97`).
+  - [~] S115 · Evals, caso de referencia, 50 sesiones, ElecnorMIO y documentación (`REQ-97`). **Hecho (2026-11-10):** 50 sesiones seguidas con el `--mcp` real (50/50 bien, 11.430 filas, nada enganchado), `docs/IA.md` y `docs/IA.en.md`, `around_marks`. **Pendiente (v0.5.1):** los dos casos reales recreados (`FTransform` al revés, bucle valor-objetivo) con `wrong_axis`, evals con un modelo real y repetir ElecnorMIO con visor.
 - [ ] **`/ship` v0.5.0 — Publicación en Microsoft Store** *(espera a `REQ-90` y a la puerta de `REQ-97`)*:
   - Generación de bundle MSIX firmado para Microsoft Store (`tauri-windows-bundle` / Partner Center).
   - Revisión checklist `MARKETPLACE_PUBLISHING.md` y actualización de fichas descriptivas (`descripcionStore_es.md`).

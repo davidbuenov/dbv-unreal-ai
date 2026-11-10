@@ -350,13 +350,13 @@ class RecorderTest(unittest.TestCase):
         self.assertGreater(ev[1]["t"], ev[0]["t"])
 
     def test_unsupported_event_kinds_warn_once_and_the_rest_keep_working(self) -> None:
-        p = plan_mod.parse_plan({"presets": ["gameplay_events"]})  # incluye movement_base y log_error: no soportados
+        p = plan_mod.parse_plan({"presets": ["gameplay_events", "input"]})  # movement_base (del simulador) e input: no soportados
         r = self._rec(p)
         r.start()
         for _ in range(3):
             self.adapter.tick()
         self.assertEqual(len([w for w in self.warnings if "«movement_base»" in w]), 1)
-        self.assertEqual(len([w for w in self.warnings if "«log_error»" in w]), 1)
+        self.assertEqual(len([w for w in self.warnings if "«input»" in w]), 1)
         self.assertEqual(r.status, "recording")
 
     def test_a_failing_event_source_is_turned_off_once(self) -> None:

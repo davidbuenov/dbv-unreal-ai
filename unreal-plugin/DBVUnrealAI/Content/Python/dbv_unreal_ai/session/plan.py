@@ -58,7 +58,8 @@ PRESETS: dict[str, dict[str, Any]] = {
         "events": [],
     },
     "input": {"signals": [], "events": ["input"]},
-    "gameplay_events": {"signals": [], "events": ["movement_mode", "movement_base", "pause", "log_error"]},
+    # `log_error` (errores del log durante la partida) no está implementado: no se promete en el preset (avisaba en cada sesión).
+    "gameplay_events": {"signals": [], "events": ["movement_mode", "movement_base", "pause"]},
 }
 
 

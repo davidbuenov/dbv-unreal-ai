@@ -1580,7 +1580,7 @@ impl McpServer {
                     s.call_toolset_tool(
                         &toolset,
                         "GetLogEntries",
-                        json!({ "categories": null, "verbosity": "Warning", "searchString": null, "tailLines": 50 }),
+                        json!({ "category": "", "pattern": "Warning|Error", "maxEntries": 50 }),
                         DEFAULT_TIMEOUT,
                     )
                 })

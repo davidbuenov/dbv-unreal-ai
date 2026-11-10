@@ -33,7 +33,7 @@ class PlanTest(unittest.TestCase):
             p.columns,
             ["player.x", "player.y", "player.z", "player.yaw", "speed", "frame.dt_ms", "frame.fps"],
         )
-        self.assertEqual(p.events, ["movement_mode", "movement_base", "pause", "log_error", "mark_key"])  # mark_key va siempre
+        self.assertEqual(p.events, ["movement_mode", "movement_base", "pause", "mark_key"])  # mark_key va siempre
 
     def test_event_only_presets_add_no_columns(self) -> None:
         p = plan_mod.parse_plan({"presets": ["input", "gameplay_events"]})
