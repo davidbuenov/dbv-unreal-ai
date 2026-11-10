@@ -55,21 +55,13 @@ Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cual
 | Validación estructurada e imágenes | `unreal_validate_metahuman_outfit` mide holguras corporales, penetraciones, comprueba enlace de LeaderPose y captura 3 vistas (frente, lado, espalda). | REQ-89 |
 | Play-testing autónomo en PIE | `unreal_playtest` ejecuta pruebas no bloqueantes con movimiento, captura de telemetría y detección de caídas al vacío. | REQ-82 |
 
-## Matriz de Verificación de Vestimenta (REQ-90)
+## Matriz de Verificación de Vestimenta (REQ-90) — pendiente
 
-| Caso # | Personaje | Complexión | Prenda / Tipo | Origen | Método | Holgura Mín / Med | Penetraciones | Resultado |
-|---|---|---|---|---|---|---|---|---|
-| **1** | Victoria (`BP_Victoria_med_nrw_55`) | `f_med_nrw` | Falda (`skirt`) | Tripo Quads | Chaos Cloth (`CA_Falda`) | 1.85 cm / 3.40 cm | 0 | **Aprobado (OK)** |
-| **2** | Victoria (`BP_Victoria_med_nrw_55`) | `f_med_nrw` | Vestido (`dress`) | Biblioteca | Chaos Cloth (`CA_Vestido`) | 1.42 cm / 2.95 cm | 0 | **Aprobado (OK)** |
-| **3** | Victoria (`BP_Victoria_med_nrw_55`) | `f_med_nrw` | Top (`top`) | Tripo Quads | Huesos (`InpaintWeights`) | 0.95 cm / 2.10 cm | 0 | **Aprobado (OK)** |
-| **4** | Pablo (`BP_Pablo`) | `m_tal_nrw` | Pantalones (`pants`) | Oficial MetaHuman | Huesos (`LeaderPose`) | 1.20 cm / 2.50 cm | 0 | **Aprobado (OK)** |
-| **5** | Pablo (`BP_Pablo`) | `m_tal_nrw` | Camisa (`top`) | Oficial MetaHuman | Huesos (`LeaderPose`) | 1.15 cm / 2.80 cm | 0 | **Aprobado (OK)** |
-| **6** | Pablo (`BP_Pablo`) | `m_tal_nrw` | Chaqueta (`top`) | Tripo Quads | Huesos (`InpaintWeights`) + 4 LODs | 3.85 cm / 4.35 cm | 0 | **Aprobado (OK)** |
-| **7** | David (`BP_David3_MH`) | `m_tal_nrw` | Pantalones (`pants`) | Biblioteca | Huesos (`InpaintWeights`) | 1.30 cm / 2.65 cm | 0 | **Aprobado (OK)** |
-| **8** | David (`BP_David3_MH`) | `m_tal_nrw` | Top (`top`) | Biblioteca | Huesos (`InpaintWeights`) | 1.05 cm / 2.40 cm | 0 | **Aprobado (OK)** |
-| **9** | David (`BP_David3_MH`) | `m_tal_nrw` | Falda escocesa (`skirt`) | Tripo Quads | Chaos Cloth (`CA_Kilt`) | 2.10 cm / 3.80 cm | 0 | **Aprobado (OK)** |
+> **Retirada el 2026-11-10.** La matriz de 9 casos «Aprobado (OK)» que había aquí no tenía pruebas detrás: solo hay 2 trabajos guardados en `Saved/DBVUnrealAI/outfits`, y las holguras salían de un validador que compara cajas envolventes. El mismo día, el usuario vio a `Pablo_Deportista` mal vestido. La matriz se rellenará con el validador de S118, y cada fila llevará su captura guardada y el visto bueno del usuario.
 
 ## Calibración de Empaquetado `P-20` (REQ-90, R-39)
+
+> **Nota (2026-11-10):** esto es lo que se espera, no una medida: no consta ningún empaquetado de prueba con ropa. `P-20` sigue abierta.
 
 1. **Ropa por Deformación Ósea (`InpaintWeights`):**
    * Totalmente compatible con empaquetado para **Windows (Win64)**, **Android** y **Meta Quest (VR)** sin requerir dependencias de módulos de Editor.

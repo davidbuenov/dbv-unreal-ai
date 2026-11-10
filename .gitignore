@@ -36,3 +36,6 @@ generated/
 
 # Logs
 *.log
+
+# Scripts de depuracion sueltos (no se versionan)
+scripts/_scratch/
