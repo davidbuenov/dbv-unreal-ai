@@ -1,8 +1,8 @@
 # 📋 Especificaciones: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` (Especificación)
-> **Estado:** Borrador `/spec` v0.5.0 (v1.14: caja negra, depurar supervisando la partida del usuario —REQ-91..REQ-97—, a partir de `docs/Propuesta_CajaNegra_DBVUnrealAI.md`; v1.13: vestir un MetaHuman de principio a fin desde la app —REQ-83..REQ-90—, y UEFN y Verse pasan a la v0.6.0; v1.12: integración con UEFN y lenguaje Verse —REQ-78, REQ-79—, generación y rigging automático de ropa para MetaHumans con Tripo Quads y GeometryScript —REQ-80, REQ-81—, y Play-testing autónomo en PIE —REQ-82—; v1.11: REQ-76, REQ-77 entregados en v0.4.1; v1.10: REQ-71..REQ-75 en v0.4.0)
-> **Última Revisión:** 2026-11-08
+> **Estado:** Borrador `/spec` v0.5.0 (v1.15: prendas ceñidas como carcasa del cuerpo —REQ-98—, holgura medida de verdad en REQ-89 y matriz de 12 casos en REQ-90, tras ver a `Pablo_Deportista` mal vestido (REJECTED-13); v1.14: caja negra, depurar supervisando la partida del usuario —REQ-91..REQ-97—, a partir de `docs/Propuesta_CajaNegra_DBVUnrealAI.md`; v1.13: vestir un MetaHuman de principio a fin desde la app —REQ-83..REQ-90—, y UEFN y Verse pasan a la v0.6.0; v1.12: integración con UEFN y lenguaje Verse —REQ-78, REQ-79—, generación y rigging automático de ropa para MetaHumans con Tripo Quads y GeometryScript —REQ-80, REQ-81—, y Play-testing autónomo en PIE —REQ-82—; v1.11: REQ-76, REQ-77 entregados en v0.4.1; v1.10: REQ-71..REQ-75 en v0.4.0)
+> **Última Revisión:** 2026-11-10
 
 ---
 
@@ -574,8 +574,8 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
 
   | Tipo | Ranura que ocupa | Ropa que se retira | Método |
   | --- | --- | --- | --- |
-  | `top` | `Torso` | `Torso` | huesos |
-  | `pants` | `Legs` | `Legs` | huesos |
+  | `top` | `Torso` | `Torso` | carcasa del cuerpo (REQ-98) |
+  | `pants` | `Legs` | `Legs` | carcasa del cuerpo (REQ-98) |
   | `shoes` | `Feet` | `Feet` | huesos |
   | `skirt` | tela | `Legs` | tela (REQ-87) |
   | `dress` | tela | `Torso` y `Legs` | tela (REQ-87) |
@@ -620,14 +620,16 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   *Aceptación:* la misma prenda y personaje dan el mismo resultado llamando desde Biblioteca, chat y cliente MCP externo. La suite de evals muestra que la IA usa esa herramienta y no `run_python`.
 
 - [ ] **REQ-89 · Validación automática e informe [v0.5.0] (amplía REQ-82):**
-  - Antes de dar una prenda por buena, se mide: bordes abiertos frente al modelo de partida, holgura con el cuerpo, enlace de la tela con `Body`, y prueba en Play de pocos segundos (`unreal_playtest` o equivalente, con una animación de andar si existe en el proyecto) con capturas de frente, lado y espalda.
+  - Antes de dar una prenda por buena, se mide: bordes abiertos frente al modelo de partida, holgura con el cuerpo (como se define abajo), enlace de la tela con `Body`, y prueba en Play de pocos segundos (`unreal_playtest` o equivalente, con una animación de andar si existe en el proyecto) con capturas de frente, lado y espalda.
   - El informe da por pasos qué se hizo, qué se retiró, medidas, avisos, capturas, y un resultado: `ok`, `con_avisos` o `error`. Una IA con visión recibe las capturas para revisarlas, y el usuario las ve en la conversación o en la Biblioteca.
+  - **Holgura medida de verdad (2026-11-10):** distancia con signo de cada vértice de la prenda al punto más cercano del cuerpo completo, con el cuerpo en la misma pose. Se informa del mínimo, la mediana y el percentil 95, y del porcentaje de vértices por dentro de la piel. También se mide la piel destapada dentro de la zona que la prenda debería cubrir, por ejemplo un hueco en la entrepierna. **Prohibido** estimar con cajas envolventes o devolver valores fijos cuando falla la medida: si no se puede medir, el resultado es `error` y dice por qué (REJECTED-13).
+  - **Capturas que cuentan:** el «ok» automático solo dice que las medidas pasan. Una fila de la matriz (REQ-90) solo se da por buena con sus capturas guardadas en disco y revisadas por el usuario.
   - Nunca se presenta como correcta una prenda con la validación fallida. El editor queda fuera de Play y sin actores o secuencias temporales.
-  *Aceptación:* con una malla preparada con agujeros, o un personaje sin física, el resultado no es `ok` y explica el motivo. Tras la validación no queda rastro temporal en el nivel.
+  *Aceptación:* con una malla preparada con agujeros, o un personaje sin física, el resultado no es `ok` y explica el motivo. La camiseta y los shorts de `Pablo_Deportista` del 2026-11-10 (caja sobre los brazos, hueco en la entrepierna) dan un resultado distinto de `ok`. Tras la validación no queda rastro temporal en el nivel.
 
 - [ ] **REQ-90 · Criterio de publicación en la Microsoft Store [v0.5.0]:**
   - La v0.5.0 no se publica sin esta matriz, ejecutada con la **app instalada** (MSIX), en un **proyecto recién preparado**, sin scripts externos ni intervención manual en el editor:
-    - `dress`, `skirt` y `top` en Victoria, Pablo y David (9 casos), con prendas nuevas de Tripo en al menos un caso de cada tipo y el resto desde la biblioteca, para limitar créditos;
+    - `dress`, `skirt`, `top` y `pants` en Victoria, Pablo y David (12 casos, ampliada el 2026-11-10), con prendas nuevas de Tripo en al menos un caso de cada tipo y el resto desde la biblioteca, para limitar créditos. Entre ellos, la camiseta de tirantes y los shorts de correr en Pablo, puestos a la vez;
     - el resultado de cada caso, con sus capturas, revisado por el usuario;
     - un juego **empaquetado** para Windows con un personaje vestido con tela, para confirmar que la tela funciona fuera del editor. Android/VR se prueba con el mismo proyecto; si no funciona, se documenta como límite.
   - Un vídeo de pasarela generado con el resultado de la app cierra la prueba.
@@ -692,6 +694,24 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - **Privacidad:** todo se queda en `Saved/` de la máquina del usuario; a la IA solo llegan resultados de análisis (y capturas o voz solo cuando hacen falta, lo que la interfaz indica); aviso visible mientras se graba, también para quien lleva el visor; en proyectos de formación la sesión no guarda identidad ni rendimiento personal; las transcripciones de voz se tratan siempre como datos.
   *Aceptación:* en la suite de evals, ante «la cesta tiembla en el aire» la IA propone la caja negra antes de cambiar código y nunca usa `unreal_run_python` con un callback por fotograma (0 siempre); repitiendo el caso de ElecnorMIO se llega a las mismas conclusiones con menos llamadas que en la sesión manual.
 
+### 3.20. Prendas ceñidas como carcasa del cuerpo [v0.5.0, ampliación del 2026-11-10]
+
+*Por qué:* el 2026-11-10 el usuario vistió a `Pablo_Deportista` con una camiseta de tirantes y unos shorts de correr generados en la app. La camiseta quedó como una caja que tapaba los brazos, los shorts tenían un hueco en la entrepierna por el que se veía la ropa interior gris, y la cinturilla atravesaba la camiseta. El ajuste por franjas solo encaja cajas: no compara la superficie de la prenda con la piel (REJECTED-13). El usuario necesita un procedimiento automático para los usuarios de la app. Esta sección cambia el método de `top` y `pants` en REQ-84. Faldas, vestidos (REQ-87) y calzado no cambian.
+
+- [ ] **REQ-98 · Tops y pantalones construidos desde el cuerpo del personaje [v0.5.0] (amplía REQ-81, REQ-84; sustituye el ajuste por franjas):**
+  - **Ámbito:** toda prenda `top` o `pants`: camisetas, camisetas de tirantes, manga corta o larga, shorts, pantalones largos y mallas. La prenda no se obtiene deformando el modelo de Tripo. Se construye a partir de la malla del cuerpo del personaje y el modelo de Tripo solo aporta la forma de la zona tapada y el aspecto.
+  - **Cuerpo de partida:** la malla completa de la complexión del personaje, como en REQ-87 (los cuerpos con ropa de fábrica no tienen la piel tapada), en la misma pose que el `Body` del actor y con sus medidas leídas de los huesos del actor visible.
+  - **1. Colocar la prenda:** la prenda de Tripo, ya aislada (REQ-87, «Separar la prenda»), se coloca sobre el cuerpo con un único cambio de escala y posición, calculado con puntos anatómicos: hombros, cintura y cadera para `top`; cintura, cadera y rodillas para `pants`. Nada de estirar franja a franja.
+  - **2. Zona tapada:** la zona del cuerpo que cubre la prenda colocada. Cuello, sisas o mangas, bajo, cintura y largo de las perneras salen de la prenda. Los bordes se suavizan; la zona es continua y simétrica, salvo que la prenda no lo sea. En `pants` la entrepierna queda siempre cubierta. En `top` sin mangas, el brazo queda siempre fuera. Si la zona no se puede medir con garantías, se usa una plantilla por tipo y largo, y se avisa en el informe.
+  - **3. Carcasa:** copia de la zona tapada, separada de la piel a lo largo de la normal con una holgura por defecto pequeña (entre 0,5 y 1,5 cm según la zona). La holgura es un parámetro opcional (REQ-88). Los bordes llevan un dobladillo con algo de grosor, para que la prenda no parezca una lámina de papel.
+  - **4. Aspecto:** color y relieve se hornean desde el modelo de Tripo a texturas propias de la prenda, desde el punto más cercano. Los materiales son de dos caras (REQ-81).
+  - **5. Huesos:** los pesos se copian vértice a vértice desde el cuerpo completo (REJECTED-12), y la prenda tiene los mismos LOD que `Body` (REQ-81).
+  - **6. Piel tapada:** la copia del cuerpo del personaje (REQ-85, REQ-86) quita los triángulos tapados, salvo un margen junto a cuello, sisas, mangas, bajos y cintura, para que la piel no asome al doblar codos, hombros o caderas. Al retirar la prenda, el cuerpo vuelve a estar completo (REQ-84).
+  - **7. Top y pantalón a la vez:** en la cintura, la prenda de arriba queda por fuera: la carcasa del `top` se separa más que la del `pants` en la zona donde se solapan, para que la cinturilla no la atraviese. Vale en los dos órdenes de equipado.
+  - **8. Prendas holgadas:** si la prenda de Tripo es claramente más ancha que el cuerpo (sudadera ancha, chaqueta, pernera ancha), se ciñe igualmente y el informe avisa de que ha perdido volumen (`con_avisos`). No se intenta reproducir el volumen: queda fuera de alcance (§5).
+  - **Automático:** se lanza desde la Biblioteca con el MetaHuman elegido (REQ-83), sin pasos a mano en el editor y sin scripts externos, por la herramienta única (REQ-88). La misma prenda sobre el mismo personaje da siempre el mismo resultado.
+  *Aceptación:* en `PB_Pablo_Deportista_claude` (nivel `Metahumans` de `DBVMCPFirst`), la camiseta de tirantes y los shorts de correr de la biblioteca, equipados desde la app, cumplen todo esto: los brazos quedan fuera de las sisas; no hay hueco ni gris en la entrepierna; la cinturilla no atraviesa la camiseta; la validación de REQ-89 no encuentra vértices dentro de la piel en reposo; y en un ciclo de andar en Play la piel no asoma. El usuario aprueba las capturas de frente, lado y espalda. Lo mismo con un top y un pantalón largo en Victoria (`f_med_nrw`). Con una sudadera ancha, el resultado es `con_avisos` y explica la pérdida de volumen.
+
 ## 🏗️ 4. Propuesta de Solución Técnica (Resumen)
 
 - **Enfoque:** aplicación Tauri v2 (Rust + Vanilla JS sin bundler) que parte del código de **dbv-tauri-starter** (que ya incluye el subsistema de IA genérico extraído de dbv-typst-editor: `src/ai/*`, `src-tauri/src/ai/*`). Sobre esa base se añaden cuatro módulos:
@@ -722,6 +742,7 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
 
 - [ ] Versiones de Unreal anteriores a 5.8 (no traen el servidor MCP integrado). *(Nota: UEFN sale de Fuera de Alcance y entra en la v0.6.0 con REQ-78 y REQ-79).*
 - [ ] **En la v0.5.0 (caja negra, 2026-11-09):** grabar partidas en un paquete instalado en el visor (el módulo de ejecución sin dependencias del editor y el envío de datos por `adb` pasan a la v0.6.0), multijugador, reproducir la partida como vídeo o *replay* real, y que la IA arregle sola sin revisión (los cambios siguen pasando por las aprobaciones actuales).
+- [ ] **En la v0.5.0 (prendas ceñidas, 2026-11-10):** conservar el volumen de prendas holgadas tipo `top` o `pants` (se ciñen y se avisa, REQ-98); capuchas, cuellos altos, bolsillos o adornos en relieve, que solo quedan pintados en la textura; elegir entre carcasa y Chaos Outfit en la interfaz (Chaos Outfit es un spike, P-27).
 - [ ] **En la v0.5.0 (ropa, 2026-11-08):** tela en tops, pantalones o calzado (van por huesos); vestir varias capas a la vez; editar la ropa de fábrica de MetaHuman; Blender (REJECTED-09); generar el vídeo de pasarela como función de la app (el vídeo de REQ-90 se hace como prueba, no como herramienta).
 - [ ] Empaquetado/cocinado de juegos, despliegue a consolas o móviles desde la app.
 - [ ] Colaboración multiusuario, sincronización en la nube o cuentas propias de dbv-unreal-ai.
@@ -818,6 +839,10 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - **Mitigación:** todo local en `Saved/`; voz desactivada por defecto; la sesión no guarda identidad ni rendimiento personal; aviso visible mientras se graba, también en el visor; a la IA solo llegan resultados y, si hacen falta, capturas.
 - **R-44 · La variante C++ exige recompilar** (REQ-91): no hay Live Coding (ver memoria) y un proyecto solo Blueprint no puede compilar.
   - **Mitigación:** la variante Python es la base y cubre todos los proyectos; la C++ es opcional y se evalúa tras medir.
+- **R-45 · El horneado depende de lo bien que encaje la prenda de Tripo** (REQ-98): si la prenda colocada queda lejos de la piel o con partes de la figura de Tripo, el color se emborrona o se cuela piel de esa figura en la textura.
+  - **Mitigación:** limitar la distancia del horneado, rellenar desde los vecinos lo que no tenga origen fiable, avisar si ese relleno pasa de un umbral, y revisar las capturas (REQ-89).
+- **R-46 · Se pierden detalles con forma de la prenda** (REQ-98): capucha, cuello alto, bolsillos o volantes no existen en la carcasa.
+  - **Mitigación:** quedan pintados por el horneado; el informe avisa cuando la prenda de Tripo se aleja mucho del cuerpo, y la ficha de la Store lo explica (REQ-90).
 - ~~**R-13 · «Copilot» es una marca registrada de Microsoft.**~~ *Retirado el 2026-10-24: el usuario cambió el nombre visible a «DBV Unreal AI», que no usa la marca.*
 
 ## ❓ 7. Preguntas Abiertas
@@ -849,6 +874,7 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
 - [ ] **P-23 · Cómo se detecta el fin de PIE y la identidad del mundo desde Python (REQ-91, R1).** Con `unreal.register_slate_post_tick_callback` (P-16) hay que comprobar en vivo qué señal fiable hay de que el PIE terminó (mundo de juego `None`, otro objeto con el mismo nombre de nivel) y que el callback se retira sin dejar nada. Spike de S106.
 - [ ] **P-24 · Iniciar VR Preview por código (REQ-95).** El caso real se arrancó a mano desde el editor. Probar `FRequestPlaySessionParams` con `SessionPreviewTypeOverride = VRPreview` o su equivalente desde Python, y qué pasa sin visor conectado.
 - [ ] **P-25 · Combinación de mando para marcar (REQ-95).** La mejor combinación depende del proyecto y puede chocar con sus controles: debe ser configurable y avisar antes de empezar. Se decide con el primer uso real.
+- [ ] **P-27 · ¿Se puede automatizar Chaos Outfit (Resizable Outfit) por Python en UE 5.8? (REQ-98, S117).** Hasta ahora solo se ha leído la documentación (ADR-V050-002/003). Comprobar si se pueden crear y ejecutar por script los nodos de Outfit de Dataflow: ajuste a otro cuerpo y `TransferSkinWeights`. Comparar con la carcasa sobre la misma camiseta y los mismos shorts en `PB_Pablo_Deportista_claude`, con las medidas de REQ-89 y las capturas. **Decide el usuario:** si gana Chaos Outfit, se replantea REQ-98 en `/spec`; si no, queda registrado en la Rejection Memory. No bloquea REQ-98.
 - [ ] **P-26 · Nombre definitivo (REQ-94).** Recomendación: **«Caja negra»**, con el botón «Jugar con caja negra». La decisión es del usuario.
 
 ## 🧪 8. Criterios de Evaluación y Evals (No Deterministas)
@@ -874,6 +900,7 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - en la generación de ropa de MetaHuman, el flujo encadena siempre `convert_model` (`quad: true`) antes de importar y transfiere los pesos de huesos al `USkeletalMesh` resultante;
   - en una escena con el suelo desplazado o sin colisión, tras ejecutar `unreal_playtest`, la IA detecta en la telemetría `fell_out_of_world: true` (o `end_location.z < start_location.z - 500`) y propone corregir la colisión o altura del suelo.
 - [ ] **Vestir un MetaHuman [v0.5.0]** (REQ-83, REQ-88): con varios MetaHumans y sin destino indicado, la IA pregunta antes de equipar (equipar sin destino debe ser 0 siempre); usa `unreal_dress_metahuman` y no `run_python` para vestir; elige bien el tipo a partir de frases como «ponle un vestido rojo» o «unos vaqueros»; y ante un informe `con_avisos` o `error` lo cuenta al usuario en vez de darlo por bueno.
+- [ ] **Prendas ceñidas [v0.5.0]** (REQ-98, REQ-89): con un resultado `con_avisos` o `error`, la IA lo cuenta tal cual al usuario y nunca lo presenta como correcto; para reintentar, solo cambia los parámetros opcionales de la herramienta única, sin reescribir el ajuste con `run_python`.
 - [ ] **Caja negra [v0.5.0]** (REQ-91..REQ-97): ante un fallo de ejecución («la cesta tiembla en el aire»), la IA propone `session_plan` antes de cambiar código; nunca usa `unreal_run_python` con un callback por fotograma (debe ser 0 siempre); usa `session_analyze` y no pide tablas largas de fotogramas; ante un resultado con `gaps` lo dice en vez de darlo por fiable; ante datos que contradicen una nota de la memoria lo cuenta y propone corregirla; y `session_isolate` y `session_drive` nunca se ejecutan sin aprobación (debe ser 0 siempre).
 - [ ] **Ejecución:** suite contra un **editor simulado** (respuestas grabadas del editor real; base inicial: las 282 herramientas aplanadas de `.mcp_tools_cache.json` de MCPCLiente y las respuestas capturadas el 2026-10-24) en CI, y contra el **editor real** de un proyecto de pruebas en local, con guardado tras cada tarea, tiempo límite por petición y parada tras tres fallos de conexión seguidos (lecciones de dbv-typst-editor).
 
