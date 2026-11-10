@@ -510,10 +510,11 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
   flex-direction: column;
   min-width: 14rem;
   padding: 0.25rem;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.18));
-  border-radius: 8px;
-  background: var(--surface, #1e2230);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 6px 20px var(--shadow);
 }
 
 .ai-panel__blackbox-item {
@@ -529,5 +530,6 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 
 .ai-panel__blackbox-item:hover,
 .ai-panel__blackbox-item:focus-visible {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-tertiary);
+  outline: none;
 }

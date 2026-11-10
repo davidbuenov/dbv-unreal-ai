@@ -57,6 +57,14 @@ describe('botón «Caja negra» (REQ-94)', () => {
     expect(menu.classList.contains('hidden')).toBe(true);
   });
 
+  it('el desplegable usa los colores del tema (claro, oscuro y sepia) y no colores fijos @spec REQ-94', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const block = css.slice(css.indexOf('/* Caja negra (REQ-94)'));
+    // Un `var(--surface, #1e2230)` con respaldo oscuro dejó el texto ilegible en el tema sepia (visto por el usuario).
+    expect(block).not.toMatch(/var\(--surface|#1e2230|rgba\(255, 255, 255/);
+    for (const token of ['--bg-secondary', '--text-primary', '--border', '--bg-tertiary', '--shadow']) expect(block).toContain(`var(${token})`);
+  });
+
   it('los textos existen en es, en y zh-CN para el botón, los modos y las tres peticiones @spec REQ-94', async () => {
     const read = (file) => readFileSync(resolve(process.cwd(), file), 'utf8');
     const keys = ['ai.blackbox', 'ai.blackboxHint', ...['pie', 'attach', 'choose'].flatMap((m) => [`ai.blackbox.${m}`, `ai.blackbox.${m}Hint`])];
