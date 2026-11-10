@@ -58,6 +58,7 @@ export function createBlackboxBar({ active, run, t, enabled = () => true, nowMs 
   function render() {
     node.classList.toggle('hidden', !current);
     if (current) status.textContent = `${t('blackbox.recording')} · ${clock(elapsed())} · ${t('blackbox.marks', { n: current.marks })}`;
+    if (current) markButton.title = t('blackbox.key', { key: current.markKey ?? 'F9' });
     markButton.disabled = busy || !current;
     finishButton.disabled = busy || !current;
   }

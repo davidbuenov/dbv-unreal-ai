@@ -47,7 +47,10 @@ class FakeAdapter:
         self.unregistered = 0
         self.readers: dict[str, object] = {}
         self.reader_calls = 0
-        self.supported_events = frozenset({"pause", "movement_mode"})
+        self.supported_events = frozenset({"pause", "movement_mode", "mark_key"})
+        self.began = 0
+        self.ended = 0
+        self.begin_error: str | None = None
         self.event_values: dict[str, object] = {}
         self.event_errors: set[str] = set()
 
@@ -62,6 +65,15 @@ class FakeAdapter:
 
     def make_reader(self, world, signal):
         return self.readers.get(signal.name)
+
+    def begin(self):
+        self.began += 1
+        if self.begin_error:
+            raise RuntimeError(self.begin_error)
+        return ["freno de CPU quitado"]
+
+    def end(self):
+        self.ended += 1
 
     def poll_event(self, world, kind):
         if kind in self.event_errors:
@@ -377,6 +389,41 @@ class RecorderTest(unittest.TestCase):
         self.assertEqual(marks[0]["t"], 0.0)
         self.assertLess(marks[1]["t"], 0.1)
         self.assertLess(self._meta()["duration_s"], 0.5)
+
+    def test_the_editor_is_prepared_on_start_and_always_restored_on_finish(self) -> None:
+        r = self._rec(_plan([]))
+        r.start()
+        self.assertEqual((self.adapter.began, self.adapter.ended), (1, 0))
+        self.adapter.tick()
+        r.finish()
+        r.finish()
+        self.assertEqual((self.adapter.began, self.adapter.ended), (1, 1))  # una sola vez, aunque se cierre dos veces
+        self.assertEqual(self._meta()["notes"], ["freno de CPU quitado"])
+
+    def test_a_failing_preparation_does_not_stop_the_recording_and_the_editor_is_still_restored(self) -> None:
+        self.adapter.begin_error = "sin permiso"
+        r = self._rec(_plan([]))
+        r.start()
+        self.assertEqual(r.status, "recording")
+        self.assertTrue(any("no se pudo preparar el editor" in w for w in self.warnings))
+        r.finish()
+        self.assertEqual(self.adapter.ended, 1)
+
+    def test_the_mark_key_adds_numbered_marks_along_with_the_ones_from_the_app(self) -> None:
+        self.adapter.readers["A"] = lambda: [0.0]
+        r = self._rec(_plan([_sig("A")]))
+        r.start()
+        self.adapter.tick()
+        self.adapter.event_values["mark_key"] = {}
+        self.adapter.tick()  # tecla en el juego
+        r.mark("Momento 2")  # desde el panel de la app
+        self.adapter.event_values["mark_key"] = {}
+        self.adapter.tick()  # otra tecla
+        r.finish()
+        marks = [e for e in self._events() if e["type"] == "mark"]
+        self.assertEqual([m["label"] for m in marks], ["Momento 1", "Momento 2", "Momento 3"])
+        self.assertEqual((marks[0]["source"], marks[0]["key"]), ("key", "F9"))
+        self.assertEqual(self._meta()["mark_key"], "F9")
 
     def test_cost_is_stored_in_meta(self) -> None:
         self.adapter.readers["A"] = lambda: [0.0]

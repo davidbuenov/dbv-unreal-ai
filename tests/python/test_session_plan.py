@@ -33,7 +33,7 @@ class PlanTest(unittest.TestCase):
             p.columns,
             ["player.x", "player.y", "player.z", "player.yaw", "speed", "frame.dt_ms", "frame.fps"],
         )
-        self.assertEqual(p.events, ["movement_mode", "movement_base", "pause", "log_error"])
+        self.assertEqual(p.events, ["movement_mode", "movement_base", "pause", "log_error", "mark_key"])  # mark_key va siempre
 
     def test_event_only_presets_add_no_columns(self) -> None:
         p = plan_mod.parse_plan({"presets": ["input", "gameplay_events"]})
@@ -97,6 +97,16 @@ class PlanTest(unittest.TestCase):
         p = plan_mod.parse_plan({"signals": sigs})
         self.assertEqual(len(p.columns), 36)
         self.assertEqual(len(p.warnings), 1)
+
+    def test_the_mark_key_is_always_listened_to_and_can_be_changed(self) -> None:
+        default = plan_mod.parse_plan({})
+        self.assertEqual((default.mark_key, default.events), ("F9", ["mark_key"]))
+        custom = plan_mod.parse_plan({"presets": ["gameplay_events"], "mark_key": " F10 "})
+        self.assertEqual(custom.mark_key, "F10")
+        self.assertEqual(custom.events.count("mark_key"), 1)
+        bad = plan_mod.parse_plan({"mark_key": 7})
+        self.assertEqual(bad.mark_key, "F9")
+        self.assertEqual(len(bad.errors), 1)
 
     def test_non_object_plan_is_an_error_not_an_exception(self) -> None:
         self.assertEqual(plan_mod.parse_plan("hola").errors, ["el plan debe ser un objeto"])

@@ -32,6 +32,7 @@ FRAME_CHANNELS = ("dt_ms", "fps")
 KINDS = ("transform", "variable", "anim_property", "frame")
 RECOMMENDED_MAX_SIGNALS = 30  # medido en P-22: 30 columnas cuestan 0,19 ms por fotograma
 
+DEFAULT_MARK_KEY = "F9"  # en PIE: F8 expulsa del personaje, F9 no hace nada
 DEFAULT_MAX_SECONDS = 600.0  # 10 minutos
 DEFAULT_MAX_BYTES = 500 * 1024 * 1024  # 500 MB
 DEFAULT_KEEP_SESSIONS = 20
@@ -91,6 +92,7 @@ class Signal:
 class Plan:
     signals: list[Signal] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
+    mark_key: str = DEFAULT_MARK_KEY  # tecla que marca un momento DENTRO del juego, sin quitarle el foco
     limits: Limits = field(default_factory=Limits)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -168,6 +170,13 @@ def parse_plan(raw: Any) -> Plan:
         elif s is not None:
             plan.signals.append(s)
 
+    key = raw.get("mark_key")
+    if isinstance(key, str) and key.strip():
+        plan.mark_key = key.strip()
+    elif key not in (None, ""):
+        plan.errors.append("«mark_key» debe ser el nombre de una tecla (por ejemplo F9)")
+    if "mark_key" not in plan.events:
+        plan.events.append("mark_key")  # siempre: es la forma de marcar sin quitarle el teclado al juego
     _dedupe_names(plan)
     plan.limits = _limits_from(raw.get("limits"), plan)
     if len(plan.columns) > RECOMMENDED_MAX_SIGNALS:

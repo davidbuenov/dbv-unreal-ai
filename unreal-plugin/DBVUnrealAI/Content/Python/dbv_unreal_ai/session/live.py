@@ -87,12 +87,37 @@ def _get_property(obj: Any, name: str) -> Any:
 class UnrealAdapter:
     """Implementa ``recorder.Adapter`` sobre la API de Python de Unreal."""
 
-    supported_events = frozenset({"pause", "movement_mode", "movement_base"})
+    supported_events = frozenset({"pause", "movement_mode", "movement_base", "mark_key"})
 
-    def __init__(self) -> None:
+    def __init__(self, mark_key: str = "F9") -> None:
         self._ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
         self._last: dict[str, Any] = {}
         self._pawn: Any = None
+        self._mark_key = mark_key
+        self._key_was_down = False
+        self._throttle: Any = None  # los ajustes del editor que se cambiaron, para devolverlos al terminar
+
+    def begin(self) -> list[str]:
+        """Quita el freno de «Usar menos CPU en segundo plano» mientras se graba, y lo devuelve al terminar.
+
+        Sin esto, hacer clic en otra ventana (el panel de la app) deja a Unreal a ~3 FPS y el juego sin teclado: visto el
+        2026-11-10. Solo cambia el valor en memoria (no guarda la configuración) y ``end`` lo restaura.
+        """
+        notes: list[str] = []
+        try:
+            settings = unreal.load_object(None, "/Script/UnrealEd.Default__EditorPerformanceSettings")
+            if settings.get_editor_property("bThrottleCPUWhenNotForeground"):
+                settings.set_editor_property("bThrottleCPUWhenNotForeground", False)
+                self._throttle = settings
+                notes.append("Se quitó «Usar menos CPU en segundo plano» durante la grabación (se restaura al terminar)")
+        except Exception as exc:  # noqa: BLE001 - otra versión del motor: se graba igual
+            notes.append(f"No se pudo quitar el freno de CPU en segundo plano: {type(exc).__name__}: {exc}")
+        return notes
+
+    def end(self) -> None:
+        settings, self._throttle = self._throttle, None
+        if settings is not None:
+            settings.set_editor_property("bThrottleCPUWhenNotForeground", True)
 
     def game_world(self) -> Any | None:
         return self._ues.get_game_world()
@@ -135,7 +160,9 @@ class UnrealAdapter:
 
     # ------------------------------------------------------------------ eventos
     def poll_event(self, world: Any, kind: str) -> dict[str, Any] | None:
-        """Detecta el cambio de ``pause``, ``movement_mode`` o ``movement_base`` desde la última comprobación."""
+        """Detecta el cambio de ``pause``, ``movement_mode`` o ``movement_base``, o la tecla de marca."""
+        if kind == "mark_key":
+            return self._mark_key_pressed(world)
         try:
             now = self._state_of(world, kind)
         except Exception:
@@ -150,6 +177,18 @@ class UnrealAdapter:
         elif now != before:
             event = {"paused": bool(now)} if kind == "pause" else {"from": before, "to": now}
         return event
+
+    def _mark_key_pressed(self, world: Any) -> dict[str, Any] | None:
+        """``{}`` en el fotograma en que se pulsa la tecla (flanco: mantenerla no repite la marca)."""
+        controller = unreal.GameplayStatics.get_player_controller(world, 0)
+        if controller is None:
+            raise ValueError("no hay controlador del jugador")
+        key = unreal.Key()
+        key.set_editor_property("key_name", self._mark_key)
+        down = bool(controller.is_input_key_down(key))
+        pressed = down and not self._key_was_down
+        self._key_was_down = down
+        return {} if pressed else None
 
     def _movement(self, world: Any) -> Any:
         """El ``CharacterMovementComponent`` del personaje del jugador (se guarda el personaje entre llamadas)."""
@@ -244,7 +283,7 @@ def start_recording(plan_json: str, name: str = "") -> str:
     if raw is not None:
         plan = parse_plan(raw)
         sid = time.strftime("%Y%m%d-%H%M%S") + (f"-{name}" if name else "")
-        rec = rec_mod.Recorder(plan, sessions_dir() / sid, UnrealAdapter(), busy=_playtest_busy)
+        rec = rec_mod.Recorder(plan, sessions_dir() / sid, UnrealAdapter(plan.mark_key), busy=_playtest_busy)
         try:
             rec.start()
             _SESSION = rec
@@ -256,6 +295,7 @@ def start_recording(plan_json: str, name: str = "") -> str:
                 "errors": plan.errors,
                 "warnings": plan.warnings,
                 "waiting_for_pie": rec.adapter.game_world() is None,
+                "mark_key": plan.mark_key,
             }
         except rec_mod.SessionBusyError as exc:
             result = {"success": False, "error": str(exc)}

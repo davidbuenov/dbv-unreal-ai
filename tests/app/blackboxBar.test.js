@@ -54,6 +54,12 @@ describe('panel de grabación (REQ-94)', () => {
     expect(bar.node.querySelector('.blackbox-bar__note').textContent).toBe('Marca 2 guardada');
   });
 
+  it('el botón de marcar recuerda la tecla del juego, que no le quita el foco @spec REQ-94', async () => {
+    const { bar } = barWith({ info: { id: 's1', startedAt: STARTED, marks: 0, markKey: 'F10' } });
+    await bar.refresh();
+    expect(bar.node.querySelectorAll('button')[0].title).toBe('F10 en el juego marca sin perder el foco');
+  });
+
   it('«Terminar» llama a session_stop y el panel se apaga cuando la grabación ya no está activa @spec REQ-94', async () => {
     const { bar, state, runTool } = barWith();
     await bar.refresh();
@@ -86,7 +92,7 @@ describe('panel de grabación (REQ-94)', () => {
     const { readFileSync } = await import('node:fs');
     const zh = readFileSync('src/app/translations.zh.js', 'utf8');
     const es = readFileSync('src/app/translations.js', 'utf8');
-    for (const key of ['recording', 'marks', 'mark', 'finish', 'moment', 'marked', 'finishing', 'finished']) {
+    for (const key of ['recording', 'marks', 'mark', 'finish', 'moment', 'marked', 'finishing', 'finished', 'key']) {
       expect(zh).toContain(`'blackbox.${key}':`);
       expect(es.split(`'blackbox.${key}':`).length - 1, key).toBe(2);
     }

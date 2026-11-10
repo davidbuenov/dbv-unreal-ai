@@ -280,10 +280,13 @@ fn is_recent(folder: &Path) -> bool {
 
 /// Una grabación en marcha ahora mismo, para el panel de la app.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ActiveSession {
     pub id: String,
     pub started_at: String,
     pub marks: usize,
+    /// Tecla que marca un momento dentro del juego (sin quitarle el teclado).
+    pub mark_key: String,
 }
 
 /// La grabación que se está escribiendo ahora, si hay: la sesión más reciente con estado «recording» y ficheros tocados
@@ -301,6 +304,7 @@ pub fn active_session(root: &Path) -> Option<ActiveSession> {
     let out = recording.then(|| ActiveSession {
         id: newest,
         started_at: str_of(&meta, "started_at"),
+        mark_key: Some(str_of(&meta, "mark_key")).filter(|k| !k.is_empty()).unwrap_or_else(|| "F9".to_string()),
         marks: read_events(&folder).iter().filter(|e| e.get("type").and_then(Value::as_str) == Some("mark")).count(),
     });
     out
@@ -472,6 +476,10 @@ mod tests {
         fs::write(root.path().join("20261110-110000/events.jsonl"), "{\"t\":1.0,\"type\":\"mark\",\"label\":\"a\"}\n{\"t\":2.0,\"type\":\"pause\",\"paused\":true}\n{\"t\":3.0,\"type\":\"mark\",\"label\":\"b\"}\n").unwrap();
         let active = active_session(root.path()).unwrap();
         assert_eq!((active.id.as_str(), active.marks, active.started_at.as_str()), ("20261110-110000", 2, "2026-11-10T11:00:00"));
+        assert_eq!(active.mark_key, "F9"); // sin `mark_key` en meta.json (sesiones antiguas), la de siempre
+        // El panel lee `startedAt` y `markKey`: el JSON sale en camelCase.
+        let json = serde_json::to_value(&active).unwrap();
+        assert!(json.get("startedAt").is_some() && json.get("markKey").is_some() && json.get("started_at").is_none());
     }
 
     #[test]

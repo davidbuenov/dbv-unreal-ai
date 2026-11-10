@@ -57,6 +57,12 @@ class Adapter(Protocol):
     def make_reader(self, world: Any, signal: Signal) -> Callable[[], list[float]] | None:
         """Devuelve un lector de la señal, o ``None`` si todavía no existe el objetivo."""
 
+    def begin(self) -> list[str]:
+        """Prepara el editor para grabar (por ejemplo, que no se frene al perder el foco). Devuelve notas para ``meta.json``."""
+
+    def end(self) -> None:
+        """Deja el editor como estaba. Se llama siempre al cerrar la sesión."""
+
     supported_events: frozenset[str]
     """Tipos de evento que sabe emitir (los demás del plan se avisan una vez y se ignoran)."""
 
@@ -111,6 +117,8 @@ class Recorder:
         self._last_flush = 0.0
         self._next_try: dict[int, float] = {}
         self._dead_events: set[str] = set()
+        self._notes: list[str] = []
+        self._n_marks = 0
         self._started_at = ""
 
     # ------------------------------------------------------------------ ciclo de vida
@@ -129,6 +137,10 @@ class Recorder:
         self._write_meta()
         for err in self.plan.errors:
             self._warn_once(f"plan: {err}")
+        try:
+            self._notes = list(self.adapter.begin() or [])
+        except Exception as exc:  # noqa: BLE001 - sin esto se graba igual, solo que el editor puede frenarse al perder el foco
+            self._warn_once(f"no se pudo preparar el editor: {type(exc).__name__}: {exc}")
         self._handle = self.adapter.register_tick(self._on_tick)
 
     def finish(self, reason: str = "stopped") -> None:
@@ -141,6 +153,7 @@ class Recorder:
             if handle is not None:
                 self.adapter.unregister_tick(handle)
         finally:
+            self._restore_editor()
             self._world = None
             self._readers.clear()
             if self._writer is not None:
@@ -152,7 +165,14 @@ class Recorder:
                 Recorder.active = None
             self._write_meta()
 
+    def _restore_editor(self) -> None:
+        try:
+            self.adapter.end()
+        except Exception as exc:  # noqa: BLE001 - cerrar la sesión no puede fallar por esto
+            self._warn_once(f"no se pudo restaurar el editor: {type(exc).__name__}: {exc}")
+
     def mark(self, label: str, **data: Any) -> None:
+        self._n_marks += 1
         self.event("mark", label=label, **data)
 
     def event(self, kind: str, **data: Any) -> None:
@@ -221,7 +241,9 @@ class Recorder:
                 self._dead_events.add(kind)
                 self._warn_once(f"evento «{kind}» apagado: {type(exc).__name__}: {exc}")
                 continue
-            if data is not None:
+            if kind == "mark_key" and data is not None:  # la tecla del juego es una marca más, numerada
+                self.mark(f"Momento {self._n_marks + 1}", source="key", key=self.plan.mark_key)
+            elif data is not None:
                 self.event(kind, **data)
 
     def _read_all(self, world: Any, dt: float) -> list[float]:
@@ -332,5 +354,7 @@ class Recorder:
             "gaps": {"slow_frames": self._gaps, "threshold_s": LOW_FRAME_DT},
             "disabled": self.disabled,
             "warnings": self.warnings,
+            "mark_key": self.plan.mark_key,
+            "notes": self._notes,
         }
         (self.folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")

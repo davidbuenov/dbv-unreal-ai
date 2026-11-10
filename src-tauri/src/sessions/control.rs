@@ -61,7 +61,7 @@ pub fn specs() -> Vec<Value> {
         ),
         tool(
             "session_start",
-            "Start a black-box recording with a plan the user accepted. It only READS the game (no changes to the project). mode \"pie\" (default) starts Play in the editor and records it; \"attach\" records a Play session that is already running. Only one recording at a time, and not while unreal_playtest is running. The user plays while it records. The chat is BUSY during your turn, so the user cannot type: the app shows a recording panel with «Mark moment» and «Finish» buttons (tell them to use it, never to type \"now\" or \"done\"). Keep calling session_wait: it returns on every mark and when the recording finishes (the user pressed Finish or closed Play); then call session_stop if it is still recording. Never use per-frame callbacks of your own instead of this.",
+            "Start a black-box recording with a plan the user accepted. It only READS the game (no changes to the project). mode \"pie\" (default) starts Play in the editor and records it; \"attach\" records a Play session that is already running. Only one recording at a time, and not while unreal_playtest is running. The user plays while it records. The chat is BUSY during your turn, so the user cannot type: the app shows a recording panel with «Mark moment» and «Finish» buttons (tell them to use it, never to type \"now\" or \"done\"). Tell the user: click ONCE inside the game viewport so the game gets the keyboard; press F9 INSIDE the game to mark a moment without losing focus; clicking the app panel takes the keyboard away from the game (use the panel mainly for «Finish»). Keep calling session_wait: it returns on every mark and when the recording finishes (the user pressed Finish or closed Play); then call session_stop if it is still recording. Never use per-frame callbacks of your own instead of this.",
             json!({
                 "plan": { "type": "object", "description": "The accepted plan: {presets:[…], signals:[…], limits:{…}} (from session_plan)." },
                 "mode": { "type": "string", "enum": MODES },
@@ -131,12 +131,12 @@ const RULES: [(&[&str], &[&str], &str); 5] = [
     (
         &["tirones", "lag", "lento", "slow", "fps", "stutter", "hitch", "rendimiento", "performance"],
         &["performance", "gameplay_events"],
-        "Play normally for ~30 s and use «Mark moment» in the recording panel when it stutters.",
+        "Play normally for ~30 s and press F9 in the game when it stutters.",
     ),
     (
         &["salta", "teletransporta", "glitch", "pop", "jump", "teleport", "snap"],
         &["player", "performance"],
-        "Repeat what makes it jump and use «Mark moment» in the recording panel right when you see it.",
+        "Repeat what makes it jump and press F9 in the game right when you see it.",
     ),
     (
         &["no sigue", "sigue", "follow", "lag behind", "se despega", "detached"],
@@ -146,7 +146,7 @@ const RULES: [(&[&str], &[&str], &str); 5] = [
     (
         &["atasca", "stuck", "cae", "fall", "suelo", "floor", "atraviesa"],
         &["player", "gameplay_events", "performance"],
-        "Walk to the place where it happens and use «Mark moment» in the recording panel.",
+        "Walk to the place where it happens and press F9 in the game.",
     ),
 ];
 
@@ -172,7 +172,7 @@ pub fn plan_text(args: &Value) -> Result<String, String> {
     let generic = presets.is_empty();
     if generic {
         presets.extend(["player", "performance", "gameplay_events"]);
-        asks.push("Play the way that triggers it and use «Mark moment» in the recording panel when you notice it.");
+        asks.push("Play the way that triggers it and press F9 in the game when you notice it.");
     }
     let signals: Vec<Value> = args
         .get("targets")
@@ -183,7 +183,7 @@ pub fn plan_text(args: &Value) -> Result<String, String> {
     let out = serde_json::to_string(&json!({
         "plan": { "presets": presets, "signals": signals, "limits": { "max_seconds": seconds } },
         "ask_the_user": asks,
-        "marks": "While recording, the chat is busy with your turn, so the user cannot type: the app shows a recording panel with «Mark moment» and «Finish» buttons. Tell them to use those; marks let the analysis look around each moment.",
+        "marks": "While recording, the chat is busy with your turn, so the user cannot type: press F9 INSIDE the game to mark a moment without losing the keyboard (the app panel also has «Mark moment» and «Finish», but clicking it takes the focus away from the game). Click once inside the game viewport first so it gets the keyboard. Marks let the analysis look around each moment.",
         "generic": generic,
         "note": if signals.is_empty() { "No actors given: only presets. Add `targets` (actor_label/actor_class, optional socket) to record the objects involved." } else { "Show this plan to the user and let them edit it; session_start counts as their approval to record and analyse (nothing in the project is changed)." },
     }))
@@ -236,7 +236,8 @@ pub fn start_text(editor: &mut dyn Editor, args: &Value) -> Result<String, Strin
         "columns": started.get("columns"),
         "plan_errors": started.get("errors"),
         "plan_warnings": started.get("warnings"),
-        "next": "The user plays now and uses the recording panel of the app (Mark moment, Finish). Keep calling session_wait until it returns finished, then session_stop if needed and session_analyze.",
+        "next": "The user plays now: tell them to click once inside the game, press F9 in the game to mark moments, and use the app panel (Finish) when done. Keep calling session_wait until it returns finished, then session_stop if needed and session_analyze.",
+        "mark_key": started.get("mark_key"),
     }))
     .map_err(|e| e.to_string());
     out
