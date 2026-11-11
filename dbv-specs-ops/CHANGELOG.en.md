@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Garment fitting with the tailor algorithm (REQ-81, REQ-98, ADR-V050-007, S119):** new `dbv_unreal_ai.outfit.tailor` module that fits the original Tripo garment mesh to the MetaHuman body while preserving its original topology, UV mapping, and materials. Uses orientation normalization with neckline/rise detection (`normalise`), anatomical landmark alignment (`landmarks_body`), horizontal inner cap triangle removal (`drop_inner_caps`), inner radius polar clamping over the convex hull (`band_clamp_polar`), signed-distance skin repulsion (`band_clamp_distance`), smoothed bone weight transfer on welded groups (`skin_weights`), and welded normal recomputation (`welded_normals`). Supports optional top length compression (`limit_top_length`, `False` by default) and automatic layering (`under_skm`) to keep tops over pants.
+- **Tailor test suite (REQ-81, REQ-98):** new `tests/python/test_outfit_tailor.py` with 7 pure unit tests on synthetic meshes without Unreal dependencies.
+
+### Removed
+- **Body shell method (REJECTED-15):** removed `unreal-plugin/DBVUnrealAI/Content/Python/dbv_unreal_ai/outfit/shell.py` and `tests/python/test_outfit_shell.py`, replaced entirely by the tailor algorithm.
+
 ## [0.5.0] - 2026-11-10
 
 Version v0.5.0: **black box** to debug what happens while you play (record the game without touching it, mark moments with a key, analyse with data and know when to trust it); **dressing MetaHumans** from the app with a deterministic tool, garment types, Chaos Cloth and validation (tight shirts and trousers stay experimental); and fixes, including `unreal_playtest` now starting Play on UE 5.8.2 and a security one (a session name cannot escape its folder). Left for v0.5.1: the VR headset, isolating and comparing sessions and the graphics memory report.

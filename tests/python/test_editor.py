@@ -630,20 +630,20 @@ class MetaHumanTests(unittest.TestCase):
         )
 
     def _shell_patches(self):  # noqa: ANN202
-        """Sustituye la geometría de la carcasa (REQ-98, probada en vivo) para probar el cableado del equipado."""
+        """Sustituye la geometría del sastre (REQ-98, probada en vivo) para probar el cableado del equipado."""
         from unittest.mock import patch
 
         from dbv_unreal_ai import metahuman as mh_mod
         from dbv_unreal_ai.outfit import clearance as clearance_mod
-        from dbv_unreal_ai.outfit import shell as shell_mod
+        from dbv_unreal_ai.outfit import tailor as tailor_mod
 
-        def fake_build(full_skm, garment_sm, kind, folder, base_name, clearance_cm=None):  # noqa: ANN001, ANN202
+        def fake_build(full_skm, garment_sm, kind, folder, base_name, clearance_cm=None, *, limit_top_length=False, under_skm=None):  # noqa: ANN001, ANN202
             skm = types.SimpleNamespace(get_path_name=lambda: f"{folder}/{base_name}.{base_name}")
-            body = types.SimpleNamespace(pos=[(0.0, 0.0, 120.0)], normal=[(0.0, 1.0, 0.0)])
             return {
                 "success": True, "skeletal_mesh": skm, "material": types.SimpleNamespace(get_path_name=lambda: f"{folder}/MI_x"),
-                "textures": {}, "offset_cm": 1.0, "placement": {}, "zone": {"covered_vertices": 1}, "warnings": [],
-                "covered": [True], "inner_covered": [True], "body": body,
+                "textures": {}, "offset_cm": 1.0, "placement": {"limit_top_length": bool(limit_top_length)},
+                "zone": {"vertices": 100, "triangles": 180, "cap_triangles_removed": 6, "inside_pct": 0.0, "min_cm": 1.0},
+                "warnings": [],
             }
 
         skel = types.SimpleNamespace(get_path_name=lambda: "/Game/MetaHumans/Common/Female/Medium/NormalWeight/Body/metahuman_base_skel")
@@ -654,7 +654,7 @@ class MetaHumanTests(unittest.TestCase):
         )
         return [
             patch.object(mh_mod, "_find_full_body_asset", side_effect=lambda arch: (full, f"/Game/MetaHumans/Common/Common/{arch}_body_preview")),
-            patch.object(shell_mod, "build_garment_shell", side_effect=fake_build),
+            patch.object(tailor_mod, "build_tailored_garment", side_effect=fake_build),
             patch.object(clearance_mod, "measure_assets", return_value={"result": "ok", "ok": True, "warnings": [], "clearance": {"measured_vertices": 1}}),
         ]
 
@@ -682,7 +682,7 @@ class MetaHumanTests(unittest.TestCase):
             for p in self._shell_patches():
                 stack.enter_context(p)
             report = json.loads(editor.equip_metahuman_outfit("BP_Pablo", "/Game/DBV/Generated/Chaqueta", slot="Torso", asset_name="ChaquetaCuero"))
-        self.assertEqual(report["method"], "body_shell", "REQ-98: los tops se construyen desde el cuerpo")
+        self.assertEqual(report["method"], "tailor", "REQ-98: los tops se ajustan con el algoritmo del sastre")
         self.assertTrue(report["success"], report)
         self.assertEqual(report["actor"], "BP_Pablo")
         self.assertEqual(report["slot"], "Torso")

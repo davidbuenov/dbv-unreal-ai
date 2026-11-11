@@ -521,8 +521,9 @@ def equip_metahuman_outfit(
     z_offset: float = 0.0,
     smoothing_iterations: int = 5,
     clearance_cm: float | None = None,
+    limit_top_length: bool = False,
 ) -> str:
-    """Equipa una prenda en un MetaHuman: tops y pantalones como carcasa del cuerpo, faldas y calzado por huesos. @spec REQ-81, REQ-98"""
+    """Equipa una prenda en un MetaHuman: tops y pantalones con el algoritmo del sastre (REQ-98), faldas y calzado por huesos (REQ-81). @spec REQ-81, REQ-98"""
     return metahuman.equip_metahuman_outfit(
         actor_label,
         garment_source,
@@ -535,6 +536,7 @@ def equip_metahuman_outfit(
         import_model_fn=import_model,
         unique_name_fn=_unique_name,
         clearance_cm=clearance_cm,
+        limit_top_length=limit_top_length,
     )
 
 

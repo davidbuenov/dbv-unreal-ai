@@ -11,6 +11,7 @@ from . import cloth
 from . import fit
 from . import pipeline
 from . import skin
+from . import tailor
 from . import validate
 
 from .pipeline import (
@@ -31,6 +32,7 @@ __all__ = [
     "fit",
     "pipeline",
     "skin",
+    "tailor",
     "validate",
     "validate_outfit",
 ]

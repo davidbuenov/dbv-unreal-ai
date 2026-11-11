@@ -11,6 +11,13 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+### Añadido
+- **Ajuste de prendas con el algoritmo del sastre (REQ-81, REQ-98, ADR-V050-007, S119):** nuevo módulo `dbv_unreal_ai.outfit.tailor` que deforma la prenda original de Tripo sobre el cuerpo conservando su malla, UVs y materiales originales. Utiliza normalización con detección de escote y tiro (`normalise`), alineación por hitos anatómicos (`landmarks_body`), eliminación de tapones horizontales interiores (`drop_inner_caps`), ajuste de radio interior mediante banda polar sobre la envolvente convexa (`band_clamp_polar`), empuje fuera de la piel por distancia con signo (`band_clamp_distance`), transferencia de pesos suavizados sobre grupos soldados (`skin_weights`) y normales recalculadas (`welded_normals`). Soporta compresión opcional de largo en tops (`limit_top_length`, por defecto `False`) y superposición automática de capas (`under_skm`) para mantener los tops por fuera de los pantalones.
+- **Suite de tests del sastre (REQ-81, REQ-98):** nuevo fichero `tests/python/test_outfit_tailor.py` con 7 pruebas unitarias sin dependencia de Unreal sobre mallas sintéticas.
+
+### Eliminado
+- **Carcasa del cuerpo (REJECTED-15):** eliminados `unreal-plugin/DBVUnrealAI/Content/Python/dbv_unreal_ai/outfit/shell.py` y `tests/python/test_outfit_shell.py`, sustituidos por completo por el algoritmo del sastre.
+
 ## [0.5.0] - 2026-11-10
 
 Versión v0.5.0: **caja negra** para depurar lo que ocurre mientras juegas (grabar el juego sin tocarlo, marcar momentos con una tecla, analizar con datos y saber cuándo fiarse de ellos); **vestir MetaHumans** desde la app con una herramienta determinista, tipos de prenda, tela con Chaos Cloth y validación (las camisetas y pantalones ceñidos quedan como experimentales); y correcciones, entre ellas que `unreal_playtest` ya arranca Play en UE 5.8.2 y una de seguridad (el nombre de una sesión no puede salirse de su carpeta). Se quedan para la v0.5.1: el visor VR, aislar y comparar sesiones y el informe de memoria gráfica.

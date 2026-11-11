@@ -289,7 +289,7 @@ def fit_pants(pos, tris, B, col, clearance=0.8, drop=2.0):
     return q, tris, info
 
 
-def fit_top(pos, tris, B, col, clearance=1.0):
+def fit_top(pos, tris, B, col, clearance=1.0, limit_top_length=False):
     p, info = normalise(pos, "top")
     L = landmarks_body(B)
     zt_g = p[:, 2].max()
@@ -321,12 +321,12 @@ def fit_top(pos, tris, B, col, clearance=1.0):
         ah = limit
         info["armhole_lowered_to"] = round(float(limit), 1)
     tris, info["cap_mask"] = drop_inner_caps(q, tris, col, z_max=ah - 3)
-    # Largo: el bajo de un top no pasa de la entrepierna; si la prenda es más larga, se acorta
-    # en vertical desde el pecho (la tela se comprime, no se corta).
+    # Largo opcional: si limit_top_length=True, el bajo de un top no pasa de la entrepierna;
+    # si la prenda es más larga, se acorta en vertical desde el pecho (la tela se comprime, no se corta).
     hem_limit = L["crotch"] + 3.0
     z_ref = L["armpit"]
     hem = q[:, 2].min()
-    if hem < hem_limit:
+    if limit_top_length and hem < hem_limit:
         f = (z_ref - hem_limit) / (z_ref - hem)
         low = q[:, 2] < z_ref
         q[low, 2] = z_ref - (z_ref - q[low, 2]) * f

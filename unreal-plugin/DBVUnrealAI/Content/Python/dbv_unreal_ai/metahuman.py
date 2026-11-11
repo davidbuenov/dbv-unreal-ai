@@ -1346,11 +1346,59 @@ def _create_and_equip_skeletal_garment(
     return outcome
 
 
-# Ranuras cuya prenda se construye como carcasa del cuerpo (REQ-98). Legs solo si no es falda.
-SHELL_KIND_BY_SLOT = {"Torso": "top", "Legs": "pants"}
+# Ranuras cuya prenda se ajusta con el algoritmo del sastre (REQ-98, ADR-V050-007). Legs solo si no es falda.
+TAILOR_KIND_BY_SLOT = {"Torso": "top", "Legs": "pants"}
 
 
-def _equip_shell_garment(
+def _apply_tailored_slot(slot_comp: Any, skm: Any, material: Any, body_comp: Any) -> None:
+    """Equipa ``skm`` en ``slot_comp`` limpiando materiales heredados y sincronizando pose con ``body_comp``. @spec REQ-81, REQ-98"""
+    slot_comp.modify()
+    slot_comp.set_skeletal_mesh_asset(skm)
+    # La ropa de fábrica deja materiales de sustitución en la ranura (spike S116a).
+    if hasattr(slot_comp, "empty_override_materials"):
+        slot_comp.empty_override_materials()
+    if hasattr(slot_comp, "set_editor_property"):
+        slot_comp.set_editor_property("visible", True)
+        slot_comp.set_editor_property("override_materials", [])
+    if material is not None:
+        slot_comp.set_material(0, material)
+    slot_comp.set_leader_pose_component(body_comp, False)
+
+
+def _reequip_top_over_pants(target_actor: Any, full_skm: Any, full_path: str, pants_skm: Any, folder: str) -> bool:
+    """Reajusta el top existente por fuera del pantalón recién equipado si procede (REQ-98 paso 7). @spec REQ-98"""
+    from .outfit import tailor
+
+    rebuilt = False
+    comps = metahuman_components(target_actor)
+    torso_comp = comps.get("Torso")
+    body_comp = comps.get("Body")
+    top_skm = torso_comp.get_skeletal_mesh_asset() if torso_comp is not None else None
+    get_tag = getattr(unreal.EditorAssetLibrary, "get_metadata_tag", None)
+    method = str(get_tag(top_skm, "dbv_method") or "") if top_skm is not None and callable(get_tag) else ""
+    source_sm_path = str(get_tag(top_skm, "dbv_source_sm") or "") if top_skm is not None and callable(get_tag) else ""
+    limit_flag = str(get_tag(top_skm, "dbv_limit_top_length") or "") == "1" if top_skm is not None and callable(get_tag) else False
+    top_sm = unreal.EditorAssetLibrary.load_asset(source_sm_path.split(".")[0]) if method == "tailor" and source_sm_path else None
+    if top_sm is not None and torso_comp is not None and body_comp is not None:
+        top_name = f"{top_skm.get_path_name().rsplit('/', 1)[-1].split('.')[0]}_layered"
+        built_top = tailor.build_tailored_garment(
+            full_skm, top_sm, "top", folder, top_name,
+            limit_top_length=limit_flag, under_skm=pants_skm,
+        )
+        if built_top.get("success"):
+            new_top_skm = built_top["skeletal_mesh"]
+            if hasattr(unreal.EditorAssetLibrary, "set_metadata_tag"):
+                unreal.EditorAssetLibrary.set_metadata_tag(new_top_skm, "source_full_body", full_path)
+                unreal.EditorAssetLibrary.set_metadata_tag(new_top_skm, "dbv_method", "tailor")
+                unreal.EditorAssetLibrary.set_metadata_tag(new_top_skm, "dbv_source_sm", source_sm_path)
+                unreal.EditorAssetLibrary.set_metadata_tag(new_top_skm, "dbv_limit_top_length", "1" if limit_flag else "0")
+            unreal.EditorAssetLibrary.save_loaded_asset(new_top_skm, False)
+            _apply_tailored_slot(torso_comp, new_top_skm, built_top.get("material"), body_comp)
+            rebuilt = True
+    return rebuilt
+
+
+def _equip_tailored_garment(
     target_actor: Any,
     body_comp: Any,
     slot_comp: Any,
@@ -1362,30 +1410,37 @@ def _equip_shell_garment(
     build: str,
     restored_skin: bool,
     clearance_cm: float | None,
+    limit_top_length: bool = False,
 ) -> dict[str, Any]:
-    """Construye la prenda como carcasa del cuerpo (REQ-98), la equipa y la mide (REQ-89). @spec REQ-98"""
-    from .outfit import clearance, shell
+    """Ajusta la prenda al cuerpo con el algoritmo del sastre (REQ-98), la equipa y la mide (REQ-89). @spec REQ-81, REQ-98"""
+    from .outfit import clearance, tailor
 
     full_skm, full_path = _find_full_body_asset(build)
     outcome: dict[str, Any] = {"success": False}
     if full_skm is None or build not in full_path.lower():
         outcome["error"] = f"No hay malla de cuerpo completo para la complexión «{build}» en /Game/MetaHumans/Common: no se puede construir la prenda."
     else:
-        built = shell.build_garment_shell(full_skm, garment_sm, kind, folder, dest_name, clearance_cm)
+        legs_comp = metahuman_components(target_actor).get("Legs") if kind == "top" else None
+        under_skm = legs_comp.get_skeletal_mesh_asset() if legs_comp is not None else None
+        built = tailor.build_tailored_garment(
+            full_skm, garment_sm, kind, folder, dest_name, clearance_cm,
+            limit_top_length=limit_top_length, under_skm=under_skm,
+        )
         if not built.get("success"):
-            outcome["error"] = built.get("error", "No se pudo construir la carcasa.")
+            outcome["error"] = built.get("error", "No se pudo ajustar la prenda con el sastre.")
         else:
             skm = built["skeletal_mesh"]
             if fit is not None:
                 fit.setup_garment_lods(skm, target_lod_count=4)
+            sm_path = garment_sm.get_path_name() if hasattr(garment_sm, "get_path_name") else ""
             if hasattr(unreal.EditorAssetLibrary, "set_metadata_tag"):
                 unreal.EditorAssetLibrary.set_metadata_tag(skm, "source_full_body", full_path)
-                unreal.EditorAssetLibrary.set_metadata_tag(skm, "dbv_method", "body_shell")
+                unreal.EditorAssetLibrary.set_metadata_tag(skm, "dbv_method", "tailor")
+                unreal.EditorAssetLibrary.set_metadata_tag(skm, "dbv_source_sm", sm_path)
+                unreal.EditorAssetLibrary.set_metadata_tag(skm, "dbv_limit_top_length", "1" if limit_top_length else "0")
             unreal.EditorAssetLibrary.save_loaded_asset(skm, False)
             with unreal.ScopedEditorTransaction("DBV Unreal AI: equip MetaHuman outfit"):
                 target_actor.modify()
-                # La carcasa solo tapa su zona: el resto de la piel tiene que estar. Un cuerpo de
-                # fábrica recortado no tiene muslos ni torso, así que se dibuja el completo.
                 if body_comp.get_skeletal_mesh_asset().get_path_name() != full_skm.get_path_name():
                     skin_material = body_comp.get_material(0)
                     body_comp.modify()
@@ -1393,39 +1448,29 @@ def _equip_shell_garment(
                     if skin_material is not None:
                         body_comp.set_material(0, skin_material)
                     restored_skin = True
-                slot_comp.modify()
-                slot_comp.set_skeletal_mesh_asset(skm)
-                # La ropa de fábrica deja materiales de sustitución en la ranura (spike S116a).
-                if hasattr(slot_comp, "empty_override_materials"):
-                    slot_comp.empty_override_materials()
-                if hasattr(slot_comp, "set_editor_property"):
-                    slot_comp.set_editor_property("visible", True)
-                    slot_comp.set_editor_property("override_materials", [])
-                slot_comp.set_material(0, built["material"])
-                slot_comp.set_leader_pose_component(body_comp, False)
+                _apply_tailored_slot(slot_comp, skm, built.get("material"), body_comp)
                 neck_hide = _disable_neck_hide(metahuman_components(target_actor).get("Face")) if clean_slot == "Torso" else []
-            body = built["body"]
-            # Sin la franja del borde: ahí el rayo se cuela por la orilla de la carcasa.
-            zone = [(body.pos[i], body.normal[i]) for i, flag in enumerate(built["inner_covered"]) if flag]
-            # La transacción vuelve a ejecutar el construction script y recrea los componentes:
-            # la referencia anterior a Body puede seguir con el cuerpo recortado.
+                rebuilt_top = _reequip_top_over_pants(target_actor, full_skm, full_path, skm, folder) if kind == "pants" else False
             drawn_body = metahuman_components(target_actor)["Body"].get_skeletal_mesh_asset()
-            measured = clearance.measure_assets(skm, drawn_body, full_skm, kind, zone)
+            measured = clearance.measure_assets(skm, drawn_body, full_skm, kind)
             skm_path = skm.get_path_name()
+            mat = built.get("material")
+            mat_path = mat.get_path_name() if mat is not None and hasattr(mat, "get_path_name") else ""
             outcome = {
                 "success": True,
-                "method": "body_shell",
+                "method": "tailor",
                 "actor": target_actor.get_actor_label(),
                 "slot": clean_slot,
                 "garment_kind": kind,
                 "skeletal_mesh": skm_path,
                 "rigged_asset": skm_path,
-                "material": built["material"].get_path_name(),
-                "textures": built["textures"],
+                "material": mat_path,
+                "textures": built.get("textures", {}),
                 "offset_cm": built["offset_cm"],
                 "placement": built["placement"],
-                "drape": built.get("drape"),
                 "zone": built["zone"],
+                "limit_top_length": bool(limit_top_length),
+                "rebuilt_top_over_pants": rebuilt_top,
                 "has_bone_weights": True,
                 "restored_full_body_skin": restored_skin,
                 "neck_hide_disabled": neck_hide,
@@ -1433,7 +1478,7 @@ def _equip_shell_garment(
                 "lod_count": 4,
                 "source_body": full_path,
                 "validation": measured,
-                "warnings": built["warnings"] + measured.get("warnings", []),
+                "warnings": built.get("warnings", []) + measured.get("warnings", []),
             }
     return outcome
 
@@ -1451,8 +1496,9 @@ def equip_metahuman_outfit(
     import_model_fn: Callable[[str, str, str], str],
     unique_name_fn: Callable[[str, str], str],
     clearance_cm: float | None = None,
+    limit_top_length: bool = False,
 ) -> str:
-    """Transfiere pesos del cuerpo MetaHuman a una prenda con ``GeometryScript`` (``INPAINT_WEIGHTS``) y la equipa. @spec REQ-81, REQ-83"""
+    """Ajusta y equipa una prenda en un MetaHuman con el sastre (REQ-98) o transferencia de pesos (REQ-81). @spec REQ-81, REQ-83, REQ-98"""
     result: dict[str, Any] = {"success": False}
     clean_folder, clean_asset, clean_scale, clean_z, arg_err = _normalize_equip_args(
         folder_path, asset_name, scale_multiplier, z_offset
@@ -1515,12 +1561,13 @@ def equip_metahuman_outfit(
                         oriented = unreal.GeometryScript_MeshQueries.get_mesh_bounding_box(garment_dyn)
                         oriented_size = oriented.max - oriented.min
                         is_skirt = _is_skirt_shape(clean_slot, float(oriented_size.z), float(oriented_size.x), clean_asset or garment_source)
-                        shell_kind = SHELL_KIND_BY_SLOT.get(clean_slot) if not is_skirt else None
-                        if shell_kind is not None:
-                            # REQ-98: tops y pantalones se construyen desde el cuerpo (REJECTED-13).
-                            result = _equip_shell_garment(
-                                target_actor, body_comp, slot_comp, garment_sm, shell_kind, clean_slot,
-                                clean_folder, dest_skm_path.rsplit("/", 1)[-1], build, restored_skin, clearance_cm,
+                        tailor_kind = TAILOR_KIND_BY_SLOT.get(clean_slot) if not is_skirt else None
+                        if tailor_kind is not None:
+                            # REQ-98 / ADR-V050-007: tops y pantalones se ajustan con el algoritmo del sastre.
+                            result = _equip_tailored_garment(
+                                target_actor, body_comp, slot_comp, garment_sm, tailor_kind, clean_slot,
+                                clean_folder, dest_skm_path.rsplit("/", 1)[-1], build, restored_skin,
+                                clearance_cm, limit_top_length=limit_top_length,
                             )
                         else:
                             skirt_hip_z = _reference_bone_z(skeleton, "thigh_l") + SKIRT_HIP_MARGIN_CM if is_skirt else None

@@ -563,61 +563,44 @@ La grabadora y los análisis deben cumplir desde el principio la regla de un sol
 
 ---
 
-## 16. Plan de implementación — v0.5.0: prendas ceñidas como carcasa del cuerpo (REQ-98, REQ-89, REQ-90; P-27, P-28)
+## 16. Plan de implementación — v0.5.0: «Sastre» (`outfit/tailor.py`) para prendas ceñidas (REQ-98, REQ-81; ADR-V050-007)
 
-> **Modo:** Orquestador (más de 3 ficheros y más de 150 líneas). **Fecha:** 2026-11-10. **Origen:** `/spec` v1.15 tras ver a `Pablo_Deportista` mal vestido (REJECTED-13).
+> **Modo:** Orquestador. **Fecha:** 2026-11-10 (noche). **Origen:** prototipo de `scripts/spikes/tailor/` aprobado por el usuario en `BP_Pablo_fable` («Camiseta ok en Pablo», commit `27d2476`), sustituyendo y eliminando la carcasa del cuerpo (`outfit/shell.py`, REJECTED-15).
 
-### Evidencia en vivo (2026-11-10, UE 5.8, `DBVMCPFirst`)
+### Architect Review
 
-- Existen: `GeometryScript_Bake.bake_texture` y `bake_vertex` (con `make_bake_type_texture` y `make_bake_type_tangent_normal`), `GeometryScript_MeshSpatial.build_bvh_for_mesh`, `find_nearest_point_on_mesh` y `find_nearest_ray_intersection_with_mesh`, `GeometryScript_MeshEdits.delete_triangles_from_mesh`, `GeometryScript_MeshModeling.apply_mesh_offset` y `apply_mesh_shell`, `GeometryScript_BoneWeights.mesh_copy_bone_weights`, `GeometryScript_Normals.compute_split_normals` y `GeometryScript_AssetUtils.copy_mesh_to_skeletal_mesh`.
-- **No existe** `create_new_texture_asset_from_render_target`. Sin comprobar cómo se guarda como asset la textura que devuelve `bake_texture`: P-28.
-- Personaje de prueba: etiqueta real **`BP_Pablo_deportista_claude`** (clase `/Game/MetaHumans/Pablo/BP_Pablo`, `Body` = `m_tal_nrw_body` recortado, camisa y pantalón de fábrica). Cuerpo completo: `/Game/MetaHumans/Common/Common/m_tal_nrw_body_preview`.
-- Chaos Outfit en Python: `ChaosOutfitAsset`, `ChaosOutfitAssetFactory`, `ChaosSizedOutfitSource` y `MetaHumanOutfitPipeline` (`apply_outfit_assembly_output_to_mesh_component`). No aparecen como clases los nodos de Outfit de Dataflow (P-27).
+```xml
+<architect_review>
+  <builder>Propongo portar el prototipo «sastre» (fitlab.py + fit2.py + ue_tailor.py) a dbv_unreal_ai/outfit/tailor.py para cumplir REQ-98 y REQ-81, eliminando outfit/shell.py, con el recorte vertical del bajo del top como opción (limit_top_length=False por defecto) y colisionador multicapa automático cuando el MetaHuman ya tiene equipado un pantalón en Legs.</builder>
+  <adversary>Riesgo específico al dominio: ¿Qué ocurre si al eliminar triángulos de las tapas interiores (drop_inner_caps) con delete_triangles_from_mesh sobre el DynamicMesh de Unreal quedan IDs de vértice dispersos (tombstones) al asignar los pesos de huesos (set_vertex_bone_weights), o si el componente Legs tiene la ropa de fábrica recortada en vez de una prenda ajustada, o si el usuario equipa primero Torso y después Legs?</adversary>
+  <evidence>En ADR-V050-006 (memory.md) se verificó que las ediciones topológicas en FDynamicMesh3 dejan huecos en los IDs si no se ordenan bien las operaciones; en ue_tailor.py (líneas 121-135) se asignan posiciones y normales ANTES de delete_triangles_from_mesh, pero set_vertex_bone_weights va después: como delete_triangles_from_mesh sin compactar no borra los vértices huérfanos, los IDs 0..N-1 siguen existiendo y copy_mesh_to_skeletal_mesh limpia los no referenciados. Además, en metahuman.py (_equip_shell_garment) se guardan metadatos en el SkeletalMesh y una transacción sobre un actor de Blueprint recrea sus componentes.</evidence>
+  <builder>Resolución: (1) Mantendremos el orden exacto verificado en ue_tailor.py (posiciones y normales → delete_triangles_from_mesh → copy_bones_from_mesh → set_vertex_bone_weights por índice de vértice original); (2) Para las capas (paso 5 de REQ-98), solo añadiremos la malla de Legs al Collider del top cuando Legs tenga una prenda activa y visible, y guardaremos el StaticMesh de origen en el metadata tag dbv_source_sm del SkeletalMesh generado para que, si se equipa primero el top y después el pantalón, el top pueda reajustarse automáticamente sobre el pantalón recién equipado; (3) Volveremos a consultar metahuman_components(target_actor) tras la transacción antes de medir con clearance.measure_assets.</builder>
+  <confidence_score edge_cases="high" security="high" concurrency="high" />
+</architect_review>
+```
 
-### Diseño
+### Diseño de `dbv_unreal_ai/outfit/tailor.py`
 
-Módulo nuevo `dbv_unreal_ai/outfit/shell.py` con una función por paso de REQ-98; `pipeline.py` lo llama para `top` y `pants`. Todo trabaja sobre una copia en `DynamicMesh` del cuerpo completo de la complexión. **Borrar triángulos de esa copia conserva UV y pesos**, así que la carcasa hereda del cuerpo topología, UV y huesos, sin transferir nada (REJECTED-12).
-
-| Función | Qué hace | REQ-98 |
+| Función / Clase | Qué hace | REQ-98 |
 | --- | --- | --- |
-| `place_garment(garment_dyn, landmarks, kind)` | escala uniforme y traslación por puntos anatómicos (`fit.measure_body_landmarks`); antes aísla la prenda (`fit.isolate_garment_triangles`) | 1 |
-| `covered_zone(body_dyn, garment_dyn, kind, landmarks)` | por vértice del cuerpo, rayo hacia fuera por la normal contra la prenda (BVH), con alcance máximo; mayoría entre vecinos, simetría en X, entrepierna forzada en `pants`, brazo fuera si la prenda no tiene mangas, cuello antes de la costura con `Face`; si la cobertura no es fiable, plantilla por tipo y largo, con aviso | 2 |
-| `build_shell(body_dyn, zone, clearance, outer_of)` | copia, quita lo no tapado, separa por la normal con la holgura por zona, dobladillo en los bordes (`apply_mesh_shell` o extrusión del borde) y más separación del `top` sobre el `pants` en la cintura | 3, 7 |
-| `bake_appearance(shell_dyn, garment_dyn, garment_textures)` | color y normal desde Tripo a las UV del cuerpo, con distancia máxima, relleno y aviso (R-45); material de dos caras | 4 |
-| `shell_to_skeletal_mesh(shell_dyn, body_skm, dest)` | asset de malla esquelética con el esqueleto del cuerpo y LOD como `Body` (`fit.setup_garment_lods`) | 5 |
-| `body_trim_zone(zone, border_margin)` | zona tapada menos un margen junto a los bordes, para `skin.trim_body_mesh_under_garment` | 6 |
-| `looseness_warning(garment_dyn, body_dyn, zone)` | holgura mediana de la prenda de Tripo colocada; por encima del umbral (4 cm), aviso de pérdida de volumen | 8 |
+| `Body`, `Collider`, `body_collider`, `garment_collider` | Modelo de piel (con exclusión geométrica y por pesos de brazos en prendas sin mangas) y superficie colisionadora (piel + prenda inferior) | Cuerpo y 5 |
+| `normalise(pos, kind)` | Centra, orienta el ancho en X (`rot90`) y el frente en `+Y` (`flip180`) por escote (`top`) o prominencia glútea (`pants`) | 1 |
+| `landmarks_body(body)`, `shoulder_top(body, x_abs)`, `garment_crotch(p)`, `garment_armhole(p)` | Medidas anatómicas dinámicas del cuerpo y de la prenda sin constantes fijas | 2 |
+| `drop_inner_caps(pos, tris, col, deep, flat, z_max)` | Detecta por inundación sobre vértices soldados (`weld_map`) las tapas interiores horizontales de modelos macizos de Tripo | 3 |
+| `band_clamp_polar(...)`, `band_clamp_distance(...)` | Ajuste radial mediano por franja/ángulo sobre muestreo denso de triángulos (`surface_samples`) y empuje suave por distancia con signo | 4 |
+| `fit_pants(...)`, `fit_top(..., limit_top_length=False)` | Ajuste completo de pantalones y tops; `limit_top_length` es opcional (`False` por defecto para conservar la caída natural aprobada en `BP_Pablo_fable`) | 2, 3, 4 |
+| `skin_weights(body, pos, tris, sleeveless=True)`, `welded_normals(pos, tris, ref)` | Transferencia de pesos desde la piel más cercana con 8 pasadas de suavizado laplaciano (top 8 huesos) y normales soldadas | 4, 6 |
+| `build_tailored_garment(...)` | Adaptador de Unreal: extrae arrays de `DynamicMesh`, ejecuta `fit_pants`/`fit_top`, elimina tapas, aplica pesos, duplica `full_skm`, vuelca con `copy_mesh_to_skeletal_mesh`, configura `two_sided` y 4 LODs | 6 |
 
-**Validador (S118):** `validate.measure_signed_clearance(garment_dyn, body_dyn, zone)` mide la distancia con signo con el punto más cercano y la normal del cuerpo, y la piel destapada en la zona. Sustituye a `measure_body_clearance` (cajas envolventes y valores fijos, prohibidos por REQ-89). Si no puede medir, devuelve `error`.
+### Slices (`S119`)
 
-**Parámetro opcional:** `clearance_cm` (REQ-88), igual en `editor.py`, `toolset.py`, `cpp_bridge.py`, `mcp_server.rs` y `unrealTools.js`.
-
-### Slices (orden de ejecución)
-
-Cada slice es un commit, en pasos de hasta 50 líneas, con `@spec`, tests y `CHANGELOG` ES y EN.
-
-1. **S118a · Distancia con signo (`REQ-89`).** `measure_signed_clearance` y piel destapada en la zona; tests con mallas de prueba (esfera dentro y fuera, hueco).
-2. **S118b · Sustituir la medida por cajas (`REQ-89`).** `validate_outfit` usa la medida nueva, sin valores fijos ni atajo de faldas; guarda las capturas en disco y pone su ruta en el informe. Tests actualizados.
-3. **S118c · Puerta de regresión en vivo (`REQ-89`).** El `Pablo_Deportista` actual (camiseta de caja, shorts con hueco) da un resultado distinto de `ok`, y lo explica.
-4. **S116a · Spike de horneado (P-28), en vivo y sin tocar el plugin.** Hornear el color de la camiseta de Tripo sobre una zona del cuerpo de `m_tal_nrw` y guardarlo como asset. Medir el tiempo de BVH más rayos en unos 30.000 vértices. **Puerta:** textura guardada o, si no, color por vértice; y tiempo por debajo de 60 s, o procesar por lotes.
-5. **S116b · `place_garment` (`REQ-98`).**
-6. **S116c · `covered_zone` (`REQ-98`)**, con las reglas de mangas, entrepierna y cuello.
-7. **S116d · `build_shell` (`REQ-98`)**, con dobladillo y el top por fuera en la cintura.
-8. **S116e · `bake_appearance` (`REQ-98`)**, por la vía que elija S116a.
-9. **S116f · `shell_to_skeletal_mesh`, recorte del cuerpo y aviso de holgura (`REQ-98`).**
-10. **S116g · `clearance_cm` en toda la pila (`REQ-88`, `REQ-98`).**
-11. **S116h · Integración (`REQ-98`, `REQ-84`).** `pipeline.py` y `equip_metahuman_outfit` mandan `top` y `pants` a `shell.py`. Se borra el camino por franjas para esos tipos (`_compute_slice_envelopes` y `_deform_by_envelopes`, más el atajo de shorts en `_is_skirt_shape`). Faldas y vestidos no cambian.
-12. **S116i · Puerta en vivo con el usuario (`REQ-98`).** Desde la Biblioteca de la app, camiseta de tirantes y shorts de correr sobre `BP_Pablo_deportista_claude`, en los dos órdenes. Validación de S118, capturas de frente, lado y espalda y ciclo de andar. **Lo aprueba el usuario.** Después, top y pantalón largo en Victoria, y una sudadera ancha (`con_avisos`).
-13. **S117 · Spike de Chaos Outfit (P-27), limitado a una sesión.** Crear un `ChaosOutfitAsset` por script y comprobar si se puede ajustar a otro cuerpo con `ChaosSizedOutfitSource` o `MetaHumanOutfitPipeline`, o con un grafo de Dataflow de plantilla. Si se puede, aplicarlo a la misma camiseta y los mismos shorts, y comparar con S118 y capturas. Resultado al usuario; si no se puede, va a la Rejection Memory.
-
-Después, la matriz de 12 casos de REQ-90 (S104 reabierto) con la app instalada.
-
-### Pruebas
-
-- **Python (`tests/python/test_outfit_shell.py`, `test_outfit_validate.py`):** dobles de `unreal` con mallas pequeñas (cilindro de torso con dos cilindros de pierna). Casos: entrepierna cubierta en `pants`; brazo fuera en un top sin mangas; zona simétrica; dobladillo sin bordes abiertos nuevos; top por fuera en la cintura en los dos órdenes; aviso de holgura por encima del umbral; error sin cuerpo completo; validador con vértices dentro, hueco destapado y error sin medida (nunca valores fijos).
-- **Vitest y Rust:** `clearance_cm` opcional en el esquema de la herramienta y en la llamada de la Biblioteca.
-- **En vivo:** puertas S118c, S116a, S116i y S117; capturas guardadas en `Saved/DBVUnrealAI/outfits/<job>/`.
-
-### Cuestiones para `/code-simplify`
-
-Al quitar el camino por franjas, comprobar que no queda código muerto en `metahuman.py` (`_warp_t`, `_arm_cutoff`, `_compute_slice_envelopes`, `_deform_by_envelopes`) ni tests que solo lo cubrían. `shell.py` cumple desde el principio un solo `return` y excepciones concretas.
+1. **S119b · `/spec` y `/plan` (`REQ-98`, `REQ-81`):** Actualizar `SPECIFICATIONS.md` §3.20 y `implementation_plan.md` §16.
+2. **S119c · `/build` (`outfit/tailor.py` + integración en `metahuman.py` + limpieza de `shell.py`):**
+   - Crear `unreal-plugin/DBVUnrealAI/Content/Python/dbv_unreal_ai/outfit/tailor.py` cumpliendo la regla de un solo `return` por función y `@spec REQ-81, REQ-98`.
+   - Reemplazar `_equip_shell_garment` por `_equip_tailored_garment` en `metahuman.py`, soportando `clearance_cm` y `limit_top_length: bool = False`, y pasando como obstáculo la prenda de `Legs` al vestir `Torso` (y reajustando `Torso` si se viste `Legs` después).
+   - Eliminar `outfit/shell.py` y `tests/python/test_outfit_shell.py`.
+   - Sincronizar el plugin con `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI`.
+3. **S119d · `/test` y `/code-simplify`:**
+   - Crear `tests/python/test_outfit_tailor.py` con pruebas unitarias de toda la parte pura (`normalise`, `drop_inner_caps`, `band_clamp_polar`, `band_clamp_distance`, `fit_pants`, `fit_top` con `limit_top_length` activado y desactivado, `skin_weights`, `welded_normals`, validación de errores).
+   - Actualizar `tests/python/test_editor.py` al método `tailor`.
+   - Pasar `pytest tests/python`, `npm run test:python` y `python dbv-specs-ops/scripts/dbv-lint.py --changed`.
