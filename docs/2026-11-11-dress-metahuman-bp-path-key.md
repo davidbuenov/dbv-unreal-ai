@@ -127,4 +127,24 @@ Comprobado en el editor tras el último intento:
 - **Copia del Blueprint existente:** `/Game/DBV/MetaHumanOutfits/Victoria_Vestido/BP_Victoria_Vestido_DBV`.
 - **Vestido importado** (lo hice yo para evitar el punto 3): `/Game/DBV/MetaHumanOutfits/model/StaticMeshes/Vestido_azul_marino`. La carpeta `model/` sale del nombre del fichero `model.glb`; convendría usar el nombre de la prenda.
 
-Sugerencia: si `fit_and_equip` falla, borrar o reutilizar los assets `SM_*_Sim`, `DF_*` y `CA_*` creados. Así los reintentos no acumulan restos ni chocan con nombres que ya existen.
+## Estado
+
+Corregido el 2026-11-11 (los puntos 1 a 3 en el commit `bc16bfd`; el resto en el siguiente):
+
+1. **Claves:** `pipeline.py` lee `copy_bp_path` y `original_bp_path`. Test de contrato con la función
+   real, copia nueva y reutilizada (`test_contrato_prepare_character_copy_con_el_pipeline`).
+2. **`apply_slot_rules`** recibe el actor del nivel y las mallas previas de las ranuras.
+3. **Importación:** si falla, el paso devuelve el motivo; la prenda de tela debe ser un `StaticMesh`.
+   Sin Blueprint de copia el paso falla en vez de usar la etiqueta del actor.
+4. **Restos:** cada prenda de tela va a su carpeta (`<destino>/<nombre>`), no a la raíz, y si el
+   Cloth Asset no llega a crearse se borran la simulación, el Dataflow y el Cloth Asset a medias.
+   Un reintento sustituye los que existan.
+5. Los pesos de la tela salen del cuerpo y el Physics Asset del propio personaje.
+
+Sin hacer: los tres assets sueltos de este intento (`SM_Dress_…_Sim`, `DF_Dress_…`, `CA_Dress_…` en
+la raíz) siguen en el proyecto y se pueden borrar a mano; la carpeta `model/` la crea
+`library_send_to_unreal` a partir del nombre del fichero, no este pipeline.
+
+Cubierto por tests; falta repetir la reproducción en el editor con el plugin sincronizado.
+
+Sugerencia original: si `fit_and_equip` falla, borrar o reutilizar los assets `SM_*_Sim`, `DF_*` y `CA_*` creados. Así los reintentos no acumulan restos ni chocan con nombres que ya existen.

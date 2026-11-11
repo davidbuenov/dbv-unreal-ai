@@ -357,6 +357,17 @@ def setup_cloth_component_in_blueprint(
     return res
 
 
+def _discard_assets(asset_paths: list[str]) -> list[str]:
+    """Borra los assets a medio crear de un intento fallido y devuelve los que borró. @spec REQ-87, REQ-88"""
+    removed: list[str] = []
+    eal = getattr(unreal, "EditorAssetLibrary", None) if HAS_UNREAL else None
+    if eal is not None and hasattr(eal, "does_asset_exist"):
+        for path in asset_paths:
+            if path and eal.does_asset_exist(path) and eal.delete_asset(path):
+                removed.append(path)
+    return removed
+
+
 def setup_cloth_for_character(
     actor_or_bp_path: str,
     garment_kind: str,
@@ -423,6 +434,13 @@ def setup_cloth_for_character(
             )
             if not ca_res["success"]:
                 res["error"] = ca_res["error"]
+                # Aún no los usa ningún Blueprint: no se dejan restos sueltos del intento fallido.
+                clean_folder = target_folder.rstrip("/")
+                leftovers = [f"{clean_folder}/CA_{garment_name}", f"{clean_folder}/DF_{garment_name}"]
+                if not sim_sm_path:
+                    leftovers.append(active_sim_sm)
+                    res["sim_sm_path"] = None
+                res["discarded_assets"] = _discard_assets(leftovers)
             else:
                 res["cloth_asset"] = ca_res["cloth_asset"]
                 res["dataflow_asset"] = ca_res["dataflow_asset"]

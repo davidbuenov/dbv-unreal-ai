@@ -147,6 +147,39 @@ class TestOutfitCloth(unittest.TestCase):
             self.assertIsNotNone(res["dataflow_asset"])
             self.assertEqual(res["blueprint_path"], "/Game/DBV/Runway/Cloth/BP_Victoria_DBV")
 
+    def test_fallo_al_crear_la_tela_no_deja_restos(self) -> None:
+        """@spec REQ-87, REQ-88 — si el Cloth Asset no se crea, se borran la simulación y los assets a medias."""
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        existing = {"/Game/Outfits/Vestido/SM_Vestido_Sim", "/Game/Outfits/Vestido/DF_Vestido"}
+        eal = SimpleNamespace(
+            does_asset_exist=lambda path: path in existing,
+            delete_asset=lambda path: existing.discard(path) is None,
+        )
+        sim_ok = {"success": True, "sim_sm_path": "/Game/Outfits/Vestido/SM_Vestido_Sim"}
+        ca_fail = {"success": False, "error": "Excepción configurando Dataflow: boom"}
+
+        with (
+            patch.object(cloth, "HAS_UNREAL", True),
+            patch.object(cloth, "unreal", SimpleNamespace(EditorAssetLibrary=eal)),
+            patch.object(cloth, "generate_cloth_simulation_mesh", return_value=sim_ok),
+            patch.object(cloth, "create_cloth_asset_and_dataflow", return_value=ca_fail),
+        ):
+            res = cloth.setup_cloth_for_character(
+                actor_or_bp_path="/Game/BP_Victoria_DBV",
+                garment_kind="dress",
+                garment_name="Vestido",
+                render_sm_path="/Game/SM_Vestido",
+                dest_folder="/Game/Outfits/Vestido",
+            )
+
+        self.assertFalse(res["success"])
+        self.assertIn("boom", res["error"])
+        self.assertEqual(existing, set())
+        self.assertIsNone(res["sim_sm_path"])
+        self.assertEqual(sorted(res["discarded_assets"]), ["/Game/Outfits/Vestido/DF_Vestido", "/Game/Outfits/Vestido/SM_Vestido_Sim"])
+
 
 if __name__ == "__main__":
     unittest.main()

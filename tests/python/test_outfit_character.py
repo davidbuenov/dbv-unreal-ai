@@ -365,6 +365,27 @@ class TestOutfitCharacter(unittest.TestCase):
         self.assertTrue(res2["reused"])
         self.assertEqual(res2["copy_bp_path"], res["copy_bp_path"])
 
+    def test_contrato_prepare_character_copy_con_el_pipeline(self) -> None:
+        """@spec REQ-85, REQ-88 — el pipeline lee de prepare_character_copy las claves que esta devuelve.
+
+        Regresión de 2026-11-11: leía ``copy_blueprint_path`` y el Blueprint de la copia quedaba en ``None``.
+        Se ejecuta la función real, con una copia nueva y con una reutilizada.
+        """
+        from dbv_unreal_ai.outfit import pipeline
+
+        for expect_created in (True, False):
+            pipeline._ACTIVE_JOB_ID = None
+            start = pipeline.dress_metahuman_start(actor_label="BP_Pablo", garment_source="/Game/SM_Top", garment_kind="top")
+            self.assertTrue(start["success"], start)
+            step = pipeline.dress_metahuman_step(start["job_id"])
+            self.assertTrue(step["success"], step)
+            ctx = pipeline._load_job_state(start["job_id"])["context"]
+            self.assertEqual(ctx["working_bp_path"], "/Game/DBV/MetaHumanOutfits/Pablo/BP_Pablo_DBV")
+            self.assertEqual(ctx["original_bp_path"], "/Game/MetaHumans/Pablo/BP_Pablo")
+            self.assertEqual(ctx["copy_created"], expect_created)
+            self.assertIn("Torso", ctx["slots_before"])
+        pipeline._ACTIVE_JOB_ID = None
+
     def test_apply_slot_rules_segun_tabla_req84(self) -> None:
         """@spec REQ-84"""
         from dbv_unreal_ai.outfit import character

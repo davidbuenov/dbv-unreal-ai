@@ -497,8 +497,11 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
                     bp_path = ctx.get("working_bp_path")
                     render_sm: str | None = None
                     cloth_err: str | None = "character copy Blueprint is missing: prepare_character did not run"
+                    # Cada prenda de tela en su carpeta: malla importada, simulación, Dataflow y Cloth Asset
+                    # quedan juntos y un reintento los sustituye en vez de dejar restos en la raíz.
+                    garment_folder = f"{dest_folder.rstrip('/')}/{asset_name}"
                     if bp_path:
-                        render_sm, cloth_err = _resolve_cloth_render_mesh(source, dest_folder, asset_name)
+                        render_sm, cloth_err = _resolve_cloth_render_mesh(source, garment_folder, asset_name)
                     cloth_res: dict[str, Any] = {"success": False, "error": cloth_err}
                     if render_sm:
                         body_skm_path, body_phys_path = _cloth_body_assets(_find_level_actor(actor_label))
@@ -509,7 +512,7 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
                             render_sm_path=render_sm,
                             skeletal_mesh_path=body_skm_path,
                             physics_asset_path=body_phys_path,
-                            dest_folder=dest_folder,
+                            dest_folder=garment_folder,
                             target_triangles=1500,
                         )
                     if not cloth_res.get("success"):

@@ -402,7 +402,7 @@ class TestOutfitPipeline(unittest.TestCase):
             self.assertEqual(kwargs["render_sm_path"], "/Game/DBV/Generated/SM_Prenda")
             self.assertEqual(kwargs["skeletal_mesh_path"], "/Game/MH/f_med_nrw_body")
             self.assertEqual(kwargs["physics_asset_path"], "/Game/MH/f_med_nrw_body_Physics")
-            self.assertEqual(kwargs["dest_folder"], "/Game/DBV/MetaHumanOutfits")
+            self.assertEqual(kwargs["dest_folder"], f"/Game/DBV/MetaHumanOutfits/{kind.capitalize()}_BP_Victoria")
             pipeline._ACTIVE_JOB_ID = None
 
     def test_paso_de_tela_importa_el_fichero_y_exige_malla_estatica(self) -> None:
