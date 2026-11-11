@@ -492,8 +492,11 @@ impl Library {
     }
 
     /// Copia un modelo (`.glb`, `.gltf`, `.fbx`, `.obj`, `.usdz`), un Gaussian Splat (`.spz`, `.ply`), una imagen
-    /// o un escenario de World Labs (`.json`) a la biblioteca. @spec REQ-30, REQ-41, REQ-42
+    /// o un escenario de World Labs (`.json`) a la biblioteca. @spec REQ-30, REQ-41, REQ-42, REQ-100
     pub fn import_file(&self, source: &Path, name: Option<&str>) -> Result<LibraryEntry, UnrealError> {
+        if source.is_dir() && source.join("outfit_metadata.json").is_file() {
+            return self.import_tailored_outfit(source, name);
+        }
         let ext = extension(source);
         if ext == "json" {
             return self.import_worldlabs_manifest(source, name);
@@ -630,6 +633,95 @@ impl Library {
         // Dónde quedó de verdad (RNF-08): lo que no se supo con el `.ply` de la Store (REQ-53).
         let bytes: u64 = entry.files.iter().filter_map(|f| std::fs::metadata(dir.join(f)).ok()).map(|m| m.len()).sum();
         crate::logging::info(&format!("library import {} -> {} ({} files, {bytes} bytes, kind {})", source.display(), dir.display(), entry.files.len(), entry.kind));
+        Ok(entry)
+    }
+
+    /// Importa una prenda adaptada devuelta desde Unreal Engine con su manifiesto de metadatos. @spec REQ-100
+    pub fn import_tailored_outfit(&self, staging_dir: &Path, name: Option<&str>) -> Result<LibraryEntry, UnrealError> {
+        let meta_path = staging_dir.join("outfit_metadata.json");
+        // Sin manifiesto no es una exportación de prenda: no se copia una carpeta cualquiera a la biblioteca.
+        if !meta_path.is_file() {
+            return Err(UnrealError::NotFound(format!(
+                "La carpeta no contiene outfit_metadata.json: {}",
+                staging_dir.display()
+            )));
+        }
+        let text = std::fs::read_to_string(&meta_path).map_err(|e| io_error(&meta_path, &e))?;
+        let meta_json: Value = serde_json::from_str(&text)
+            .map_err(|error| UnrealError::Format(format!("outfit_metadata.json: {error}")))?;
+
+        let outfit_name = name
+            .map(str::to_string)
+            .filter(|n| !n.trim().is_empty())
+            .or_else(|| meta_json.get("name").and_then(|v| v.as_str()).map(str::to_string))
+            .unwrap_or_else(|| name_from_file(staging_dir));
+
+        let (id, dir) = self.new_entry_dir(&outfit_name)?;
+        let mut copied_files = Vec::new();
+        let mut thumbnail = None;
+
+        if let Ok(entries) = std::fs::read_dir(staging_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    let fname = entry.file_name().to_string_lossy().to_string();
+                    let target = dir.join(&fname);
+                    if std::fs::copy(&path, &target).is_ok() {
+                        let ext = extension(&path);
+                        if IMAGE_EXTENSIONS.contains(&ext.as_str()) && thumbnail.is_none() {
+                            thumbnail = Some(fname.clone());
+                        }
+                        if fname != "outfit_metadata.json" {
+                            copied_files.push(fname);
+                        }
+                    }
+                }
+            }
+        }
+
+        if copied_files.is_empty() {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err(UnrealError::NotFound(format!(
+                "No se encontraron modelos ni mallas 3D válidas en el directorio de exportación: {}",
+                staging_dir.display()
+            )));
+        }
+
+        let mut params = serde_json::json!({
+            "is_outfit": true,
+            "source_dir": staging_dir.to_string_lossy(),
+        });
+
+        if let Value::Object(map) = meta_json {
+            for (k, v) in map {
+                params[k] = v;
+            }
+        }
+
+        let entry = LibraryEntry {
+            id,
+            name: outfit_name,
+            provider: "unreal_tailored".into(),
+            kind: "model".into(),
+            prompt: String::new(),
+            parameters: params,
+            task_id: String::new(),
+            created_at: now_secs(),
+            credits: None,
+            files: copied_files,
+            thumbnail,
+            sent_to: vec![],
+            parent: None,
+            output: Value::Null,
+        };
+
+        self.add(entry.clone())?;
+        crate::logging::info(&format!(
+            "library import tailored outfit {} -> {} ({} files)",
+            staging_dir.display(),
+            dir.display(),
+            entry.files.len()
+        ));
         Ok(entry)
     }
 
@@ -1286,5 +1378,42 @@ mod tests {
         let mut model = entry("modelo", 3);
         model.parameters = world.parameters.clone();
         assert_eq!(world_metadata(&model), None, "solo las entradas «world»");
+    }
+
+    /// @spec REQ-100
+    #[test]
+    fn importa_prenda_ajustada_de_metahuman_con_metadatos() {
+        let dir = tempfile::tempdir().unwrap();
+        let staging = dir.path().join("staging");
+        std::fs::create_dir_all(&staging).unwrap();
+        std::fs::write(staging.join("SK_Tirantes_Pablo.fbx"), b"FBX fake mesh data").unwrap();
+        std::fs::write(staging.join("outfit_metadata.json"), serde_json::json!({
+            "name": "Tirantes Fable (Pablo)",
+            "garment_kind": "top",
+            "slot": "Torso",
+            "body_archetype": "m_tal_nrw",
+            "actor_source": "BP_Pablo_fable"
+        }).to_string()).unwrap();
+
+        let library = Library::new(dir.path().join("library"));
+        let entry = library.import_tailored_outfit(&staging, None).unwrap();
+
+        assert_eq!(entry.provider, "unreal_tailored");
+        assert_eq!(entry.kind, "model");
+        assert_eq!(entry.parameters["is_outfit"], true);
+        assert_eq!(entry.parameters["body_archetype"], "m_tal_nrw");
+        assert_eq!(entry.parameters["slot"], "Torso");
+        assert_eq!(entry.name, "Tirantes Fable (Pablo)");
+        assert!(entry.files.contains(&"SK_Tirantes_Pablo.fbx".to_string()));
+
+        // Una carpeta sin manifiesto no es una prenda exportada: no se copia nada.
+        let other = dir.path().join("otra");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("privado.txt"), b"no es una prenda").unwrap();
+        assert!(matches!(
+            library.import_tailored_outfit(&other, None),
+            Err(UnrealError::NotFound(_))
+        ));
+        assert_eq!(library.list().len(), 1);
     }
 }

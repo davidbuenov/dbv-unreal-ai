@@ -486,7 +486,17 @@ export function start() {
           thumb.addEventListener('click', () => openModal([el('img', { className: 'capture-full', attrs: { src, alt: t('unreal.capture') } })], { wide: true }));
           panel.addNode(thumb);
         };
-        const unreal = state.connection?.status === 'online' ? createUnrealTools({ backend: unrealBackend(), askApproval, onAction: log.add, permissions: memories.get(conversationId), vision, showImage, sessionSpecs, sessionRun: (name, args) => api.sessionsRunTool(state.connection?.projectPath ?? null, state.connection?.endpoint ?? null, name, args).finally(() => blackboxBar.refresh()) }) : [];
+        const unreal = state.connection?.status === 'online' ? createUnrealTools({
+          backend: unrealBackend(),
+          askApproval,
+          onAction: log.add,
+          permissions: memories.get(conversationId),
+          vision,
+          showImage,
+          sessionSpecs,
+          sessionRun: (name, args) => api.sessionsRunTool(state.connection?.projectPath ?? null, state.connection?.endpoint ?? null, name, args).finally(() => blackboxBar.refresh()),
+          saveOutfitFromUnreal: (args) => api.librarySaveOutfitFromUnreal(args.stagingDir, args.name),
+        }) : [];
         const generation = createGenerationTools({
           specs: generationSpecs,
           status: api.generationStatus,

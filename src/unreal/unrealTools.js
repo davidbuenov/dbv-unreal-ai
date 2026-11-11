@@ -456,6 +456,45 @@ export function createUnrealTools(deps) {
     },
   };
 
+  const exportOutfit = {
+    name: 'unreal_export_outfit',
+    description: 'Export an optimized tailored garment from an equipped MetaHuman in Unreal Engine, saving it to the DBV Unreal AI Library as a reusable 3D asset with body archetype metadata (REQ-100).',
+    parameters: object(
+      {
+        actor_label: { type: 'string', description: 'Label of the MetaHuman actor in the open level.' },
+        slot: { type: 'string', enum: ['Torso', 'Legs', 'Feet'], description: 'Equipped garment slot (default: Torso).' },
+        name: { type: 'string', description: 'Optional name for the saved Library asset.' },
+      },
+      ['actor_label'],
+    ),
+    label: (args) => `Unreal: export outfit → ${args.actor_label ?? 'MetaHuman'} (${args.slot ?? 'Torso'})`,
+    run: async ({ actor_label: actorLabel = '', slot = 'Torso', name: assetName = '' }) => {
+      const dbv = await dbvToolset();
+      if (!dbv) return 'error: the DBV Unreal AI toolset is not installed in this project.';
+      if (!String(actorLabel).trim()) return 'error: actor_label is required.';
+      const hex = toHex({
+        actor_label: String(actorLabel),
+        slot: String(slot || 'Torso'),
+        asset_name: String(assetName || ''),
+      });
+      const code = `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.export_tailored_outfit(actor_label=_p["actor_label"], slot=_p.get("slot", "Torso"), asset_name=_p.get("asset_name", ""))\n`;
+      const ran = await invoke(dbv, 'run_python', { code }, 'modify', PYTHON_TIMEOUT_SECS);
+      const val = valueOf(ran);
+      const res = val?.result ?? val;
+      if (res?.success && res?.export_dir) {
+        try {
+          const save = deps.saveOutfitFromUnreal ?? deps.host?.saveOutfitFromUnreal;
+          if (save) {
+            await save({ stagingDir: res.export_dir, name: assetName || undefined });
+          }
+        } catch (e) {
+          return `exported to disk (${res.export_dir}) but could not import to Library: ${e?.message ?? e}`;
+        }
+      }
+      return clip(JSON.stringify(res));
+    },
+  };
+
   const playtest = {
     name: 'unreal_playtest',
     description: 'Run an autonomous Play-In-Editor (PIE) playtest: starts PIE, drives the PlayerPawn across Slate ticks (forward/backward/left/right/jump), measures start/end location, distance moved, whether it fell out of the world, average FPS and recent Warning/Error log entries, captures the PIE viewport screenshot, and always stops PIE.',
@@ -549,7 +588,7 @@ export function createUnrealTools(deps) {
     };
   });
 
-  const tools = [listToolsets, describeToolset, callTool, runPython, sceneSummary, describeApi, projectInfo, listMetahumans, equipMetahumanOutfit, dressMetahuman, validateMetahumanOutfit, playtest, ...sessionTools];
+  const tools = [listToolsets, describeToolset, callTool, runPython, sceneSummary, describeApi, projectInfo, listMetahumans, equipMetahumanOutfit, dressMetahuman, validateMetahumanOutfit, exportOutfit, playtest, ...sessionTools];
   return deps.vision && deps.backend.captureViewport ? [...tools, captureViewport] : tools;
 }
 
@@ -612,8 +651,8 @@ export function runtimeDebugPrompt() {
 
 export function unrealPrompt({ projectName = '', engineVersion = '', agent = false, convai = false, copyrightHolder = '' } = {}) {
   const how = agent
-    ? 'You act on the Unreal Editor through the tools of the `dbv-unreal-ai` MCP server: unreal_list_toolsets, unreal_describe_toolset, unreal_call_tool, unreal_run_python, unreal_scene_summary, unreal_describe_python_api, unreal_capture_viewport (look at the viewport to check your work), unreal_list_metahumans, unreal_dress_metahuman, unreal_validate_metahuman_outfit, unreal_equip_metahuman_outfit, unreal_playtest (autonomous PIE playtest with Pawn movement, telemetry, log check and viewport screenshot), unreal_import_sound (import sound effects as USoundWave in /Game/DBV/Audio), library_list, library_rename, library_import, library_send_to_unreal, generate_3d_model, generate_metahuman_outfit, image_to_3d_model, rig_model, animate_model, tripo_run, tripo_operations, tripo_balance, generate_world, export_world_mesh, worldlabs_balance (World Labs credits are a separate account from Tripo), generation_jobs, level_zones_propose and level_zones_list (named places of the level), session_plan, session_start, session_status, session_mark, session_wait, session_stop, session_analyze, session_query, session_list and session_delete (black box: record the game while the user plays and analyse the recording), compile_project_code (compile the project C++ after you changed it), recipes_list and recipe_check (guided recipes for common tasks, with a final check in the editor), search_unreal_guides (offline Unreal guides with their URL, if the user set them up). Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits. Your working folder is the Unreal project: you can read its Python, C++ and .ini files. Use only these tools for Unreal: if you also see another MCP server for the editor (for example unreal-mcp, from the project .mcp.json), do not use it — it skips the app check of the Python and the user approvals. If the project instructions (for example in CLAUDE.md or AGENTS.md) mention list_toolsets, describe_toolset or calling a toolset, do it with unreal_list_toolsets, unreal_describe_toolset and unreal_call_tool.'
-    : 'You act on the editor through tools. Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Use unreal_list_metahumans, unreal_dress_metahuman, unreal_validate_metahuman_outfit and unreal_equip_metahuman_outfit for MetaHuman characters, and unreal_playtest to test the level in Play-In-Editor (PIE). Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits.';
+    ? 'You act on the Unreal Editor through the tools of the `dbv-unreal-ai` MCP server: unreal_list_toolsets, unreal_describe_toolset, unreal_call_tool, unreal_run_python, unreal_scene_summary, unreal_describe_python_api, unreal_capture_viewport (look at the viewport to check your work), unreal_list_metahumans, unreal_dress_metahuman, unreal_validate_metahuman_outfit, unreal_equip_metahuman_outfit, unreal_export_outfit, unreal_playtest (autonomous PIE playtest with Pawn movement, telemetry, log check and viewport screenshot), unreal_import_sound (import sound effects as USoundWave in /Game/DBV/Audio), library_list, library_rename, library_import, library_send_to_unreal, generate_3d_model, generate_metahuman_outfit, image_to_3d_model, rig_model, animate_model, tripo_run, tripo_operations, tripo_balance, generate_world, export_world_mesh, worldlabs_balance (World Labs credits are a separate account from Tripo), generation_jobs, level_zones_propose and level_zones_list (named places of the level), session_plan, session_start, session_status, session_mark, session_wait, session_stop, session_analyze, session_query, session_list and session_delete (black box: record the game while the user plays and analyse the recording), compile_project_code (compile the project C++ after you changed it), recipes_list and recipe_check (guided recipes for common tasks, with a final check in the editor), search_unreal_guides (offline Unreal guides with their URL, if the user set them up). Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits. Your working folder is the Unreal project: you can read its Python, C++ and .ini files. Use only these tools for Unreal: if you also see another MCP server for the editor (for example unreal-mcp, from the project .mcp.json), do not use it — it skips the app check of the Python and the user approvals. If the project instructions (for example in CLAUDE.md or AGENTS.md) mention list_toolsets, describe_toolset or calling a toolset, do it with unreal_list_toolsets, unreal_describe_toolset and unreal_call_tool.'
+    : 'You act on the editor through tools. Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Use unreal_list_metahumans, unreal_dress_metahuman, unreal_validate_metahuman_outfit, unreal_equip_metahuman_outfit and unreal_export_outfit for MetaHuman characters, and unreal_playtest to test the level in Play-In-Editor (PIE). Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits.';
   const approval = agent
     ? 'The app asks the user to approve every action that modifies the project. Tripo tools cost credits: call them first without confirm_cost to get the exact price, tell the user, and call again with confirm_cost=true only if they accept. If the user denies an action, do not insist.'
     : 'Actions that modify the project need the user approval: explain in `purpose` what each one does. If the user denies an action, do not insist.';

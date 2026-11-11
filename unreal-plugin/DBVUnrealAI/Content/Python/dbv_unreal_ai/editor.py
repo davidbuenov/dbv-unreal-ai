@@ -618,6 +618,21 @@ def validate_metahuman_outfit(
     return _json(res)
 
 
+def export_tailored_outfit(
+    actor_label: str = "",
+    slot: str = "Torso",
+    asset_name: str = "",
+    destination_dir: str = "",
+) -> str:
+    """Exporta una prenda adaptada de un MetaHuman hacia un directorio de intercambio con su malla y metadatos. @spec REQ-100"""
+    return metahuman.export_tailored_outfit(
+        actor_label=actor_label,
+        slot=slot,
+        asset_name=asset_name,
+        destination_dir=destination_dir,
+    )
+
+
 _PLAYTEST_STATE: dict[str, Any] = {}
 
 

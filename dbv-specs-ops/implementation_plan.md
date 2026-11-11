@@ -1,35 +1,17 @@
 ---
-# Frontmatter de la fase vigente: v0.5.0, vestir un MetaHuman desde la app (REQ-83..REQ-90, sección 14), caja negra (REQ-91..REQ-97, sección 15) y prendas ceñidas como carcasa del cuerpo (REQ-98, REQ-89, REQ-90, sección 16).
+# Frontmatter de la fase vigente: v0.5.1, devolver prendas ajustadas a la biblioteca (REQ-100) e informe de memoria gráfica (REQ-99).
 dependencies:
-  - UE 5.8 con DBVMCPFirst y tres MetaHumans de dos cuerpos (f_med_nrw y m_tal_nrw)
-  - Plugins de Epic GeometryScripting y ChaosClothAssetToolset (experimental)
-  - API de Tripo para las prendas nuevas de la matriz de REQ-90 (coste en créditos, con permiso del usuario)
-  - Scripts de la sesión del 2026-11-08 como referencia (fuera del repositorio; se portan, no se copian)
-  - Prendas ceñidas (sección 16): BP_Pablo_deportista_claude (BP_Pablo original) en /Game/DBV/Maps/Metahumans y cuerpos completos <complexión>_body_preview; GeometryScript (Bake, MeshSpatial, MeshEdits, BoneWeights, Normals), comprobado en vivo el 2026-11-10
-  - Caja negra (sección 15): editor de pruebas con PIE y, para S112, un visor con VR Preview; ElecnorMIO como caso real de referencia; sin dependencias nuevas de Python (solo biblioteca estándar) ni de Rust salvo que S107 lo justifique
+  - UE 5.8 con DBVMCPFirst y MetaHumans en el nivel (BP_Pablo_fable / BP_Pablo_deportista_claude)
+  - Toolset DBV en Python con sastre (`outfit/tailor.py`) y `equip_metahuman_outfit`
+  - Biblioteca DBV Unreal AI (`src-tauri/src/library/mod.rs` y `generation/commands.rs`)
+  - Sistema de exportación de Unreal Engine (`AssetExportTask` / `GeometryScript_AssetUtils`)
 risks:
-  - "R-35: el resultado depende del modelo de Tripo -> aislar con aviso, validación automática y límite documentado"
-  - "R-36: todo se ajustó sobre un solo cuerpo -> sin valores fijos y prueba con m_tal_nrw desde el primer slice de ajuste"
-  - "R-37: sustituir el actor rompe referencias -> avisar de las secuencias, conservar etiqueta y transformación, volver al original"
-  - "R-38: plugin experimental y operación larga -> spike P-17, pasos con progreso y tiempos propios"
-  - "R-39: tela en juego empaquetado -> spike P-20 antes de publicar; si falla, límite documentado por plataforma"
-  - "R-41: un callback por fotograma rompe el editor o inunda el log -> R1 y R2 con prueba automática y cierre antes de tocar objetos"
-  - "R-42: coste de muestrear desde Python -> medir en S106 (P-22) y construir la variante C++ solo si hace falta"
-  - "R-43: privacidad de capturas y voz -> todo local, voz apagada por defecto, sin identidad en la sesión"
-  - "R-44: la variante C++ exige recompilar -> Python es la base y cubre proyectos solo Blueprint"
-  - "R-45: el horneado depende del encaje de la prenda de Tripo -> distancia de horneado limitada, relleno desde vecinos con aviso y capturas revisadas"
-  - "R-46: se pierden capucha, cuello alto o bolsillos -> quedan pintados; aviso de prenda alejada del cuerpo y límite en la ficha"
-  - "P-28: guardar como asset la textura horneada no está comprobado -> spike S116a; si falla, color por vértice (bake_vertex)"
+  - "R-47: AssetExportTask puede no soportar materiales dinámicos sin exportador FBX/GLTF configurado -> fallback geométrico DynamicMesh a OBJ/MTL preservando UVs y texturas"
+  - "R-48: Concurrencia entre el proceso del editor y la app al escribir en la Biblioteca -> la exportación se hace a staging temporal y Rust gestiona la importación con cerrojo atómico"
+  - "R-49: MetaHumans sin prenda equipada o slot vacío -> validación defensiva temprana listando opciones disponibles sin fallos catastróficos"
 rollback_strategy: >
-  Un commit por slice. Ningún slice toca el Blueprint ni los assets originales del usuario, y todo lo creado queda en
-  /Game/DBV/MetaHumanOutfits/<Personaje>/. Si un slice de tela no supera su puerta, equip_metahuman_outfit por huesos
-  sigue funcionando y se retira skirt/dress de la interfaz. No se publica en la Store sin REQ-90.
-  Prendas ceñidas (sección 16): un commit por slice; la carcasa vive en outfit/shell.py y entra en el pipeline en un solo
-  punto (S116h). Revertir ese commit devuelve top y pants al método anterior, ya marcado como REJECTED-13, así que no se
-  publica así: sin S116 aprobado por el usuario, top y pants salen de la interfaz de la v0.5.0.
-  Caja negra: un commit por slice, solo lectura sobre el proyecto (REQ-91, R4); si un slice no supera su puerta, el
-  anterior sigue siendo utilizable (S105, instrucciones y receta, no depende de la grabadora) y las herramientas
-  session_* de ese slice se retiran del catálogo sin tocar el resto.
+  Un commit por slice. Si S120 o S121 fallan o se revierten, el pipeline de sastre en Unreal y la biblioteca
+  continúan funcionando de manera independiente como en v0.5.0 sin pérdida de datos.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -604,3 +586,41 @@ La grabadora y los análisis deben cumplir desde el principio la regla de un sol
    - Crear `tests/python/test_outfit_tailor.py` con pruebas unitarias de toda la parte pura (`normalise`, `drop_inner_caps`, `band_clamp_polar`, `band_clamp_distance`, `fit_pants`, `fit_top` con `limit_top_length` activado y desactivado, `skin_weights`, `welded_normals`, validación de errores).
    - Actualizar `tests/python/test_editor.py` al método `tailor`.
    - Pasar `pytest tests/python`, `npm run test:python` y `python dbv-specs-ops/scripts/dbv-lint.py --changed`.
+
+---
+
+## 17. Plan v0.5.1 — Devolver prendas ajustadas a la Biblioteca (`REQ-100`)
+
+> **Modo:** Orquestador (afecta a toolset de Unreal en Python, backend Rust/Tauri, MCP y pruebas E2E).
+> **Aprobación:** el usuario solicitó expresamente esta funcionalidad para evitar rehacer el ajuste de prendas de Tripo para futuros usos.
+
+### Architect Review
+
+```xml
+<architect_review>
+  <builder>Propongo implementar la exportación y registro de prendas optimizadas desde Unreal hacia la Biblioteca de DBV Unreal AI (REQ-100). Crearemos `export_tailored_outfit` en el plugin Python (`editor.py` / `metahuman.py` / `toolset.py`), que extraerá el `USkeletalMesh` equipado en un slot (`Torso`, `Legs`, `Feet`) a un archivo FBX con `AssetExportTask` (o fallback geométrico a OBJ con `DynamicMesh`), generará un manifiesto `outfit_metadata.json` con el `body_archetype` (p. ej. `m_tal_nrw`), y registraremos un nuevo `LibraryEntry` en `GenerationSettings.libraryDir` mediante el comando Tauri y herramienta MCP `unreal_export_outfit`.</builder>
+  <adversary>Riesgo específico al dominio: ¿Qué ocurre si `AssetExportTask` falla porque el `USkeletalMesh` en `/Game/DBV/MetaHumanOutfits/` contiene referencias a materiales dinámicos de Unreal (`MaterialInstanceDynamic`) que no pueden serializarse fuera del paquete, o si el `actor_label` no tiene una prenda equipada en ese slot de `METAHUMAN_SLOTS`? Además, si se exporta a la carpeta `GenerationSettings.libraryDir` directamente desde Python dentro del editor, ¿hay riesgo de que colisione con el cerrojo de concurrencia de `LibraryEntry` en Rust o que queden rutas absolutas incompatibles entre plataformas?</adversary>
+  <evidence>`SPECIFICATIONS.md` §3.22 (`REQ-100`), `src-tauri/src/library/mod.rs:77-104` (`LibraryEntry`), `unreal-plugin/DBVUnrealAI/Content/Python/dbv_unreal_ai/metahuman.py:1451-1470` (`_apply_tailored_slot` y `outcome["skeletal_mesh"]`).</evidence>
+  <builder>Resolución: (1) En `export_tailored_outfit`, validamos primero si el componente en `slot` tiene un `USkeletalMesh` asignado y válido. Si no hay prenda equipada o el actor no existe, se retorna un error descriptivo listando MetaHumans y slots disponibles; (2) La exportación se realiza a una carpeta de staging temporal (`%TEMP%/dbv_outfit_export_<uuid>`). Se exporta con `AssetExportTask` y se añade fallback de extracción de malla con `GeometryScript_AssetUtils.copy_mesh_from_skeletal_mesh` a OBJ/MTL preservando UVs y texturas originales; (3) La integración en la biblioteca se realiza a través de `library.import_tailored_outfit` en Rust bajo el cerrojo canónico `library.lock()`, copiando los archivos al almacenamiento de usuario, asignando ID único y generando el `LibraryEntry` de forma atómica y multiplataforma.</builder>
+  <confidence_score edge_cases="high" security="high" concurrency="high" />
+</architect_review>
+```
+
+### Slices (`v0.5.1`)
+
+1. **S120 · Exportación en Unreal Python (`REQ-100`):**
+   - Implementar `export_tailored_outfit(actor_label: str, slot: str = "Torso", asset_name: str = "", destination_dir: str = "") -> str` en `metahuman.py` y exponerlo en `editor.py` y `toolset.py`.
+   - Localización del `USkeletalMesh` del slot o ruta del activo.
+   - Extracción de malla y esqueleto (`AssetExportTask` / fallback geométrico) y volcado de texturas/material de Tripo.
+   - Generación de `outfit_metadata.json` con `name`, `garment_kind`, `slot`, `body_archetype`, `actor_source`, `tailoring_info` y timestamp.
+   - Aplicar cabeceras estándar DBV y regla de un solo return.
+2. **S121 · Integración con la Biblioteca y MCP en Rust (`REQ-100`):**
+   - En `src-tauri/src/library/mod.rs`: método `import_tailored_outfit` para importar la carpeta de staging, creando `LibraryEntry` con `provider: "unreal_tailored"`, `parameters.is_outfit: true`, `parameters.body_archetype`, etc.
+   - En `src-tauri/src/generation/commands.rs`: comando Tauri `library_save_outfit_from_unreal`.
+   - En `src-tauri/src/mcp_server.rs`: herramienta MCP `unreal_export_outfit` para permitir a la IA o clientes MCP guardar la prenda tras vestirla.
+3. **S122 · Pruebas unitarias de exportación e indexación (`REQ-100`):**
+   - Tests de Python (`tests/python/test_outfit_export.py` y en `test_editor.py`): validación de argumentos, actor no encontrado, slot sin prenda, exportación exitosa con manifiesto, metadatos y fallback.
+   - Tests de Rust (`src-tauri/src/library/mod.rs` y `mcp_server.rs`): test de importación de outfit y consulta en `library_list`.
+4. **S123 · Verificación E2E de ciclo de vida completo (`REQ-100`):**
+   - Prueba de punta a punta: prenda creada/importada -> adaptada con `equip_metahuman_outfit` a MetaHuman -> exportada con `unreal_export_outfit` -> confirmada en la Biblioteca -> reequipada en MetaHuman con misma complexión.
+   - Sincronización del plugin con `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI`.

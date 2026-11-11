@@ -70,6 +70,11 @@ FString UDBVUnrealAICppToolset::import_model(const FString& source_file, const F
 	return CallPython(TEXT("import_model"), { source_file, folder_path, asset_name });
 }
 
+FString UDBVUnrealAICppToolset::import_sound(const FString& source_file, const FString& folder_path, const FString& asset_name)
+{
+	return CallPython(TEXT("import_sound"), { source_file, folder_path, asset_name });
+}
+
 FString UDBVUnrealAICppToolset::place_asset(const FString& asset_path, float distance, const FString& folder)
 {
 	return CallPython(TEXT("place_asset"), { asset_path, FString::SanitizeFloat(distance), folder });

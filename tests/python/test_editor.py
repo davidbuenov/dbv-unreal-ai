@@ -47,12 +47,27 @@ class Skeleton:
 class SkeletalMesh:
     """Malla con esqueleto."""
 
-    def __init__(self, skeleton: Skeleton | None = None) -> None:
+    def __init__(self, skeleton: Skeleton | None = None, materials: list[object] | None = None, path_name: str = "") -> None:
         self.skeleton = skeleton or Skeleton()
+        self.materials = materials or []
+        self._path_name = path_name or "/Game/DBV/MetaHumanOutfits/SK_TailoredGarment.SK_TailoredGarment"
 
     def get_editor_property(self, name):  # noqa: ANN001, ANN201
         """Propiedad de la malla."""
-        return self.skeleton if name == "skeleton" else None
+        if name == "skeleton":
+            return self.skeleton
+        if name == "materials":
+            return self.materials
+        return None
+
+    def get_material(self, index: int):  # noqa: ANN201
+        return self.materials[index] if index < len(self.materials) else None
+
+    def get_num_materials(self) -> int:
+        return len(self.materials)
+
+    def get_path_name(self) -> str:
+        return self._path_name
 
 
 class AnimSequence:
@@ -771,6 +786,32 @@ class MetaHumanTests(unittest.TestCase):
         self.assertEqual(con_destino["build"], "f_med_nrw", "REQ-84: el resultado dice la complexión para avisar del corte")
         self.assertTrue(actors[1].comps["Torso"].leader)
         self.assertFalse(actors[0].comps["Torso"].leader or actors[2].comps["Torso"].leader)
+
+    def test_equip_metahuman_outfit_reutiliza_skeletal_mesh_exportado(self) -> None:
+        """@spec REQ-81, REQ-100 — una SkeletalMesh ajustada a la misma complexión se equipa directamente sin re-rigging."""
+        mh = self._make_mh_actor("BP_David3_MH")
+        ACTORS.append(mh)
+        skel = types.SimpleNamespace(get_path_name=lambda: "/Game/MetaHumans/Common/Female/Medium/NormalWeight/Body/metahuman_base_skel")
+        mat_mock = types.SimpleNamespace(get_path_name=lambda: "/Game/DBV/MetaHumanOutfits/M_Camiseta")
+        skm = SkeletalMesh(skeleton=skel, materials=[mat_mock], path_name="/Game/DBV/MetaHumanOutfits/SK_Camiseta_Ajustada.SK_Camiseta_Ajustada")
+        ASSETS["/Game/DBV/MetaHumanOutfits/SK_Camiseta_Ajustada"] = skm
+
+        from contextlib import ExitStack
+
+        with ExitStack() as stack:
+            for p in self._shell_patches():
+                stack.enter_context(p)
+            report = json.loads(editor.equip_metahuman_outfit("BP_David3_MH", "/Game/DBV/MetaHumanOutfits/SK_Camiseta_Ajustada", slot="Torso"))
+
+        self.assertTrue(report["success"], report)
+        self.assertEqual(report["method"], "tailored_reuse", "Debe reutilizar la SkeletalMesh directamente")
+        self.assertEqual(report["actor"], "BP_David3_MH")
+        self.assertEqual(report["slot"], "Torso")
+        self.assertEqual(report["skeletal_mesh"], "/Game/DBV/MetaHumanOutfits/SK_Camiseta_Ajustada.SK_Camiseta_Ajustada")
+        self.assertEqual(mh.comps["Torso"].get_skeletal_mesh_asset(), skm)
+        self.assertEqual(mh.comps["Torso"].leader[0], mh.comps["Body"])
+        self.assertTrue(mh.comps["Torso"].cleared_overrides)
+        self.assertEqual(mh.comps["Torso"].assigned_materials.get(0), mat_mock)
 
 
 class PlaytestTrackerTests(unittest.TestCase):

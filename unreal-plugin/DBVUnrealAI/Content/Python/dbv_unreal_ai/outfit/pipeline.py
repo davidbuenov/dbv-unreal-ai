@@ -31,7 +31,7 @@ except ImportError:
 from . import character
 from . import cloth
 from . import fit
-from . import skin
+from . import skin  # noqa: F401 — el paso prepare_skin está pendiente de decisión (ver dress_metahuman_step)
 from . import validate
 
 #: Tipos de prenda admitidos según REQ-84.
@@ -144,16 +144,97 @@ def _equip_bones_garment(
             res = json.loads(equip_raw)
         except Exception:
             res = {"success": False, "error": str(equip_raw)}
-    except Exception as exc:
-        res = {
-            "success": True,
-            "actor": actor_label,
-            "slot": slot_name,
-            "skeletal_mesh": f"{dest_folder}/SK_{asset_name or 'Garment'}",
-            "has_bone_weights": True,
-            "note": f"Mock fallback: {exc}",
-        }
+    except Exception as exc:  # noqa: BLE001 — un fallo al equipar es un fallo del paso, nunca un éxito simulado
+        res = {"success": False, "error": f"{type(exc).__name__}: {exc}"}
     return res
+
+
+def _cloth_body_assets(actor: Any) -> tuple[str | None, str | None]:
+    """Cuerpo completo y Physics Asset del MetaHuman para transferir pesos a la tela. @spec REQ-87
+
+    Un cuerpo derivado (recortado bajo una falda, de previsualización) guarda en ``source_full_body`` el
+    cuerpo completo del que salió: los pesos de la tela se transfieren desde ese, no desde el recortado.
+    """
+    skm_path: str | None = None
+    phys_path: str | None = None
+    eal = getattr(unreal, "EditorAssetLibrary", None) if HAS_UNREAL else None
+    body_comp = character._metahuman_components(actor).get("Body") if actor is not None and eal is not None else None
+    body_skm = body_comp.get_skeletal_mesh_asset() if body_comp is not None and hasattr(body_comp, "get_skeletal_mesh_asset") else None
+    if body_skm is not None and eal is not None:
+        full_skm = body_skm
+        tag = str(eal.get_metadata_tag(body_skm, "source_full_body") or "") if hasattr(eal, "get_metadata_tag") else ""
+        tag_path = tag.split(".")[0]
+        tagged = eal.load_asset(tag_path) if tag_path and eal.does_asset_exist(tag_path) else None
+        if tagged is not None:
+            full_skm = tagged
+        skm_path = full_skm.get_path_name().split(".")[0] if hasattr(full_skm, "get_path_name") else None
+        phys = full_skm.get_editor_property("physics_asset") if hasattr(full_skm, "get_editor_property") else None
+        phys_path = phys.get_path_name().split(".")[0] if phys is not None and hasattr(phys, "get_path_name") else None
+    return (skm_path, phys_path)
+
+
+def _resolve_cloth_render_mesh(source: str, dest_folder: str, asset_name: str) -> tuple[str | None, str | None]:
+    """Ruta del ``StaticMesh`` de render de una prenda de tela; importa ``source`` si es un fichero. @spec REQ-87, REQ-88"""
+    render_sm: str | None = None
+    err: str | None = None
+    if os.path.isfile(source):
+        from .. import editor
+
+        imported = json.loads(editor.import_model(source, dest_folder, asset_name))
+        if not imported.get("success"):
+            err = f"could not import garment '{source}': {imported.get('error') or 'the import produced no assets'}"
+        elif imported.get("kind") != "static":
+            err = f"Chaos Cloth needs a StaticMesh garment, but '{source}' imported as {imported.get('kind')}"
+        else:
+            render_sm = str(imported.get("primary") or "").split(".")[0] or None
+    elif source.startswith("/"):
+        render_sm = source.split(".")[0]
+    else:
+        err = f"garment source must be a local file or an Unreal asset path: {source}"
+    return (render_sm, err)
+
+
+def _restore_slot_meshes(actor: Any, slots: dict[str, Any]) -> list[str]:
+    """Devuelve a las ranuras de ropa las mallas que tenían antes del trabajo. @spec REQ-85"""
+    restored: list[str] = []
+    eal = getattr(unreal, "EditorAssetLibrary", None) if HAS_UNREAL else None
+    comps = character._metahuman_components(actor) if eal is not None else {}
+    body_comp = comps.get("Body")
+    for slot_name in character.METAHUMAN_SLOTS:
+        comp = comps.get(slot_name)
+        wanted = slots.get(slot_name)
+        current = comp.get_skeletal_mesh_asset() if comp is not None and hasattr(comp, "get_skeletal_mesh_asset") else None
+        current_path = current.get_path_name() if current is not None and hasattr(current, "get_path_name") else None
+        if comp is not None and wanted and current_path != wanted:
+            mesh = eal.load_asset(str(wanted).split(".")[0])
+            if mesh is not None:
+                comp.set_skeletal_mesh_asset(mesh)
+                if body_comp is not None and hasattr(comp, "set_leader_pose_component"):
+                    comp.set_leader_pose_component(body_comp, False)
+                restored.append(slot_name)
+    return restored
+
+
+def _rollback_failed_job(actor_label: str, ctx: dict[str, Any]) -> dict[str, Any]:
+    """Deshace lo que un trabajo fallido dejó a medias, sin tocar lo que ya había antes. @spec REQ-85, REQ-88
+
+    Solo se vuelve al Blueprint original cuando la copia la creó este mismo trabajo. Si el personaje ya
+    era una copia vestida por trabajos anteriores, revertirla destruiría esas prendas (se asignan en el
+    actor del nivel, no en el Blueprint): en ese caso solo se devuelven a las ranuras sus mallas previas.
+    """
+    report: dict[str, Any] = {"action": "none"}
+    try:
+        target = _find_level_actor(actor_label)
+        if target is not None and ctx.get("working_bp_path"):
+            if ctx.get("copy_created"):
+                reverted = character.revert_to_original(actor_label)
+                report = {"action": "reverted_to_original", "success": bool(reverted.get("success")), "error": reverted.get("error")}
+            else:
+                restored = _restore_slot_meshes(target, ctx.get("slots_before") or {})
+                report = {"action": "restored_slots", "success": True, "restored_slots": restored}
+    except Exception as exc:  # noqa: BLE001 — el fallo original manda; el del rollback se informa aparte
+        report = {"action": "failed", "success": False, "error": f"{type(exc).__name__}: {exc}"}
+    return report
 
 
 def _save_job_state(job_data: dict[str, Any]) -> bool:
@@ -285,6 +366,8 @@ def dress_metahuman_start(
                 "context": {
                     "working_bp_path": None,
                     "original_bp_path": None,
+                    "copy_created": False,
+                    "slots_before": {},
                     "sequence_warnings": [],
                     "skin_prepared": False,
                     "body_trimmed": False,
@@ -362,8 +445,11 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
                 if not prep_res.get("success"):
                     step_err = prep_res.get("error", "Failed to prepare character copy.")
                 else:
-                    ctx["working_bp_path"] = prep_res.get("copy_blueprint_path")
-                    ctx["original_bp_path"] = prep_res.get("original_blueprint_path")
+                    ctx["working_bp_path"] = prep_res.get("copy_bp_path")
+                    ctx["original_bp_path"] = prep_res.get("original_bp_path")
+                    # El rollback distingue una copia recién creada de una ya vestida por trabajos anteriores.
+                    ctx["copy_created"] = not prep_res.get("reused", False)
+                    ctx["slots_before"] = prep_res.get("original_slots") or prep_res.get("slots") or {}
                     seq_warns = character.find_sequence_warnings(actor_label)
                     ctx["sequence_warnings"] = seq_warns
                     if seq_warns:
@@ -374,8 +460,11 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
             # Paso 1: apply_slot_rules (Vaciar ranuras según REQ-84)
             # -------------------------------------------------------------
             elif cur_step_name == "apply_slot_rules":
-                bp_path = ctx.get("working_bp_path")
-                slot_res = character.apply_slot_rules(bp_path, kind) if bp_path else {"success": True}
+                actor = _find_level_actor(actor_label)
+                if actor is None:
+                    slot_res = {"success": False, "error": f"MetaHuman '{actor_label}' not found in level."}
+                else:
+                    slot_res = character.apply_slot_rules(actor, kind, ctx.get("slots_before") or None)
                 if not slot_res.get("success"):
                     step_err = slot_res.get("error", "Failed to apply slot rules.")
                 else:
@@ -385,14 +474,14 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
             # Paso 2: prepare_skin (Piel limpia y recortar cuerpo tapado)
             # -------------------------------------------------------------
             elif cur_step_name == "prepare_skin":
-                actor = _find_level_actor(actor_label)
-                if actor is not None:
-                    skin_res = skin.prepare_clean_skin(actor)
-                    ctx["skin_prepared"] = bool(skin_res.get("success", False))
-                    if method == "cloth":
-                        trim_res = skin.trim_body_mesh_under_garment(actor, kind)
-                        ctx["body_trimmed"] = bool(trim_res.get("success", False))
-                step_msg = "Body skin textures and mesh prepared"
+                # Pendiente de decisión (REQ-86): este paso llamaba a skin.prepare_clean_skin y a
+                # skin.trim_body_mesh_under_garment pasándoles el actor en vez de su etiqueta, así que nunca
+                # hicieron nada y las prendas aprobadas se validaron sin ellos. No se activan a ciegas: el
+                # recorte crea la malla con create_new_skeletal_mesh_asset_from_mesh, que desordena los huesos
+                # en UE 5.8 (lección de S116). El informe final dice la verdad: skin_cleaned/body_trimmed False.
+                ctx["skin_prepared"] = False
+                ctx["body_trimmed"] = False
+                step_msg = "Skin preparation skipped (not enabled in this pipeline yet)"
 
             # -------------------------------------------------------------
             # Paso 3: fit_and_equip (Huesos o Chaos Cloth)
@@ -405,15 +494,24 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
                 z_off = job_data["z_offset"]
 
                 if method == "cloth":
-                    bp_path = ctx.get("working_bp_path") or actor_label
-                    cloth_res = cloth.setup_cloth_for_character(
-                        actor_or_bp_path=bp_path,
-                        garment_kind=kind,
-                        garment_name=asset_name,
-                        render_sm_path=source,
-                        dest_folder=dest_folder,
-                        target_triangles=1500,
-                    )
+                    bp_path = ctx.get("working_bp_path")
+                    render_sm: str | None = None
+                    cloth_err: str | None = "character copy Blueprint is missing: prepare_character did not run"
+                    if bp_path:
+                        render_sm, cloth_err = _resolve_cloth_render_mesh(source, dest_folder, asset_name)
+                    cloth_res: dict[str, Any] = {"success": False, "error": cloth_err}
+                    if render_sm:
+                        body_skm_path, body_phys_path = _cloth_body_assets(_find_level_actor(actor_label))
+                        cloth_res = cloth.setup_cloth_for_character(
+                            actor_or_bp_path=bp_path,
+                            garment_kind=kind,
+                            garment_name=asset_name,
+                            render_sm_path=render_sm,
+                            skeletal_mesh_path=body_skm_path,
+                            physics_asset_path=body_phys_path,
+                            dest_folder=dest_folder,
+                            target_triangles=1500,
+                        )
                     if not cloth_res.get("success"):
                         step_err = cloth_res.get("error", "Failed to setup Chaos Cloth.")
                     else:
@@ -502,6 +600,7 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
             _ACTIVE_JOB_ID = None
             _save_job_state(job_data)
 
+            res["rollback"] = _rollback_failed_job(actor_label, ctx)
             res["error"] = step_err
         else:
             job_data["steps"][step_idx]["status"] = "completed"

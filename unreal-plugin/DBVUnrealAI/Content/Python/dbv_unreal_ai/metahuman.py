@@ -15,6 +15,9 @@ import json
 import math
 import os
 import re
+import tempfile
+import time
+import uuid
 from typing import Any, Callable
 
 import unreal
@@ -1209,8 +1212,8 @@ def resolve_garment_static_mesh(
             err = f"asset not found: {garment_source}"
     else:
         err = f"garment_source must be a local file or an Unreal asset path: {garment_source}"
-    if mesh is not None and not isinstance(mesh, unreal.StaticMesh):
-        err = f"expected a StaticMesh for rigging, got {type(mesh).__name__}"
+    if mesh is not None and not isinstance(mesh, (unreal.StaticMesh, unreal.SkeletalMesh)):
+        err = f"expected a StaticMesh or SkeletalMesh for rigging, got {type(mesh).__name__}"
         mesh = None
     return (mesh, err)
 
@@ -1351,7 +1354,7 @@ TAILOR_KIND_BY_SLOT = {"Torso": "top", "Legs": "pants"}
 
 
 def _apply_tailored_slot(slot_comp: Any, skm: Any, material: Any, body_comp: Any) -> None:
-    """Equipa ``skm`` en ``slot_comp`` limpiando materiales heredados y sincronizando pose con ``body_comp``. @spec REQ-81, REQ-98"""
+    """Equipa ``skm`` en ``slot_comp`` limpiando materiales heredados y sincronizando pose con ``body_comp``. @spec REQ-81, REQ-98, REQ-100"""
     slot_comp.modify()
     slot_comp.set_skeletal_mesh_asset(skm)
     # La ropa de fábrica deja materiales de sustitución en la ranura (spike S116a).
@@ -1360,8 +1363,22 @@ def _apply_tailored_slot(slot_comp: Any, skm: Any, material: Any, body_comp: Any
     if hasattr(slot_comp, "set_editor_property"):
         slot_comp.set_editor_property("visible", True)
         slot_comp.set_editor_property("override_materials", [])
-    if material is not None:
-        slot_comp.set_material(0, material)
+
+    mats_to_apply = []
+    if isinstance(material, (list, tuple)):
+        mats_to_apply = [m for m in material if m is not None]
+    elif material is not None:
+        mats_to_apply = [material]
+    elif skm is not None and hasattr(skm, "get_num_materials"):
+        try:
+            num = skm.get_num_materials()
+            mats_to_apply = [skm.get_material(i) for i in range(num) if skm.get_material(i) is not None]
+        except Exception:
+            mats_to_apply = []
+
+    for i, m in enumerate(mats_to_apply):
+        slot_comp.set_material(i, m)
+
     slot_comp.set_leader_pose_component(body_comp, False)
 
 
@@ -1466,9 +1483,9 @@ def _equip_tailored_garment(
                 "rigged_asset": skm_path,
                 "material": mat_path,
                 "textures": built.get("textures", {}),
-                "offset_cm": built["offset_cm"],
-                "placement": built["placement"],
-                "zone": built["zone"],
+                "offset_cm": built.get("offset_cm", 0.0),
+                "placement": built.get("placement", built.get("fit_info", {})),
+                "zone": built.get("zone", built.get("fit_info", {})),
                 "limit_top_length": bool(limit_top_length),
                 "rebuilt_top_over_pants": rebuilt_top,
                 "has_bone_weights": True,
@@ -1544,47 +1561,203 @@ def equip_metahuman_outfit(
                     if skeleton is None or body_comp is None or slot_comp is None:
                         result["error"] = f"MetaHuman '{target_actor.get_actor_label()}' has no valid skeleton on Body"
                     else:
-                        if not unreal.EditorAssetLibrary.does_directory_exist(clean_folder):
-                            unreal.EditorAssetLibrary.make_directory(clean_folder)
-                        base_name = clean_asset.strip() or os.path.splitext(os.path.basename(garment_source))[0]
-                        if not base_name.startswith("SK_"):
-                            base_name = f"SK_{base_name}"
-                        dest_skm_path = f"{clean_folder}/{unique_name_fn(clean_folder, base_name)}"
-                        lod = unreal.GeometryScriptMeshReadLOD()
-                        garment_dyn = unreal.DynamicMesh()
-                        garment_dyn, _ = unreal.GeometryScript_AssetUtils.copy_mesh_from_static_mesh_v2(
-                            garment_sm, garment_dyn, unreal.GeometryScriptCopyMeshFromAssetOptions(), lod, True
-                        )
-                        garment_dyn = _clean_and_orient_garment(garment_dyn, clean_slot)
-                        if clean_slot in ("Torso", "Legs") and fit is not None:
-                            garment_dyn = fit.weld_top_dynamic_mesh(garment_dyn)
-                        oriented = unreal.GeometryScript_MeshQueries.get_mesh_bounding_box(garment_dyn)
-                        oriented_size = oriented.max - oriented.min
-                        is_skirt = _is_skirt_shape(clean_slot, float(oriented_size.z), float(oriented_size.x), clean_asset or garment_source)
-                        tailor_kind = TAILOR_KIND_BY_SLOT.get(clean_slot) if not is_skirt else None
-                        if tailor_kind is not None:
-                            # REQ-98 / ADR-V050-007: tops y pantalones se ajustan con el algoritmo del sastre.
-                            result = _equip_tailored_garment(
-                                target_actor, body_comp, slot_comp, garment_sm, tailor_kind, clean_slot,
-                                clean_folder, dest_skm_path.rsplit("/", 1)[-1], build, restored_skin,
-                                clearance_cm, limit_top_length=limit_top_length,
+                        is_skm = isinstance(garment_sm, unreal.SkeletalMesh)
+                        garment_archetype = ""
+                        get_tag = getattr(unreal.EditorAssetLibrary, "get_metadata_tag", None)
+                        if callable(get_tag):
+                            garment_archetype = str(get_tag(garment_sm, "body_archetype") or "")
+                            if not garment_archetype:
+                                tag_match = ARCHETYPE_RE.search(str(get_tag(garment_sm, "source_full_body") or ""))
+                                garment_archetype = tag_match.group(1).lower() if tag_match else ""
+                        if not garment_archetype and os.path.isfile(garment_source):
+                            meta_file = os.path.join(os.path.dirname(garment_source), "outfit_metadata.json")
+                            if os.path.isfile(meta_file):
+                                try:
+                                    with open(meta_file, "r", encoding="utf-8") as mf:
+                                        garment_archetype = str(json.load(mf).get("body_archetype", ""))
+                                except (OSError, ValueError):
+                                    garment_archetype = ""
+
+                        if is_skm and garment_archetype and garment_archetype != build:
+                            # Reajustar exige la malla estática original: el sastre no lee un SkeletalMesh
+                            # (tailor.garment_model usa copy_mesh_from_static_mesh_v2) y equiparla tal cual
+                            # la dejaría con la forma de otro cuerpo.
+                            result["error"] = (
+                                f"This garment was tailored for body '{garment_archetype}' and '{target_actor.get_actor_label()}' "
+                                f"is '{build}'. Dress this MetaHuman with the original garment instead of the tailored copy."
                             )
+                        elif is_skm:
+                            with unreal.ScopedEditorTransaction("DBV Unreal AI: equip tailored SkeletalMesh"):
+                                target_actor.modify()
+                                _apply_tailored_slot(slot_comp, garment_sm, None, body_comp)
+                                if clean_slot == "Torso":
+                                    _disable_neck_hide(metahuman_components(target_actor).get("Face"))
+                            skm_path = garment_sm.get_path_name() if hasattr(garment_sm, "get_path_name") else str(garment_sm)
+                            mat = garment_sm.get_material(0) if hasattr(garment_sm, "get_material") else None
+                            mat_path = mat.get_path_name() if mat is not None and hasattr(mat, "get_path_name") else ""
+                            result = {
+                                "success": True,
+                                "method": "tailored_reuse",
+                                "actor": target_actor.get_actor_label(),
+                                "slot": clean_slot,
+                                "garment_kind": TAILOR_KIND_BY_SLOT.get(clean_slot, "outfit"),
+                                "skeletal_mesh": skm_path,
+                                "rigged_asset": skm_path,
+                                "material": mat_path,
+                                "has_bone_weights": True,
+                                "restored_full_body_skin": restored_skin,
+                                "source_body": source_body_path,
+                                "build": build,  # REQ-84: la app compara el corte de la prenda con este cuerpo
+                                "target_build": build,
+                                "garment_build": garment_archetype or "unknown",
+                                "warnings": [] if garment_archetype else [
+                                    "The garment has no body archetype recorded: it was equipped as is, without checking that it fits this body."
+                                ],
+                            }
                         else:
-                            skirt_hip_z = _reference_bone_z(skeleton, "thigh_l") + SKIRT_HIP_MARGIN_CM if is_skirt else None
-                            garment_dyn, target_center, target_size, uniform_scale = _fit_garment_to_body(
-                                by_name, body_comp, body_dyn, full_skm, slot_comp, garment_dyn, clean_slot, clean_scale, clean_z,
-                                asset_name=clean_asset or garment_source,
+                            if not unreal.EditorAssetLibrary.does_directory_exist(clean_folder):
+                                unreal.EditorAssetLibrary.make_directory(clean_folder)
+                            base_name = clean_asset.strip() or os.path.splitext(os.path.basename(garment_source))[0]
+                            if not base_name.startswith("SK_"):
+                                base_name = f"SK_{base_name}"
+                            dest_skm_path = f"{clean_folder}/{unique_name_fn(clean_folder, base_name)}"
+                            lod = unreal.GeometryScriptMeshReadLOD()
+                            garment_dyn = unreal.DynamicMesh()
+                            garment_dyn, _ = unreal.GeometryScript_AssetUtils.copy_mesh_from_static_mesh_v2(
+                                garment_sm, garment_dyn, unreal.GeometryScriptCopyMeshFromAssetOptions(), lod, True
                             )
-                            result = _create_and_equip_skeletal_garment(
-                                target_actor, body_comp, slot_comp, body_dyn, garment_dyn, garment_sm,
-                                skeleton, dest_skm_path, clean_slot, smoothing_iterations,
-                                restored_skin, target_center, target_size, uniform_scale,
-                                skirt_hip_z,
-                                source_body_name=source_body_path or (full_skm.get_path_name() if full_skm else ""),
-                            )
-                        if result.get("success"):
-                            result["build"] = build  # REQ-84: la app compara el corte de la prenda con este cuerpo
-                            result["source_body"] = source_body_path or (full_skm.get_path_name() if full_skm else "")
+                            garment_dyn = _clean_and_orient_garment(garment_dyn, clean_slot)
+                            if clean_slot in ("Torso", "Legs") and fit is not None:
+                                garment_dyn = fit.weld_top_dynamic_mesh(garment_dyn)
+                            oriented = unreal.GeometryScript_MeshQueries.get_mesh_bounding_box(garment_dyn)
+                            oriented_size = oriented.max - oriented.min
+                            is_skirt = _is_skirt_shape(clean_slot, float(oriented_size.z), float(oriented_size.x), clean_asset or garment_source)
+                            tailor_kind = TAILOR_KIND_BY_SLOT.get(clean_slot) if not is_skirt else None
+                            if tailor_kind is not None:
+                                # REQ-98 / ADR-V050-007: tops y pantalones se ajustan con el algoritmo del sastre.
+                                result = _equip_tailored_garment(
+                                    target_actor, body_comp, slot_comp, garment_sm, tailor_kind, clean_slot,
+                                    clean_folder, dest_skm_path.rsplit("/", 1)[-1], build, restored_skin,
+                                    clearance_cm, limit_top_length=limit_top_length,
+                                )
+                            else:
+                                skirt_hip_z = _reference_bone_z(skeleton, "thigh_l") + SKIRT_HIP_MARGIN_CM if is_skirt else None
+                                garment_dyn, target_center, target_size, uniform_scale = _fit_garment_to_body(
+                                    by_name, body_comp, body_dyn, full_skm, slot_comp, garment_dyn, clean_slot, clean_scale, clean_z,
+                                    asset_name=clean_asset or garment_source,
+                                )
+                                result = _create_and_equip_skeletal_garment(
+                                    target_actor, body_comp, slot_comp, body_dyn, garment_dyn, garment_sm,
+                                    skeleton, dest_skm_path, clean_slot, smoothing_iterations,
+                                    restored_skin, target_center, target_size, uniform_scale,
+                                    skirt_hip_z,
+                                    source_body_name=source_body_path or (full_skm.get_path_name() if full_skm else ""),
+                                )
+                            if result.get("success"):
+                                result["build"] = build  # REQ-84: la app compara el corte de la prenda con este cuerpo
+                                result["source_body"] = source_body_path or (full_skm.get_path_name() if full_skm else "")
         except Exception as exc:  # noqa: BLE001 — devolvemos error corto y legible sin volcar traceback entero
             result["error"] = f"{type(exc).__name__}: {exc}"
+    return _json(result)
+
+
+#: Tipo de prenda que corresponde a cada ranura al exportar (REQ-84, REQ-100).
+EXPORT_KIND_BY_SLOT = {"Torso": "top", "Legs": "pants", "Feet": "shoes"}
+
+
+def _export_skeletal_mesh_fbx(skm: Any, fbx_file: str) -> bool:
+    """Exporta ``skm`` a ``fbx_file`` con ``AssetExportTask``; ``True`` solo si el fichero existe. @spec REQ-100"""
+    exported = False
+    task_cls = getattr(unreal, "AssetExportTask", None)
+    exporter_cls = getattr(unreal, "Exporter", None)
+    if task_cls is not None and exporter_cls is not None and hasattr(exporter_cls, "run_asset_export_task"):
+        task = task_cls()
+        task.object = skm
+        task.filename = fbx_file
+        task.automated = True
+        task.prompt = False
+        task.replace_identical = True
+        task.selected = False
+        if hasattr(unreal, "FbxExportOption"):
+            opt = unreal.FbxExportOption()
+            opt.collision = False
+            opt.vertex_color = True
+            task.options = opt
+        exported = bool(exporter_cls.run_asset_export_task(task)) and os.path.isfile(fbx_file)
+    return exported
+
+
+def export_tailored_outfit(
+    actor_label: str = "",
+    slot: str = "Torso",
+    asset_name: str = "",
+    destination_dir: str = "",
+) -> str:
+    """Exporta la prenda equipada en una ranura de un MetaHuman a un FBX con su manifiesto de metadatos. @spec REQ-100
+
+    La prenda solo es reutilizable con su esqueleto, pesos, UV y materiales, y eso es el FBX: si no se
+    puede exportar, la llamada falla y no deja nada (ni mallas sin pesos ni geometría de relleno).
+    """
+    result: dict[str, Any] = {"success": False}
+    clean_slot = slot if slot in METAHUMAN_SLOTS else "Torso"
+    try:
+        subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem) if hasattr(unreal, "EditorActorSubsystem") else None
+        actors = subsys.get_all_level_actors() if subsys is not None else []
+        candidates = [a for a in actors if "Body" in metahuman_components(a)]
+        available = [a.get_actor_label() for a in candidates]
+        target_actor = next((a for a in candidates if actor_label and a.get_actor_label() == actor_label), None)
+        by_name = metahuman_components(target_actor) if target_actor is not None else {}
+        slot_comp = by_name.get(clean_slot)
+        skm = slot_comp.get_skeletal_mesh_asset() if slot_comp and hasattr(slot_comp, "get_skeletal_mesh_asset") else None
+        if target_actor is None:
+            if actor_label:
+                result["error"] = f"MetaHuman '{actor_label}' not found in level. Available MetaHumans: {available}"
+            else:
+                result["error"] = f"No target MetaHuman was chosen. Ask the user which one to export from. Available MetaHumans: {available}"
+            result["available"] = available
+        elif skm is None:
+            result["error"] = f"No garment equipped on slot '{clean_slot}' of MetaHuman '{target_actor.get_actor_label()}'"
+        else:
+            body_comp = by_name.get("Body")
+            body_skm = body_comp.get_skeletal_mesh_asset() if body_comp and hasattr(body_comp, "get_skeletal_mesh_asset") else None
+            archetype = body_build(body_skm, target_actor) if body_skm else "unknown"
+            out_dir = destination_dir.strip() if destination_dir else ""
+            if not out_dir:
+                out_dir = os.path.join(tempfile.gettempdir(), f"dbv_outfit_export_{int(time.time())}_{uuid.uuid4().hex[:8]}")
+            os.makedirs(out_dir, exist_ok=True)
+            skm_name = skm.get_name() if hasattr(skm, "get_name") else "SK_TailoredGarment"
+            display_name = asset_name.strip() or skm_name
+            # El nombre llega de fuera y acaba en una ruta: solo letras, cifras, guion y guion bajo.
+            file_stem = re.sub(r"[^\w\-]+", "_", display_name).strip("_") or "SK_TailoredGarment"
+            fbx_file = os.path.join(out_dir, f"{file_stem}.fbx")
+            if not _export_skeletal_mesh_fbx(skm, fbx_file):
+                result["error"] = f"Could not export '{skm_name}' to FBX at {fbx_file}; nothing was saved to the Library."
+            else:
+                skm_path = skm.get_path_name() if hasattr(skm, "get_path_name") else str(skm)
+                files = [os.path.basename(fbx_file)]
+                metadata = {
+                    "version": "1.0",
+                    "name": display_name,
+                    "garment_kind": EXPORT_KIND_BY_SLOT.get(clean_slot, "top"),
+                    "slot": clean_slot,
+                    "body_archetype": archetype,
+                    "actor_source": target_actor.get_actor_label(),
+                    "skeletal_mesh": skm_path,
+                    "files": files,
+                    "created_at": int(time.time()),
+                }
+                with open(os.path.join(out_dir, "outfit_metadata.json"), "w", encoding="utf-8") as f:
+                    json.dump(metadata, f, indent=2)
+                result = {
+                    "success": True,
+                    "actor": target_actor.get_actor_label(),
+                    "slot": clean_slot,
+                    "body_archetype": archetype,
+                    "skeletal_mesh": skm_path,
+                    "export_dir": out_dir,
+                    "files": [*files, "outfit_metadata.json"],
+                    "metadata": metadata,
+                }
+    except Exception as exc:  # noqa: BLE001 — devolvemos error corto y legible sin volcar traceback entero
+        result["error"] = f"{type(exc).__name__}: {exc}"
     return _json(result)

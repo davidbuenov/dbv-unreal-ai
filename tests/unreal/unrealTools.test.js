@@ -438,6 +438,49 @@ describe('MetaHumans y playtest autónomo (REQ-80, REQ-81, REQ-82)', () => {
     expect(tool(tools, 'unreal_validate_metahuman_outfit').parameters.required).toContain('actor_label');
   });
 
+  it('unreal_export_outfit exporta la prenda ajustada del MetaHuman y la guarda en la biblioteca @spec REQ-100', async () => {
+    const saved = [];
+    const backend = fakeBackend({
+      responses: {
+        run_python: (args) => {
+          if (args.code.includes('export_tailored_outfit')) {
+            return {
+              text: '',
+              isError: false,
+              value: {
+                success: true,
+                result: {
+                  success: true,
+                  actor: 'BP_Victoria',
+                  slot: 'Torso',
+                  export_dir: 'D:/tmp/outfit_export',
+                  mesh: 'D:/tmp/outfit_export/Torso_mesh.obj',
+                  metadata_file: 'D:/tmp/outfit_export/outfit_metadata.json',
+                },
+              },
+            };
+          }
+          return { text: '', isError: false, value: { success: true } };
+        },
+      },
+    });
+    const tools = createUnrealTools({
+      backend,
+      saveOutfitFromUnreal: async (arg) => {
+        saved.push(arg);
+        return { ok: true, id: 'outfit-saved-1' };
+      },
+    });
+
+    const noTarget = await tool(tools, 'unreal_export_outfit').run({});
+    expect(noTarget).toContain('actor_label is required');
+
+    const res = await tool(tools, 'unreal_export_outfit').run({ actor_label: 'BP_Victoria', slot: 'Torso', name: 'Chaqueta_Ajustada' });
+    expect(res).toContain('Torso_mesh.obj');
+    expect(saved).toEqual([{ stagingDir: 'D:/tmp/outfit_export', name: 'Chaqueta_Ajustada' }]);
+    expect(tool(tools, 'unreal_export_outfit').parameters.required).toContain('actor_label');
+  });
+
   it('unreal_playtest arranca PIE, mide telemetría, captura el viewport y detiene siempre PIE @spec REQ-82', async () => {
     const capture = { mime: 'image/jpeg', base64: 'BBBB', width: 1024, height: 576, info: {}, text: 'PIE capture' };
     const backend = {

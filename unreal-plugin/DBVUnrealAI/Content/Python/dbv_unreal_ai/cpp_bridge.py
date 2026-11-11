@@ -181,5 +181,20 @@ def validate_metahuman_outfit(
     )
 
 
+def export_tailored_outfit(
+    actor_label: str = "",
+    slot: str = "",
+    asset_name: str = "",
+    destination_dir: str = "",
+) -> str:
+    """Ver ``editor.export_tailored_outfit``. @spec REQ-100"""
+    return editor.export_tailored_outfit(
+        actor_label=_text(actor_label),
+        slot=_text(slot) or "Torso",
+        asset_name=_text(asset_name),
+        destination_dir=_text(destination_dir),
+    )
+
+
 
 

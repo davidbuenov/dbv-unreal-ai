@@ -118,6 +118,7 @@ export const libraryImportUrl = (url, name) => call('library_import_url', { url,
 export const libraryRename = (id, name) => call('library_rename', { id, name });
 export const libraryEntryDir = (id) => call('library_entry_dir', { id });
 export const librarySaveThumbnail = (id, png) => call('library_save_thumbnail', { id, png });
+export const librarySaveOutfitFromUnreal = (stagingDir, name) => call('library_save_outfit_from_unreal', { stagingDir, name: name || null });
 export const generationAllowReference = (path) => call('generation_allow_reference', { path });
 // Memoria y tareas del proyecto (`dbv-unreal-ai/` junto al `.uproject`, REQ-34..REQ-38).
 export const memoryStatus = (project) => call('memory_status', { project });

@@ -50,6 +50,10 @@ public:
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString import_model(const FString& source_file, const FString& folder_path, const FString& asset_name);
 
+	/** Import a sound file (.wav, .mp3, .ogg) into Unreal as a USoundWave asset. Returns JSON (success, imported, primary, kind). */
+	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
+	static FString import_sound(const FString& source_file, const FString& folder_path, const FString& asset_name);
+
 	/** Spawn an asset in front of the editor camera inside a World Outliner folder. Returns JSON (success, actor, location). */
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString place_asset(const FString& asset_path, float distance, const FString& folder);

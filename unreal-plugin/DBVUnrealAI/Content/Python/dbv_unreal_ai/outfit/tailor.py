@@ -931,8 +931,15 @@ def build_tailored_garment(
             if eal.does_asset_exist(dest)
             else unreal.AssetToolsHelpers.get_asset_tools().duplicate_asset(clean_name, folder, full_skm)
         )
-        static_mats = garment_sm.get_editor_property("static_materials") if hasattr(garment_sm, "get_editor_property") else getattr(garment_sm, "static_materials", None)
-        material = static_mats[0].material_interface if static_mats else None
+        material = None
+        if hasattr(garment_sm, "get_material"):
+            try:
+                material = garment_sm.get_material(0)
+            except Exception:
+                material = None
+        if material is None:
+            static_mats = garment_sm.get_editor_property("static_materials") if hasattr(garment_sm, "get_editor_property") else getattr(garment_sm, "static_materials", None)
+            material = static_mats[0].material_interface if static_mats and hasattr(static_mats[0], "material_interface") else None
         if skm is None:
             result["error"] = f"GeometryScript no pudo crear la malla esquelética en {dest}."
         else:
@@ -954,6 +961,8 @@ def build_tailored_garment(
                     "skeletal_mesh": skm,
                     "material": material,
                     "offset_cm": offset,
+                    "placement": info,
+                    "zone": info,
                     "fit_info": info,
                     "layered_over_legs": under_arrays is not None,
                 }

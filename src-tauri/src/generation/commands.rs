@@ -514,6 +514,23 @@ pub async fn library_import_url(app: AppHandle, url: String, name: Option<String
     outcome
 }
 
+/// Guarda una prenda ajustada exportada desde Unreal en la biblioteca de la app. @spec REQ-100
+#[tauri::command]
+pub async fn library_save_outfit_from_unreal(
+    app: AppHandle,
+    staging_dir: String,
+    name: Option<String>,
+) -> Result<crate::library::LibraryEntry, UnrealError> {
+    let library = library(&app)?;
+    let path = PathBuf::from(staging_dir);
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        library.import_tailored_outfit(&path, name.as_deref())
+    })
+    .await
+    .map_err(|error| UnrealError::Io(error.to_string()))?;
+    outcome
+}
+
 /// @spec REQ-28
 #[tauri::command]
 pub fn library_rename(app: AppHandle, id: String, name: String) -> Result<crate::library::LibraryEntry, UnrealError> {

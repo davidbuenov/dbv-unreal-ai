@@ -408,6 +408,12 @@ class TestOutfitCharacter(unittest.TestCase):
         self.assertTrue(rev_res["success"], rev_res)
         self.assertEqual(rev_res["restored_bp_path"], "/Game/MetaHumans/Pablo/BP_Pablo")
 
+    def test_ensure_blueprint_leader_pose_valida_ruta(self) -> None:
+        """@spec REQ-85 — valida que ensure_blueprint_leader_pose maneje rutas inexistentes sin error."""
+        from dbv_unreal_ai.outfit import character
+
+        self.assertFalse(character.ensure_blueprint_leader_pose("/Game/Inexistente"))
+
 
 if __name__ == "__main__":
     unittest.main()

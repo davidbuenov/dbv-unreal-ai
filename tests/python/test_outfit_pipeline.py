@@ -11,10 +11,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import sys
+import types
 import unittest
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -129,7 +132,7 @@ class TestOutfitPipeline(unittest.TestCase):
 
         with (
             patch.object(pipeline, "_find_level_actor", return_value=mock_actor),
-            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_blueprint_path": "/Game/BP_Pablo_DBV", "original_blueprint_path": "/Game/BP_Pablo"}),
+            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_bp_path": "/Game/BP_Pablo_DBV", "original_bp_path": "/Game/BP_Pablo"}),
             patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
             patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
             patch.object(pipeline.skin, "prepare_clean_skin", return_value={"success": True}),
@@ -185,7 +188,7 @@ class TestOutfitPipeline(unittest.TestCase):
 
         with (
             patch.object(pipeline, "_find_level_actor", return_value=mock_actor),
-            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_blueprint_path": "/Game/BP_Victoria_DBV", "original_blueprint_path": "/Game/BP_Victoria"}),
+            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_bp_path": "/Game/BP_Victoria_DBV", "original_bp_path": "/Game/BP_Victoria"}),
             patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
             patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
             patch.object(pipeline.skin, "prepare_clean_skin", return_value={"success": True}),
@@ -226,7 +229,7 @@ class TestOutfitPipeline(unittest.TestCase):
 
         with (
             patch.object(pipeline, "_find_level_actor", return_value=mock_actor),
-            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_blueprint_path": "/Game/BP_Pablo_DBV", "original_blueprint_path": "/Game/BP_Pablo"}),
+            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_bp_path": "/Game/BP_Pablo_DBV", "original_bp_path": "/Game/BP_Pablo"}),
             patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
             patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
             patch.object(pipeline.skin, "prepare_clean_skin", return_value={"success": True}),
@@ -272,7 +275,7 @@ class TestOutfitPipeline(unittest.TestCase):
 
         with (
             patch.object(pipeline, "_find_level_actor", return_value=mock_actor),
-            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_blueprint_path": "/Game/BP_Pablo_DBV", "original_blueprint_path": "/Game/BP_Pablo"}),
+            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_bp_path": "/Game/BP_Pablo_DBV", "original_bp_path": "/Game/BP_Pablo"}),
             patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
             patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
             patch.object(pipeline.skin, "prepare_clean_skin", return_value={"success": True}),
@@ -297,6 +300,169 @@ class TestOutfitPipeline(unittest.TestCase):
             self.assertEqual(st["status"], "failed")
 
         return None
+
+    def test_dress_metahuman_step_revierte_al_original_si_paso_falla(self) -> None:
+        """@spec REQ-85, REQ-88 — verifica rollback al Blueprint original si un paso de vestimenta falla."""
+        mock_actor = MagicMock()
+        mock_actor.get_actor_label.return_value = "BP_David3_MH"
+
+        with (
+            patch.object(pipeline, "_find_level_actor", return_value=mock_actor),
+            patch.object(pipeline.character, "prepare_character_copy", return_value={"success": True, "copy_bp_path": "/Game/BP_David3_MH_DBV", "original_bp_path": "/Game/BP_David3_MH"}),
+            patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
+            patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
+            patch.object(pipeline.skin, "prepare_clean_skin", return_value={"success": True}),
+            patch.object(pipeline, "_equip_bones_garment", return_value={"success": False, "error": "GeometryScript error"}),
+            patch.object(pipeline.character, "is_character_copy", return_value=True),
+            patch.object(pipeline.character, "revert_to_original") as mock_revert,
+        ):
+            start = pipeline.dress_metahuman_start(
+                actor_label="BP_David3_MH",
+                garment_source="/Game/DBV/Generated/Camiseta",
+                garment_kind="top",
+            )
+            job_id = start["job_id"]
+            # Paso 0: prepare_character
+            pipeline.dress_metahuman_step(job_id)
+            # Paso 1: apply_slot_rules
+            pipeline.dress_metahuman_step(job_id)
+            # Paso 2: prepare_skin
+            pipeline.dress_metahuman_step(job_id)
+            # Paso 3: fit_and_equip (falla)
+            s3 = pipeline.dress_metahuman_step(job_id)
+            self.assertFalse(s3["success"])
+            self.assertIn("GeometryScript error", s3["error"])
+            mock_revert.assert_called_once_with("BP_David3_MH")
+
+        return None
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _fake_editor(**functions: MagicMock) -> Iterator[types.SimpleNamespace]:
+        """Sustituye ``dbv_unreal_ai.editor`` (que necesita el motor) por un módulo con ``functions``."""
+        import dbv_unreal_ai
+
+        fake = types.SimpleNamespace(**functions)
+        with patch.dict(sys.modules, {"dbv_unreal_ai.editor": fake}), patch.object(dbv_unreal_ai, "editor", fake, create=True):
+            yield fake
+
+    def _run_until_fit(self, kind: str, source: str = "/Game/DBV/Generated/Prenda") -> str:
+        """Arranca un trabajo y ejecuta los tres pasos previos a ``fit_and_equip``."""
+        start = pipeline.dress_metahuman_start(actor_label="BP_Victoria", garment_source=source, garment_kind=kind)
+        self.assertTrue(start["success"], start)
+        for _ in range(3):
+            self.assertTrue(pipeline.dress_metahuman_step(start["job_id"])["success"])
+        return start["job_id"]
+
+    def test_reglas_de_ranura_reciben_el_actor_y_sus_mallas_previas(self) -> None:
+        """@spec REQ-84, REQ-88 — apply_slot_rules trabaja sobre el actor del nivel, no sobre una ruta de Blueprint."""
+        mock_actor = MagicMock()
+        mock_actor.get_actor_label.return_value = "BP_Victoria"
+        slots = {"Torso": "/Game/SK_Top.SK_Top", "Legs": "/Game/SK_Jeans.SK_Jeans"}
+        prep = {"success": True, "reused": True, "copy_bp_path": "/Game/BP_Victoria_DBV", "original_bp_path": "/Game/BP_Victoria", "slots": slots}
+
+        with (
+            patch.object(pipeline, "_find_level_actor", return_value=mock_actor),
+            patch.object(pipeline.character, "prepare_character_copy", return_value=prep),
+            patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
+            patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}) as mock_rules,
+        ):
+            start = pipeline.dress_metahuman_start(actor_label="BP_Victoria", garment_source="/Game/SM_Vestido", garment_kind="dress")
+            pipeline.dress_metahuman_step(start["job_id"])
+            self.assertTrue(pipeline.dress_metahuman_step(start["job_id"])["success"])
+
+        mock_rules.assert_called_once_with(mock_actor, "dress", slots)
+
+    def test_paso_de_tela_llama_al_orquestador_real_con_el_blueprint_de_la_copia(self) -> None:
+        """@spec REQ-87, REQ-88 — fit_and_equip encaja con la firma real de setup_cloth_for_character.
+
+        Regresión de 2026-11-11: el paso pasaba ``dest_folder`` a una función que no lo admitía y, además,
+        leía una clave que ``prepare_character_copy`` no devuelve, así que enviaba la etiqueta del actor
+        como ruta de Blueprint. Ninguna prenda ``skirt`` o ``dress`` se podía equipar.
+        """
+        mock_actor = MagicMock()
+        mock_actor.get_actor_label.return_value = "BP_Victoria"
+        prep = {"success": True, "reused": False, "copy_bp_path": "/Game/DBV/BP_Victoria_DBV", "original_bp_path": "/Game/BP_Victoria"}
+
+        for kind in ("skirt", "dress"):
+            with (
+                patch.object(pipeline, "_find_level_actor", return_value=mock_actor),
+                patch.object(pipeline.character, "prepare_character_copy", return_value=prep),
+                patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
+                patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
+                patch.object(pipeline, "_cloth_body_assets", return_value=("/Game/MH/f_med_nrw_body", "/Game/MH/f_med_nrw_body_Physics")),
+                patch.object(pipeline.cloth, "setup_cloth_for_character", wraps=pipeline.cloth.setup_cloth_for_character) as spy,
+            ):
+                job_id = self._run_until_fit(kind, source="/Game/DBV/Generated/SM_Prenda.SM_Prenda")
+                step = pipeline.dress_metahuman_step(job_id)
+
+            self.assertTrue(step["success"], step)
+            kwargs = spy.call_args.kwargs
+            self.assertEqual(kwargs["actor_or_bp_path"], "/Game/DBV/BP_Victoria_DBV")
+            self.assertEqual(kwargs["render_sm_path"], "/Game/DBV/Generated/SM_Prenda")
+            self.assertEqual(kwargs["skeletal_mesh_path"], "/Game/MH/f_med_nrw_body")
+            self.assertEqual(kwargs["physics_asset_path"], "/Game/MH/f_med_nrw_body_Physics")
+            self.assertEqual(kwargs["dest_folder"], "/Game/DBV/MetaHumanOutfits")
+            pipeline._ACTIVE_JOB_ID = None
+
+    def test_paso_de_tela_importa_el_fichero_y_exige_malla_estatica(self) -> None:
+        """@spec REQ-87, REQ-88 — una prenda en disco se importa antes; si no da un StaticMesh, el paso falla con el motivo."""
+        ok = json.dumps({"success": True, "primary": "/Game/DBV/MetaHumanOutfits/Vestido.Vestido", "kind": "static"})
+        rigged = json.dumps({"success": True, "primary": "/Game/DBV/MetaHumanOutfits/SK_Vestido", "kind": "skeletal"})
+        failed = json.dumps({"success": False, "error": "the import produced no assets"})
+
+        with patch("os.path.isfile", return_value=True), self._fake_editor(import_model=MagicMock(return_value=ok)) as fake:
+            self.assertEqual(
+                pipeline._resolve_cloth_render_mesh("C:/lib/vestido.glb", "/Game/DBV/MetaHumanOutfits", "Vestido"),
+                ("/Game/DBV/MetaHumanOutfits/Vestido", None),
+            )
+            fake.import_model.assert_called_once_with("C:/lib/vestido.glb", "/Game/DBV/MetaHumanOutfits", "Vestido")
+        with patch("os.path.isfile", return_value=True), self._fake_editor(import_model=MagicMock(return_value=rigged)):
+            mesh, err = pipeline._resolve_cloth_render_mesh("C:/lib/vestido.fbx", "/Game/X", "Vestido")
+            self.assertIsNone(mesh)
+            self.assertIn("needs a StaticMesh", err)
+        with patch("os.path.isfile", return_value=True), self._fake_editor(import_model=MagicMock(return_value=failed)):
+            mesh, err = pipeline._resolve_cloth_render_mesh("C:/lib/vestido.glb", "/Game/X", "Vestido")
+            self.assertIsNone(mesh)
+            self.assertIn("the import produced no assets", err)
+        mesh, err = pipeline._resolve_cloth_render_mesh("vestido_azul_marino-1794400441413", "/Game/X", "Vestido")
+        self.assertIsNone(mesh)
+        self.assertIn("local file or an Unreal asset path", err)
+
+    def test_fallo_en_copia_ya_vestida_no_revierte_al_original(self) -> None:
+        """@spec REQ-85, REQ-88 — si el personaje ya era una copia vestida, un fallo no destruye sus prendas anteriores."""
+        mock_actor = MagicMock()
+        mock_actor.get_actor_label.return_value = "BP_David3_MH"
+        slots = {"Torso": "/Game/Fable/SK_Tirantes.SK_Tirantes", "Legs": "/Game/Fable/SK_Shorts.SK_Shorts"}
+        prep = {"success": True, "reused": True, "copy_bp_path": "/Game/BP_David3_MH_DBV", "original_bp_path": "/Game/BP_David3_MH", "slots": slots}
+
+        with (
+            patch.object(pipeline, "_find_level_actor", return_value=mock_actor),
+            patch.object(pipeline.character, "prepare_character_copy", return_value=prep),
+            patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
+            patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
+            patch.object(pipeline, "_equip_bones_garment", return_value={"success": False, "error": "GeometryScript error"}),
+            patch.object(pipeline, "_restore_slot_meshes", return_value=["Legs"]) as mock_restore,
+            patch.object(pipeline.character, "revert_to_original") as mock_revert,
+        ):
+            start = pipeline.dress_metahuman_start(actor_label="BP_David3_MH", garment_source="/Game/SM_Pantalon", garment_kind="pants")
+            for _ in range(3):
+                pipeline.dress_metahuman_step(start["job_id"])
+            failed = pipeline.dress_metahuman_step(start["job_id"])
+
+        self.assertFalse(failed["success"])
+        mock_revert.assert_not_called()
+        mock_restore.assert_called_once_with(mock_actor, slots)
+        self.assertEqual(failed["rollback"], {"action": "restored_slots", "success": True, "restored_slots": ["Legs"]})
+
+    def test_excepcion_al_equipar_por_huesos_es_un_fallo_no_un_exito_simulado(self) -> None:
+        """@spec REQ-88 — si equipar lanza una excepción, el paso falla; antes devolvía éxito con una ruta inventada."""
+        with self._fake_editor(equip_metahuman_outfit=MagicMock(side_effect=RuntimeError("boom"))):
+            res = pipeline._equip_bones_garment("BP_Pablo", "/Game/SM_Top", "Torso", "/Game/DBV", "Top", 1.05, 0.0)
+
+        self.assertFalse(res["success"])
+        self.assertIn("RuntimeError: boom", res["error"])
+        self.assertNotIn("skeletal_mesh", res)
 
 
 if __name__ == "__main__":

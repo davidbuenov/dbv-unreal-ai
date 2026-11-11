@@ -368,6 +368,32 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             capture_angles=capture_angles,
         )
 
+    @toolset_registry.tool_call
+    @staticmethod
+    def export_tailored_outfit(
+        actor_label: str = "",
+        slot: str = "Torso",
+        asset_name: str = "",
+        destination_dir: str = "",
+    ) -> str:
+        """Export an optimized tailored garment from an equipped MetaHuman to a local staging folder for Library import.
+
+        Args:
+            actor_label: Label of the MetaHuman actor in the open level.
+            slot: Equipped garment slot ('Torso', 'Legs', 'Feet').
+            asset_name: Optional name for the exported garment.
+            destination_dir: Optional destination folder on disk for files and metadata.
+
+        Returns:
+            JSON with success, actor, slot, body_archetype, skeletal_mesh, export_dir, files, metadata.
+        """
+        return editor.export_tailored_outfit(
+            actor_label=actor_label,
+            slot=slot,
+            asset_name=asset_name,
+            destination_dir=destination_dir,
+        )
+
 
 
 

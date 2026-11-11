@@ -1,8 +1,8 @@
 # 📋 Especificaciones: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` (Especificación)
-> **Estado:** Borrador `/spec` v0.5.0 (v1.15: prendas ceñidas como carcasa del cuerpo —REQ-98—, holgura medida de verdad en REQ-89 y matriz de 12 casos en REQ-90, tras ver a `Pablo_Deportista` mal vestido (REJECTED-13); v1.14: caja negra, depurar supervisando la partida del usuario —REQ-91..REQ-97—, a partir de `docs/Propuesta_CajaNegra_DBVUnrealAI.md`; v1.13: vestir un MetaHuman de principio a fin desde la app —REQ-83..REQ-90—, y UEFN y Verse pasan a la v0.6.0; v1.12: integración con UEFN y lenguaje Verse —REQ-78, REQ-79—, generación y rigging automático de ropa para MetaHumans con Tripo Quads y GeometryScript —REQ-80, REQ-81—, y Play-testing autónomo en PIE —REQ-82—; v1.11: REQ-76, REQ-77 entregados en v0.4.1; v1.10: REQ-71..REQ-75 en v0.4.0)
-> **Última Revisión:** 2026-11-10
+> **Estado:** Borrador `/spec` v0.5.1 (v1.16: devolver prendas ajustadas a la biblioteca —REQ-100— e informe de memoria gráfica —REQ-99—; v1.15: prendas ceñidas como carcasa del cuerpo —REQ-98—, holgura medida de verdad en REQ-89 y matriz de 12 casos en REQ-90, tras ver a `Pablo_Deportista` mal vestido (REJECTED-13); v1.14: caja negra, depurar supervisando la partida del usuario —REQ-91..REQ-97—, a partir de `docs/Propuesta_CajaNegra_DBVUnrealAI.md`; v1.13: vestir un MetaHuman de principio a fin desde la app —REQ-83..REQ-90—, y UEFN y Verse pasan a la v0.6.0; v1.12: integración con UEFN y lenguaje Verse —REQ-78, REQ-79—, generación y rigging automático de ropa para MetaHumans con Tripo Quads y GeometryScript —REQ-80, REQ-81—, y Play-testing autónomo en PIE —REQ-82—; v1.11: REQ-76, REQ-77 entregados en v0.4.1; v1.10: REQ-71..REQ-75 en v0.4.0)
+> **Última Revisión:** 2026-11-11
 
 ---
 
@@ -711,6 +711,47 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - **6. Pesos y activo (`skin_weights`):** transfiere los pesos de la piel más cercana (sin brazos en prendas sin mangas), los suaviza con 8 pasadas laplacianas sobre el grafo soldado (hasta 8 influencias por vértice), duplica el `SkeletalMesh` del cuerpo completo (`full_skm`) para conservar el orden exacto de huesos, vuelca la prenda con `copy_mesh_to_skeletal_mesh` manteniendo el material de Tripo, genera los LOD (`setup_garment_lods`) y limpia `override_materials`.
   - **Automático:** integrado en `outfit/tailor.py` y enlazado en `equip_metahuman_outfit` y `pipeline.py` en lugar de `outfit/shell.py` (que se elimina).
   *Aceptación:* en `BP_Pablo_fable` / `BP_Pablo_deportista_claude` (nivel `Metahumans` de `DBVMCPFirst`), los shorts y la camiseta de tirantes equipados con el plugin dan 0 % de vértices dentro de la piel, entrepierna cerrada, brazos libres, camiseta por fuera del pantalón y material original de Tripo intacto.
+
+### 3.21. Informe de memoria gráfica del sistema y de Unreal [v0.5.1]
+
+*Por qué:* Tras incidencias de agotamiento de memoria de vídeo («Video memory has been exhausted (424 MB over budget)») al dar Play en niveles densos con MetaHumans y nubes Gaussian Splatting, el usuario necesita diagnosticar la asignación de VRAM sin interrumpir la sesión ni modificar los parámetros del motor a ciegas.
+
+- [ ] **REQ-99 · Informe de memoria gráfica y VRAM de GPU (solo lectura) [v0.5.1]:**
+  - **Ámbito:** Herramienta y panel de diagnóstico que reporta VRAM total, libre y usada de GPU, desglose por proceso (en Windows mediante contadores de rendimiento de GPU o DXGI, en macOS/Linux total del sistema o marcado «no disponible»), desglose interno de Unreal (pool de texturas, presupuesto de streaming de mallas, escalabilidad gráfica) y sugerencias de optimización sin aplicar modificaciones automáticas. Alimenta el aviso R5 de la caja negra.
+  - *Aceptación:* Llamar a la herramienta devuelve un objeto JSON estructurado con `total_mb`, `used_mb`, `free_mb`, lista de procesos GPU relevantes y estado del pool de Unreal, sin alterar el estado del nivel.
+
+### 3.22. Devolución de prendas ajustadas a la Biblioteca [v0.5.1]
+
+*Por qué:* Cuando una prenda generada (Tripo) o importada se adapta, ajusta y optimiza sobre un MetaHuman en Unreal Engine mediante el «Sastre» (`REQ-98`) o auto-rigging (`REQ-81`), la deformación geométrica hacia la complexión anatómica, la eliminación de tapas interiores, la continuidad de normales en costuras, la transferencia de pesos esqueléticos y la generación de LODs suponen un trabajo computacional valioso. Para evitar tener que repetir este cómputo cada vez que se viste al personaje o a otro MetaHuman con la misma complexión, la prenda ajustada debe poder exportarse y devolverse a la Biblioteca (`LibraryEntry`) de la app como activo 3D reutilizable con sus metadatos de complexión.
+
+- [ ] **REQ-100 · Devolución de prendas ajustadas a la Biblioteca como asset optimizado y reutilizable [v0.5.1] (amplía REQ-17, REQ-30, REQ-81, REQ-98):**
+  - **Ámbito:** Toda prenda equipada en un MetaHuman (`Torso`, `Legs`, `Feet`) o activo `USkeletalMesh` residente en `/Game/DBV/MetaHumanOutfits/<Personaje>/<Prenda>`.
+  - **Extracción y exportación desde Unreal Engine:**
+    - Herramienta Python en el toolset: `export_tailored_outfit(actor_label: str = "", slot: str = "Torso", asset_name: str = "", destination_dir: str = "") -> str`.
+    - Localiza el `USkeletalMesh` asignado al slot del MetaHuman indicado (o por nombre de asset explícito en la carpeta de outfits).
+    - Extrae la malla con su esqueleto y materiales hacia un formato de intercambio compatible (`.fbx` o `.glb` mediante `AssetExportTask` / `Exporter.run_asset_export_task`, o alternativamente volcado geométrico estructurado con `DynamicMesh` preservando UVs y texturas).
+    - Genera un manifiesto de metadatos `outfit_metadata.json` que registra:
+      - `name`: nombre descriptivo de la prenda (ej: `Top tirantes (ajustado a Pablo - m_tal_nrw)`).
+      - `garment_kind`: `top`, `pants`, `shoes`, `skirt`, etc.
+      - `slot`: `Torso`, `Legs`, `Feet`.
+      - `body_archetype`: la complexión anatómica de destino (ej: `m_tal_nrw`, `f_med_nrw`).
+      - `actor_source`: etiqueta del actor MetaHuman de origen.
+      - `tailoring_info`: parámetros aplicados (`clearance_cm`, `limit_top_length`, `measured_clearance`).
+      - `original_library_id`: ID de la prenda original si provino de la Biblioteca (conservando la trazabilidad `parent`).
+  - **Registro en la Biblioteca de DBV Unreal AI:**
+    - Se importa en la Biblioteca (`LibraryEntry`) en el directorio de assets del usuario (`GenerationSettings.libraryDir`):
+      - `kind`: `"model"` (con metadato `parameters.is_outfit: true`, `parameters.body_archetype`, `parameters.slot`).
+      - `provider`: `"unreal_tailored"`.
+      - `files`: incluye el fichero 3D exportado, el manifiesto `outfit_metadata.json` y las texturas asociadas.
+      - `parent`: el ID del asset de Tripo/Biblioteca original si existía.
+      - `thumbnail`: miniatura capturada del viewport o heredada de la prenda original.
+  - **Reutilización y Superficies:**
+    - Herramienta MCP: `unreal_export_outfit` disponible para agentes e IA integrada.
+    - Interfaz gráfica: Botón o acción «Guardar en Biblioteca» en las tarjetas de prenda equipada y en la vista Proyecto.
+    - Reutilización inmediata: Al reequipar esta prenda en cualquier MetaHuman con el mismo `body_archetype`, el plugin la asigna directamente sin repetir el algoritmo pesado del sastre ni la transferencia inicial de pesos.
+  - *Aceptación:*
+    - En tests automatizados de Python y Rust, una prenda equipada se exporta generando el archivo de modelo y metadatos, y es indexada por `Library` como un `LibraryEntry` válido con `body_archetype` y trazabilidad.
+    - En el banco E2E, se completa el ciclo de vida: generación/importación de prenda -> ajuste a MetaHuman en Unreal -> exportación y devolución a la Biblioteca -> disponibilidad confirmada en `library_list`.
 
 ## 🏗️ 4. Propuesta de Solución Técnica (Resumen)
 

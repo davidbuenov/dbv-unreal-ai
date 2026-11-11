@@ -26,26 +26,26 @@ except ImportError:
     HAS_UNREAL = False
 
 
-#: Plantilla predeterminada de Cloth Asset en el proyecto.
-DEFAULT_TEMPLATE_CA = "/Game/DBV/MetaHumanOutfits/_spike/CA_Template"
+#: Plantilla predeterminada de Cloth Asset en el plugin DBVUnrealAI.
+DEFAULT_TEMPLATE_CA = "/DBVUnrealAI/Cloth/CA_Template"
 
-#: Plantilla predeterminada de Dataflow en el proyecto.
-DEFAULT_TEMPLATE_DF = "/Game/DBV/MetaHumanOutfits/_spike/DF_Template"
+#: Plantilla predeterminada de Dataflow en el plugin DBVUnrealAI.
+DEFAULT_TEMPLATE_DF = "/DBVUnrealAI/Cloth/DF_Template"
 
-#: Rutas alternativas de respaldo si las plantillas del spike se reubicaran.
-FALLBACK_TEMPLATE_CA = "/Game/DBV/Runway/Cloth/CA_FaldaShell"
-FALLBACK_TEMPLATE_DF = "/Game/DBV/Runway/Cloth/DF_Falda"
+#: Rutas alternativas de respaldo si las plantillas del spike se reubicaran en el proyecto.
+FALLBACK_TEMPLATE_CA = "/Game/DBV/MetaHumanOutfits/_spike/CA_Template"
+FALLBACK_TEMPLATE_DF = "/Game/DBV/MetaHumanOutfits/_spike/DF_Template"
 
 #: Mallas y físicas predeterminadas de complexión para MetaHumans.
 ARCHETYPE_FULL_BODIES: dict[str, str] = {
-    "f_med_nrw": "/Game/MetaHumans/Victoria/f_med_nrw_body",
-    "m_tal_nrw": "/Game/MetaHumans/Pablo/m_tal_nrw_body",
+    "f_med_nrw": "/Game/MetaHumans/Common/Female/Medium/NormalWeight/Body/f_med_nrw_body",
+    "m_tal_nrw": "/Game/MetaHumans/Common/Male/Tall/NormalWeight/Body/m_tal_nrw_body",
     "m_med_nrw": "/Game/MetaHumans/Common/Male/Medium/NormalWeight/Body/m_med_nrw_body",
 }
 
 ARCHETYPE_PHYSICS: dict[str, str] = {
-    "f_med_nrw": "/Game/MetaHumans/Victoria/f_med_nrw_body_Physics",
-    "m_tal_nrw": "/Game/MetaHumans/Pablo/m_tal_nrw_body_Physics",
+    "f_med_nrw": "/Game/MetaHumans/Common/Female/Medium/NormalWeight/Body/f_med_nrw_body_Physics",
+    "m_tal_nrw": "/Game/MetaHumans/Common/Male/Tall/NormalWeight/Body/m_tal_nrw_body_Physics",
     "m_med_nrw": "/Game/MetaHumans/Common/Male/Medium/NormalWeight/Body/m_med_nrw_body_Physics",
 }
 
@@ -170,11 +170,30 @@ def create_cloth_asset_and_dataflow(
         lib_ed = unreal.DataflowEditorBlueprintLibrary
         lib_df = unreal.DataflowBlueprintLibrary
 
-        used_ca_tmpl = template_ca if eal.does_asset_exist(template_ca) else FALLBACK_TEMPLATE_CA
-        used_df_tmpl = template_df if eal.does_asset_exist(template_df) else FALLBACK_TEMPLATE_DF
+        used_ca_tmpl = (
+            template_ca
+            if eal.does_asset_exist(template_ca)
+            else (
+                DEFAULT_TEMPLATE_CA
+                if eal.does_asset_exist(DEFAULT_TEMPLATE_CA)
+                else FALLBACK_TEMPLATE_CA
+            )
+        )
+        used_df_tmpl = (
+            template_df
+            if eal.does_asset_exist(template_df)
+            else (
+                DEFAULT_TEMPLATE_DF
+                if eal.does_asset_exist(DEFAULT_TEMPLATE_DF)
+                else FALLBACK_TEMPLATE_DF
+            )
+        )
 
         if not eal.does_asset_exist(used_ca_tmpl) or not eal.does_asset_exist(used_df_tmpl):
             res["error"] = f"Plantillas de Chaos Cloth no encontradas en {used_ca_tmpl} / {used_df_tmpl}"
+        elif not eal.does_asset_exist(skeletal_mesh_path) or not eal.does_asset_exist(physics_asset_path):
+            # Sin cuerpo o sin físicas el Dataflow se evalúa igual y deja una tela sin pesos ni colisión.
+            res["error"] = f"Cuerpo o Physics Asset del MetaHuman no encontrados: {skeletal_mesh_path} / {physics_asset_path}"
         else:
             clean_folder = dest_folder.rstrip("/")
             if not eal.does_directory_exist(clean_folder):
@@ -349,8 +368,9 @@ def setup_cloth_for_character(
     sim_sm_path: str | None = None,
     target_triangles: int = 1500,
     slot_name: str = "SkirtCloth",
+    dest_folder: str | None = None,
 ) -> dict[str, Any]:
-    """Orquestador completo: simulación, dataflow, cloth asset, componente y ranuras.
+    """Orquestador de la tela: malla de simulación, Dataflow, Cloth Asset y componente en el Blueprint.
 
     @spec REQ-87, REQ-85, REQ-84
     """
@@ -361,7 +381,6 @@ def setup_cloth_for_character(
         "cloth_asset": None,
         "dataflow_asset": None,
         "blueprint_path": None,
-        "slot_rules_applied": False,
     }
 
     if not actor_or_bp_path or not garment_name or not render_sm_path:
@@ -373,14 +392,14 @@ def setup_cloth_for_character(
         clean_skel = skeletal_mesh_path or ARCHETYPE_FULL_BODIES["f_med_nrw"]
         clean_phys = physics_asset_path or ARCHETYPE_PHYSICS["f_med_nrw"]
 
-        dest_folder = f"/Game/DBV/MetaHumanOutfits/{garment_name}"
+        target_folder = dest_folder or f"/Game/DBV/MetaHumanOutfits/{garment_name}"
         active_sim_sm = sim_sm_path
 
         # 1. Generar malla de simulación si no se suministra
         if not active_sim_sm:
             sim_res = generate_cloth_simulation_mesh(
                 render_sm_path=render_sm_path,
-                dest_folder=dest_folder,
+                dest_folder=target_folder,
                 sim_name=f"SM_{garment_name}_Sim",
                 target_triangles=target_triangles,
             )
@@ -395,7 +414,7 @@ def setup_cloth_for_character(
         # 2. Crear Dataflow y Cloth Asset procedimental
         if res["error"] is None and active_sim_sm is not None:
             ca_res = create_cloth_asset_and_dataflow(
-                dest_folder=dest_folder,
+                dest_folder=target_folder,
                 garment_name=garment_name,
                 render_sm_path=render_sm_path,
                 sim_sm_path=active_sim_sm,
@@ -420,16 +439,8 @@ def setup_cloth_for_character(
                     res["error"] = comp_res["error"]
                 else:
                     res["blueprint_path"] = bp_path
-
-                    # 4. Aplicar reglas de ranura
-                    try:
-                        from . import character
-
-                        slot_res = character.apply_slot_rules(bp_path, garment_kind)
-                        res["slot_rules_applied"] = bool(slot_res.get("success", False))
-                    except Exception:
-                        res["slot_rules_applied"] = False
-
+                    # Las reglas de ranura (REQ-84) se aplican sobre el actor del nivel, no sobre el
+                    # Blueprint: las aplica quien llama (pipeline.dress_metahuman_step, paso apply_slot_rules).
                     res["success"] = True
 
     return res

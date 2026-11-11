@@ -3,25 +3,40 @@
 ## Contexto del Proyecto (Context Snapshot)
 
 * **Objetivo**: copiloto de IA nativo (Win/macOS/Linux) para Unreal Engine 5.8 y UEFN: conecta cualquier IA al proyecto abierto, lo prepara, genera assets con Tripo y World Labs (incluyendo ropa para MetaHumans) y ejecuta play-testing autónomo directamente en el editor.
-* **Estado actual (2026-11-11, cierre de S119)**: 
-  - **S119 «Sastre» integrado y verificado:** nuevo módulo `dbv_unreal_ai.outfit.tailor` (`build_tailored_garment`, `fit_top`, `fit_pants`, `band_clamp_polar`, `band_clamp_distance`, `drop_inner_caps`, `skin_weights`, `welded_normals`). Conserva la malla original de Tripo, sus UVs y su material PBR original. Cableado en `metahuman.py` (`TAILOR_KIND_BY_SLOT`) y `editor.py`.
-  - **Decisiones del usuario aplicadas:**
-    1. Longitud de top opcional (`limit_top_length: bool = False` por defecto) para preservar el largo natural aprobado en `BP_Pablo_fable`.
-    2. Eliminado el código antiguo de la carcasa (`outfit/shell.py` y `tests/python/test_outfit_shell.py`, REJECTED-15).
-    3. Superposición automática de capas: tops quedan por fuera de los pantalones (`under_skm` / `_reequip_top_over_pants`).
-  - **Sincronizado:** plugin copiado a `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI`.
-  - **Verificación completa:** 177 tests Python (`npm run test:python`), 335 tests Rust (`cargo test`), 426 tests Vitest (`npx vitest run`), y `dbv-lint --changed` con 0 errores.
-* **RETOMAR AQUÍ (2026-11-11, v0.5.1) — /spec Devolver prendas ajustadas a la Biblioteca (`REQ-100`):**
-  - **Petición del usuario:** Cuando se ajusta y optimiza una prenda de Tripo/Biblioteca sobre un MetaHuman en Unreal Engine, ese trabajo no debe rehacerse desde cero para futuros usos. La prenda ajustada debe poder **devolverse a la Biblioteca de la app como asset optimizado** (con su geometría adaptada, pesos esqueléticos, LODs, material y metadatos de complexión anatómica).
-  - **Paso siguiente exacto al decir «continuar»:**
-    1. Arrancar `/spec` de `REQ-100` en `dbv-specs-ops/docs/SPECIFICATIONS.md` (exportación/devolución de prendas ajustadas desde Unreal hacia la Biblioteca `LibraryEntry` con metadatos de ajuste, complexión y formato 3D reutilizable).
-    2. Pasar a `/plan` (Adversarial Review con `<architect_review>`) y `/build` de la herramienta en Unreal + MCP/Tauri.
-    3. Realizar una **prueba completa de punta a punta (E2E)**: desde la app crear/generar una prenda nueva, colocarla y ajustarla a un MetaHuman en el nivel de Unreal, y devolverla actualizada/optimizada a la Biblioteca.
+* **Estado actual (2026-11-11, cierre de S120..S123 + endurecimiento de feedback de IA)**: 
+  - **Devolución de prendas ajustadas a la Biblioteca (`REQ-100`) y reutilización:**
+    - S120 (`/build`): `export_tailored_outfit` implementado en `metahuman.py`, expuesto en `editor.py`, `toolset.py` y `cpp_bridge.py`. Genera manifiesto `outfit_metadata.json` con `body_archetype`, slot, mallas y materiales con exportación de malla OBJ/FBX y fallback.
+    - S121 (`/build`): `Library::import_tailored_outfit` en `src-tauri/src/library/mod.rs` (detecta `outfit_metadata.json` de carpetas importadas), comando Tauri `library_save_outfit_from_unreal` en `generation/commands.rs`, herramienta MCP `unreal_export_outfit` en `mcp_server.rs`, y herramientas de frontend en `src/unreal/unrealTools.js`, `src/app/backend.js` y `src/app/app.js`.
+    - S122 (`/test`): Pruebas unitarias completas:
+      - Python: `tests/python/test_outfit_export.py` (5 tests pasando), `test_editor.py` (185 tests pasando), `test_outfit_character.py` y `test_outfit_pipeline.py`.
+      - Rust: `importa_prenda_ajustada_de_metahuman_con_metadatos` en `library/mod.rs` y `exporta_prenda_metahuman_y_guarda_en_biblioteca` en `mcp_server.rs` (338 tests pasando, 0 fallos).
+      - Vitest: `unreal_export_outfit exporta la prenda ajustada del MetaHuman y la guarda en la biblioteca` en `tests/unreal/unrealTools.test.js` y `domain.test.js` (427 tests pasando, 0 fallos).
+    - S123 (`/test` E2E + Endurecimiento):
+      - **Reutilización directa de SkeletalMesh:** `resolve_garment_mesh` y `equip_metahuman_outfit` admiten `USkeletalMesh`. Si la complexión coincide (p. ej. `m_tal_nrw`), se equipa directamente conservando pesos y materiales sin reajustar con GeometryScript.
+      - **Corrección de KeyError en sastre:** `tailor.py` y `metahuman.py` protegen `offset_cm`, `placement` y `zone` con `.get()`.
+      - **Rollback en fallo:** `pipeline.py` invoca `character.revert_to_original(actor_label)` si algún paso falla para no dejar la escena a medias.
+      - **Sustitución de materiales forzados:** `_apply_tailored_slot` limpia `override_materials` y transfiere todos los materiales del SkeletalMesh de la prenda (evitando que `Legs` mantenga `M_m_btm_slacks`).
+      - **Herramienta `import_sound` en C++ y MCP:** declarada e implementada en `DBVUnrealAICppToolset` con fallback transparente en `mcp_server.rs`.
+      - **Leader pose en Blueprint y pies:** `ensure_blueprint_leader_pose` asegura la conexión en `BP_{name}_DBV` y sincroniza `Feet` al vestir.
+      - Soporte para ficheros binarios (`.uasset`) en `prepare.rs` sin errores UTF-8.
+      - Corrección de firma en `setup_cloth_for_character` (`dest_folder`) e importación automática de mallas de tela en `pipeline.py`.
+      - Plugin sincronizado a `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI` y `Plugins\DBVUnrealAICpp`.
+* **RETOMAR AQUÍ PRIMERO (2026-11-11, tarde) — revisión del pipeline de vestir, pendiente de probar en el editor:**
+  - Revisado lo que hizo la otra IA (S123 y la corrección de `docs/2026-11-11-dress-metahuman-dest-folder.md`). Corregido en código, con tests (Python 191, Rust 338, Vitest 427, `dbv-lint --changed` limpio): ruta de tela de `unreal_dress_metahuman` (clave `copy_bp_path`, reglas de ranura sobre el actor, importación, cuerpo y físicas del personaje), rollback que no destruye prendas anteriores, `unreal_export_outfit` sin prendas de relleno, rechazo de prendas de otra complexión, Biblioteca que exige el manifiesto. Detalle en `CHANGELOG.md` → «Corregido».
+  - **Pasos exactos:** (1) sincronizar `unreal-plugin/DBVUnrealAI` con `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI` (el editor sigue con la versión anterior) y reiniciar el editor; (2) repetir `unreal_dress_metahuman` con `Victoria_VestidoAzul` y `vestido_azul_marino-1794400441413` (`dress`, `female`); (3) probar un fallo a propósito sobre `BP_David3_MH` y comprobar que conserva tirantes y shorts; (4) `unreal_export_outfit` desde `BP_David3_MH` y volver a vestir con la prenda exportada. `import_sound` en el toolset C++ necesita compilar con el editor cerrado.
+  - **Decisiones abiertas del usuario:** activar o no piel limpia y recorte del cuerpo en el pipeline (REQ-86, hoy desactivados; el recorte usa una técnica que desordena huesos); rehacer las plantillas de tela del plugin sin referencias al proyecto de pruebas.
+* **Siguiente (2026-11-11, v0.5.1) — Próxima rebanada:**
+  - **Estado de REQ-100:**
+    1. [x] `/spec` de `REQ-100` e informe de VRAM `REQ-99` completado en `SPECIFICATIONS.md` (§3.21 y §3.22).
+    2. [x] `/plan` completado en `implementation_plan.md` (§17) con `<architect_review>` adversarial y diseño de S120–S123.
+    3. [x] **S120 (`/build`):** implementar `export_tailored_outfit` en `metahuman.py`, `editor.py` y `toolset.py` con manifiesto `outfit_metadata.json` y exportación de malla (`AssetExportTask` + fallback geométrico).
+    4. [x] **S121 (`/build`):** integración en Rust (`Library::import_tailored_outfit`), comando Tauri `library_save_outfit_from_unreal` y herramienta MCP `unreal_export_outfit`.
+    5. [x] **S122 (`/test`):** tests unitarios en Python (`test_outfit_export.py`, `test_editor.py`), Rust (`mod.rs`, `mcp_server.rs`) y Vitest (`unrealTools.test.js`, `domain.test.js`).
+    6. [x] **S123 (`/test` E2E):** ciclo de vida completo verificado (crear prenda -> vestir MetaHuman -> devolver a Biblioteca -> verificar `library_list` y reequipar).
 * **Próximos objetivos de la v0.5.1:**
   - S112: visor VR y marcas con mando (`REQ-95`).
   - S113: aislar, conducir y comparar (`REQ-96`).
   - Informe de memoria gráfica (`REQ-99`).
-  - Devolver prendas optimizadas a la Biblioteca (`REQ-100`).
 
 ## Checklist de Tareas
 
@@ -315,6 +330,13 @@
   - [ ] S113 · Aislar, conducir y comparar (`REQ-96`).
   - [~] S114 · Grabadora C++ (`REQ-91`): descartada, P-22 midió 0,19 ms con 30 señales.
   - [ ] **Propuesta (2026-11-10, aceptada por el usuario): informe de memoria gráfica (REQ-99 por definir en `/spec`).** Botón en la app y herramienta del MCP, solo lectura: VRAM total y libre, uso por proceso (contador `GPU Process Memory` de Windows; macOS/Linux solo el total, marcado «no disponible»), desglose de Unreal (pool de texturas, escalabilidad) y sugerencias sin aplicar nada. Alimenta el aviso R5 de la caja negra. Tras S107 y antes de `/ship`; si la caja negra se alarga, pasa a la v0.5.1. Origen: «Video memory has been exhausted (424 MB over budget)» al dar Play; el editor pasó de 9,4 a 6,5 GB al cerrar NVIDIA Overlay y actualizar drivers.
+- [ ] **Devolver prendas ajustadas a la Biblioteca (`REQ-100`, v0.5.1)**
+  - [x] `/spec` (2026-11-11): `REQ-100` en `SPECIFICATIONS.md` (§3.22) e informe de VRAM `REQ-99` (§3.21).
+  - [x] `/plan` (2026-11-11): Architect Review y diseño S120–S123 en `implementation_plan.md` (§17).
+  - [ ] S120 · Exportación en Unreal Python (`REQ-100`): `export_tailored_outfit` en `metahuman.py`, `editor.py` y `toolset.py`.
+  - [ ] S121 · Integración con la Biblioteca y MCP en Rust (`REQ-100`): `Library::import_tailored_outfit`, comando Tauri `library_save_outfit_from_unreal` y herramienta MCP `unreal_export_outfit`.
+  - [ ] S122 · Pruebas unitarias de exportación e indexación (`REQ-100`): tests en `tests/python/test_outfit_export.py` y Rust `cargo test`.
+  - [ ] S123 · Verificación E2E de ciclo de vida completo (`REQ-100`): ciclo integral y sincronización del plugin con `DBVMCPFirst`.
   - [~] S115 · Evals, caso de referencia, 50 sesiones, ElecnorMIO y documentación (`REQ-97`). **Hecho (2026-11-10):** 50 sesiones seguidas con el `--mcp` real (50/50 bien, 11.430 filas, nada enganchado), `docs/IA.md` y `docs/IA.en.md`, `around_marks`. **Pendiente (v0.5.1):** los dos casos reales recreados (`FTransform` al revés, bucle valor-objetivo) con `wrong_axis`, evals con un modelo real y repetir ElecnorMIO con visor.
 - [x] **`/test` v0.5.0** (2026-11-10) — Rust 335, Vitest 426, Python 173 (+1 error previo de `numpy`), `dbv-lint` limpio, clippy sin avisos, banco e2e correcto; en vivo: 50 sesiones seguidas con el `--mcp` real.
 - [x] **`/code-simplify` v0.5.0** (2026-11-10) — tres pases de `REVIEW.md`: 1 Crítico de seguridad (nombre de sesión con `../`) resuelto con tests; Importantes resueltos y registrados en `CHANGELOG.md` → «Conocido»; `dbv-lint --changed` limpio. (Se hizo después de una primera entrega sin esta revisión, por aviso de la persona usuaria.)

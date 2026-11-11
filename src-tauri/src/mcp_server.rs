@@ -284,6 +284,16 @@ pub fn tool_specs() -> Vec<Value> {
             json!(["actor_label"]),
         ),
         tool(
+            "unreal_export_outfit",
+            "Export an optimized tailored garment from an equipped MetaHuman in Unreal Engine, saving it to the DBV Unreal AI Library as a reusable 3D asset with body archetype metadata (REQ-100).",
+            json!({
+                "actor_label": { "type": "string", "description": "Label of the MetaHuman actor in the open level." },
+                "slot": { "type": "string", "enum": ["Torso", "Legs", "Feet"], "description": "Equipped garment slot (default: Torso)." },
+                "name": { "type": "string", "description": "Optional name for the saved Library asset." }
+            }),
+            json!(["actor_label"]),
+        ),
+        tool(
             "unreal_playtest",
             "Run an autonomous Play-In-Editor (PIE) playtest: starts PIE, drives the PlayerPawn across Slate ticks (forward/backward/left/right/jump), measures start/end location, distance moved, whether it fell out of the world, average FPS and recent Warning/Error log entries, captures the PIE viewport screenshot, and always stops PIE.",
             json!({
@@ -666,14 +676,41 @@ impl McpServer {
             "unreal_equip_metahuman_outfit" => self.equip_metahuman_outfit(args)?,
             "unreal_dress_metahuman" => self.dress_metahuman(args)?,
             "unreal_validate_metahuman_outfit" => self.validate_metahuman_outfit(args)?,
+            "unreal_export_outfit" => self.export_tailored_outfit(args)?,
             "unreal_import_sound" => {
                 let path = text(args, "path");
                 let asset_name = text(args, "asset_name");
-                let dbv = self.dbv_toolset().map_err(err)?.ok_or(
-                    "the DBV Unreal AI toolset is not installed: prepare the project in the app",
-                )?;
-                let res = self.editor(|s| s.call_toolset_tool(&dbv, "import_sound", json!({ "source_file": path, "folder_path": "/Game/DBV/Audio", "asset_name": asset_name }), std::time::Duration::from_secs(60))).map_err(err)?;
-                res.value.map(|v| v.to_string()).unwrap_or(res.text)
+                let dbv_res = self.dbv_toolset().map_err(err)?;
+                let tool_res = if let Some(ref dbv) = dbv_res {
+                    self.editor(|s| {
+                        s.call_toolset_tool(
+                            dbv,
+                            "import_sound",
+                            json!({ "source_file": path, "folder_path": "/Game/DBV/Audio", "asset_name": asset_name }),
+                            std::time::Duration::from_secs(60),
+                        )
+                    })
+                } else {
+                    Err(crate::unreal::UnrealError::NotFound("no dbv toolset".into()))
+                };
+
+                match tool_res {
+                    Ok(res) => res.value.map(|v| v.to_string()).unwrap_or(res.text),
+                    Err(_) => {
+                        // Fallback a ejecución Python directa por si la variante C++ en el motor aún no se ha recompilado
+                        let hex = Self::hex_json(&json!({
+                            "source_file": path,
+                            "folder_path": "/Game/DBV/Audio",
+                            "asset_name": asset_name,
+                        }));
+                        let code = format!(
+                            "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode(\"utf-8\"))\nresult = _e.import_sound(source_file=_p[\"source_file\"], folder_path=_p.get(\"folder_path\", \"/Game/DBV/Audio\"), asset_name=_p.get(\"asset_name\", \"\"))\n"
+                        );
+                        let ran = self.run_fixed(&code)?;
+                        let res = ran.get("result").cloned().unwrap_or(Value::Null);
+                        res.as_str().map(str::to_string).unwrap_or_else(|| res.to_string())
+                    }
+                }
             }
             "generation_jobs" => self.jobs(args)?,
             // REQ-22: el agente edita con sus herramientas; aquí solo se compila (con su permiso, que pone el cliente).
@@ -1518,6 +1555,96 @@ impl McpServer {
                 .unwrap_or("failed to validate MetaHuman outfit");
             Err(msg.to_string())
         }
+    }
+
+    fn export_tailored_outfit_code(
+        actor_label: &str,
+        slot: &str,
+        asset_name: &str,
+        destination_dir: &str,
+    ) -> String {
+        let hex = Self::hex_json(&json!({
+            "actor_label": actor_label,
+            "slot": slot,
+            "asset_name": asset_name,
+            "destination_dir": destination_dir,
+        }));
+        format!(
+            "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode('utf-8'))\nprint(_e.export_tailored_outfit(actor_label=_p.get('actor_label', ''), slot=_p.get('slot', 'Torso'), asset_name=_p.get('asset_name', ''), destination_dir=_p.get('destination_dir', '')))\n"
+        )
+    }
+
+    /// Exporta una prenda adaptada de un MetaHuman y la guarda en la biblioteca. @spec REQ-100
+    fn export_tailored_outfit(&mut self, args: &Value) -> Result<String, String> {
+        let actor_label = args
+            .get("actor_label")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        if actor_label.is_empty() {
+            return Err("`actor_label` is required (see unreal_list_metahumans).".into());
+        }
+        let slot = args
+            .get("slot")
+            .and_then(Value::as_str)
+            .unwrap_or("Torso")
+            .trim();
+        let name_arg = args
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+
+        let staging_temp = std::env::temp_dir().join(format!("dbv_outfit_export_{}", now_secs()));
+        let staging_str = staging_temp.to_string_lossy().to_string();
+
+        let ran = self.run_fixed(&Self::export_tailored_outfit_code(
+            actor_label,
+            slot,
+            name_arg.unwrap_or(""),
+            &staging_str,
+        ))?;
+
+        let res = ran
+            .get("result")
+            .filter(|v| !v.is_null())
+            .cloned()
+            .or_else(|| {
+                ran.get("stdout")
+                    .and_then(Value::as_str)
+                    .and_then(|s| serde_json::from_str(s.trim()).ok())
+            })
+            .unwrap_or(Value::Null);
+
+        if res.get("success") != Some(&json!(true)) {
+            let reason = res
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("export failed in editor");
+            return Err(format!("Could not export outfit from {actor_label} ({slot}): {reason}"));
+        }
+
+        let staging_path = res
+            .get("export_dir")
+            .and_then(Value::as_str)
+            .map(PathBuf::from)
+            .unwrap_or(staging_temp);
+
+        let entry = self
+            .config
+            .library
+            .import_tailored_outfit(&staging_path, name_arg)
+            .map_err(|e| format!("Failed to import outfit into library: {e}"))?;
+
+        let archetype = res
+            .get("body_archetype")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+
+        Ok(format!(
+            "Successfully exported tailored garment '{}' (archetype: {}) from {}'s {} slot and saved to Library (id: {}).",
+            entry.name, archetype, actor_label, slot, entry.id
+        ))
     }
 
     /// Ejecuta un playtest autónomo en PIE y garantiza detener siempre la sesión (`StopPIE`). @spec REQ-82
@@ -2597,6 +2724,23 @@ mod tests {
                                     json!({ "count": 2, "metahumans": [{ "label": "BP_Victoria_med_nrw_55", "build": "f_med_nrw", "slots": { "Torso": "/Game/MetaHumans/Common/Shirt" } }] })
                                 } else if code.contains("equip_metahuman_outfit") || code.contains("dress_metahuman") {
                                     json!({ "success": true, "actor": "BP_Victoria_med_nrw_55", "slot": "Torso", "garment_kind": "top", "method": "bones", "rigged_asset": "/Game/DBV/MetaHumanOutfits/Chaqueta_Rigged_f_med_nrw", "has_bone_weights": true })
+                                } else if code.contains("export_tailored_outfit") {
+                                    let staging_dir = if let Some(hex_start) = code.find("bytes.fromhex(\"") {
+                                        let hex = &code[hex_start + 15..];
+                                        let hex_end = hex.find('\"').unwrap_or(0);
+                                        let bytes = (0..hex_end)
+                                            .step_by(2)
+                                            .filter_map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+                                            .collect::<Vec<u8>>();
+                                        let parsed: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+                                        parsed.get("destination_dir").and_then(Value::as_str).map(PathBuf::from)
+                                    } else {
+                                        None
+                                    }.unwrap_or_else(|| std::env::temp_dir().join("dbv_mock_outfit"));
+                                    let _ = std::fs::create_dir_all(&staging_dir);
+                                    let _ = std::fs::write(staging_dir.join("SK_MockGarment.fbx"), b"FBX fake data");
+                                    let _ = std::fs::write(staging_dir.join("outfit_metadata.json"), r#"{"name":"Mock Garment","slot":"Torso","body_archetype":"f_med_nrw"}"#);
+                                    json!({ "success": true, "actor": "BP_Victoria_med_nrw_55", "slot": "Torso", "body_archetype": "f_med_nrw", "skeletal_mesh": "/Game/DBV/MetaHumanOutfits/SK_MockGarment", "export_dir": staging_dir.to_string_lossy(), "files": ["SK_MockGarment.fbx", "outfit_metadata.json"] })
                                 } else if code.contains("read_pie_playtest_telemetry") {
                                     json!({ "pawn_spawned": true, "pawn_class": "BP_ThirdPersonCharacter_C", "start_location": [0.0, 0.0, 91.7], "end_location": [618.0, 0.0, 101.6], "distance_moved_cm": 618.0, "fell_out_of_world": false, "avg_fps": 60.0, "frames": 300, "actions_executed": ["forward", "jump"] })
                                 } else {
@@ -3282,5 +3426,42 @@ mod tests {
         );
         assert_eq!(res["result"]["isError"], true);
         assert!(res["result"]["content"][0]["text"].as_str().unwrap().contains("no recorded sessions"));
+    }
+
+    /// `unreal_export_outfit` exporta prenda de MetaHuman y la guarda en la biblioteca. @spec REQ-100
+    #[test]
+    fn exporta_prenda_metahuman_y_guarda_en_biblioteca() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let (url, calls) = fake_editor();
+        s.config.unreal_url = url;
+
+        // Llamada sin actor_label da error
+        let no_actor = rpc(
+            &mut s,
+            "tools/call",
+            json!({ "name": "unreal_export_outfit", "arguments": {} }),
+        );
+        assert_eq!(no_actor["result"]["isError"], true, "{no_actor}");
+
+        // Llamada con actor_label y slot
+        calls.lock().unwrap().clear();
+        let res = rpc(
+            &mut s,
+            "tools/call",
+            json!({
+                "name": "unreal_export_outfit",
+                "arguments": { "actor_label": "BP_Victoria_med_nrw_55", "slot": "Torso", "name": "Top Victoria" }
+            }),
+        );
+        assert_eq!(res["result"]["isError"], false, "{res}");
+        let text = res["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Successfully exported tailored garment 'Top Victoria'"), "{text}");
+        assert!(text.contains("BP_Victoria_med_nrw_55"), "{text}");
+
+        // Comprobar que aparece en library_list
+        let list_res = rpc(&mut s, "tools/call", json!({ "name": "library_list", "arguments": {} }));
+        let list_text = list_res["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(list_text.contains("Top Victoria"), "{list_text}");
     }
 }

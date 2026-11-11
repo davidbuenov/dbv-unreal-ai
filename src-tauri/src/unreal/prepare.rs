@@ -159,6 +159,10 @@ pub struct FileChange {
     /// Contenido actual (`None` si el fichero no existe).
     pub before: Option<String>,
     pub after: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+    pub is_binary: bool,
+    #[serde(skip)]
+    pub origin: Option<PathBuf>,
 }
 
 /// Lo que haría «Preparar».
@@ -400,7 +404,12 @@ fn plugin_files(source: &Path, plugin: &str) -> Result<Vec<(String, PathBuf)>, U
         .filter_entry(|e| e.file_name() != "__pycache__")
     {
         let entry = entry.map_err(|error| UnrealError::Io(error.to_string()))?;
-        if entry.file_type().is_file() && entry.path().extension().is_none_or(|ext| ext != "pyc") {
+        if entry.file_type().is_file()
+            && entry.path().extension().is_none_or(|ext| {
+                let e = ext.to_string_lossy().to_lowercase();
+                e != "pyc"
+            })
+        {
             let relative = entry
                 .path()
                 .strip_prefix(&root)
@@ -423,6 +432,7 @@ fn read_optional(path: &Path) -> Result<Option<String>, UnrealError> {
     let result = match std::fs::read_to_string(path) {
         Ok(text) => Ok(Some(text)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => Ok(None),
         Err(error) => Err(io_error(path, &error)),
     };
     result
@@ -468,6 +478,8 @@ pub fn plan_with_engine(
             relative: relative_of(dir, uproject),
             before: Some(before),
             after,
+            is_binary: false,
+            origin: None,
         });
     }
     // 2. Arranque automático del servidor MCP (ajustes del usuario).
@@ -487,20 +499,49 @@ pub fn plan_with_engine(
             relative: relative_of(dir, &settings),
             before: current,
             after: text,
+            is_binary: false,
+            origin: None,
         });
     }
     // 3. El toolset.
     for plugin in variant.plugins() {
         for (relative, origin) in plugin_files(source, plugin)? {
-            let after =
-                std::fs::read_to_string(&origin).map_err(|error| io_error(&origin, &error))?;
-            let before = read_optional(&dir.join(&relative))?;
-            if before.as_deref() != Some(after.as_str()) {
-                changes.push(FileChange {
-                    relative,
-                    before,
-                    after,
-                });
+            match std::fs::read_to_string(&origin) {
+                Ok(content) => {
+                    let before = read_optional(&dir.join(&relative))?;
+                    if before.as_deref() != Some(content.as_str()) {
+                        changes.push(FileChange {
+                            relative,
+                            before,
+                            after: content,
+                            is_binary: false,
+                            origin: None,
+                        });
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+                    // Fichero binario (como .uasset): comparar contenido en bytes
+                    let target = dir.join(&relative);
+                    let needs_copy = if target.is_file() {
+                        std::fs::read(&origin).ok() != std::fs::read(&target).ok()
+                    } else {
+                        true
+                    };
+                    if needs_copy {
+                        changes.push(FileChange {
+                            relative,
+                            before: if target.is_file() {
+                                Some("[archivo binario]".into())
+                            } else {
+                                None
+                            },
+                            after: "[archivo binario]".into(),
+                            is_binary: true,
+                            origin: Some(origin),
+                        });
+                    }
+                }
+                Err(error) => return Err(io_error(&origin, &error)),
             }
         }
     }
@@ -561,7 +602,13 @@ fn write_changes(plan: &PreparePlan, targets: &[PathBuf]) -> Result<(), UnrealEr
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent).map_err(|error| io_error(parent, &error))?;
         }
-        std::fs::write(target, &change.after).map_err(|error| io_error(target, &error))?;
+        if change.is_binary {
+            if let Some(ref origin) = change.origin {
+                std::fs::copy(origin, target).map_err(|error| io_error(target, &error))?;
+            }
+        } else {
+            std::fs::write(target, &change.after).map_err(|error| io_error(target, &error))?;
+        }
     }
     Ok(())
 }
@@ -1013,5 +1060,42 @@ mod tests {
         // Aunque el 8000 esté ocupado: lo ocupa su propio editor.
         let _busy = std::net::TcpListener::bind(("127.0.0.1", 8000));
         assert_eq!(propose_free_port(&mcp, true), 8000);
+    }
+
+    /// @spec REQ-05
+    #[test]
+    fn soporta_ficheros_binarios_o_no_utf8_al_planificar_y_aplicar_el_toolset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Demo.uproject");
+        std::fs::write(&path, "{\"Plugins\": []}").unwrap();
+        let source = tempfile::tempdir().unwrap();
+        let plugin = source.path().join("DBVUnrealAI");
+        let cloth = plugin.join("Content").join("Cloth");
+        std::fs::create_dir_all(&cloth).unwrap();
+        std::fs::write(plugin.join("DBVUnrealAI.uplugin"), "{\"VersionName\": \"1.0\"}").unwrap();
+        let bytes = [0xFF, 0xFE, 0x00, 0x88, 0x99];
+        std::fs::write(cloth.join("CA_Template.uasset"), bytes).unwrap();
+        let p = plan(&path, source.path(), Variant::Python, None).unwrap();
+        let change = p
+            .changes
+            .iter()
+            .find(|c| c.relative.contains("CA_Template.uasset"))
+            .unwrap();
+        assert!(change.is_binary);
+        assert_eq!(change.after, "[archivo binario]");
+        // Aplicar el plan
+        let backups = tempfile::tempdir().unwrap();
+        let id = apply(&path, &p, backups.path()).unwrap();
+        let target = dir
+            .path()
+            .join("Plugins")
+            .join("DBVUnrealAI")
+            .join("Content")
+            .join("Cloth")
+            .join("CA_Template.uasset");
+        assert_eq!(std::fs::read(&target).unwrap(), bytes);
+        // Revertir
+        revert(&path, backups.path(), &id).unwrap();
+        assert!(!target.exists());
     }
 }

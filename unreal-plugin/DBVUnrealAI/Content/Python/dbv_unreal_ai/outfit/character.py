@@ -198,6 +198,8 @@ def prepare_character_copy(actor_label: str) -> dict[str, Any]:
                 dup_ok = True
                 if hasattr(eal, "does_asset_exist") and not eal.does_asset_exist(dest_bp_path):
                     dup_ok = bool(eal.duplicate_asset(orig_bp_clean, dest_bp_path))
+                    if dup_ok:
+                        ensure_blueprint_leader_pose(dest_bp_path)
 
                 if not dup_ok:
                     outcome = {"success": False, "error": f"Failed to duplicate Blueprint from {orig_bp_clean} to {dest_bp_path}"}
@@ -364,6 +366,10 @@ def apply_slot_rules(
                 cleared.append("Legs")
             actions.append("dress_cloth_slots_prepared")
 
+        # Asegurar que Feet siempre quede sincronizado con Body en el viewport (REQ-85)
+        if feet_comp and body_comp and hasattr(feet_comp, "set_leader_pose_component"):
+            feet_comp.set_leader_pose_component(body_comp, False)
+
     result = {
         "success": True,
         "garment_kind": kind,
@@ -373,6 +379,42 @@ def apply_slot_rules(
         "current_slots": snapshot_actor_slots(actor),
     }
     return result
+
+
+def ensure_blueprint_leader_pose(blueprint_path: str) -> bool:
+    """Asegura que Torso, Legs y Feet tengan SetLeaderPoseComponent(Body) en el Blueprint copiado. @spec REQ-85"""
+    bound = False
+    eal = getattr(unreal, "EditorAssetLibrary", None) if HAS_UNREAL else None
+    if eal is not None and hasattr(eal, "does_asset_exist") and eal.does_asset_exist(blueprint_path):
+        bp = eal.load_asset(blueprint_path)
+        if bp is not None:
+            try:
+                from editor_toolset.toolsets.blueprint import BlueprintTools
+
+                tools = BlueprintTools()
+                graph = tools.get_graph(blueprint=bp, graph_name="EventGraph")
+                if graph:
+                    dsl = tools.read_graph_dsl(graph=graph) or ""
+                    missing_slots = [
+                        s for s in ("Torso", "Legs", "Feet")
+                        if f"Get{s}" not in dsl or "SetLeaderPoseComponent" not in dsl
+                    ]
+                    if missing_slots:
+                        lines = [
+                            f"  (Components|SkinnedMesh|SetLeaderPoseComponent (Variables|Default|Get{s}) (Variables|Default|GetBody))"
+                            for s in missing_slots
+                        ]
+                        lead_code = "(event EventBeginPlay\n" + "\n".join(lines) + ")\n"
+                        tools.write_graph_dsl(graph=graph, code=lead_code)
+                        if hasattr(unreal, "BlueprintEditorLibrary"):
+                            unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+                        eal.save_asset(blueprint_path)
+                    bound = True
+                else:
+                    bound = True
+            except Exception:
+                bound = False
+    return bound
 
 
 def revert_to_original(actor_label: str) -> dict[str, Any]:

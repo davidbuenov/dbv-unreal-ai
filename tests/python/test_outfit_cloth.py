@@ -29,8 +29,10 @@ class TestOutfitCloth(unittest.TestCase):
         self.assertIn("m_tal_nrw", cloth.ARCHETYPE_FULL_BODIES)
         self.assertIn("f_med_nrw", cloth.ARCHETYPE_PHYSICS)
         self.assertIn("m_tal_nrw", cloth.ARCHETYPE_PHYSICS)
-        self.assertTrue(cloth.DEFAULT_TEMPLATE_CA.startswith("/Game/DBV/"))
-        self.assertTrue(cloth.DEFAULT_TEMPLATE_DF.startswith("/Game/DBV/"))
+        self.assertTrue(cloth.DEFAULT_TEMPLATE_CA.startswith("/DBVUnrealAI/Cloth/"))
+        self.assertTrue(cloth.DEFAULT_TEMPLATE_DF.startswith("/DBVUnrealAI/Cloth/"))
+        self.assertTrue(cloth.FALLBACK_TEMPLATE_CA.startswith("/Game/DBV/"))
+        self.assertTrue(cloth.FALLBACK_TEMPLATE_DF.startswith("/Game/DBV/"))
 
     def test_generate_simulation_mesh_validation(self) -> None:
         """Valida los parámetros de entrada de generate_cloth_simulation_mesh."""
