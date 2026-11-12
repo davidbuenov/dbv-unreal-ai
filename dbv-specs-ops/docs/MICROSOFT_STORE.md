@@ -161,3 +161,18 @@ Identidad en `bundle.config.json`:
 2. **Fichas de Store:** pegar *Novedades de esta versión*, la descripción, las características y las notas para la certificación de `descripcionStore_es.md`, `descripcionStore_en.md` y `descripcionStore_zh.md` (ya actualizadas a la v0.5.0).
 3. **Capturas:** conviene añadir una de la caja negra (botón y panel de grabación) y renovar las que muestren la versión anterior.
 4. **Enviar a certificación.**
+
+## 9. Envío de la v0.5.1 (2026-11-12)
+
+> ⚠️ **REQ-90 sigue abierto**, igual que en la v0.5.0: la matriz de 12 casos de ropa con la app instalada no se ha ejecutado. En vivo solo se ha probado un vestido sobre `f_med_nrw` (Victoria). Enviar es decisión de la persona responsable sabiendo que ese criterio sigue sin cumplirse.
+
+**Paquete:** `src-tauri/target/msix/dbv-unreal-ai_0.5.1.0.msixbundle` (generado con `npm run tauri:windows:build`). Identidad comprobada: `davidbuenov.DBVUnrealAI`, `CN=13EE2A5D-F49E-48C9-8873-941069B15D63`, `Version="0.5.1.0"`, `x64`; capacidades sin cambios (`runFullTrust`, `internetClient`).
+
+**Fichas:** `descripcionStore_es.md`, `descripcionStore_en.md` y `descripcionStore_zh.md` tienen ahora cada campo en su propio bloque de código (las 20 características y las 7 palabras clave, una por bloque), con el número de caracteres y el límite del formulario al lado. Abiertas en DBV MD Reader, se copian con el botón del bloque. Cambian *Novedades de esta versión*, la característica de MetaHumans de la descripción y una nota nueva para la certificación (vestir crea assets en el proyecto del usuario y una copia del Blueprint, todo local).
+
+**Pasos en Partner Center:**
+1. **Paquetes:** subir `dbv-unreal-ai_0.5.1.0.msixbundle` y retirar del envío el anterior.
+2. **Fichas de Store** (español, inglés y chino): pegar *Novedades de esta versión* y la *Descripción*. El resto de campos no cambia, salvo que se quiera repasar.
+3. **Notas para la certificación:** pegar las de `descripcionStore_en.md` (un solo campo por envío).
+4. **Capturas (opcional):** una del vestido sobre un MetaHuman.
+5. **Enviar a certificación.**
