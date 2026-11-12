@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-12
+
+Version v0.5.1: **cloth dresses end to end** with `unreal_dress_metahuman` (the Tripo dress is fitted to the body, oriented by its silhouette, its sleeves follow the arms and the skirt moves with Chaos Cloth pinned at the bodice; validation with measured clearance), **returning already fitted garments to the Library** to reuse them, the **tailor** for tops and pants, and a batch of fixes to the dressing pipeline that stopped skirts and dresses from being equipped or left leftovers and fake successes.
+
 ### Added
+- **Return an already fitted garment to the Library (REQ-100):** `unreal_export_outfit` exports the garment a MetaHuman is wearing (FBX plus an `outfit_metadata.json` manifest with body build, slot, meshes and materials) and saves it to the Library; dressing it again on a body of the same build equips it as is, without re-fitting it. `library_save_outfit_from_unreal` command, MCP tool and app AI tool.
 - **Garment fitting with the tailor algorithm (REQ-81, REQ-98, ADR-V050-007, S119):** new `dbv_unreal_ai.outfit.tailor` module that fits the original Tripo garment mesh to the MetaHuman body while preserving its original topology, UV mapping, and materials. Uses orientation normalization with neckline/rise detection (`normalise`), anatomical landmark alignment (`landmarks_body`), horizontal inner cap triangle removal (`drop_inner_caps`), inner radius polar clamping over the convex hull (`band_clamp_polar`), signed-distance skin repulsion (`band_clamp_distance`), smoothed bone weight transfer on welded groups (`skin_weights`), and welded normal recomputation (`welded_normals`). Supports optional top length compression (`limit_top_length`, `False` by default) and automatic layering (`under_skm`) to keep tops over pants.
 - **Tailor test suite (REQ-81, REQ-98):** new `tests/python/test_outfit_tailor.py` with 7 pure unit tests on synthetic meshes without Unreal dependencies.
 - **Tripo dresses are fitted to the body before the cloth is set up (REQ-87, REQ-88):** `unreal_dress_metahuman` with `garment_kind: "dress"` no longer builds the simulation on the mesh as delivered (a 1 m box at the origin, which left the dress as a heap at the character's feet). The new `tailor.fit_dress` scales by chest and waist, moves the armhole to the armpit and the waist to the body's waist, turns each sleeve onto the shoulder-elbow-hand line while keeping its volume, removes the solid's caps that the neck, cuffs and legs pass through (and the mannequin stubs left loose), takes in the bodice and keeps the whole garment at least 1 cm from the skin. `build_cloth_garment` saves the render mesh (with Tripo's UVs and material) and a welded simulation mesh, and computes the per-vertex `MaxDistance` map: bodice and sleeves follow the body, the skirt is free from the hips with 9 cm of travel. Tested in the editor on `Victoria_VestidoAzul`: validation `ok`, 0 % of vertices inside the skin, median clearance 4.7 cm.
@@ -383,7 +388,8 @@ First release: connection to Unreal 5.8 through MCP, project preparation, conver
 - **[Important]** A job id could clash between the window and an agent's `--mcp` if both launched in the same millisecond; it now carries the process id.
 - Review nits (3): early `return`s outside guard clauses in `tools::build`, `resolve_source` and `uploadable`.
 
-[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...v0.4.0

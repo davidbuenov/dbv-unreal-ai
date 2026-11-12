@@ -11,7 +11,12 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.5.1] - 2026-11-12
+
+Versión v0.5.1: **vestidos de tela de punta a punta** con `unreal_dress_metahuman` (el vestido de Tripo se ajusta al cuerpo, se orienta por la silueta, sus mangas siguen a los brazos y la falda se mueve con Chaos Cloth sujeta al talle; validación con holgura medida), **devolver a la Biblioteca las prendas ya ajustadas** para reutilizarlas, el **sastre** para tops y pantalones, y una tanda de correcciones del pipeline de vestir que impedían equipar faldas y vestidos o dejaban restos y éxitos falsos.
+
 ### Añadido
+- **Devolver a la Biblioteca una prenda ya ajustada (REQ-100):** `unreal_export_outfit` exporta la prenda que lleva un MetaHuman (FBX y manifiesto `outfit_metadata.json` con complexión, ranura, mallas y materiales) y la guarda en la Biblioteca; al volver a vestirla en un cuerpo de la misma complexión se equipa tal cual, sin reajustarla. Comando `library_save_outfit_from_unreal`, herramienta MCP y herramienta de la IA de la app.
 - **Ajuste de prendas con el algoritmo del sastre (REQ-81, REQ-98, ADR-V050-007, S119):** nuevo módulo `dbv_unreal_ai.outfit.tailor` que deforma la prenda original de Tripo sobre el cuerpo conservando su malla, UVs y materiales originales. Utiliza normalización con detección de escote y tiro (`normalise`), alineación por hitos anatómicos (`landmarks_body`), eliminación de tapones horizontales interiores (`drop_inner_caps`), ajuste de radio interior mediante banda polar sobre la envolvente convexa (`band_clamp_polar`), empuje fuera de la piel por distancia con signo (`band_clamp_distance`), transferencia de pesos suavizados sobre grupos soldados (`skin_weights`) y normales recalculadas (`welded_normals`). Soporta compresión opcional de largo en tops (`limit_top_length`, por defecto `False`) y superposición automática de capas (`under_skm`) para mantener los tops por fuera de los pantalones.
 - **Suite de tests del sastre (REQ-81, REQ-98):** nuevo fichero `tests/python/test_outfit_tailor.py` con 7 pruebas unitarias sin dependencia de Unreal sobre mallas sintéticas.
 - **Vestidos de Tripo ajustados al cuerpo antes de la tela (REQ-87, REQ-88):** `unreal_dress_metahuman` con `garment_kind: "dress"` ya no monta la simulación sobre la malla tal como llega (una caja de 1 m en el origen, que dejaba el vestido hecho un bulto a los pies). El nuevo `tailor.fit_dress` escala por pecho y cintura, lleva la sisa a la axila y la cintura a la del cuerpo, gira cada manga hasta la línea hombro-codo-mano conservando su volumen, quita las tapas del sólido que atraviesan cuello, puños y piernas (y los muñones del maniquí que quedan sueltos), ciñe el talle y separa toda la prenda al menos 1 cm de la piel. `build_cloth_garment` guarda la malla de render (con UV y material de Tripo) y una de simulación soldada, y calcula por vértice el mapa de `MaxDistance`: talle y mangas sujetos al cuerpo, falda suelta desde la cadera con 9 cm de recorrido. Probado en el editor con `Victoria_VestidoAzul`: validación `ok`, 0 % de vértices dentro de la piel, holgura mediana 4,7 cm.
@@ -387,7 +392,8 @@ Primera versión: conexión con Unreal 5.8 por MCP, preparación del proyecto, c
 - **[Importante]** El id de un trabajo podía coincidir entre la ventana y el `--mcp` de un agente si lanzaban en el mismo milisegundo; ahora lleva el id del proceso.
 - Nits de la revisión (3): `return` tempranos fuera de las guardas en `tools::build`, `resolve_source` y `uploadable`.
 
-[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.0...HEAD
+[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.3.1...v0.4.0

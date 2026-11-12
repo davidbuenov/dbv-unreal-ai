@@ -1,53 +1,42 @@
-# 🧭 Walkthrough — DBV Unreal AI v0.5.0
+# 🧭 Walkthrough — DBV Unreal AI v0.5.1
 
-> **Fecha:** 2026-11-10 · **Versión:** 0.5.0 (Minor, desde la 0.4.1) · **Autores:** David Bueno Vallejo y David Bueno Carmona
-> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.17..§3.20) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.5.0.md`](./releases/v0.5.0.md)
+> **Fecha:** 2026-11-12 · **Versión:** 0.5.1 (Patch, desde la 0.5.0) · **Autores:** David Bueno Vallejo y David Bueno Carmona
+> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.18, §3.21) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.5.1.md`](./releases/v0.5.1.md)
 
 ## Qué es
 
 Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cualquier IA (modelos locales, de nube o agentes por suscripción como Claude Code, Codex o Antigravity) a un proyecto abierto de Unreal Engine 5.8, con permiso antes de actuar, generación 3D (Tripo, World Labs), audio y un servidor MCP propio.
 
-## Qué se entrega en v0.5.0
+## Qué se entrega en v0.5.1
 
 | Área | Qué hace | Requisitos |
 | --- | --- | --- |
-| **Caja negra** (grabar el juego) | Botón **⏺ Caja negra** junto a «Probar en Play». Graba el juego **sin tocar el proyecto**: personaje, cámara, objetos, sockets, variables de Blueprint, FPS y eventos (pausa, modo de movimiento, base). Formato propio por bloques con CRC (`frames.bin`), `meta.json` y `events.jsonl` en `Saved/DBVUnrealAI/Sessions/`. Un fallo en una señal la apaga con un solo aviso; límites de 10 min / 500 MB / 20 sesiones con topes duros. | REQ-91 |
-| **Marcar y terminar** | Tecla **F10 dentro del juego** (configurable con `mark_key`) que añade una marca numerada sin quitarle el foco; panel fijo con tiempo, marcas y «Marcar momento» / «Terminar», que se enciende leyendo ficheros (también si grabó un agente por `--mcp`). Mientras graba quita «Usar menos CPU en segundo plano» (en memoria) para que el editor no caiga a ~3 FPS al perder el foco, y lo restaura. | REQ-91, REQ-94 |
-| **Análisis con datos** | En Rust, sobre los ficheros (sirve con el editor cerrado): `gaps` (¿es fiable la medición?, por tiempo y por tramos), `frame_budget`, `stillness`, `oscillation`, `jumps`, `follow`, `transitions`, `timeline`, `around_marks`. Respuestas de menos de 2,5 KB; `gaps` va siempre primero. | REQ-93 |
-| **Diez herramientas `session_*`** | `session_plan`, `start`, `status`, `mark`, `stop`, `wait`, `analyze`, `query`, `list`, `delete`: una sola definición para el asistente integrado y el MCP propio (agentes). Grabar y borrar piden aprobación. | REQ-92 |
-| **Instrucciones y receta** | Receta `runtime_diagnosis`, prompt de depuración y regla contra callbacks por fotograma; `docs/IA.md` y `docs/IA.en.md`. | REQ-97 |
-| **Vestir MetaHumans** | Herramienta determinista (`unreal_dress_metahuman`), elegir a quién se viste, cinco tipos de prenda, copia segura, piel limpia, tela con Chaos Cloth (faldas y vestidos), validación con capturas. **Camisetas y pantalones ceñidos: experimentales** (REJECTED-13, REJECTED-15). | REQ-80..REQ-89, REQ-98 |
-| **`unreal_playtest` y registro** | Ahora arranca Play en UE 5.8.2 (`StartPIE` exige `options`) y pide el log con su esquema real. | REQ-82 |
-
-Aplazado a la **v0.5.1**: visor VR con marca desde el mando (REQ-95), aislar/conducir/comparar (REQ-96), informe de memoria gráfica (REQ-99), ajuste de la tecla de marca, tarjeta del plan editable, historial en la interfaz y los análisis `correlate`, `wrong_axis` y `relative_yaw`.
+| **Vestidos con tela** | `unreal_dress_metahuman` con `dress`: el vestido de Tripo se ajusta al cuerpo (`tailor.fit_dress`: escala por pecho y cintura, sisa a la axila, mangas a los brazos, tapas del sólido y muñones fuera, 1 cm de holgura mínima), se orienta por la silueta y se monta con Chaos Cloth con un mapa de `MaxDistance` propio: talle y mangas sujetos, falda suelta. Material de Tripo, ranuras `Torso` y `Legs` vacías. | REQ-84, REQ-87, REQ-88 |
+| **Validación de tela** | La holgura de un vestido se mide con la distancia con signo de cada vértice al cuerpo completo; antes salía siempre `error`. Capturas con el personaje entero. | REQ-89 |
+| **`flip_orientation`** | Parámetro opcional para girar 180° un vestido que la detección dejó al revés; en el MCP, en la IA de la app y en el puente C++. | REQ-87, REQ-88 |
+| **Prendas a la Biblioteca** | `unreal_export_outfit` guarda en la Biblioteca la prenda que lleva un MetaHuman, con su manifiesto, para volver a ponerla sin reajustar en la misma complexión. | REQ-100 |
+| **El sastre** | Tops y pantalones de Tripo deformados sobre el cuerpo conservando malla, UV y material (sustituye a la carcasa). | REQ-81, REQ-98 |
+| **Pipeline de vestir** | Faldas y vestidos ya se pueden equipar (claves y firmas que no coincidían), un fallo no destruye prendas anteriores, no quedan restos ni éxitos simulados. | REQ-85, REQ-87, REQ-88 |
 
 ## Cómo probarlo
 
-1. `npm install` y `npm run tauri dev`. Abre un proyecto de Unreal 5.8 y pulsa **Preparar** (copia el plugin nuevo, v0.5.0).
-2. Con el editor conectado, abre la conversación y pulsa **⏺ Caja negra → En el editor (PIE)**. Contesta a la IA y acepta la tarjeta de `session_start`.
-3. Haz **un clic dentro del juego** para que reciba el teclado, muévete 20–30 s y pulsa **F10** un par de veces cuando notes algo. Termina con **Terminar** (o cierra Play).
-4. La IA responde en tres bloques (lo que notaste / lo que dicen los datos / conclusión) y avisa si la medición no es fiable.
-5. Para probar las herramientas sin la ventana: `dbv-unreal-ai --mcp --project <.uproject>` y llama a `session_plan`, `session_start`, `session_stop`, `session_analyze`.
+1. `npm install` y `npm run tauri dev`. Abre un proyecto de Unreal 5.8 con un MetaHuman en el nivel y pulsa **Preparar** (copia el plugin v0.5.1).
+2. En la Biblioteca, elige un vestido generado con Tripo, **Enviar a Unreal**, tipo `dress`, y el MetaHuman de destino (o pídeselo a la IA, que usará `unreal_dress_metahuman`).
+3. Tarda alrededor de un minuto. El informe debe decir `validation_result: ok` y traer tres capturas (frente, lado y espalda) en `Saved/DBVUnrealAI/outfits/captures/<actor>/`.
+4. Comprueba en el visor que el vestido está bien puesto. Si saliera girado, repite con `flip_orientation: true`.
+5. Dale a **Play** con una animación de andar: el talle sigue al cuerpo y la falda se mueve.
 
 ## Verificación
 
-- **Automática (2026-11-10):**
-  - Rust: 335 tests (`cargo test --lib`), `cargo clippy --lib --all-targets` sin avisos.
-  - Vitest: 426 tests en 44 ficheros.
-  - Python: 173 tests de `unittest` en verde y 1 error previo de importación (`test_outfit_skin` necesita `numpy`, que no está instalado en este equipo); `dbv-lint.py` limpio.
-  - Banco e2e (`npm run test:e2e`): correcto.
-- **En vivo, con el editor abierto (UE 5.8.2, `DBVMCPFirst`):**
-  - Spikes P-22 (coste: 0,19 ms con 30 señales) y P-23 (fin de PIE: `get_game_world()` a `None`; un mundo retenido lanza «ObjectInstance is null»).
-  - **50 sesiones seguidas** con el `--mcp` real: 50 de 50 bien, 11.430 filas, Play parado al final, ninguna grabación activa, sin errores repetidos en el log. Coste medio de la grabadora 0,25–0,34 ms por fotograma (p95 ≤ 0,46 ms, bajo el objetivo de 0,5 ms).
-  - Quitarle el foco al editor 9 s con otra ventana: se mantuvo entre 72 y 81 FPS (antes ~3), y el ajuste volvió a su valor.
-  - Tres rondas de prueba con la persona usuaria; salieron y se corrigieron: IA que pedía escribir en un chat bloqueado, desplegable ilegible en el tema sepia, caída a ~3 FPS al perder el foco, F9 que chocaba con su captura de pantalla y un grabador viejo en memoria tras actualizar el plugin.
-- **Revisión de `/code-simplify` (2026-11-10):** un hallazgo **Crítico** de seguridad (el nombre de sesión podía salirse de su carpeta) resuelto con tests; varios Importante resueltos (arranque que fallaba a medias, tecla de marca que se apagaba si el personaje aún no existía, «Terminar» que paraba un Play ajeno, topes de límites, `slots=True`) y los demás registrados en `CHANGELOG.md` → «Conocido».
-- **Hallazgos al probar contra el editor real:** `unreal_playtest` no podía arrancar Play ni leer el log porque los argumentos de `StartPIE` y `GetLogEntries` no eran los del esquema real; el editor simulado de los tests aceptaba cualquier argumento. Regla: probar contra el editor real.
+- **Automática (2026-11-12):** Python 208 tests (`npm run test:python`), Rust 338 (`cargo test`), Vitest 427, `dbv-lint --changed` sin errores y Clippy sin avisos. Tests nuevos: `test_outfit_tailor_dress.py` (perfil, tapas, piezas sueltas, sujeción, orientación por silueta y `flip_orientation`) y `test_outfit_cloth_dress.py` (mapa de `MaxDistance`, holgura de tela y pasos del pipeline).
+- **En vivo (UE 5.8, `DBVMCPFirst`):** `Victoria_VestidoAzul` (`f_med_nrw`) con `vestido_azul_marino`: 5 pasos, validación `ok`, 0 % de vértices dentro de la piel, holgura mediana 4,5 cm, frente decidido por la silueta. Revisado y aprobado por el usuario en el visor.
+- **Revisión de `/code-simplify` (2026-11-12):** sin hallazgos Crítico. Un Importante resuelto (mallas del ajuste que quedaban sueltas si fallaba la tela) y otro como límite conocido (el pelo en las capturas).
 
 ## Límites conocidos y lo que NO está comprobado
 
-- **Microsoft Store:** REQ-90 exige una matriz de 12 casos de ropa con la app instalada (MSIX), un juego empaquetado y un vídeo; **no se ha ejecutado**. La versión se publica en GitHub y la ficha de la Store está preparada, pero el envío a Partner Center debe decidirlo la persona responsable sabiendo que ese criterio sigue abierto.
-- **Prendas ceñidas** (camisetas, pantalones): experimentales; el aspecto no siempre es presentable aunque las métricas den `ok`.
-- **Ventana de la app:** el botón, el desplegable y el panel de grabación se han probado con tests y con la persona usuaria en dos rondas; la tarjeta del plan editable y el historial no existen todavía.
-- **F10** (la tecla por defecto desde la última ronda) no se ha vuelto a pulsar en una grabación real tras el cambio de F9.
-- **Solo PIE o una partida ya abierta en el editor**: no hay grabación en paquetes ni con visor VR.
+- **Solo un vestido y un cuerpo probados en vivo** (`f_med_nrw`). Falta un vestido en Pablo o David (`m_tal_nrw`) y el resto de la matriz de REQ-90; la Microsoft Store sigue pendiente de esa matriz.
+- **Las faldas (`skirt`) no se ajustan:** se montan sobre la malla tal como llega.
+- **El pelo no se ve en las capturas de validación**; en el visor y en Play sí.
+- **Un vestido sin curva lumbar clara se orienta por el escote** y puede salir girado: se corrige con `flip_orientation`.
+- **Piel limpia y recorte del cuerpo** (REQ-86) siguen desactivados en el pipeline, a la espera de decisión.
+- **Plantillas de tela del plugin** con referencias al proyecto de pruebas: en otro proyecto cargan con avisos de referencias que faltan.

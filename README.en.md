@@ -5,9 +5,9 @@
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
 
 [![Website](https://img.shields.io/badge/Website-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/en/)
-[![Releases v0.5.0](https://img.shields.io/badge/Releases-v0.5.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.5.1](https://img.shields.io/badge/Releases-v0.5.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
-[![status](https://img.shields.io/badge/status-stable_%7C_v0.4.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.5.0)
+[![status](https://img.shields.io/badge/status-stable_%7C_v0.5.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.5.1)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -145,6 +145,13 @@ These channels are not available yet; they will arrive in an upcoming version. I
 <a name="status"></a>
 
 ## 🚧 Status
+
+**v0.5.1** (2026-11-12). What's new:
+
+- **Dresses with real cloth (REQ-87..REQ-89):** "Send to Unreal" or `unreal_dress_metahuman` with a Tripo dress fit it to the MetaHuman's body (fitted bodice, sleeves on the arms, none of the model's caps), orient it by its silhouette and set up Chaos Cloth: the bodice follows the body and the skirt moves freely. Validation actually measures the clearance and only says `ok` when nothing passes through the skin. If a dress comes out turned, the AI can retry with `flip_orientation`;
+- **Save an already fitted garment to the Library (REQ-100)** and put it on another character of the same build without re-fitting it;
+- **The "tailor" for shirts and pants (REQ-98):** it bends the Tripo garment onto the body while keeping its mesh, UVs and material;
+- **Dressing pipeline fixes:** skirts and dresses could not be equipped, a failure could delete earlier garments and some failures returned success. Skirts are still set up without fitting.
 
 **v0.5.0** (2026-11-10). What's new:
 
