@@ -156,6 +156,30 @@ class TestDressPipeline(unittest.TestCase):
         self.assertEqual(slots.call_count, 2, "compilar el Blueprint devuelve la ropa a las ranuras: se retira otra vez")
         self.assertEqual(val.call_args.kwargs["cloth_fit"], FIT_OK)
 
+    def test_si_la_tela_falla_se_borran_las_mallas_del_ajuste(self) -> None:
+        """@spec REQ-87, REQ-88 — un intento fallido no deja SM_*_Render ni SM_*_Sim sueltos."""
+        fitted = {"success": True, "render_sm_path": "/Game/V/SM_V_Render", "sim_sm_path": "/Game/V/SM_V_Sim", "fit_info": FIT_OK}
+        actor = MagicMock()
+        prep = {"success": True, "copy_bp_path": "/Game/BP_Victoria_DBV", "original_bp_path": "/Game/BP_Victoria"}
+        with (
+            _saved_dir(),
+            patch.object(pipeline, "_find_level_actor", return_value=actor),
+            patch.object(pipeline.character, "prepare_character_copy", return_value=prep),
+            patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
+            patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
+            patch.object(pipeline.tailor, "build_cloth_garment", return_value=fitted),
+            patch.object(pipeline.cloth, "setup_cloth_for_character", return_value={"success": False, "error": "boom"}),
+            patch.object(pipeline.cloth, "_discard_assets", return_value=["/Game/V/SM_V_Sim", "/Game/V/SM_V_Render"]) as discard,
+            patch.object(pipeline, "_rollback_failed_job", return_value={"action": "none"}),
+        ):
+            start = pipeline.dress_metahuman_start("Victoria", "/Game/DBV/Vestido", "dress", force=True)
+            for _ in range(4):
+                last = pipeline.dress_metahuman_step(start["job_id"])
+                if not last.get("success"):
+                    break
+        self.assertFalse(last["success"])
+        discard.assert_called_once_with(["/Game/V/SM_V_Sim", "/Game/V/SM_V_Render"])
+
     def test_si_el_ajuste_falla_no_se_monta_la_tela(self) -> None:
         """@spec REQ-87, REQ-88"""
         last, _, _, setup, _ = self._run({"success": False, "error": "numpy no está disponible"})

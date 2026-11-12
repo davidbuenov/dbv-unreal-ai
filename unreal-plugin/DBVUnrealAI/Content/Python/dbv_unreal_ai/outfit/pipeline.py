@@ -549,6 +549,12 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
                                 max_distance_weights=fitted.get("max_distance_weights"),
                                 max_distance_cm=fitted.get("max_distance_cm"),
                             )
+                            if not cloth_res.get("success"):
+                                # La tela ya borró su Dataflow y su Cloth Asset; las mallas del ajuste
+                                # quedan sin uso y tampoco se dejan como restos.
+                                ctx["discarded_assets"] = cloth._discard_assets(
+                                    [p for p in (fitted.get("sim_sm_path"), fitted.get("render_sm_path")) if p and p != render_sm]
+                                )
                     if not cloth_res.get("success"):
                         step_err = cloth_res.get("error", "Failed to setup Chaos Cloth.")
                     else:

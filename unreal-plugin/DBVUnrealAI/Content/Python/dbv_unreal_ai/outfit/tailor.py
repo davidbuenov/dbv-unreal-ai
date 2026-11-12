@@ -1047,6 +1047,12 @@ def _body_segments(body: Body) -> list[tuple[Any, Any, float]]:
     return segments
 
 
+#: La tela va sujeta hasta 5 cm por encima de la pelvis (sin pasar de la cintura de la prenda) y se
+#: suelta del todo a una caída proporcional a la altura de la pelvis: 34 cm en una pelvis de 87 cm.
+CLOTH_PIN_ABOVE_PELVIS_CM = 5.0
+CLOTH_FREE_DROP_PER_PELVIS = 34.0 / 87.0
+
+
 def cloth_free_weights(pos: Any, sleeve_w: Any, pin_z: float, free_z: float) -> Any:
     """Peso ``0..1`` de libertad de la tela por vértice: ``0`` sujeto al cuerpo, ``1`` suelto. @spec REQ-87
 
@@ -1136,7 +1142,8 @@ def fit_dress(
     q, d = band_clamp_distance(q, kept, skin if garment["sleeved"] else torso, clearance)
     used = np.zeros(len(q), dtype=bool)
     used[kept.ravel()] = True
-    pin_z = min(marks["pelvis"] + 5.0, waist_g - 2.0)
+    pin_z = min(marks["pelvis"] + CLOTH_PIN_ABOVE_PELVIS_CM, waist_g - 2.0)
+    free_z = pin_z - CLOTH_FREE_DROP_PER_PELVIS * marks["pelvis"]
     info.update(
         {
             "scale": round(float(s), 3),
@@ -1159,7 +1166,7 @@ def fit_dress(
             "median_cm": round(float(np.median(d[used])), 2),
             "p95_cm": round(float(np.percentile(d[used], 95)), 2),
             "pin_z": round(float(pin_z), 1),
-            "free_z": round(float(pin_z - 34.0 * marks["pelvis"] / 87.0), 1),
+            "free_z": round(float(free_z), 1),
             "cap_mask": cap,
             "sleeve_w": sleeve_w,
         }
