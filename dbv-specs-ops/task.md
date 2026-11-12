@@ -23,7 +23,7 @@
       - Plugin sincronizado a `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI` y `Plugins\DBVUnrealAICpp`.
 * **RETOMAR AQUÍ PRIMERO (2026-11-12) — vestidos de tela funcionando de punta a punta; falta cerrar la versión:**
   - `unreal_dress_metahuman` viste `Victoria_VestidoAzul` con el vestido azul de Tripo: 5 pasos, validación `ok`, aprobado por el usuario. Nuevo `tailor.fit_dress` / `build_cloth_garment` (ajuste, tapas, mangas, mapa de `MaxDistance`), holgura de tela medida, material, ranuras y capturas corregidos, `flip_orientation` opcional. Tests: Python 206 (13 nuevos en `test_outfit_tailor_dress.py` y `test_outfit_cloth_dress.py`), Rust 338, Vitest 427, `dbv-lint --changed` limpio. Plugin sincronizado con `DBVMCPFirst`.
-  - **No volver a lanzar el pipeline sobre `Victoria_VestidoAzul`:** el vestido es el aprobado. Para pruebas, usar una copia del personaje.
+  - **Orientación del vestido corregida por la silueta** (el escote lo ponía al revés; informe del 2026-11-12). Vestido de `Victoria_VestidoAzul` regenerado con la orientación buena: **no volver a lanzar el pipeline sobre él** sin que lo pida el usuario. Para pruebas, usar una copia del personaje.
   - **Pendiente para la versión:** elegir el número (v0.5.0 ya está publicada: lo siguiente es v0.5.1 o v0.6.0), pasar `[Sin publicar]` del CHANGELOG a esa versión, subir la versión en `package.json`, `tauri.conf.json` y `Cargo.toml`, tag y push.
   - **Siguiente para tela:** ajustar también las faldas (`skirt`, hoy sin ajuste) y probar el vestido en Pablo o David (`m_tal_nrw`) para la matriz de REQ-90.
 * **(Anterior, 2026-11-11, tarde) — revisión del pipeline de vestir, pendiente de probar en el editor:**

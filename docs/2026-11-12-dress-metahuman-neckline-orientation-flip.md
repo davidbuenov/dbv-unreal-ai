@@ -121,8 +121,9 @@ Si `flip_orientation is not None`, `normalise` y `fit_dress` respetan la directi
 
 ## 4. Estado (2026-11-12)
 
-**No se reproduce con `vestido_azul_marino`: la orientación automática es la correcta.** El escote en V con volantes y la fila de botones quedan delante, como en la miniatura de la Biblioteca, y la cremallera detrás. El volumen que se ve delante en la cadera viene de la pose del maniquí de Tripo (cadera adelantada), no de un giro de la prenda. El usuario dio por bueno el vestido así.
+**Corregido. El informe acertaba.** Medido en `vestido_azul_marino`: la cintura se hunde 8,4 cm en el lado que el escote tomaba por frente y 1,5 cm en el otro, así que ese lado es la espalda.
 
-- **Opción A, descartada (REJECTED-16 en `memory.md`):** decidir el frente por la silueta. Medido en este vestido: la cintura se hunde 8,4 cm en el lado del escote y 1,5 cm en el otro, así que la silueta marcaba el escote como espalda y giraba un vestido que estaba bien.
-- **Opción B, hecha:** `flip_orientation` (opcional, `false` por defecto) en `dress_metahuman`, `dress_metahuman_start`, el toolset, el puente C++ (`cpp_bridge.py`), la herramienta MCP `unreal_dress_metahuman` y la herramienta de la IA de la app. Gira 180° lo que decida el escote. Está pensada para un reintento después de ver las capturas. Test: `test_flip_orientation_gira_el_vestido_180_grados`.
-- La heurística del escote no se toca. `shell.py` ya no existe (se retiró con REJECTED-15).
+- **Opción A, hecha:** `tailor.dress_back_side` decide la espalda por la silueta (hundimiento de la cintura entre la espalda alta y los glúteos, con un margen de 1,5 cm). El escote solo decide si la silueta no distingue. Tests: `test_la_espalda_se_reconoce_por_la_curva_lumbar_y_no_por_el_escote` y `test_flip_orientation_gira_el_vestido_180_grados`.
+- **Opción B, hecha:** `flip_orientation` (opcional, `false` por defecto) en `dress_metahuman`, `dress_metahuman_start`, el toolset, el puente C++, la herramienta MCP `unreal_dress_metahuman` y la de la IA de la app. Gira 180° el resultado de la detección.
+- Comprobado en el editor: `Victoria_VestidoAzul` vestida con `front_by: silhouette`, validación `ok`, pecho delante y glúteos detrás en la captura de perfil.
+- Nota: el mismo día se descartó por error la opción A y se volvió a poner el vestido al revés; ver REJECTED-16 en `memory.md`. `shell.py` ya no existe (se retiró con REJECTED-15), así que solo cambia `tailor.py`.

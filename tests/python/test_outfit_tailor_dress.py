@@ -182,6 +182,29 @@ class TestTailorDress(unittest.TestCase):
         used = np.unique(kept.ravel())
         self.assertGreater(float(fitted[used][:, 2].max()), 130.0, "el vestido queda a la altura del cuerpo, no en el origen")
 
+    def test_la_espalda_se_reconoce_por_la_curva_lumbar_y_no_por_el_escote(self) -> None:
+        """Vestido con volantes delante (borde delantero más alto) y glúteos detrás. @spec REQ-87
+
+        Regresión del 2026-11-12: el escote más alto delante hacía girar 180° el vestido azul de Victoria.
+        """
+
+        def ry(z: float) -> float:
+            return 12.0
+
+        wall, wall_t = _tube(lambda z: 15.0, ry, 0.0, 80.0, nz=81)
+        back = wall[:, 1] < 0.0
+        # Detrás: la cintura (z=50) se hunde 5 cm entre la espalda alta y los glúteos; delante cae recta.
+        wall[back, 1] += 5.0 * np.clip(1.0 - np.abs(wall[back, 2] - 50.0) / 15.0, 0.0, 1.0)
+        # Delante, un volante sube el borde central; detrás el escote es más bajo.
+        front_top = (wall[:, 1] > 8.0) & (np.abs(wall[:, 0]) < 3.0) & (wall[:, 2] > 79.0)
+        wall[front_top, 2] += 4.0
+        marks = {"waist": 50.0, "armpit": 70.0, "waist_hw": 15.0}
+        side, hollow = tailor.dress_back_side(wall, wall_t, marks)
+        self.assertEqual(side, -1.0, hollow)
+        self.assertGreater(hollow["minus_y"], hollow["plus_y"] + tailor.DRESS_SILHOUETTE_MARGIN_CM)
+        flat, _ = tailor.dress_back_side(*_tube(15.0, 12.0, 0.0, 80.0, nz=81), marks)
+        self.assertEqual(flat, 0.0, "sin curva lumbar no decide la silueta: decide el escote")
+
     def test_flip_orientation_gira_el_vestido_180_grados(self) -> None:
         """@spec REQ-87, REQ-88"""
         body = _make_body()

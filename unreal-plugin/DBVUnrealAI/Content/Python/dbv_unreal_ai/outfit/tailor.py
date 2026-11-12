@@ -813,6 +813,39 @@ def dress_marks(p: Any, tris: Any) -> dict[str, Any]:
     return marks
 
 
+#: Diferencia mínima (cm) entre el hundimiento de cintura de los dos lados para fiarse de la silueta.
+DRESS_SILHOUETTE_MARGIN_CM = 1.5
+
+
+def dress_back_side(p: Any, tris: Any, garment: dict[str, Any]) -> tuple[float, dict[str, float]]:
+    """Lado de la espalda de un vestido por su silueta: ``+1`` (``+Y``), ``-1`` (``-Y``) o ``0`` si no se distingue.
+
+    La espalda es el lado donde la cintura se hunde entre la espalda alta y los glúteos (curva
+    lumbar); el delantero cae casi recto. El escote no sirve para un vestido: con volantes en el
+    cuello o la espalda baja, el borde delantero sale más alto y el vestido quedaba girado 180°
+    (``docs/2026-11-12-dress-metahuman-neckline-orientation-flip.md``).
+    @spec REQ-87
+    """
+    s = surface_samples(p, tris, 1.0)
+    core = s[np.abs(s[:, 0]) < 0.8 * max(garment["waist_hw"], 1.0)]
+    waist, armpit = garment["waist"], garment["armpit"]
+    torso = max(armpit - waist, 4.0)
+    seat_hi = waist - 0.8 * torso
+    seat_lo = max(waist - 1.8 * torso, float(p[:, 2].min()) + 2.0)
+    hollow: dict[str, float] = {}
+    for side, key in ((1.0, "plus_y"), (-1.0, "minus_y")):
+        y = side * core[:, 1]
+        z = core[:, 2]
+        at_waist = y[np.abs(z - waist) < 1.5]
+        at_chest = y[(z > armpit - 8.0) & (z < armpit - 1.0)]
+        at_seat = y[(z > seat_lo) & (z < seat_hi)]
+        measurable = len(at_waist) > 0 and len(at_chest) > 0 and len(at_seat) > 0
+        hollow[key] = round(float((at_chest.max() + at_seat.max()) / 2.0 - at_waist.max()), 1) if measurable else 0.0
+    diff = hollow["plus_y"] - hollow["minus_y"]
+    back = 0.0 if abs(diff) < DRESS_SILHOUETTE_MARGIN_CM else (1.0 if diff > 0.0 else -1.0)
+    return (back, hollow)
+
+
 def body_waist(col: Collider, marks: dict[str, float]) -> float:
     """Altura de la cintura del cuerpo: la franja más estrecha del torso entre la pelvis y la axila. @spec REQ-87"""
     zs = np.arange(marks["pelvis"] + 3.0, marks["armpit"] - 8.0, 1.0)
@@ -1034,8 +1067,8 @@ def fit_dress(
 ) -> tuple[Any, Any, dict[str, Any]]:
     """Ajusta un vestido de Tripo al cuerpo conservando su malla, sus UV y el vuelo de la falda. @spec REQ-87
 
-    El frente se decide por el escote (``normalise``); ``flip_orientation=True`` gira 180° ese
-    resultado, para una prenda con la espalda más baja que el delantero.
+    El frente se decide por la silueta (``dress_back_side``) y, solo si no se distingue, por el escote
+    (``normalise``). ``flip_orientation=True`` gira 180° el resultado, para corregirlo a la vista.
 
     Escala uniforme por pecho y cintura (la mayor de las dos, para que el cuerpo quepa), sisa a la
     axila, cintura de la prenda a la del cuerpo, mangas a los brazos, tapas del sólido fuera, talle
@@ -1045,8 +1078,13 @@ def fit_dress(
     """
     p, info = normalise(pos, "top")
     garment = dress_marks(p, tris)
+    back, hollow = dress_back_side(p, tris, garment)
+    info["front_by"] = "silhouette" if back != 0.0 else "neckline"
+    info["waist_hollow"] = hollow
     info["flip_requested"] = bool(flip_orientation)
-    if flip_orientation:
+    # normalise deja el frente en +Y según el escote: se gira si la silueta dice que +Y es la espalda,
+    # y otra vez si quien llama pide corregir el resultado.
+    if (back > 0.0) != bool(flip_orientation):
         p = p * np.array([-1.0, -1.0, 1.0])
         info["flip180"] = not info["flip180"]
     marks = landmarks_body(body)
