@@ -731,6 +731,404 @@ def fit_top(
     return (q, kept_tris, info)
 
 
+# ---------------------------------------------------------------------------
+# Vestidos de tela (REQ-87): se ajusta el talle, las mangas siguen a los brazos y la falda conserva el vuelo
+# ---------------------------------------------------------------------------
+
+
+def _central_halfwidths(x: Any, gap: float) -> tuple[float, float]:
+    """Semianchos izquierdo y derecho del tramo continuo de tela que contiene ``x = 0``."""
+    out: list[float] = []
+    for side in (-1.0, 1.0):
+        r = np.sort(side * x[side * x >= 0.0])
+        brk = np.nonzero(np.diff(np.r_[0.0, r]) > gap)[0]
+        if len(r) == 0 or (len(brk) > 0 and int(brk[0]) == 0):
+            out.append(0.0)
+        elif len(brk) == 0:
+            out.append(float(r[-1]))
+        else:
+            out.append(float(r[int(brk[0]) - 1]))
+    return (out[0], out[1])
+
+
+def torso_profile(samples: Any, gap: float = 2.0, step: float = STEP) -> tuple[Any, Any, Any]:
+    """Por franja de altura: cota, semiancho del tramo central y si hay tela separada a ambos lados. @spec REQ-87"""
+    zs = np.arange(float(samples[:, 2].min()) + step, float(samples[:, 2].max()), step)
+    cw = np.full(len(zs), np.nan)
+    side = np.zeros(len(zs), dtype=bool)
+    for i, z in enumerate(zs):
+        q = samples[np.abs(samples[:, 2] - z) < step * 0.75]
+        if len(q) >= 8:
+            left, right = _central_halfwidths(q[:, 0], gap)
+            cw[i] = (left + right) / 2.0
+            reach_l, reach_r = float(-q[:, 0].min()), float(q[:, 0].max())
+            # Un tramo central de pocos centímetros no es un talle: es una tapa interior poco densa.
+            wide_enough = min(left, right) > max(3.0, 0.15 * max(reach_l, reach_r))
+            side[i] = wide_enough and reach_l > left + gap and reach_r > right + gap
+    return (zs, cw, side)
+
+
+def _longest_run(flags: Any) -> tuple[int, int]:
+    """Índices ``[inicio, fin)`` del tramo continuo más largo de ``flags`` verdaderos."""
+    best = (0, 0)
+    start = -1
+    for i, flag in enumerate(list(flags) + [False]):
+        if flag and start < 0:
+            start = i
+        elif not flag and start >= 0:
+            if i - start > best[1] - best[0]:
+                best = (start, i)
+            start = -1
+    return best
+
+
+def dress_marks(p: Any, tris: Any) -> dict[str, Any]:
+    """Sisa, cintura y anchos del talle de un vestido ya orientado; detecta si trae mangas. @spec REQ-87
+
+    Con mangas, bajo la sisa hay tres tramos de tela por franja (manga, talle, manga): la sisa es el
+    final de ese tramo. Sin mangas se usa la sisa de un top.
+    """
+    zs, cw, side = torso_profile(surface_samples(p, tris, 1.0))
+    lo, hi = _longest_run(side)
+    sleeved = hi - lo >= 5
+    hem = float(p[:, 2].min())
+    height = float(p[:, 2].max()) - hem
+    armpit = float(zs[hi - 1]) + 0.5 if sleeved else garment_armhole(p)
+    ok = ~np.isnan(cw)
+    widest = float(np.nanmax(cw)) if bool(ok.any()) else 1.0
+    smooth = np.convolve(np.pad(np.where(ok, cw, widest), 2, mode="edge"), np.ones(5) / 5.0, mode="valid")
+    band = ok & (zs > hem + 0.25 * height) & (zs < armpit - 0.08 * height)
+    waist = float(zs[band][int(np.argmin(smooth[band]))]) if bool(band.any()) else armpit - 0.25 * height
+    near_chest = ok & (np.abs(zs - (armpit - 3.0)) <= 1.5)
+    near_waist = ok & (np.abs(zs - waist) <= 1.5)
+    marks = {
+        "sleeved": bool(sleeved),
+        "armpit": armpit,
+        "waist": waist,
+        "chest_hw": float(np.median(cw[near_chest])) if bool(near_chest.any()) else widest,
+        "waist_hw": float(np.median(cw[near_waist])) if bool(near_waist.any()) else widest,
+        "zs": zs,
+        "cw": np.where(ok, cw, widest),
+    }
+    return marks
+
+
+def body_waist(col: Collider, marks: dict[str, float]) -> float:
+    """Altura de la cintura del cuerpo: la franja más estrecha del torso entre la pelvis y la axila. @spec REQ-87"""
+    zs = np.arange(marks["pelvis"] + 3.0, marks["armpit"] - 8.0, 1.0)
+    waist_z = (marks["pelvis"] + marks["armpit"]) / 2.0
+    if len(zs) > 0:
+        widths = np.array([width_depth(col.pts, float(z))[0] for z in zs])
+        waist_z = float(zs[int(np.argmin(widths))])
+    return waist_z
+
+
+def _rotation_between(u: Any, v: Any) -> Any:
+    """Matriz del giro mínimo que lleva el vector unitario ``u`` a ``v`` (Rodrigues)."""
+    axis = np.cross(u, v)
+    s = float(np.linalg.norm(axis))
+    rot = np.eye(3)
+    if s > 1e-9:
+        a = axis / s
+        k = np.array([[0.0, -a[2], a[1]], [a[2], 0.0, -a[0]], [-a[1], a[0], 0.0]])
+        rot = np.eye(3) + s * k + (1.0 - float(u @ v)) * (k @ k)
+    return rot
+
+
+def fit_sleeve(q: Any, sleeve: Any, body: Body, sign: float, x_root: float, blend: float = 8.0) -> tuple[Any, Any, dict[str, float]]:
+    """Lleva una manga a la línea hombro-codo-mano del cuerpo conservando su volumen. @spec REQ-87
+
+    Cada vértice se expresa como un punto del eje de la manga más un desvío; el eje se sustituye por
+    los huesos del brazo y el desvío se gira con él. Cerca del hombro se mezcla con la posición
+    original para no romper la unión con el talle. ``sign`` es ``+1`` para el lado ``+X`` (izquierdo).
+    """
+    side = "l" if sign > 0.0 else "r"
+    m = sleeve & (sign * q[:, 0] > 0.0)
+    out = q.copy()
+    weight = np.zeros(len(q))
+    info: dict[str, float] = {}
+    if int(m.sum()) >= 30:
+        pts = q[m]
+        centre = pts.mean(0)
+        axis = np.linalg.svd(pts - centre, full_matrices=False)[2][0]
+        axis = axis if sign * axis[0] > 0.0 else -axis
+        root = centre + axis * ((sign * x_root - centre[0]) / (axis[0] if abs(axis[0]) > 1e-6 else 1e-6))
+        shoulder, elbow, hand = (body.bone(f"{name}_{side}") for name in ("upperarm", "lowerarm", "hand"))
+        upper = (elbow - shoulder) / (np.linalg.norm(elbow - shoulder) + 1e-12)
+        lower = (hand - elbow) / (np.linalg.norm(hand - elbow) + 1e-12)
+        upper_len = float(np.linalg.norm(elbow - shoulder))
+        t = (pts - root) @ axis
+        off = (pts - root) - t[:, None] * axis[None, :]
+        k = np.clip((t - (upper_len - 5.0)) / 10.0, 0.0, 1.0)[:, None]
+        turned = (off @ _rotation_between(axis, upper).T) * (1.0 - k) + (off @ _rotation_between(axis, lower).T) * k
+        along = np.clip(t, 0.0, None)[:, None]
+        line = np.where(along < upper_len, shoulder[None, :] + upper[None, :] * along, elbow[None, :] + lower[None, :] * (along - upper_len))
+        line = line + np.minimum(t, 0.0)[:, None] * upper[None, :]
+        tt = np.clip(t / blend, 0.0, 1.0)
+        w = tt * tt * (3.0 - 2.0 * tt)
+        out[m] = pts * (1.0 - w[:, None]) + (line + turned) * w[:, None]
+        weight[m] = w
+        info = {
+            "turn_deg": round(float(np.degrees(np.arccos(np.clip(float(axis @ upper), -1.0, 1.0)))), 1),
+            "length_cm": round(float(t.max()), 1),
+        }
+    return (out, weight, info)
+
+
+def segment_hits(a: Any, b: Any, c: Any, p0: Any, p1: Any) -> Any:
+    """Triángulos ``(a, b, c)`` que corta el segmento ``p0``-``p1`` (Möller-Trumbore)."""
+    d = p1 - p0
+    e1, e2 = b - a, c - a
+    h = np.cross(d[None, :], e2)
+    det = (e1 * h).sum(1)
+    ok = np.abs(det) > 1e-12
+    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+    s = p0[None, :] - a
+    u = (s * h).sum(1) * inv
+    qv = np.cross(s, e1)
+    v = (qv @ d) * inv
+    t = (e2 * qv).sum(1) * inv
+    hits = ok & (u >= 0.0) & (v >= 0.0) & (u + v <= 1.0) & (t >= 0.0) & (t <= 1.0)
+    return hits
+
+
+def _grow_region(cand: Any, seeds: Any, t: Any, groups: int) -> Any:
+    """Triángulos candidatos alcanzables desde ``seeds`` a través de vértices soldados compartidos."""
+    cur = seeds.copy()
+    reached = np.zeros(groups, dtype=bool)
+    for _ in range(600):
+        reached[t[cur].ravel()] = True
+        grown = (cand & reached[t].any(1)) | seeds
+        if int(grown.sum()) == int(cur.sum()):
+            break
+        cur = grown
+    return cur
+
+
+def _planar_region(seed: int, fn: Any, cen: Any, area: Any, t: Any, groups: int, flat: float, slab: float) -> Any:
+    """Región plana conexa que contiene el triángulo ``seed``; el plano se reestima con lo ya reunido."""
+    normal, origin = fn[seed], cen[seed]
+    cur = np.zeros(len(fn), dtype=bool)
+    cur[seed] = True
+    for _ in range(6):
+        cand = (np.abs(fn @ normal) > flat) & (np.abs((cen - origin) @ normal) < slab)
+        grown = _grow_region(cand, cur, t, groups)
+        stable = int(grown.sum()) == int(cur.sum())
+        cur = grown
+        weights = area[cur] * np.sign(fn[cur] @ normal)
+        normal = (fn[cur] * weights[:, None]).sum(0)
+        normal = normal / (np.linalg.norm(normal) + 1e-12)
+        origin = (cen[cur] * area[cur][:, None]).sum(0) / (float(area[cur].sum()) + 1e-12)
+        if stable:
+            break
+    return cur
+
+
+def drop_end_caps(
+    pos: Any,
+    tris: Any,
+    segments: list[tuple[Any, Any, float]],
+    col: Collider,
+    flat: float = 0.8,
+    slab: float = 2.0,
+) -> tuple[Any, Any]:
+    """Quita las tapas planas que el cuerpo atraviesa: cuello, puños y suelo de la falda. @spec REQ-87
+
+    Tripo entrega el vestido como un sólido cerrado. Una tapa es la región plana conexa que contiene un
+    triángulo perforado por un hueso y orientado de cara a él (``segments`` trae, por hueso, el
+    alineamiento mínimo entre la normal y el hueso). Las tapas en tejado, de dos planos, se completan
+    encadenando el plano vecino si está orientado como tapa y queda dentro del cuerpo. Las paredes de
+    la prenda no se tocan: no las perfora ningún hueso ni son planas.
+    """
+    a, b, c = (pos[tris[:, k]] for k in range(3))
+    fn = np.cross(b - a, c - a)
+    area = 0.5 * np.linalg.norm(fn, axis=1)
+    fn = fn / (np.linalg.norm(fn, axis=1, keepdims=True) + 1e-12)
+    cen = (a + b + c) / 3.0
+    inv = weld_map(pos)
+    t = inv[tris]
+    groups = int(inv.max()) + 1
+    depth, _, _ = col.signed(cen)
+    cap = np.zeros(len(tris), dtype=bool)
+    for p0, p1, seed_align in segments:
+        axis = (p1 - p0) / (np.linalg.norm(p1 - p0) + 1e-12)
+        capish = np.abs(fn @ axis) > seed_align
+        pending = [int(i) for i in np.nonzero(segment_hits(a, b, c, p0, p1) & capish)[0]]
+        chained = False
+        while pending:
+            seed = pending.pop()
+            region = None if cap[seed] else _planar_region(seed, fn, cen, area, t, groups, flat, slab)
+            inside = region is not None and float((depth[region] * area[region]).sum()) < -0.5 * float(area[region].sum())
+            if region is not None and (inside or not chained):
+                cap |= region
+                reached = np.zeros(groups, dtype=bool)
+                reached[t[region].ravel()] = True
+                pending += [int(i) for i in np.nonzero(capish & ~cap & reached[t].any(1) & (depth < -1.0))[0]]
+            chained = True
+    return (tris[~cap], cap)
+
+
+def loose_parts(pos: Any, tris: Any, min_share: float = 0.05) -> Any:
+    """Triángulos de piezas sueltas pequeñas, como los muñones del maniquí bajo la falda. @spec REQ-87"""
+    t = weld_map(pos)[tris]
+    label = np.arange(int(t.max()) + 1) if len(t) else np.zeros(0, dtype=np.int64)
+    for _ in range(len(label) + 1):
+        new = label.copy()
+        lowest = label[t].min(1)
+        for k in range(3):
+            np.minimum.at(new, t[:, k], lowest)
+        new = new[new]
+        if bool((new == label).all()):
+            break
+        label = new
+    loose = np.zeros(len(tris), dtype=bool)
+    if len(t) > 0:
+        a, b, c = (pos[tris[:, k]] for k in range(3))
+        area = 0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1)
+        _, idx = np.unique(label[t[:, 0]], return_inverse=True)
+        total = np.bincount(idx.reshape(-1), weights=area)
+        loose = (total < min_share * float(total.max()))[idx.reshape(-1)]
+    return loose
+
+
+#: Alineamiento mínimo normal-hueso para tomar un triángulo perforado como tapa. El brazo cae en
+#: diagonal y roza la pared del talle de un vestido sin mangas (alineamiento ~0,6): se le exige más.
+CAP_ALIGN_AXIAL = 0.5
+CAP_ALIGN_ARM = 0.75
+
+
+def _body_segments(body: Body) -> list[tuple[Any, Any, float]]:
+    """Huesos que atraviesan las aberturas de un vestido: brazos, piernas y columna hasta la cabeza."""
+    segments: list[tuple[Any, Any, float]] = []
+    for side in ("l", "r"):
+        shoulder, elbow, hand = (body.bone(f"{name}_{side}") for name in ("upperarm", "lowerarm", "hand"))
+        thigh, calf, foot = (body.bone(f"{name}_{side}") for name in ("thigh", "calf", "foot"))
+        segments += [(shoulder, elbow, CAP_ALIGN_ARM), (elbow, hand + (hand - elbow) * 0.8, CAP_ALIGN_ARM)]
+        segments += [(thigh, calf, CAP_ALIGN_AXIAL), (calf, foot, CAP_ALIGN_AXIAL)]
+    spine_lo, spine_hi, head = body.bone("spine_01"), body.bone("spine_05"), body.bone("head")
+    segments += [(spine_lo, spine_hi, CAP_ALIGN_AXIAL), (spine_hi, head + np.array([0.0, 0.0, 15.0]), CAP_ALIGN_AXIAL)]
+    # Entre las piernas: el suelo de la falda puede traer muñones del maniquí justo donde pasan los
+    # muslos, y entonces el hueso del muslo no perfora el suelo sino el interior del muñón.
+    pelvis = body.bone("pelvis")
+    segments.append((pelvis, np.array([pelvis[0], pelvis[1], float(body.bone("foot_l")[2])]), CAP_ALIGN_AXIAL))
+    return segments
+
+
+def cloth_free_weights(pos: Any, sleeve_w: Any, pin_z: float, free_z: float) -> Any:
+    """Peso ``0..1`` de libertad de la tela por vértice: ``0`` sujeto al cuerpo, ``1`` suelto. @spec REQ-87
+
+    Por encima de ``pin_z`` (talle) y en las mangas la tela sigue al cuerpo; baja suavemente hasta
+    ``free_z``, desde donde la falda se mueve con toda su ``MaxDistance``.
+    """
+    t = np.clip((pin_z - pos[:, 2]) / max(pin_z - free_z, 1e-3), 0.0, 1.0)
+    free = t * t * (3.0 - 2.0 * t) * (1.0 - np.clip(np.asarray(sleeve_w) * 2.0, 0.0, 1.0))
+    return free
+
+
+def fit_dress(
+    pos: Any,
+    tris: Any,
+    body: Body,
+    clearance: float = 1.0,
+    flip_orientation: bool | None = None,
+) -> tuple[Any, Any, dict[str, Any]]:
+    """Ajusta un vestido de Tripo al cuerpo conservando su malla, sus UV y el vuelo de la falda. @spec REQ-87
+
+    El frente se decide por el escote (``normalise``); ``flip_orientation=True`` gira 180° ese
+    resultado, para una prenda con la espalda más baja que el delantero.
+
+    Escala uniforme por pecho y cintura (la mayor de las dos, para que el cuerpo quepa), sisa a la
+    axila, cintura de la prenda a la del cuerpo, mangas a los brazos, tapas del sólido fuera, talle
+    ceñido a la banda de holgura y, al final, empuje de todo lo que quede a menos de ``clearance`` de
+    la piel. ``info`` lleva ``cap_mask`` (triángulos retirados), ``sleeve_w`` (peso de manga por
+    vértice) y las cotas ``pin_z`` / ``free_z`` de la tela.
+    """
+    p, info = normalise(pos, "top")
+    garment = dress_marks(p, tris)
+    info["flip_requested"] = bool(flip_orientation)
+    if flip_orientation:
+        p = p * np.array([-1.0, -1.0, 1.0])
+        info["flip180"] = not info["flip180"]
+    marks = landmarks_body(body)
+    torso = body_collider(body, with_arms=False)
+    skin = body_collider(body, with_arms=True)
+    chest_w, _, chest_y = width_depth(torso.pts, marks["armpit"] - 3.0)
+    waist_b = body_waist(torso, marks)
+    waist_w, _, _ = width_depth(torso.pts, waist_b)
+    s_chest = (chest_w + 2.0 * clearance) * 1.03 / max(2.0 * garment["chest_hw"], 1e-3)
+    s_waist = (waist_w + 2.0 * clearance) * 1.03 / max(2.0 * garment["waist_hw"], 1e-3)
+    s = max(s_chest, s_waist)
+    q = p * s
+    armhole = marks["armpit"] - 1.5
+    lift = armhole - garment["armpit"] * s
+    q[:, 2] += lift
+    waist_g = garment["waist"] * s + lift
+    stretch = float(np.clip((armhole - waist_b) / max(armhole - waist_g, 1e-3), 0.8, 1.25))
+    mid = (q[:, 2] <= armhole) & (q[:, 2] >= waist_g)
+    low = q[:, 2] < waist_g
+    q[mid, 2] = armhole - (armhole - q[mid, 2]) * stretch
+    q[low, 2] -= (armhole - waist_g) * (stretch - 1.0)
+    waist_g = armhole - (armhole - waist_g) * stretch
+    x_root = garment["chest_hw"] * s
+    sleeve = np.zeros(len(q), dtype=bool)
+    if garment["sleeved"]:
+        central = np.interp(p[:, 2], garment["zs"], garment["cw"]) * s
+        sleeve = np.where(p[:, 2] < garment["armpit"], np.abs(q[:, 0]) > central + 1.0, np.abs(q[:, 0]) > x_root)
+    _, _, chest_y_g = width_depth(q[~sleeve], armhole - 3.0)
+    q[:, 1] += chest_y - chest_y_g
+    sleeve_w = np.zeros(len(q))
+    sleeves: dict[str, dict[str, float]] = {}
+    if garment["sleeved"]:
+        for sign in (1.0, -1.0):
+            q, w, sleeve_info = fit_sleeve(q, sleeve, body, sign, x_root)
+            sleeve_w = np.maximum(sleeve_w, w)
+            sleeves["left" if sign > 0.0 else "right"] = sleeve_info
+    _, cap = drop_end_caps(q, tris, _body_segments(body), skin)
+    cap_count = int(cap.sum())
+    rest = np.nonzero(~cap)[0]
+    cap[rest[loose_parts(q, tris[rest])]] = True
+    kept = tris[~cap]
+    core = kept[(sleeve_w < 0.5)[kept].all(1)]
+    z_lo, z_hi = waist_g - 6.0, armhole + 6.0
+    levels = int(round((z_hi - z_lo) / STEP)) + 1
+    tight, polar = band_clamp_polar(
+        q, core, torso, z_lo, z_hi, clearance, np.full(levels, 5.0), fade_lo=(waist_g - 6.0, waist_g), fade_hi=(armhole - 3.0, armhole + 3.0)
+    )
+    q = q + (tight - q) * (1.0 - np.clip(sleeve_w * 2.0, 0.0, 1.0))[:, None]
+    q, d = band_clamp_distance(q, kept, skin if garment["sleeved"] else torso, clearance)
+    used = np.zeros(len(q), dtype=bool)
+    used[kept.ravel()] = True
+    pin_z = min(marks["pelvis"] + 5.0, waist_g - 2.0)
+    info.update(
+        {
+            "scale": round(float(s), 3),
+            "scale_chest": round(float(s_chest), 3),
+            "scale_waist": round(float(s_waist), 3),
+            "sleeved": bool(garment["sleeved"]),
+            "sleeves": sleeves,
+            "armhole_z": round(float(armhole), 1),
+            "waist_z": round(float(waist_g), 1),
+            "body_waist_z": round(float(waist_b), 1),
+            "waist_stretch": round(stretch, 3),
+            "hem_z": round(float(q[used, 2].min()), 1),
+            "top_z": round(float(q[used, 2].max()), 1),
+            "caps_removed": cap_count,
+            "loose_removed": int(cap.sum()) - cap_count,
+            "polar": polar,
+            "vertices": int(used.sum()),
+            "inside_pct": round(float((d[used] < 0.2).mean() * 100.0), 2),
+            "min_cm": round(float(d[used].min()), 2),
+            "median_cm": round(float(np.median(d[used])), 2),
+            "p95_cm": round(float(np.percentile(d[used], 95)), 2),
+            "pin_z": round(float(pin_z), 1),
+            "free_z": round(float(pin_z - 34.0 * marks["pelvis"] / 87.0), 1),
+            "cap_mask": cap,
+            "sleeve_w": sleeve_w,
+        }
+    )
+    return (q, kept, info)
+
+
 def skin_weights(body: Body, pos: Any, tris: Any, sleeveless: bool = True) -> tuple[Any, Any]:
     """Pesos de hueso por vértice de la prenda desde la piel más cercana, suavizados sobre la malla soldada. @spec REQ-98"""
     shoulder_x = abs(float(body.bone("upperarm_l")[0]))
@@ -965,6 +1363,125 @@ def build_tailored_garment(
                     "zone": info,
                     "fit_info": info,
                     "layered_over_legs": under_arrays is not None,
+                }
+            )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Adaptador de Unreal Engine para prendas de tela
+# ---------------------------------------------------------------------------
+
+CLOTH_KINDS = ("dress",)
+
+#: Recorrido máximo de la falda suelta respecto al cuerpo animado (cm).
+CLOTH_MAX_DISTANCE_CM = 9.0
+
+
+def _write_static_mesh(dyn: Any, path: str, material: Any) -> Any:
+    """Guarda ``dyn`` como ``StaticMesh`` en ``path``; si ya existe se sobrescribe sin borrarlo.
+
+    Un reintento no borra el asset: el Dataflow de la prenda lo referencia y borrarlo abre un diálogo.
+    """
+    eal = unreal.EditorAssetLibrary
+    if eal.does_asset_exist(path):
+        mesh = eal.load_asset(path)
+        opts = unreal.GeometryScriptCopyMeshToAssetOptions()
+        opts.enable_recompute_normals = False
+        opts.enable_recompute_tangents = True
+        unreal.GeometryScript_AssetUtils.copy_mesh_to_static_mesh(dyn, mesh, opts, unreal.GeometryScriptMeshWriteLOD())
+    else:
+        new_opts = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
+        new_opts.enable_collision = False
+        new_opts.enable_recompute_normals = False
+        new_opts.enable_recompute_tangents = True
+        mesh = _first(unreal.GeometryScript_NewAssetUtils.create_new_static_mesh_asset_from_mesh(dyn, path, new_opts))
+    if mesh is not None and material is not None and hasattr(mesh, "set_material"):
+        mesh.set_material(0, material)
+    if mesh is not None:
+        eal.save_asset(path)
+    return mesh
+
+
+def build_cloth_garment(
+    full_skm: Any,
+    garment_sm: Any,
+    kind: str,
+    folder: str,
+    base_name: str,
+    clearance_cm: float | None = None,
+    flip_orientation: bool | None = None,
+) -> dict[str, Any]:
+    """Ajusta una prenda de tela al cuerpo y crea sus mallas de render y de simulación. @spec REQ-87
+
+    La malla de render conserva vértices, UV y material de Tripo. La de simulación es la misma malla
+    soldada (las costuras de UV rasgarían la tela). ``max_distance_weights`` va en el orden de
+    vértices de la malla de simulación guardada, que es el que usa el Dataflow.
+    """
+    result: dict[str, Any] = {"success": False, "method": "tailor_cloth", "garment_kind": kind, "warnings": []}
+    if kind not in CLOTH_KINDS:
+        result["error"] = f"El ajuste de tela solo admite vestidos (dress), no «{kind}»."
+    elif not HAS_NUMPY:
+        result["error"] = "numpy no está disponible en el entorno Python de Unreal Engine (activa PythonFoundationPackages)."
+    elif full_skm is None or garment_sm is None:
+        result["error"] = "Faltan el cuerpo completo del MetaHuman o la malla de la prenda."
+    else:
+        t0 = time.time()
+        eal = unreal.EditorAssetLibrary
+        body, _ = body_model(full_skm)
+        dyn, pos, tris, nrm0 = garment_model(garment_sm)
+        new_pos, kept, info = fit_dress(pos, tris, body, clearance=resolve_clearance("top", clearance_cm), flip_orientation=flip_orientation)
+        cap = info.pop("cap_mask")
+        sleeve_w = info.pop("sleeve_w")
+        ref = np.stack([-nrm0[:, 1], nrm0[:, 0], nrm0[:, 2]], 1) if info["rot90"] else nrm0.copy()
+        ref = ref * np.array([-1.0, -1.0, 1.0]) if info["flip180"] else ref
+        normals = welded_normals(new_pos, kept, ref)
+        to_list = unreal.GeometryScript_List.convert_array_to_vector_list
+        vec = to_list([unreal.Vector(float(p[0]), float(p[1]), float(p[2])) for p in new_pos])
+        nvec = to_list([unreal.Vector(float(n[0]), float(n[1]), float(n[2])) for n in normals])
+        dyn = _first(unreal.GeometryScript_MeshEdits.set_all_mesh_vertex_positions(dyn, vec))
+        dyn = _first(unreal.GeometryScript_Normals.set_per_vertex_normals(dyn))
+        dyn = _first(unreal.GeometryScript_Normals.set_mesh_per_vertex_normals(dyn, nvec))
+        if bool(cap.any()):
+            ids = unreal.GeometryScript_List.convert_array_to_index_list(
+                [int(i) for i in np.nonzero(cap)[0]],
+                unreal.GeometryScriptIndexType.TRIANGLE,
+            )
+            dyn = _first(unreal.GeometryScript_MeshEdits.delete_triangles_from_mesh(dyn, ids))
+        dyn = _first(unreal.GeometryScript_MeshRepair.compact_mesh(dyn))
+        if not eal.does_directory_exist(folder):
+            eal.make_directory(folder)
+        static_mats = getattr(garment_sm, "static_materials", None)
+        material = static_mats[0].material_interface if static_mats else None
+        render_path = f"{folder.rstrip('/')}/SM_{base_name}_Render"
+        sim_path = f"{folder.rstrip('/')}/SM_{base_name}_Sim"
+        render_sm = _write_static_mesh(dyn, render_path, material)
+        dyn = _first(unreal.GeometryScript_MeshRepair.weld_mesh_edges(dyn, unreal.GeometryScriptWeldEdgesOptions()))
+        dyn = _first(unreal.GeometryScript_MeshRepair.compact_mesh(dyn))
+        sim_sm = _write_static_mesh(dyn, sim_path, None)
+        if render_sm is None or sim_sm is None:
+            result["error"] = f"GeometryScript no pudo crear las mallas de la prenda en {folder}."
+        else:
+            fit.apply_two_sided_materials(render_sm)
+            _, sim_pos, sim_tris, _ = garment_model(sim_sm)
+            used = np.zeros(len(new_pos), dtype=bool)
+            used[kept.ravel()] = True
+            src = np.nonzero(used)[0]
+            near, _ = nearest(sim_pos, new_pos[src])
+            weights = cloth_free_weights(sim_pos, sleeve_w[src][near], info["pin_z"], info["free_z"])
+            info["sim_vertices"] = int(len(sim_pos))
+            info["sim_triangles"] = int(len(sim_tris))
+            info["pinned_pct"] = round(float((weights < 0.02).mean() * 100.0), 1)
+            info["seconds"] = round(time.time() - t0, 1)
+            result.update(
+                {
+                    "success": True,
+                    "render_sm_path": render_path,
+                    "sim_sm_path": sim_path,
+                    "material_path": material.get_path_name().split(".")[0] if material is not None else None,
+                    "max_distance_weights": [round(float(w), 4) for w in weights],
+                    "max_distance_cm": CLOTH_MAX_DISTANCE_CM,
+                    "fit_info": info,
                 }
             )
     return result

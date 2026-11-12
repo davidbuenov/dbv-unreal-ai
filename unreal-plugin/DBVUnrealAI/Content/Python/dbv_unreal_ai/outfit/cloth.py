@@ -32,6 +32,10 @@ DEFAULT_TEMPLATE_CA = "/DBVUnrealAI/Cloth/CA_Template"
 #: Plantilla predeterminada de Dataflow en el plugin DBVUnrealAI.
 DEFAULT_TEMPLATE_DF = "/DBVUnrealAI/Cloth/DF_Template"
 
+#: Nodos de la plantilla que pintan y aplican la sujeción de la tela al cuerpo.
+MAX_DISTANCE_MAP_NODE = "MaxDistMap"
+MAX_DISTANCE_NODE = "MaxDist"
+
 #: Rutas alternativas de respaldo si las plantillas del spike se reubicaran en el proyecto.
 FALLBACK_TEMPLATE_CA = "/Game/DBV/MetaHumanOutfits/_spike/CA_Template"
 FALLBACK_TEMPLATE_DF = "/Game/DBV/MetaHumanOutfits/_spike/DF_Template"
@@ -142,9 +146,14 @@ def create_cloth_asset_and_dataflow(
     physics_asset_path: str,
     template_ca: str = DEFAULT_TEMPLATE_CA,
     template_df: str = DEFAULT_TEMPLATE_DF,
+    max_distance_weights: list[float] | None = None,
+    max_distance_cm: float | None = None,
 ) -> dict[str, Any]:
     """Crea un ChaosClothAsset y su Dataflow procedimental a partir de plantillas limpias.
 
+    ``max_distance_weights`` (``0`` sujeto al cuerpo, ``1`` suelto) va por vértice de la malla de
+    simulación y sustituye al mapa de la plantilla, pintado para otra malla: sin él la tela no queda
+    sujeta donde debe. ``max_distance_cm`` es el recorrido de la parte suelta.
     @spec REQ-87
     """
     res: dict[str, Any] = {
@@ -226,16 +235,26 @@ def create_cloth_asset_and_dataflow(
                     lib_ed.set_dataflow_node_property(df, "Import", "StaticMesh", sim_sm_path)
                     lib_ed.set_dataflow_node_property(df, "Transfer", "SkeletalMesh", skeletal_mesh_path)
                     lib_ed.set_dataflow_node_property(df, "Physics", "PhysicsAsset", physics_asset_path)
+                    map_ok = True
+                    if max_distance_weights is not None:
+                        weights_text = "(" + ",".join(f"{float(w):.4f}" for w in max_distance_weights) + ")"
+                        map_ok = bool(lib_ed.set_dataflow_node_property(df, MAX_DISTANCE_MAP_NODE, "VertexWeights", weights_text))
+                    if map_ok and max_distance_cm is not None:
+                        range_text = f"(Low=0.0,High={float(max_distance_cm):.2f})"
+                        map_ok = bool(lib_ed.set_dataflow_node_property(df, MAX_DISTANCE_NODE, "MaxDistance", range_text))
 
-                    lib_df.evaluate_terminal_node_by_name(df, "Terminal", ca)
-                    lib_df.evaluate_dataflow(df, ca)
+                    if not map_ok:
+                        res["error"] = "El Dataflow de la plantilla no admite el mapa de MaxDistance: la tela quedaría sin sujetar."
+                    else:
+                        lib_df.evaluate_terminal_node_by_name(df, "Terminal", ca)
+                        lib_df.evaluate_dataflow(df, ca)
 
-                    eal.save_asset(target_df)
-                    eal.save_asset(target_ca)
+                        eal.save_asset(target_df)
+                        eal.save_asset(target_ca)
 
-                    res["success"] = True
-                    res["cloth_asset"] = target_ca
-                    res["dataflow_asset"] = target_df
+                        res["success"] = True
+                        res["cloth_asset"] = target_ca
+                        res["dataflow_asset"] = target_df
                 except Exception as exc:
                     res["error"] = f"Excepción configurando Dataflow: {exc}"
 
@@ -318,10 +337,11 @@ def setup_cloth_component_in_blueprint(
                 if res["error"] is None and cloth_comp_obj is not None:
                     if hasattr(cloth_comp_obj, "set_editor_property"):
                         cloth_comp_obj.set_editor_property("asset", cloth_asset)
-                    if material_path and eal.does_asset_exist(material_path):
-                        mat = eal.load_asset(material_path)
-                        if hasattr(cloth_comp_obj, "set_material"):
-                            cloth_comp_obj.set_material(0, mat)
+                    # Un componente reutilizado conserva el material de la prenda anterior (un vestido azul
+                    # salía burdeos): sin material pedido se vacían los sustitutos y manda el Cloth Asset.
+                    mat = eal.load_asset(material_path) if material_path and eal.does_asset_exist(material_path) else None
+                    if hasattr(cloth_comp_obj, "set_editor_property"):
+                        cloth_comp_obj.set_editor_property("override_materials", [mat] if mat is not None else [])
 
                     # Enlazar LeaderPoseComponent en EventBeginPlay mediante BlueprintTools DSL
                     leader_bound = False
@@ -380,6 +400,8 @@ def setup_cloth_for_character(
     target_triangles: int = 1500,
     slot_name: str = "SkirtCloth",
     dest_folder: str | None = None,
+    max_distance_weights: list[float] | None = None,
+    max_distance_cm: float | None = None,
 ) -> dict[str, Any]:
     """Orquestador de la tela: malla de simulación, Dataflow, Cloth Asset y componente en el Blueprint.
 
@@ -431,6 +453,8 @@ def setup_cloth_for_character(
                 sim_sm_path=active_sim_sm,
                 skeletal_mesh_path=clean_skel,
                 physics_asset_path=clean_phys,
+                max_distance_weights=max_distance_weights,
+                max_distance_cm=max_distance_cm,
             )
             if not ca_res["success"]:
                 res["error"] = ca_res["error"]

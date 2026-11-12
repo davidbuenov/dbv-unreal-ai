@@ -146,11 +146,44 @@ def _full_body_for(body_skm: Any, actor: Any) -> tuple[Any, str]:
     return (full_skm, reason)
 
 
+def cloth_clearance_report(garment_kind: str, cloth_fit: dict[str, Any]) -> dict[str, Any]:
+    """Informe de holgura de una prenda de tela a partir de las distancias que midió su ajuste.
+
+    El ajuste (``tailor.fit_dress``) mide la distancia con signo de cada vértice de la prenda al cuerpo
+    completo en la misma pose; aquí solo se le da el formato y la nota de las demás prendas. La piel
+    destapada no se mide en tela: un vestido deja al aire escote, brazos o piernas a propósito.
+    @spec REQ-89
+    """
+    from . import clearance
+
+    stats: dict[str, Any] = {
+        "measured_vertices": int(cloth_fit.get("vertices", 0)),
+        "over_hidden_skin_vertices": 0,
+        "min_cm": cloth_fit.get("min_cm"),
+        "median_cm": cloth_fit.get("median_cm"),
+        "p95_cm": cloth_fit.get("p95_cm"),
+        "inside_pct": float(cloth_fit.get("inside_pct", 0.0)),
+    }
+    result, warnings = clearance.grade(stats, None)
+    report: dict[str, Any] = {
+        "result": result,
+        "ok": result == "ok",
+        "method": "signed_distance",
+        "garment_kind": garment_kind,
+        "clearance": stats,
+        "bare_skin": None,
+        "warnings": warnings,
+        "zone_source": "cloth_fit",
+    }
+    return report
+
+
 def measure_body_clearance(
     actor_or_label: Any,
     garment_kind: str,
     body_trimmed: bool = False,
     zone: list[Any] | None = None,
+    cloth_fit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Holgura real de la prenda de una ranura: distancia con signo contra el cuerpo completo.
 
@@ -173,6 +206,8 @@ def measure_body_clearance(
         res = _clearance_error(garment_kind, "solo se puede medir dentro del editor de Unreal.")
     elif actor is None:
         res = _clearance_error(garment_kind, f"no se encuentra el actor «{actor_or_label}» en el nivel.")
+    elif slot is None and cloth_fit:
+        res = cloth_clearance_report(garment_kind, cloth_fit)
     elif slot is None:
         res = _clearance_error(
             garment_kind, f"la holgura de una prenda de tela ({garment_kind}) aún no se mide vértice a vértice."
@@ -233,7 +268,11 @@ def check_cloth_linkage(actor_or_label: Any, garment_kind: str) -> dict[str, Any
                             # Enlace persistido en EventBeginPlay o componente
                             leader_linked = True
 
-                        if hasattr(comp, "get_physics_asset") and comp.get_physics_asset() is not None:
+                        # La colisión de la tela con el cuerpo vive en el Cloth Asset, no en el componente.
+                        cloth_asset = comp.get_asset() if hasattr(comp, "get_asset") else None
+                        if cloth_asset is not None and cloth_asset.get_editor_property("physics_asset") is not None:
+                            physics_asset_ok = True
+                        elif hasattr(comp, "get_physics_asset") and comp.get_physics_asset() is not None:
                             physics_asset_ok = True
                         else:
                             # Verificar si Body tiene physics asset asignado
@@ -305,6 +344,32 @@ def _captures_dir(actor_label: str, output_dir: str | None) -> str:
     return os.path.abspath(chosen or os.path.join("Saved", "DBVUnrealAI", "outfits", "captures", actor_label))
 
 
+def _refresh_skinned_pose(actor: Any) -> int:
+    """Obliga a las mallas con huesos del actor a calcular su pose antes de una captura.
+
+    Un actor recién sustituido o con el Blueprint recién compilado no tiene pose hasta que el editor
+    lo dibuja y pasa un fotograma: una captura hecha en la misma llamada lo saca colapsado en el
+    suelo. Volver a asignar la misma malla la recalcula en el acto y no cambia nada del actor.
+    @spec REQ-89
+    """
+    refreshed = 0
+    skel_cls = getattr(unreal, "SkeletalMeshComponent", None) if HAS_UNREAL else None
+    cloth_cls = getattr(unreal, "ChaosClothComponent", None) if HAS_UNREAL else None
+    for comp in actor.get_components_by_class(skel_cls) if skel_cls is not None else []:
+        mesh = comp.get_skeletal_mesh_asset()
+        if mesh is not None and hasattr(comp, "set_skinned_asset_and_update"):
+            comp.set_skinned_asset_and_update(None, True)
+            comp.set_skinned_asset_and_update(mesh, True)
+            refreshed += 1
+    for comp in actor.get_components_by_class(cloth_cls) if cloth_cls is not None else []:
+        asset = comp.get_asset()
+        if asset is not None:
+            comp.set_asset(None)
+            comp.set_asset(asset)
+            refreshed += 1
+    return refreshed
+
+
 def capture_three_angles(
     actor_label: str,
     output_dir: str | None = None,
@@ -328,6 +393,7 @@ def capture_three_angles(
         errors.append(f"No se encuentra el actor «{actor_label}» en el nivel.")
     else:
         _ensure_dir(dest_dir)
+        _refresh_skinned_pose(actor)
         actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
         target = actor.get_actor_location()
@@ -422,6 +488,7 @@ def validate_outfit(
     capture_angles: bool = True,
     output_dir: str | None = None,
     zone: list[Any] | None = None,
+    cloth_fit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Orquesta la validación completa de una prenda equipada y genera su informe.
 
@@ -441,7 +508,7 @@ def validate_outfit(
             has_fatal_error = True
 
     # 2. Medición de holgura y penetraciones
-    clearance_res = measure_body_clearance(actor_label, garment_kind, body_trimmed=body_trimmed, zone=zone)
+    clearance_res = measure_body_clearance(actor_label, garment_kind, body_trimmed=body_trimmed, zone=zone, cloth_fit=cloth_fit)
     steps_executed.append("clearance_measurement")
     all_warnings.extend(clearance_res.get("warnings", []))
     if clearance_res.get("result") == "error":

@@ -383,6 +383,8 @@ class TestOutfitPipeline(unittest.TestCase):
         mock_actor = MagicMock()
         mock_actor.get_actor_label.return_value = "BP_Victoria"
         prep = {"success": True, "reused": False, "copy_bp_path": "/Game/DBV/BP_Victoria_DBV", "original_bp_path": "/Game/BP_Victoria"}
+        # El ajuste del vestido (tailor) necesita el motor: se simula solo él y la tela sigue siendo la real.
+        fitted = {"success": True, "render_sm_path": "/Game/DBV/Generated/SM_Prenda", "sim_sm_path": None, "max_distance_weights": [0.0, 1.0], "max_distance_cm": 9.0, "fit_info": {}}
 
         for kind in ("skirt", "dress"):
             with (
@@ -391,6 +393,7 @@ class TestOutfitPipeline(unittest.TestCase):
                 patch.object(pipeline.character, "find_sequence_warnings", return_value=[]),
                 patch.object(pipeline.character, "apply_slot_rules", return_value={"success": True}),
                 patch.object(pipeline, "_cloth_body_assets", return_value=("/Game/MH/f_med_nrw_body", "/Game/MH/f_med_nrw_body_Physics")),
+                patch.object(pipeline.tailor, "build_cloth_garment", return_value=fitted),
                 patch.object(pipeline.cloth, "setup_cloth_for_character", wraps=pipeline.cloth.setup_cloth_for_character) as spy,
             ):
                 job_id = self._run_until_fit(kind, source="/Game/DBV/Generated/SM_Prenda.SM_Prenda")
@@ -403,6 +406,8 @@ class TestOutfitPipeline(unittest.TestCase):
             self.assertEqual(kwargs["skeletal_mesh_path"], "/Game/MH/f_med_nrw_body")
             self.assertEqual(kwargs["physics_asset_path"], "/Game/MH/f_med_nrw_body_Physics")
             self.assertEqual(kwargs["dest_folder"], f"/Game/DBV/MetaHumanOutfits/{kind.capitalize()}_BP_Victoria")
+            # Solo el vestido pasa por el ajuste y lleva su mapa de sujeción; la falda aún no.
+            self.assertEqual(kwargs["max_distance_weights"], [0.0, 1.0] if kind == "dress" else None)
             pipeline._ACTIVE_JOB_ID = None
 
     def test_paso_de_tela_importa_el_fichero_y_exige_malla_estatica(self) -> None:

@@ -32,6 +32,7 @@ from . import character
 from . import cloth
 from . import fit
 from . import skin  # noqa: F401 — el paso prepare_skin está pendiente de decisión (ver dress_metahuman_step)
+from . import tailor
 from . import validate
 
 #: Tipos de prenda admitidos según REQ-84.
@@ -194,6 +195,29 @@ def _resolve_cloth_render_mesh(source: str, dest_folder: str, asset_name: str) -
     return (render_sm, err)
 
 
+def _fit_cloth_garment(
+    kind: str,
+    render_sm: str,
+    body_skm_path: str | None,
+    folder: str,
+    asset_name: str,
+    flip_orientation: bool | None = None,
+) -> dict[str, Any]:
+    """Ajusta la prenda de tela al cuerpo antes de montar la simulación. @spec REQ-87
+
+    Un vestido de Tripo llega en una caja de 1 m centrada en el origen, cerrado como un sólido: sin
+    ajustarlo queda hecho un bulto a los pies del personaje. Las faldas aún no tienen ajuste propio en
+    el pipeline y pasan tal cual, con aviso.
+    """
+    fitted: dict[str, Any] = {"success": True, "render_sm_path": render_sm, "fit_info": None}
+    if kind in tailor.CLOTH_KINDS:
+        eal = getattr(unreal, "EditorAssetLibrary", None) if HAS_UNREAL else None
+        full_skm = eal.load_asset(body_skm_path) if eal is not None and body_skm_path else None
+        garment_sm = eal.load_asset(render_sm) if eal is not None else None
+        fitted = tailor.build_cloth_garment(full_skm, garment_sm, kind, folder, asset_name, flip_orientation=flip_orientation)
+    return fitted
+
+
 def _restore_slot_meshes(actor: Any, slots: dict[str, Any]) -> list[str]:
     """Devuelve a las ranuras de ropa las mallas que tenían antes del trabajo. @spec REQ-85"""
     restored: list[str] = []
@@ -273,6 +297,7 @@ def dress_metahuman_start(
     scale_multiplier: float = 1.05,
     z_offset: float = 0.0,
     force: bool = False,
+    flip_orientation: bool | None = None,
 ) -> dict[str, Any]:
     """Inicia un nuevo trabajo de vestimenta determinista (REQ-88, D59, D65)."""
     global _ACTIVE_JOB_ID  # noqa: PLW0603
@@ -358,6 +383,7 @@ def dress_metahuman_start(
                 "asset_name": asset_name or f"{clean_kind.capitalize()}_{clean_label}",
                 "scale_multiplier": float(scale_multiplier),
                 "z_offset": float(z_offset),
+                "flip_orientation": bool(flip_orientation) if flip_orientation is not None else None,
                 "method": method,
                 "build": build,
                 "step_index": 0,
@@ -505,19 +531,32 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
                     cloth_res: dict[str, Any] = {"success": False, "error": cloth_err}
                     if render_sm:
                         body_skm_path, body_phys_path = _cloth_body_assets(_find_level_actor(actor_label))
-                        cloth_res = cloth.setup_cloth_for_character(
-                            actor_or_bp_path=bp_path,
-                            garment_kind=kind,
-                            garment_name=asset_name,
-                            render_sm_path=render_sm,
-                            skeletal_mesh_path=body_skm_path,
-                            physics_asset_path=body_phys_path,
-                            dest_folder=garment_folder,
-                            target_triangles=1500,
-                        )
+                        fitted = _fit_cloth_garment(kind, render_sm, body_skm_path, garment_folder, asset_name, job_data.get("flip_orientation"))
+                        cloth_res = {"success": False, "error": fitted.get("error")}
+                        if fitted.get("success"):
+                            ctx["cloth_fit"] = fitted.get("fit_info")
+                            cloth_res = cloth.setup_cloth_for_character(
+                                actor_or_bp_path=bp_path,
+                                garment_kind=kind,
+                                garment_name=asset_name,
+                                render_sm_path=fitted.get("render_sm_path") or render_sm,
+                                skeletal_mesh_path=body_skm_path,
+                                physics_asset_path=body_phys_path,
+                                material_path=fitted.get("material_path"),
+                                sim_sm_path=fitted.get("sim_sm_path"),
+                                dest_folder=garment_folder,
+                                target_triangles=1500,
+                                max_distance_weights=fitted.get("max_distance_weights"),
+                                max_distance_cm=fitted.get("max_distance_cm"),
+                            )
                     if not cloth_res.get("success"):
                         step_err = cloth_res.get("error", "Failed to setup Chaos Cloth.")
                     else:
+                        # Compilar el Blueprint reconstruye el actor y devuelve a las ranuras la ropa que
+                        # el paso apply_slot_rules había retirado: se retira otra vez (REQ-84).
+                        dressed = _find_level_actor(actor_label)
+                        if dressed is not None:
+                            character.apply_slot_rules(dressed, kind, ctx.get("slots_before") or None)
                         ctx["cloth_asset"] = cloth_res.get("cloth_asset")
                         ctx["sim_sm_path"] = cloth_res.get("sim_sm_path")
                         step_msg = f"Chaos Cloth successfully configured: {ctx['cloth_asset']}"
@@ -560,6 +599,7 @@ def dress_metahuman_step(job_id: str) -> dict[str, Any]:
                     body_trimmed=ctx.get("body_trimmed", False),
                     run_pie=False,
                     capture_angles=True,
+                    cloth_fit=ctx.get("cloth_fit"),
                 )
                 if val_res.get("warnings"):
                     job_data["warnings"].extend(val_res["warnings"])
@@ -653,6 +693,7 @@ def dress_metahuman(
     scale_multiplier: float = 1.05,
     z_offset: float = 0.0,
     force: bool = False,
+    flip_orientation: bool | None = None,
 ) -> str:
     """Ejecutor síncrono del pipeline completo de vestimenta para MetaHumans (REQ-88)."""
     start_res = dress_metahuman_start(
@@ -665,6 +706,7 @@ def dress_metahuman(
         scale_multiplier=scale_multiplier,
         z_offset=z_offset,
         force=force,
+        flip_orientation=flip_orientation,
     )
 
     outcome: dict[str, Any] = {"success": False}

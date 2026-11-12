@@ -121,6 +121,7 @@ def dress_metahuman(
     scale_multiplier: str = "",
     z_offset: str = "",
     force: str = "",
+    flip_orientation: str = "",
 ) -> str:
     """Ver ``editor.dress_metahuman``."""
     return editor.dress_metahuman(
@@ -133,6 +134,7 @@ def dress_metahuman(
         scale_multiplier=float(_text(scale_multiplier) or "1.05") if scale_multiplier else 1.05,
         z_offset=float(_text(z_offset) or "0.0") if z_offset else 0.0,
         force=_text(force).lower() in ("true", "1", "yes") if force else False,
+        flip_orientation=_text(flip_orientation).lower() in ("true", "1", "yes") if flip_orientation else None,
     )
 
 
@@ -146,6 +148,7 @@ def dress_metahuman_start(
     scale_multiplier: str = "",
     z_offset: str = "",
     force: str = "",
+    flip_orientation: str = "",
 ) -> str:
     """Ver ``editor.dress_metahuman_start``."""
     return editor.dress_metahuman_start(
@@ -158,6 +161,7 @@ def dress_metahuman_start(
         scale_multiplier=float(_text(scale_multiplier) or "1.05") if scale_multiplier else 1.05,
         z_offset=float(_text(z_offset) or "0.0") if z_offset else 0.0,
         force=_text(force).lower() in ("true", "1", "yes") if force else False,
+        flip_orientation=_text(flip_orientation).lower() in ("true", "1", "yes") if flip_orientation else None,
     )
 
 

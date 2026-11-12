@@ -550,6 +550,7 @@ def dress_metahuman(
     scale_multiplier: float = 1.05,
     z_offset: float = 0.0,
     force: bool = False,
+    flip_orientation: bool | None = None,
 ) -> str:
     """Ejecuta el pipeline unificado y determinista para vestir un MetaHuman. @spec REQ-88"""
     return outfit.dress_metahuman(
@@ -562,6 +563,7 @@ def dress_metahuman(
         scale_multiplier=scale_multiplier,
         z_offset=z_offset,
         force=force,
+        flip_orientation=flip_orientation,
     )
 
 
@@ -575,6 +577,7 @@ def dress_metahuman_start(
     scale_multiplier: float = 1.05,
     z_offset: float = 0.0,
     force: bool = False,
+    flip_orientation: bool | None = None,
 ) -> str:
     """Inicia el trabajo de vestimenta por pasos. @spec REQ-88, D59"""
     return _json(
@@ -588,6 +591,7 @@ def dress_metahuman_start(
             scale_multiplier=scale_multiplier,
             z_offset=z_offset,
             force=force,
+            flip_orientation=flip_orientation,
         )
     )
 

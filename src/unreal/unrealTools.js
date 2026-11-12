@@ -390,12 +390,13 @@ export function createUnrealTools(deps) {
         garment_cut: { type: 'string', enum: ['male', 'female', 'neutral'], description: 'Garment cut to match body build (optional).' },
         scale_multiplier: { type: 'number', description: 'Scale margin over the target body slot (default 1.05).' },
         z_offset: { type: 'number', description: 'Vertical offset in cm (default 0.0).' },
+        flip_orientation: { type: 'boolean', description: 'Dresses only: turn the garment 180 degrees. Use it on a retry when the captures show the dress back to front (default false).' },
         purpose: { type: 'string', description: 'One sentence for the user: what garment is being equipped and on whom.' },
       },
       ['actor_label', 'source'],
     ),
     label: (args) => `Unreal: dress ${args.garment_kind ?? 'top'}${args.actor_label ? ` → ${args.actor_label}` : ''}`,
-    run: async ({ actor_label: actorLabel = '', source = '', garment_kind: garmentKind = 'top', garment_cut: garmentCut = null, scale_multiplier: scaleMultiplier = 1.05, z_offset: zOffset = 0, purpose = '' }) => {
+    run: async ({ actor_label: actorLabel = '', source = '', garment_kind: garmentKind = 'top', garment_cut: garmentCut = null, scale_multiplier: scaleMultiplier = 1.05, z_offset: zOffset = 0, flip_orientation: flipOrientation = false, purpose = '' }) => {
       const dbv = await dbvToolset();
       if (!dbv) return 'error: the DBV Unreal AI toolset is not installed in this project.';
       // REQ-83: sin destino no se pide permiso ni se ejecuta nada; la IA debe elegir (o preguntar) primero.
@@ -407,6 +408,7 @@ export function createUnrealTools(deps) {
         garment_cut: garmentCut ? String(garmentCut) : null,
         scale_multiplier: Number(scaleMultiplier) || 1.05,
         z_offset: Number(zOffset) || 0,
+        flip_orientation: flipOrientation === true,
       };
       if (!(await approved({ kind: 'tool', toolset: dbv, tool: 'dress_metahuman', args: safeArgs, purpose }))) {
         return 'The user DENIED this action. It was not executed.';
@@ -418,8 +420,9 @@ export function createUnrealTools(deps) {
         garment_cut: safeArgs.garment_cut,
         scale_multiplier: safeArgs.scale_multiplier,
         z_offset: safeArgs.z_offset,
+        flip_orientation: safeArgs.flip_orientation,
       });
-      const code = `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.dress_metahuman(actor_label=_p["actor_label"], garment_source=_p["garment_source"], garment_kind=_p.get("garment_kind", "top"), garment_cut=_p.get("garment_cut"), scale_multiplier=float(_p.get("scale_multiplier", 1.05)), z_offset=float(_p.get("z_offset", 0.0)))\n`;
+      const code = `import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex("${hex}").decode("utf-8"))\nresult = _e.dress_metahuman(actor_label=_p["actor_label"], garment_source=_p["garment_source"], garment_kind=_p.get("garment_kind", "top"), garment_cut=_p.get("garment_cut"), scale_multiplier=float(_p.get("scale_multiplier", 1.05)), z_offset=float(_p.get("z_offset", 0.0)), flip_orientation=bool(_p.get("flip_orientation", False)))\n`;
       const ran = await invoke(dbv, 'run_python', { code }, 'modify', PYTHON_TIMEOUT_SECS);
       const val = valueOf(ran);
       return clip(JSON.stringify(val?.result ?? val));

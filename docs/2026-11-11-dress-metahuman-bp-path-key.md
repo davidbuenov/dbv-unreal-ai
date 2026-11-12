@@ -145,6 +145,6 @@ Sin hacer: los tres assets sueltos de este intento (`SM_Dress_…_Sim`, `DF_Dres
 la raíz) siguen en el proyecto y se pueden borrar a mano; la carpeta `model/` la crea
 `library_send_to_unreal` a partir del nombre del fichero, no este pipeline.
 
-Cubierto por tests; falta repetir la reproducción en el editor con el plugin sincronizado.
+Cubierto por tests. **Reproducido en el editor el 2026-11-12, resuelto:** con el plugin sincronizado, `unreal_dress_metahuman` termina los 5 pasos sobre `Victoria_VestidoAzul` con validación `ok`. Para eso hizo falta, además, ajustar el vestido al cuerpo antes de la tela (llegaba como un bulto a los pies), escribir su mapa de `MaxDistance`, medir de verdad la holgura de las prendas de tela y corregir material, ranuras y capturas. Detalle en `CHANGELOG.md` y en la lección del 2026-11-12 de `memory.md`.
 
 Sugerencia original: si `fit_and_equip` falla, borrar o reutilizar los assets `SM_*_Sim`, `DF_*` y `CA_*` creados. Así los reintentos no acumulan restos ni chocan con nombres que ya existen.

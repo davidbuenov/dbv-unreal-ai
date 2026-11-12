@@ -259,6 +259,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
         scale_multiplier: float = 1.05,
         z_offset: float = 0.0,
         force: bool = False,
+        flip_orientation: bool = False,
     ) -> str:
         """Dress a MetaHuman with a garment using the deterministic pipeline (creates copy, applies slot rules, cleans skin, fits bones/cloth).
 
@@ -272,6 +273,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             scale_multiplier: Slight inflation factor (default 1.05).
             z_offset: Vertical offset in cm (default 0.0).
             force: Force restart if another job was in progress.
+            flip_orientation: Turn a dress 180 degrees when its front was detected backwards (default False).
 
         Returns:
             JSON with success, actor, blueprint, garment_kind, method, rigged_asset or cloth_asset.
@@ -286,6 +288,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             scale_multiplier=scale_multiplier,
             z_offset=z_offset,
             force=force,
+            flip_orientation=flip_orientation,
         )
 
     @toolset_registry.tool_call
@@ -300,6 +303,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
         scale_multiplier: float = 1.05,
         z_offset: float = 0.0,
         force: bool = False,
+        flip_orientation: bool = False,
     ) -> str:
         """Start a step-by-step MetaHuman outfit dressing job.
 
@@ -313,6 +317,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             scale_multiplier: Inflation factor (default 1.05).
             z_offset: Vertical offset in cm.
             force: Force restart if previous job was active.
+            flip_orientation: Turn a dress 180 degrees when its front was detected backwards (default False).
 
         Returns:
             JSON with success, job_id, current_step, warnings.
@@ -327,6 +332,7 @@ class DBVUnrealAIToolset(unreal.ToolsetDefinition):
             scale_multiplier=scale_multiplier,
             z_offset=z_offset,
             force=force,
+            flip_orientation=flip_orientation,
         )
 
     @toolset_registry.tool_call

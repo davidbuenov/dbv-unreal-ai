@@ -268,7 +268,8 @@ pub fn tool_specs() -> Vec<Value> {
                 "garment_kind": { "type": "string", "enum": ["top", "pants", "skirt", "dress", "shoes"], "description": "Garment kind (default: top, or from library asset)." },
                 "garment_cut": { "type": "string", "enum": ["male", "female", "neutral"], "description": "Garment cut to match body build (optional)." },
                 "scale_multiplier": { "type": "number", "description": "Scale margin over target body (default 1.05)." },
-                "z_offset": { "type": "number", "description": "Vertical offset in cm (default 0.0)." }
+                "z_offset": { "type": "number", "description": "Vertical offset in cm (default 0.0)." },
+                "flip_orientation": { "type": "boolean", "description": "Dresses only: turn the garment 180 degrees. Use it on a retry when the captures show the dress back to front (default false)." }
             }),
             json!(["actor_label", "source"]),
         ),
@@ -1373,6 +1374,7 @@ impl McpServer {
         garment_cut: Option<&str>,
         scale_multiplier: f64,
         z_offset: f64,
+        flip_orientation: bool,
     ) -> String {
         let hex = Self::hex_json(&json!({
             "actor_label": actor_label,
@@ -1381,9 +1383,10 @@ impl McpServer {
             "garment_cut": garment_cut,
             "scale_multiplier": scale_multiplier,
             "z_offset": z_offset,
+            "flip_orientation": flip_orientation,
         }));
         format!(
-            "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode(\"utf-8\"))\nresult = _e.dress_metahuman(actor_label=_p[\"actor_label\"], garment_source=_p[\"garment_source\"], garment_kind=_p.get(\"garment_kind\", \"top\"), garment_cut=_p.get(\"garment_cut\"), scale_multiplier=float(_p.get(\"scale_multiplier\", 1.05)), z_offset=float(_p.get(\"z_offset\", 0.0)))\n"
+            "import json\nimport dbv_unreal_ai.editor as _e\n_p = json.loads(bytes.fromhex(\"{hex}\").decode(\"utf-8\"))\nresult = _e.dress_metahuman(actor_label=_p[\"actor_label\"], garment_source=_p[\"garment_source\"], garment_kind=_p.get(\"garment_kind\", \"top\"), garment_cut=_p.get(\"garment_cut\"), scale_multiplier=float(_p.get(\"scale_multiplier\", 1.05)), z_offset=float(_p.get(\"z_offset\", 0.0)), flip_orientation=bool(_p.get(\"flip_orientation\", False)))\n"
         )
     }
 
@@ -1475,6 +1478,11 @@ impl McpServer {
             .unwrap_or(0.0)
             .clamp(-200.0, 200.0);
 
+        let flip_orientation = args
+            .get("flip_orientation")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
         let ran = self.run_fixed(&Self::dress_metahuman_code(
             actor_label,
             &garment_source,
@@ -1482,6 +1490,7 @@ impl McpServer {
             cut,
             scale_multiplier,
             z_offset,
+            flip_orientation,
         ))?;
         let res = ran.get("result").cloned().unwrap_or(Value::Null);
         if ran.get("success") == Some(&json!(true)) && res.get("success") != Some(&json!(false)) {
