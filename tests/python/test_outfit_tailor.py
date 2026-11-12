@@ -22,7 +22,10 @@ _user_site = site.getusersitepackages()
 if os.path.isdir(_user_site) and _user_site not in sys.path:
     sys.path.append(_user_site)
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:  # el CI no instala numpy (en Unreal lo trae PythonFoundationPackages): se saltan
+    np = None  # type: ignore[assignment]
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "unreal-plugin" / "DBVUnrealAI" / "Content" / "Python"))
 
@@ -78,6 +81,7 @@ def _make_synthetic_body() -> tailor.Body:
     return tailor.Body({"pos": pos, "tris": tris, "names": bone_names, "wi": b_idx, "ww": b_w, "bpos": bpos})
 
 
+@unittest.skipIf(np is None, "numpy no está disponible")
 class TestTailorPure(unittest.TestCase):
     """Pruebas unitarias puras del sastre (REQ-81, REQ-98)."""
 
