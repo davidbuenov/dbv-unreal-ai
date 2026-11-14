@@ -148,6 +148,23 @@ export function createSettingsView(host, deps) {
         ),
       )
       : null;
+    // REQ-114: con qué se cargan los splats. El nuestro, por defecto, no pide nada; el de Epic (UE 5.9) necesita su plugin.
+    const splatRenderer = el(
+      'select',
+      { attrs: { 'aria-label': t('settings.splatRenderer') } },
+      ...['dbv', 'epic'].map((id) => el('option', { attrs: { value: id, ...(status.ok && status.value.splatRenderer === id ? { selected: '' } : {}) }, text: t(`settings.splatRenderer.${id}`) })),
+    );
+    splatRenderer.addEventListener('change', async () => {
+      const saved = await api.generationSetSplatRenderer(splatRenderer.value);
+      deps.toast(saved.ok ? t(splatRenderer.value === 'epic' ? 'settings.splatRendererEpicSaved' : 'settings.splatRendererSaved') : saved.error.message, saved.ok ? 'info' : 'error');
+    });
+    const splatCard = el(
+      'div',
+      { className: 'card stack' },
+      el('h3', { text: t('settings.splats') }),
+      el('label', {}, t('settings.splatRenderer'), splatRenderer),
+      el('p', { className: 'hint', text: t('settings.splatRendererHint') }),
+    );
     const convai = await convaiSettingsCard({ toast: deps.toast });
     // REQ-25: la copia local de las guías de Unreal (formato de MCPCLiente); la app no descarga nada de Epic.
     const listed = await api.guidesStatus();
@@ -244,7 +261,7 @@ export function createSettingsView(host, deps) {
         })),
       ),
       convai,
-      library: libraryCard,
+      library: el('div', { className: 'stack' }, libraryCard, splatCard),
       knowledge,
       mcp: el('div', { className: 'card stack' }, el('h3', { text: t('settings.mcp') }), el('p', { className: 'hint', text: t('settings.mcpHint') }), command.ok ? el('pre', { className: 'diff', text: mcpClientConfig(command.value) }) : null),
       diagnostics: el(

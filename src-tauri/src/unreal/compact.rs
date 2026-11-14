@@ -25,18 +25,34 @@ const SUMMARY_LIMIT: usize = 160;
 
 /// Caracteres como mucho de la descripción de cada toolset en `unreal_list_toolsets`. UE 5.9 tiene 139 toolsets y,
 /// con la primera línea entera, la lista ocupaba 15.897 caracteres, por encima de `RESULT_LIMIT`; con 40 se queda en
-/// ~10.800 y sigue diciendo para qué es cada uno. El mismo valor que en `unrealTools.js`. @spec REQ-51, REQ-112
+/// ~10.800 y sigue diciendo para qué es cada uno. Es el máximo: si hay más toolsets (con Unreal Canvas y GaussianSplat
+/// activos, el 2026-11-14, eran 154 y la lista llegaba a 12.087), `list_summary_limit` lo baja lo justo para que quepa.
+/// El mismo valor que en `unrealTools.js`. @spec REQ-51, REQ-112, REQ-113
 pub const LIST_SUMMARY_LIMIT: usize = 40;
+
+/// Lo menos que se deja de descripción a cada toolset cuando hay que acortarlas: por debajo ya no dice nada.
+pub const LIST_SUMMARY_MIN: usize = 12;
+
+/// Tope de la descripción de cada toolset para que la lista entera quepa en `RESULT_LIMIT`: `LIST_SUMMARY_LIMIT` si
+/// cabe, menos si no (como poco `LIST_SUMMARY_MIN`). Cuenta cada línea como si llevara descripción y «…». La misma
+/// cuenta que `listSummaryLimit` de `unrealTools.js`. @spec REQ-51, REQ-113
+pub fn list_summary_limit(toolsets: &[ToolsetSummary]) -> usize {
+    let count = toolsets.len();
+    let fixed: usize = toolsets.iter().map(|t| t.name.chars().count() + 4).sum::<usize>() + count.saturating_sub(1);
+    let per_line = RESULT_LIMIT.saturating_sub(fixed).checked_div(count).unwrap_or(LIST_SUMMARY_LIMIT + 1);
+    per_line.saturating_sub(1).clamp(LIST_SUMMARY_MIN, LIST_SUMMARY_LIMIT)
+}
 
 /// La lista de toolsets que ve la IA: una línea por toolset con el principio de su primera frase, recortada al
 /// tope. La misma que `toolsetList` de `unrealTools.js`. @spec REQ-51, REQ-112
 pub fn toolset_list(toolsets: &[ToolsetSummary]) -> String {
+    let limit = list_summary_limit(toolsets);
     let lines: Vec<String> = toolsets
         .iter()
         .map(|t| {
             let sentence = first_sentence(&t.description);
-            let short: String = sentence.chars().take(LIST_SUMMARY_LIMIT).collect();
-            let summary = if sentence.chars().count() > LIST_SUMMARY_LIMIT { format!("{short}…") } else { short };
+            let short: String = sentence.chars().take(limit).collect();
+            let summary = if sentence.chars().count() > limit { format!("{short}…") } else { short };
             if summary.is_empty() { format!("- {}", t.name) } else { format!("- {}: {summary}", t.name) }
         })
         .collect();
@@ -165,6 +181,23 @@ mod tests {
         assert_eq!(list, expected.trim_end_matches('\n'));
     }
 
+    /// Con más toolsets de los que caben a 40 caracteres (154 en vivo con Canvas y GaussianSplat), las descripciones
+    /// se acortan lo justo y la lista entera cabe sin recortar el final. @spec REQ-51, REQ-113
+    #[test]
+    fn con_muchos_toolsets_las_descripciones_se_acortan_y_la_lista_cabe() {
+        let toolsets: Vec<ToolsetSummary> = (0..160)
+            .map(|i| ToolsetSummary { name: format!("SequencerScriptingEditor.SomeLongToolsetName{i:03}"), description: "This is a set of helper functions to access various parts of the API.".into() })
+            .collect();
+        let limit = list_summary_limit(&toolsets);
+        assert!((LIST_SUMMARY_MIN..LIST_SUMMARY_LIMIT).contains(&limit), "{limit}");
+        let list = toolset_list(&toolsets);
+        assert!(list.chars().count() <= RESULT_LIMIT, "{}", list.chars().count());
+        assert!(!list.contains("(truncated") && list.contains("SomeLongToolsetName159"));
+        let few = &toolsets[..10];
+        assert_eq!(list_summary_limit(few), LIST_SUMMARY_LIMIT, "con pocos, el de siempre");
+        assert_eq!(list_summary_limit(&[]), LIST_SUMMARY_LIMIT);
+    }
+
     /// Niagara pasaba de 306 KB; ahora cabe en el tope y la herramienta concreta sigue disponible entera. @spec REQ-51
     #[test]
     fn un_toolset_enorme_cabe_en_el_tope_y_su_herramienta_se_pide_aparte() {
@@ -184,6 +217,7 @@ mod tests {
         assert!(tools.contains(&format!("export const RESULT_LIMIT = {RESULT_LIMIT};")), "RESULT_LIMIT de unrealTools.js");
         assert!(tools.contains(&format!("const SUMMARY_LIMIT = {SUMMARY_LIMIT};")), "SUMMARY_LIMIT de unrealTools.js");
         assert!(tools.contains(&format!("export const LIST_SUMMARY_LIMIT = {LIST_SUMMARY_LIMIT};")), "LIST_SUMMARY_LIMIT de unrealTools.js");
+        assert!(tools.contains(&format!("export const LIST_SUMMARY_MIN = {LIST_SUMMARY_MIN};")), "LIST_SUMMARY_MIN de unrealTools.js");
         let memory = std::fs::read_to_string(format!("{src}/memory/memory.js")).unwrap();
         assert!(memory.contains(&format!("export const MAX_ENTRIES = {};", crate::project_memory::tools::MAX_ENTRIES)), "MAX_ENTRIES de memory.js");
     }

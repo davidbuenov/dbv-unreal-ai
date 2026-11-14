@@ -87,6 +87,8 @@ export const generationStatus = () => call('generation_status');
 export const generationSetKey = (service, key) => call('generation_set_key', { service, key });
 export const generationDeleteKey = (service) => call('generation_delete_key', { service });
 export const generationSetBudget = (credits, service) => call('generation_set_budget', { credits, service: service ?? null });
+/** `dbv` (por defecto) o `epic` (plugin GaussianSplat de UE 5.9). @spec REQ-114 */
+export const generationSetSplatRenderer = (renderer) => call('generation_set_splat_renderer', { renderer });
 /** Herramientas de Tripo para el asistente integrado: las mismas que ve un agente por MCP (D10). */
 export const generationToolSpecs = () => call('generation_tool_specs');
 /** Qué hará una herramienta y cuánto cuesta, sin gastar (tarjeta de coste). */
@@ -111,6 +113,8 @@ export const libraryFilePath = (id, file) => call('library_file_path', { id, fil
 export const libraryRecordSent = (id, project, assetPath) => call('library_record_sent', { id, project, assetPath });
 /** Código fijo que coloca un mundo con su escala métrica y el suelo en Z = 0, o null sin metadatos (REQ-18). */
 export const libraryWorldPlaceCode = (id, splatLabel, colliderAsset, name) => call('library_world_place_code', { id, splatLabel, colliderAsset, name });
+/** Código fijo para cargar un splat con el plugin de Epic (REQ-114). */
+export const libraryEpicSplatCode = (sourceFile, actorLabel) => call('library_epic_splat_code', { sourceFile, actorLabel });
 export const libraryLocation = () => call('library_location');
 export const librarySetLocation = (path, copyExisting) => call('library_set_location', { path: path || null, copyExisting: Boolean(copyExisting) });
 export const libraryImport = (paths) => call('library_import', { paths });

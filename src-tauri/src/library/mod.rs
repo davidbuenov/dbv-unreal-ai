@@ -1068,6 +1068,18 @@ pub fn world_place_code(entry: &LibraryEntry, splat_label: &str, collider_asset:
     })
 }
 
+/// Código Python FIJO que carga un splat con el plugin GaussianSplat de Epic (`editor.load_splat_epic`), si el usuario
+/// lo eligió. Una sola definición para la ventana y el `--mcp` (D25). Sin el plugin, el resultado trae
+/// `error: "epic_plugin_missing"` y se carga con el nuestro. @spec REQ-114
+pub fn epic_splat_code(source_file: &str, actor_label: &str) -> String {
+    let quote = |text: &str| serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
+    format!(
+        "import json\nfrom dbv_unreal_ai import editor\nresult = json.loads(editor.load_splat_epic({}, {}))\n",
+        quote(source_file),
+        quote(actor_label)
+    )
+}
+
 /// Carpeta de la biblioteca dentro de la carpeta de datos de la app.
 pub fn library_root(data_dir: &Path) -> PathBuf {
     data_dir.join("library")
@@ -1378,6 +1390,15 @@ mod tests {
         let mut model = entry("modelo", 3);
         model.parameters = world.parameters.clone();
         assert_eq!(world_metadata(&model), None, "solo las entradas «world»");
+    }
+
+    /// El código de Epic lleva la ruta y la etiqueta como literales JSON: una ruta de Windows o unas comillas no lo
+    /// rompen. @spec REQ-114
+    #[test]
+    fn el_codigo_de_epic_escapa_ruta_y_etiqueta() {
+        let code = epic_splat_code(r"C:\Users\u\DBV Unreal AI\Library\scene.ply", r#"Iglesia "vieja"_Splat"#);
+        assert!(code.contains(r#"editor.load_splat_epic("C:\\Users\\u\\DBV Unreal AI\\Library\\scene.ply", "Iglesia \"vieja\"_Splat")"#), "{code}");
+        assert!(code.starts_with("import json\nfrom dbv_unreal_ai import editor\nresult = "), "{code}");
     }
 
     /// @spec REQ-100

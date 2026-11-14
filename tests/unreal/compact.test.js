@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { clip, compactToolset, firstSentence, paramsLine, RESULT_LIMIT, toolDetail, toolsetList } from '../../src/unreal/unrealTools.js';
+import { clip, compactToolset, firstSentence, LIST_SUMMARY_LIMIT, LIST_SUMMARY_MIN, listSummaryLimit, paramsLine, RESULT_LIMIT, toolDetail, toolsetList } from '../../src/unreal/unrealTools.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixtures = path.join(root, 'tests/fixtures');
@@ -76,5 +76,18 @@ describe('Lista de toolsets de UE 5.9', () => {
     expect(Array.from(list).length).toBeLessThanOrEqual(RESULT_LIMIT);
     const expected = readFileSync(path.join(fixtures, 'compact/list_toolsets.ue-5.9.txt'), 'utf8').replace(/\r\n/g, '\n').replace(/\n+$/, '');
     expect(list).toBe(expected);
+  });
+
+  /** Con más toolsets de los que caben a 40 caracteres, las descripciones se acortan igual que en Rust. @spec REQ-51, REQ-113 */
+  it('con muchos toolsets acorta las descripciones y la lista cabe sin recortar', () => {
+    const toolsets = Array.from({ length: 160 }, (_, i) => ({ name: `SequencerScriptingEditor.SomeLongToolsetName${String(i).padStart(3, '0')}`, description: 'This is a set of helper functions to access various parts of the API.' }));
+    const limit = listSummaryLimit(toolsets);
+    expect(limit).toBeLessThan(LIST_SUMMARY_LIMIT);
+    expect(limit).toBeGreaterThanOrEqual(LIST_SUMMARY_MIN);
+    const list = toolsetList(toolsets);
+    expect(Array.from(list).length).toBeLessThanOrEqual(RESULT_LIMIT);
+    expect(list).not.toContain('(truncated');
+    expect(list).toContain('SomeLongToolsetName159');
+    expect(listSummaryLimit(toolsets.slice(0, 10))).toBe(LIST_SUMMARY_LIMIT);
   });
 });

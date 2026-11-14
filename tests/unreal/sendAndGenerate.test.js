@@ -247,6 +247,53 @@ describe('enviar a Unreal (REQ-19)', () => {
     expect(out).toMatchObject({ ok: true, colliderActor: 'Arid_Desert_Collider', world: { ground_lift_cm: 217.2 } });
   });
 
+  /** El backend de un mundo con el renderizador elegido y la respuesta de `load_splat_epic`. */
+  function epicBackend(renderer, epicResult) {
+    const b = backend();
+    b.splatRenderer = vi.fn(async () => renderer);
+    b.libraryEpicSplatCode = vi.fn(async () => ({ ok: true, value: 'result = editor.load_splat_epic(...)' }));
+    const run = b.callTool;
+    b.callTool = async (toolset, tool, args, timeout) =>
+      tool === 'run_python'
+        ? (b.calls.push({ toolset, tool, args, timeout }), { ok: true, value: { text: '', isError: false, value: { success: true, result: epicResult } } })
+        : run(toolset, tool, args, timeout);
+    return b;
+  }
+  const ISLAND = { id: 'isla', name: 'Isla', kind: 'world', files: ['w.spz'], sentTo: [] };
+
+  it('por defecto el splat se carga con el nuestro, sin tocar el plugin de Epic @spec REQ-114', async () => {
+    const b = epicBackend('dbv', null);
+    const out = await sendToUnreal({ backend: b }, ISLAND, { project: 'p' });
+    expect(b.calls.map((c) => c.tool)).toEqual(['load_gaussian_splat']);
+    expect(b.libraryEpicSplatCode).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ ok: true, renderer: 'dbv' });
+    expect(out.note).toBeUndefined();
+  });
+
+  it('con el de Epic elegido se carga con su plugin y con el código fijo de Rust @spec REQ-114', async () => {
+    const b = epicBackend('epic', { success: true, renderer: 'epic', actor: 'Isla_Splat', asset: '/Game/DBV/Splats/Isla_Splat' });
+    const out = await sendToUnreal({ backend: b }, ISLAND, { project: 'p' });
+    expect(b.libraryEpicSplatCode).toHaveBeenCalledWith('C:/data/library/isla/w.spz', 'Isla_Splat');
+    expect(b.calls.map((c) => c.tool)).toEqual(['run_python']);
+    expect(out).toMatchObject({ ok: true, renderer: 'epic', actor: 'Isla_Splat' });
+  });
+
+  it('con el de Epic elegido y sin su plugin, se carga con el nuestro y se dice @spec REQ-114', async () => {
+    const b = epicBackend('epic', { success: false, renderer: 'epic', error: 'epic_plugin_missing' });
+    const out = await sendToUnreal({ backend: b }, ISLAND, { project: 'p' });
+    expect(b.calls.map((c) => c.tool)).toEqual(['run_python', 'load_gaussian_splat']);
+    expect(out).toMatchObject({ ok: true, renderer: 'dbv', note: 'epicPluginMissing' });
+    expect(out.warning).toMatch(/enable the GaussianSplat plugin/);
+  });
+
+  it('si el plugin de Epic está pero no puede con el fichero, falla y no carga a escondidas con el nuestro @spec REQ-114', async () => {
+    const b = epicBackend('epic', { success: false, renderer: 'epic', error: 'the GaussianSplat plugin could not import this file' });
+    const out = await sendToUnreal({ backend: b }, ISLAND, { project: 'p' });
+    expect(out).toEqual({ ok: false, error: 'the GaussianSplat plugin could not import this file' });
+    expect(b.calls.map((c) => c.tool)).toEqual(['run_python']);
+    expect(b.libraryRecordSent).not.toHaveBeenCalled();
+  });
+
   it('sin metadatos de mundo se coloca como antes @spec REQ-18', async () => {
     const b = backend();
     b.libraryWorldPlaceCode = vi.fn(async () => ({ ok: true, value: null }));

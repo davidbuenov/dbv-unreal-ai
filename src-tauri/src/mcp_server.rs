@@ -46,7 +46,11 @@ use crate::unreal::mcp_client::{
 use crate::unreal::UnrealError;
 
 /// Cómo usar este servidor sin gastar contexto (REQ-51): lo recibe el cliente en `initialize`.
-pub const INSTRUCTIONS: &str = "DBV Unreal AI bridges the Unreal Editor of one project. Every result you get stays in your context, so keep them small: \
+/// Lo que lee el agente cuando el usuario eligió el renderizador de Epic y el proyecto no tiene el plugin. El mismo
+/// texto que `EPIC_MISSING_WARNING` de la ventana. @spec REQ-114
+const EPIC_MISSING_NOTE: &str = "The user chose the Epic GaussianSplat renderer in Settings, but that plugin is not enabled in this project, so the world was loaded with the DBV renderer. Tell the user: to use Epic's, enable the GaussianSplat plugin (Edit > Plugins) and restart the editor; the DBV renderer needs nothing.";
+
+pub const INSTRUCTIONS: &str ="DBV Unreal AI bridges the Unreal Editor of one project. Every result you get stays in your context, so keep them small: \
 use unreal_scene_summary with name_filter/class_filter/limit instead of listing every actor; unreal_describe_toolset gives one line per tool, and with tool=\"<name>\" the full schema of that one tool; \
 prefer ONE unreal_run_python that does several things and sets `result` to a compact value over many small calls; capture the viewport only when you need to look (detail=\"high\" only to read small labels). \
 Use only this server for Unreal even if another one (unreal-mcp) is configured: this one checks Python against the engine and goes through the user's approvals.";
@@ -987,13 +991,23 @@ impl McpServer {
         let label = format!("{name}_Splat");
         let splat_args =
             json!({ "source_file": splat_path.to_string_lossy(), "actor_label": label });
-        // Un .ply de varios GB tarda en leerse; si aun así se agota la espera, el editor sigue cargándolo.
-        let loaded = self.editor(|s| s.call_toolset_tool(dbv, "load_gaussian_splat", splat_args.clone(), std::time::Duration::from_secs(Self::SPLAT_TIMEOUT_SECS))).map_err(|e| match e {
-            UnrealError::Timeout(_) => "the editor is still loading the Gaussian Splat (large file): check with unreal_scene_summary in a minute before sending it again".to_string(),
-            other => other.to_string(),
-        })?;
-        let report = loaded.value.clone().unwrap_or(Value::Null);
-        let result = if loaded.is_error || report.get("success") != Some(&json!(true)) {
+        // REQ-114: con el renderizador de Epic elegido se intenta primero con su plugin; sin él, el nuestro y se dice.
+        let epic_chosen = GenerationSettings::load(&self.config.config_dir).splat_renderer() == "epic";
+        let epic = if epic_chosen { self.load_splat_epic(dbv, &splat_path.to_string_lossy(), &label)? } else { None };
+        let epic_note = if epic_chosen && epic.is_none() { format!("; NOTE: {EPIC_MISSING_NOTE}") } else { String::new() };
+        let (report, loaded) = match epic {
+            Some(report) => (report, None),
+            None => {
+                // Un .ply de varios GB tarda en leerse; si aun así se agota la espera, el editor sigue cargándolo.
+                let loaded = self.editor(|s| s.call_toolset_tool(dbv, "load_gaussian_splat", splat_args.clone(), std::time::Duration::from_secs(Self::SPLAT_TIMEOUT_SECS))).map_err(|e| match e {
+                    UnrealError::Timeout(_) => "the editor is still loading the Gaussian Splat (large file): check with unreal_scene_summary in a minute before sending it again".to_string(),
+                    other => other.to_string(),
+                })?;
+                (loaded.value.clone().unwrap_or(Value::Null), Some(loaded))
+            }
+        };
+        let failed = loaded.as_ref().is_some_and(|l| l.is_error || report.get("success") != Some(&json!(true)));
+        let result = if let Some(loaded) = loaded.filter(|_| failed) {
             let missing = loaded.text.contains("load_gaussian_splat")
                 && loaded.text.to_lowercase().contains("not found");
             Err(if missing {
@@ -1032,9 +1046,26 @@ impl McpServer {
                 None => String::new(),
             };
             self.record_sent(&entry.id, dbv, &label);
-            Ok(format!("{message}{collider_note}{world_note}"))
+            Ok(format!("{message}{collider_note}{world_note}{epic_note}"))
         };
         result
+    }
+
+    /// Carga un splat con el plugin GaussianSplat de Epic (REQ-114): `Some(informe)` si se cargó, `None` si el plugin
+    /// no está activo (se carga entonces con el nuestro) y error si estaba pero no pudo.
+    fn load_splat_epic(&mut self, dbv: &str, source_file: &str, label: &str) -> Result<Option<Value>, String> {
+        let code = crate::library::epic_splat_code(source_file, label);
+        let ran = self
+            .editor(|s| s.call_toolset_tool(dbv, "run_python", json!({ "code": code }), std::time::Duration::from_secs(Self::SPLAT_TIMEOUT_SECS)))
+            .map_err(|e| e.to_string())?;
+        let report = ran.value.as_ref().and_then(|v| v.get("result")).cloned().unwrap_or(Value::Null);
+        if report.get("success") == Some(&json!(true)) {
+            Ok(Some(report))
+        } else if report.get("error").and_then(Value::as_str) == Some("epic_plugin_missing") {
+            Ok(None)
+        } else {
+            Err(format!("the splat was not loaded with Epic's GaussianSplat plugin: {}", report.get("error").and_then(Value::as_str).unwrap_or(&ran.text)))
+        }
     }
 
     /// La malla de colisión de un mundo, importada y, si se pide, colocada. Devuelve la nota para el mensaje y el asset.

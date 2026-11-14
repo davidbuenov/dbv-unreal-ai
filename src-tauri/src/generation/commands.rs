@@ -52,12 +52,23 @@ pub struct GenerationSettings {
     /// Cuántos assets se trajeron, para la nota de Ajustes.
     #[serde(default)]
     pub library_migrated_count: usize,
+    /// Con qué se cargan los splats: `dbv` (el nuestro, por defecto; no pide activar nada) o `epic` (el plugin
+    /// `GaussianSplat` de UE 5.9, que el usuario tiene que activar en el proyecto). @spec REQ-114
+    #[serde(default = "default_splat_renderer")]
+    pub splat_renderer: String,
 }
 
 impl Default for GenerationSettings {
     fn default() -> Self {
-        Self { budget_credits: 300.0, worldlabs_budget_credits: default_worldlabs_budget(), library_dir: None, library_migrated: false, library_migrated_count: 0 }
+        Self { budget_credits: 300.0, worldlabs_budget_credits: default_worldlabs_budget(), library_dir: None, library_migrated: false, library_migrated_count: 0, splat_renderer: default_splat_renderer() }
     }
+}
+
+/// Renderizadores de splats que se pueden elegir; el primero es el de por defecto. @spec REQ-114
+pub const SPLAT_RENDERERS: [&str; 2] = ["dbv", "epic"];
+
+fn default_splat_renderer() -> String {
+    SPLAT_RENDERERS[0].to_string()
 }
 
 /// Cabe un mundo completo (`marble-1.1`, 1.580) pero no dos ni una malla HQ (3.500) sin subirlo.
@@ -69,6 +80,11 @@ impl GenerationSettings {
     /// Tope de un servicio (`tripo` o `worldlabs`).
     pub fn budget_for(&self, service: &str) -> f64 {
         if service == "worldlabs" { self.worldlabs_budget_credits } else { self.budget_credits }
+    }
+
+    /// El renderizador de splats elegido; un valor que no se conoce (un fichero tocado a mano) vale como el nuestro.
+    pub fn splat_renderer(&self) -> &str {
+        if SPLAT_RENDERERS.contains(&self.splat_renderer.as_str()) { &self.splat_renderer } else { SPLAT_RENDERERS[0] }
     }
 }
 
@@ -130,6 +146,8 @@ pub struct GenerationStatus {
     pub spent_by_service: HashMap<String, f64>,
     pub budget_by_service: HashMap<String, f64>,
     pub has_key: HashMap<String, bool>,
+    /// `dbv` o `epic` (REQ-114).
+    pub splat_renderer: String,
 }
 
 fn config_dir(app: &AppHandle) -> Result<PathBuf, UnrealError> {
@@ -192,7 +210,7 @@ pub fn generation_status(app: AppHandle, ai: State<'_, AiState>, state: State<'_
     let settings = load_settings(&app);
     let spent_by_service: HashMap<String, f64> = SERVICES.iter().map(|s| (s.to_string(), session_spent(&app, &state, s))).collect();
     let budget_by_service: HashMap<String, f64> = SERVICES.iter().map(|s| (s.to_string(), settings.budget_for(s))).collect();
-    GenerationStatus { spent: spent_by_service.get("tripo").copied().unwrap_or(0.0), budget: settings.budget_credits, spent_by_service, budget_by_service, has_key }
+    GenerationStatus { spent: spent_by_service.get("tripo").copied().unwrap_or(0.0), budget: settings.budget_credits, spent_by_service, budget_by_service, has_key, splat_renderer: settings.splat_renderer().to_string() }
 }
 
 /// Guarda la clave de un servicio en el almacén del sistema (solo de ida). @spec RNF-IA.4
@@ -223,6 +241,16 @@ pub fn generation_set_budget(app: AppHandle, credits: f64, service: Option<Strin
         GenerationSettings { budget_credits: credits, ..current }
     };
     updated.save(&dir)
+}
+
+/// Elige con qué se cargan los splats: `dbv` (el nuestro) o `epic` (plugin `GaussianSplat` de UE 5.9). @spec REQ-114
+#[tauri::command]
+pub fn generation_set_splat_renderer(app: AppHandle, renderer: String) -> Result<(), UnrealError> {
+    if !SPLAT_RENDERERS.contains(&renderer.as_str()) {
+        return Err(UnrealError::Format(format!("renderizador de splats desconocido: {renderer}")));
+    }
+    let dir = config_dir(&app)?;
+    GenerationSettings { splat_renderer: renderer, ..GenerationSettings::load(&dir) }.save(&dir)
 }
 
 /// Lo que hará una herramienta de generación, sin gastar nada: para la tarjeta de coste. @spec RNF-04, REQ-27
@@ -388,6 +416,12 @@ pub fn library_file_path(app: AppHandle, id: String, file: String) -> Result<Str
 #[tauri::command]
 pub fn library_record_sent(app: AppHandle, id: String, project: String, asset_path: String) -> Result<crate::library::LibraryEntry, UnrealError> {
     library(&app)?.record_sent(&id, &project, &asset_path)
+}
+
+/// Código fijo para cargar un splat con el plugin de Epic (REQ-114), el mismo que usa el `--mcp`.
+#[tauri::command]
+pub fn library_epic_splat_code(source_file: String, actor_label: String) -> String {
+    crate::library::epic_splat_code(&source_file, &actor_label)
 }
 
 /// Código Python fijo que coloca un mundo ya cargado (escala métrica y suelo en Z = 0), o `null` si la entrada no
@@ -793,6 +827,19 @@ mod tests {
     }
 
     /// Primer arranque sin nada: la carpeta existe aunque esté vacía y queda anotado. @spec REQ-53
+    /// Por defecto, el nuestro; un valor desconocido (un fichero tocado a mano) vale como el nuestro, y uno viejo sin
+    /// el campo también. @spec REQ-114
+    #[test]
+    fn el_renderizador_de_splats_por_defecto_es_el_nuestro() {
+        assert_eq!(GenerationSettings::default().splat_renderer(), "dbv");
+        let old: GenerationSettings = serde_json::from_str(r#"{"budgetCredits": 300}"#).unwrap();
+        assert_eq!(old.splat_renderer(), "dbv");
+        let epic = GenerationSettings { splat_renderer: "epic".into(), ..GenerationSettings::default() };
+        assert_eq!(epic.splat_renderer(), "epic");
+        let odd = GenerationSettings { splat_renderer: "nanite".into(), ..GenerationSettings::default() };
+        assert_eq!(odd.splat_renderer(), "dbv");
+    }
+
     #[test]
     fn crea_la_biblioteca_al_arrancar_aunque_este_vacia() {
         let dir = tempfile::tempdir().unwrap();

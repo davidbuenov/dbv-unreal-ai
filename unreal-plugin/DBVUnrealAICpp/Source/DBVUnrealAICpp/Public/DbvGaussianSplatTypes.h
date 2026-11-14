@@ -34,12 +34,16 @@ struct DBVUNREALAICPP_API FDbvSplatHeader {
  * Coordinate space conventions and conversion utilities
  */
 namespace DbvGaussianSplatCoords {
-/** Recommended transformation when placing World Labs / OpenCV .spz in Unreal
- * Engine */
+/** Transform that places World Labs / OpenCV .spz in Unreal Engine: together
+ * they give ConvertOpenCVPointToUnreal, (z, x, -y) * 100.
+ * OpenCV is right-handed and Unreal left-handed, so a rotation alone cannot do
+ * it: one axis has to be negated. The old Roll = 90 with a positive scale showed
+ * every world mirrored left to right (seen on 2026-11-14 against the World Labs
+ * thumbnail and Epic's GaussianSplat plugin). @spec REQ-18, REQ-114 */
 static const FRotator OpenCVToUnrealRotation =
-    FRotator(0.0f, 0.0f, 90.0f); // Roll = 90.0 deg
+    FRotator(0.0f, -90.0f, 90.0f); // Pitch 0, Yaw -90, Roll 90
 static const FVector OpenCVToUnrealScale =
-    FVector(100.0, 100.0, 100.0); // 1m = 100cm
+    FVector(-100.0, 100.0, 100.0); // 1m = 100cm, X negated (handedness)
 
 /** Direct vertex coordinate swap if baked into vertices instead of Actor
  * transform */

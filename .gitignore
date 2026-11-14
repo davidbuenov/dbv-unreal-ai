@@ -39,3 +39,6 @@ generated/
 
 # Scripts de depuracion sueltos (no se versionan)
 scripts/_scratch/
+
+# Capturas y material de pruebas (fotos de comparativas, logs del editor)
+/Saved/

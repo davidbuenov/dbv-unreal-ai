@@ -504,7 +504,7 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
   border-radius: 6px;
   background: transparent;
   color: inherit;
-  max-width: 14em;
+  max-width: 22em;
 }
 .ai-panel__autonomy--risky {
   border-color: var(--status-warning);

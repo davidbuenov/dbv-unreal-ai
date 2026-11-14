@@ -29,6 +29,20 @@ const SUMMARY_LIMIT = 160;
  * UE 5.9 tiene 139 toolsets y con la primera línea entera la lista pasaba de `RESULT_LIMIT`. @spec REQ-51, REQ-112
  */
 export const LIST_SUMMARY_LIMIT = 40;
+/** Lo menos que se deja de descripción a cada toolset cuando hay que acortarlas (`LIST_SUMMARY_MIN` en Rust). */
+export const LIST_SUMMARY_MIN = 12;
+
+/**
+ * Tope de la descripción de cada toolset para que la lista entera quepa en `RESULT_LIMIT` (`list_summary_limit` de
+ * Rust, la misma cuenta): `LIST_SUMMARY_LIMIT` si cabe, menos si hay muchos toolsets. @spec REQ-51, REQ-113
+ */
+export function listSummaryLimit(toolsets) {
+  const list = toolsets ?? [];
+  if (!list.length) return LIST_SUMMARY_LIMIT;
+  const fixed = list.reduce((sum, t) => sum + Array.from(String(t.name ?? '')).length + 4, 0) + list.length - 1;
+  const perLine = Math.floor(Math.max(0, RESULT_LIMIT - fixed) / list.length);
+  return Math.min(LIST_SUMMARY_LIMIT, Math.max(LIST_SUMMARY_MIN, perLine - 1));
+}
 /** Tiempo límite de `run_python` (s): una importación o un script largo pueden tardar. */
 export const PYTHON_TIMEOUT_SECS = 180;
 
@@ -74,9 +88,10 @@ export function firstSentence(text) {
  * La misma que `compact::toolset_list` de Rust. @spec REQ-51, REQ-112
  */
 export function toolsetList(toolsets) {
+  const limit = listSummaryLimit(toolsets);
   const lines = (toolsets ?? []).map((t) => {
     const sentence = Array.from(firstSentence(t.description));
-    const summary = sentence.length > LIST_SUMMARY_LIMIT ? `${sentence.slice(0, LIST_SUMMARY_LIMIT).join('')}…` : sentence.join('');
+    const summary = sentence.length > limit ? `${sentence.slice(0, limit).join('')}…` : sentence.join('');
     return summary ? `- ${t.name}: ${summary}` : `- ${t.name}`;
   });
   return clip(lines.join('\n'));
@@ -693,6 +708,8 @@ export function ue59Prompt(engineVersion = '') {
         'Play In Editor is EditorToolset.EditorAppToolset StartPIE / StopPIE / IsPIERunning;',
         'there are native toolsets for Blueprints (BlueprintToolsets), performance (PerfToolset), the console (ConsoleToolset), input (InputToolset), materials, data tables and MetaHumans.',
         'Prefer these native tools over unreal_run_python when one does the job. Each 5.9 tool says whether it reads or writes, and unreal_describe_toolset lists the read-only ones from that mark.',
+        // REQ-113: Canvas se usa desde su app; aquí solo sus herramientas del editor, que la IA no veía.
+        'If unreal_list_toolsets shows EditorMcp.TopLevelTools, Unreal Canvas is active: those tools place Gaussian splats from .ply (SpawnGsplatFromPLY), image cutouts, 3D annotations, renders and media jobs; call them with unreal_call_tool and that toolset. Canvas generates images, video and 3D in its own app, not through these tools: for new content use the app generators (Tripo, World Labs) or tell the user to generate it in Canvas.',
       ].join(' ')
     : '';
 }

@@ -104,7 +104,8 @@ void UDbvGaussianSplatComponent::ApplyOpenCVTransformIfNeeded() {
   AActor *Owner = GetOwner();
   if (Owner && Owner->GetRootComponent() == this) {
     // OpenCV coordinate system to Unreal Engine:
-    // Roll = 90.0 degrees, Scale = 100x (1 meter = 100 cm)
+    // (z, x, -y) * 100: see DbvGaussianSplatCoords (the scale carries the
+    // handedness flip, so the world is not mirrored).
     Owner->SetActorRotation(DbvGaussianSplatCoords::OpenCVToUnrealRotation);
     Owner->SetActorScale3D(DbvGaussianSplatCoords::OpenCVToUnrealScale);
   }

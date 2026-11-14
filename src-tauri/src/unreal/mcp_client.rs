@@ -39,6 +39,17 @@ pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Toolset virtual con las herramientas que el editor publica en `tools/list` fuera de los toolsets: en UE 5.9, las
+/// de Unreal Canvas (`UnrealCanvasBridge`: splats, recortes, anotaciones 3D, render y vídeo). Sin él, la IA no las
+/// veía, porque solo descubre toolsets. Se describe con `tools/list` y se llama con `tools/call`. @spec REQ-113
+pub const TOP_LEVEL_TOOLSET: &str = "EditorMcp.TopLevelTools";
+
+/// Herramientas de primer nivel que son el propio sistema de toolsets, no herramientas de trabajo.
+const META_TOOLS: [&str; 5] = ["list_toolsets", "describe_toolset", "describe_toolsets", "describe_tools", "call_tool"];
+
+/// Lo que se cuenta del toolset virtual antes de los nombres de sus herramientas.
+const TOP_LEVEL_DESCRIPTION: &str = "Tools registered directly on the editor MCP server, outside any toolset. With Unreal Canvas active (UnrealCanvasBridge plugin) they place Gaussian splats from .ply files, image cutouts and 3D annotations, render and convert media (transcode, trim, frames). Generating images, video or 3D is done in the Unreal Canvas app, not here. Tools:";
+
 /// Sesión abierta con el servidor MCP de un editor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -216,10 +227,30 @@ impl McpSession {
         Ok(tool_result(&result))
     }
 
-    /// Toolsets disponibles (`list_toolsets`).
+    /// Toolsets disponibles (`list_toolsets`) y, en UE 5.9 o posterior, el toolset virtual con las herramientas de
+    /// primer nivel si las hay (`TOP_LEVEL_TOOLSET`). Si `tools/list` falla, la lista sigue sin él. @spec REQ-113
     pub fn list_toolsets(&self) -> Result<Vec<ToolsetSummary>, UnrealError> {
         let result = self.call("list_toolsets", json!({}), DEFAULT_TIMEOUT)?;
-        Ok(parse_toolset_list(&result.text))
+        let mut toolsets = parse_toolset_list(&result.text);
+        let top_level = if self.may_have_top_level_tools() { self.top_level_tools().unwrap_or_default() } else { Vec::new() };
+        if !top_level.is_empty() {
+            let names = top_level.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(", ");
+            // El primero: si la lista pasa del tope de REQ-51 se recorta por el final, y este no debe perderse.
+            toolsets.insert(0, ToolsetSummary { name: TOP_LEVEL_TOOLSET.to_string(), description: format!("{TOP_LEVEL_DESCRIPTION} {names}") });
+        }
+        Ok(toolsets)
+    }
+
+    /// Solo UE 5.9 o posterior publica herramientas de trabajo fuera de los toolsets (Unreal Canvas). En 5.8, o si
+    /// el editor no da su versión, no se pregunta: así no hay una petición de más en cada lista. @spec REQ-113
+    fn may_have_top_level_tools(&self) -> bool {
+        let mut parts = self.server_version.split(|c: char| !c.is_ascii_digit()).filter_map(|p| p.parse::<u32>().ok());
+        matches!((parts.next(), parts.next()), (Some(major), Some(minor)) if (major, minor) >= (5, 9))
+    }
+
+    /// Herramientas de `tools/list` que no son el sistema de toolsets. @spec REQ-113
+    pub fn top_level_tools(&self) -> Result<Vec<ToolInfo>, UnrealError> {
+        Ok(self.list_tools()?.into_iter().filter(|t| !META_TOOLS.contains(&t.name.as_str())).collect())
     }
 
     /// Herramientas de un toolset: `describe_toolset` en UE 5.8 y `describe_toolsets` (en plural, con una lista y
@@ -227,6 +258,9 @@ impl McpSession {
     /// la conoce, la de 5.9; si las dos fallan, gana el error de la primera.
     /// @spec REQ-109, REQ-112
     pub fn describe_toolset(&self, toolset: &str) -> Result<ToolsetInfo, UnrealError> {
+        if toolset == TOP_LEVEL_TOOLSET {
+            return Ok(ToolsetInfo { name: TOP_LEVEL_TOOLSET.to_string(), description: TOP_LEVEL_DESCRIPTION.trim_end_matches(" Tools:").to_string(), tools: self.top_level_tools()? });
+        }
         let info = match self.call("describe_toolset", json!({ "toolset_name": toolset }), DEFAULT_TIMEOUT) {
             Ok(result) if !result.is_error => parse_toolset_info(&result.text),
             singular => {
@@ -243,8 +277,11 @@ impl McpSession {
         info
     }
 
-    /// Llama a una herramienta de un toolset (`call_tool`).
+    /// Llama a una herramienta de un toolset (`call_tool`); las del toolset virtual, con `tools/call`. @spec REQ-113
     pub fn call_toolset_tool(&self, toolset: &str, tool: &str, arguments: Value, timeout: Duration) -> Result<ToolResult, UnrealError> {
+        if toolset == TOP_LEVEL_TOOLSET {
+            return self.call(tool, arguments, timeout);
+        }
         self.call("call_tool", json!({ "toolset_name": toolset, "tool_name": tool, "arguments": arguments }), timeout)
     }
 }
@@ -581,6 +618,42 @@ pub(crate) mod tests {
         assert!(info.tools.iter().all(|t| matches!(t.access_mode.as_deref(), Some("read" | "write" | "execute"))));
         let old = parse_toolset_info(&tool_result(&result_of("describe_toolset.MyCustomSceneToolset.response.json")).text).unwrap();
         assert!(old.tools.iter().all(|t| t.access_mode.is_none()), "5.8 no publica la marca");
+    }
+
+    /// En 5.9 las herramientas de primer nivel (Unreal Canvas) salen como un toolset más, sin las del propio sistema de
+    /// toolsets; se describen con `tools/list` y se llaman con `tools/call`. En 5.8 no se pregunta. @spec REQ-113
+    #[test]
+    fn las_herramientas_de_primer_nivel_salen_como_un_toolset_en_ue_5_9() {
+        let init59 = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18","serverInfo":{"name":"unreal-mcp","version":"5.9.0-60351404"}}}"#;
+        let toolsets = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"content":[{"type":"text","text":"- EditorToolset.ActorToolset: Actors"}]}}"#;
+        let tools = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"tools":[{"name":"list_toolsets"},{"name":"call_tool"},{"name":"describe_toolsets"},{"name":"describe_tools"},{"name":"SpawnGsplatFromPLY","description":"Import a splat"},{"name":"ListGsplats","description":"List splats"}]}}"#;
+        let called = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"content":[{"type":"text","text":"[]"}]}}"#;
+        let (url, handle) = fake_server(vec![
+            http("200 OK", "Mcp-Session-Id: s\r\n", init59),
+            http("202 Accepted", "", ""),
+            http("200 OK", "", toolsets),
+            http("200 OK", "", tools),
+            http("200 OK", "", tools),
+            http("200 OK", "", called),
+        ]);
+        let session = McpSession::connect(&url).unwrap();
+        let listed = session.list_toolsets().unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].name, TOP_LEVEL_TOOLSET, "el primero, para que el tope no lo corte");
+        assert!(listed[0].description.ends_with("Tools: SpawnGsplatFromPLY, ListGsplats"), "{}", listed[0].description);
+        let described = session.describe_toolset(TOP_LEVEL_TOOLSET).unwrap();
+        assert_eq!(described.tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["SpawnGsplatFromPLY", "ListGsplats"]);
+        session.call_toolset_tool(TOP_LEVEL_TOOLSET, "ListGsplats", json!({}), DEFAULT_TIMEOUT).unwrap();
+        let seen = handle.join().unwrap();
+        let body: Value = serde_json::from_str(seen[5].split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(body["method"], "tools/call");
+        assert_eq!(body["params"]["name"], "ListGsplats", "se llama directamente, no con call_tool");
+
+        // 5.8 (o un editor sin versión): solo la lista de toolsets, sin pedir tools/list.
+        let init58 = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18","serverInfo":{"name":"unreal-mcp","version":"5.8.4-1"}}}"#;
+        let (url, handle) = fake_server(vec![http("200 OK", "Mcp-Session-Id: s\r\n", init58), http("202 Accepted", "", ""), http("200 OK", "", toolsets)]);
+        assert_eq!(McpSession::connect(&url).unwrap().list_toolsets().unwrap().len(), 1);
+        assert_eq!(handle.join().unwrap().len(), 3);
     }
 
     /// Si tampoco existe `describe_toolsets`, el error que se devuelve es el de la primera petición. @spec REQ-02

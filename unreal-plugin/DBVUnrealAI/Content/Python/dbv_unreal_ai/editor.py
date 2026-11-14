@@ -296,10 +296,75 @@ def get_scene_summary(name_filter: str = "", class_filter: str = "", limit: int 
     return _json({"total": total, "counts": counts, "actors": listed, "truncated": total > len(listed)})
 
 
+def _splat_rotation() -> Any:
+    """Giro de nuestro actor de splats: con ``_splat_scale`` da (z, x, −y)·100, OpenCV → Unreal. @spec REQ-18, REQ-61
+
+    El mismo que ``DbvGaussianSplatCoords`` en C++. OpenCV es de mano derecha y Unreal de mano izquierda: el giro solo
+    no basta y la escala niega la X. Con el roll 90 y la escala positiva de antes el mundo salía en espejo (2026-11-14).
+    """
+    return unreal.Rotator(roll=90.0, pitch=0.0, yaw=-90.0)
+
+
+def _splat_scale(metric_scale: float) -> Any:
+    """Escala de nuestro actor de splats: metros → cm, con la X negada (cambio de mano)."""
+    return unreal.Vector(-100.0 * metric_scale, 100.0 * metric_scale, 100.0 * metric_scale)
+
+
+# Ajustes del actor del plugin GaussianSplat de Epic (UE 5.9). Su factoría ya pasa a centímetros y a ejes de Unreal,
+# pero trata todo .spz como RUB, y World Labs los guarda en RDF: el mundo queda boca abajo hasta girarlo 180° (visto
+# en vivo el 2026-11-14). Un .ply de 3DGS (RDF) lo coloca bien sin girar. @spec REQ-114
+EPIC_SPLAT_FOLDER = "/Game/DBV/Splats"
+EPIC_SPZ_ROTATION = (0.0, 180.0, 180.0)  # pitch, yaw, roll
+
+
+def _is_epic_splat(actor: Any) -> bool:
+    """¿Es un actor del plugin GaussianSplat de Epic (y no el nuestro)?"""
+    epic_class = getattr(unreal, "GaussianSplatActor", None)
+    return bool(epic_class and isinstance(actor, epic_class))
+
+
+def load_splat_epic(source_file: str, actor_label: str = "DBV_GaussianSplat") -> str:
+    """Carga un Gaussian Splat con el plugin GaussianSplat de Epic (UE 5.9), si el usuario lo eligió. @spec REQ-114
+
+    Devuelve lo mismo que ``load_gaussian_splat`` y ``renderer: "epic"``. Sin el plugin activo devuelve
+    ``error: "epic_plugin_missing"`` para que la app cargue con el nuestro y lo diga.
+    """
+    result: dict[str, Any] = {"success": False, "renderer": "epic"}
+    source_path = Path(source_file)
+    epic_class = getattr(unreal, "GaussianSplatActor", None)
+    editor_subsystem = getattr(unreal, "UnrealEditorSubsystem", None)
+    playing = bool(editor_subsystem and unreal.get_editor_subsystem(editor_subsystem).get_game_world())
+    if epic_class is None:
+        result["error"] = "epic_plugin_missing"
+    elif not source_path.exists():
+        result["error"] = f"the Gaussian Splat file does not exist: {source_file}. Tell the user."
+    elif playing:
+        result["error"] = "Play is running: the splat can only be added to the level outside Play. Ask the user to stop Play and try again."
+    else:
+        actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+        for actor in actor_subsystem.get_all_level_actors():
+            if actor.get_actor_label() == actor_label:
+                actor_subsystem.destroy_actor(actor)
+        paths = _run_import(str(source_path), EPIC_SPLAT_FOLDER, _unique_name(EPIC_SPLAT_FOLDER, actor_label))
+        asset = next((a for a in (unreal.load_asset(p) for p in paths) if a and a.get_class().get_name() == "GaussianSplat"), None)
+        if asset is None:
+            result["error"] = "the GaussianSplat plugin could not import this file. Tell the user; they can load it with the DBV renderer instead."
+        else:
+            pitch, yaw, roll = EPIC_SPZ_ROTATION if source_path.suffix.lower() == ".spz" else (0.0, 0.0, 0.0)
+            actor = actor_subsystem.spawn_actor_from_object(asset, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(roll=roll, pitch=pitch, yaw=yaw))
+            if actor is None:
+                result["error"] = "the splat actor could not be created in the level. Tell the user."
+            else:
+                actor.set_actor_label(actor_label)
+                actor.set_folder_path(unreal.Name("DBV/Splats"))
+                result.update({"success": True, "actor": actor_label, "asset": asset.get_path_name(), "source_file": str(source_path)})
+    return _json(result)
+
+
 def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat") -> str:
     """Carga un Gaussian Splat (.spz o .ply) en un ADbvGaussianSplatActor nativo.
 
-    Aplica la orientación validada para World Labs (Roll 90.0, Escala 100x). Un fichero muy grande se carga entero
+    Aplica la orientación de World Labs (OpenCV → Unreal, sin espejo: ver ``SPLAT_ROTATION``). Un fichero muy grande se carga entero
     pero el visor nativo dibuja solo sus splats más visibles: el informe lo dice (``splats``, ``drawn``, ``note``).
     Si la carga falla, no deja un actor vacío y explica el motivo. @spec REQ-54, REQ-63
     """
@@ -320,6 +385,10 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
             if actor.get_actor_label() == actor_label:
                 target_actor = actor
                 break
+        if target_actor is not None and _is_epic_splat(target_actor):
+            # Se envió antes con el renderizador de Epic y ahora con el nuestro: se sustituye. @spec REQ-114
+            actor_subsystem.destroy_actor(target_actor)
+            target_actor = None
 
         if target_actor is None:
             splat_class = unreal.load_class(None, "/Script/DBVUnrealAICpp.DbvGaussianSplatActor")
@@ -328,12 +397,11 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
 
             if splat_class is not None:
                 spawn_loc = unreal.Vector(0.0, 0.0, 0.0)
-                spawn_rot = unreal.Rotator(pitch=0.0, yaw=0.0, roll=90.0)
-                target_actor = actor_subsystem.spawn_actor_from_class(splat_class, spawn_loc, spawn_rot)
+                target_actor = actor_subsystem.spawn_actor_from_class(splat_class, spawn_loc, _splat_rotation())
                 if target_actor:
                     spawned = True
                     target_actor.set_actor_label(actor_label)
-                    target_actor.set_actor_scale3d(unreal.Vector(100.0, 100.0, 100.0))
+                    target_actor.set_actor_scale3d(_splat_scale(1.0))
                     target_actor.set_folder_path(unreal.Name("DBV/Splats"))
                 else:
                     result["error"] = "the splat actor could not be created in the level. Tell the user."
@@ -361,9 +429,11 @@ def load_gaussian_splat(source_file: str, actor_label: str = "DBV_GaussianSplat"
 def place_world(splat_label: str, collider_asset: str, name: str, metric_scale: float, ground_offset: float) -> str:
     """Coloca un mundo de World Labs con su escala métrica y el suelo en Z = 0. @spec REQ-18
 
-    Verificado en vivo con el desierto (2026-10-31): el splat va a escala 100·m (metros → cm por el factor métrico) y
-    la malla de colisión (.glb, en la misma convención RDF) necesita escala (m, m, −m), porque al importarla como
-    glTF queda reflejada en Z. Los dos se suben 100·m·g para que el suelo quede en Z = 0. La colisión va oculta en el
+    El splat va a escala 100·m (metros → cm por el factor métrico) con la X negada: OpenCV es de mano derecha y Unreal
+    de mano izquierda, y con la escala positiva el mundo salía en espejo (visto el 2026-11-14 contra la miniatura de
+    World Labs y el plugin de Epic). La malla de colisión (.glb, en la misma convención RDF) sigue al splat con
+    escala m uniforme y giro (yaw 90, roll 180): es la (m, m, −m) de antes, validada con el desierto el 2026-10-31,
+    con las X e Y intercambiadas como el splat. Los dos se suben 100·m·g para que el suelo quede en Z = 0. La colisión va oculta en el
     juego y usa su colisión compleja como simple: el movimiento de un personaje solo mira la simple, y sin esto
     caminaba sobre la caja de la malla.
     """
@@ -377,7 +447,13 @@ def place_world(splat_label: str, collider_asset: str, name: str, metric_scale: 
         scale = float(metric_scale) if metric_scale and metric_scale > 0 else 1.0
         lift = 100.0 * scale * float(ground_offset or 0.0)
         folder = unreal.Name(f"DBV/Worlds/{name}")
-        splat.set_actor_scale3d(unreal.Vector(100.0 * scale, 100.0 * scale, 100.0 * scale))
+        if _is_epic_splat(splat):
+            # El de Epic ya viene en cm y con su giro (load_splat_epic): solo falta la escala métrica. Acaba con la
+            # misma orientación que el nuestro, así que la colisión es la misma. @spec REQ-114
+            splat.set_actor_scale3d(unreal.Vector(scale, scale, scale))
+        else:
+            splat.set_actor_rotation(_splat_rotation(), False)
+            splat.set_actor_scale3d(_splat_scale(scale))
         splat.set_actor_location(unreal.Vector(0.0, 0.0, lift), False, False)
         splat.set_folder_path(folder)
         result.update({"success": True, "splat": splat_label, "metric_scale": scale, "ground_lift_cm": round(lift, 1)})
@@ -394,8 +470,8 @@ def place_world(splat_label: str, collider_asset: str, name: str, metric_scale: 
             collider = actors.get(label) or actor_subsystem.spawn_actor_from_object(mesh, unreal.Vector(0.0, 0.0, lift))
             collider.set_actor_label(label)
             collider.set_actor_location(unreal.Vector(0.0, 0.0, lift), False, False)
-            collider.set_actor_rotation(unreal.Rotator(0.0, 0.0, 0.0), False)
-            collider.set_actor_scale3d(unreal.Vector(scale, scale, -scale))
+            collider.set_actor_rotation(unreal.Rotator(roll=180.0, pitch=0.0, yaw=90.0), False)
+            collider.set_actor_scale3d(unreal.Vector(scale, scale, scale))
             collider.set_actor_hidden_in_game(True)
             # Invisible también en el editor (encima del splat lo ensuciaba); la colisión no depende de la visibilidad.
             component = collider.get_component_by_class(unreal.StaticMeshComponent)

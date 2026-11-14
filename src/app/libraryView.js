@@ -74,6 +74,14 @@ export function sendBackend(connection) {
     callTool: (toolset, tool, args, timeout) => api.unrealCallTool(connection.endpoint, toolset, tool, args, timeout),
     libraryFilePath: api.libraryFilePath,
     libraryRecordSent: api.libraryRecordSent,
+    // REQ-18: sin esto, un mundo enviado desde la ventana no se colocaba a su escala ni alineaba su colisión.
+    libraryWorldPlaceCode: api.libraryWorldPlaceCode,
+    libraryEpicSplatCode: api.libraryEpicSplatCode,
+    // REQ-114: el renderizador de splats elegido en Ajustes; sin poder leerlo, el nuestro.
+    splatRenderer: async () => {
+      const status = await api.generationStatus();
+      return status.ok ? status.value.splatRenderer ?? 'dbv' : 'dbv';
+    },
   };
 }
 
@@ -230,6 +238,7 @@ export function createLibraryView(host, deps) {
     }
     statusLine.textContent = result.ok ? `${t('lib.sent', { path: result.assetPath })}${extra}` : '';
     if (result.note === 'toolsetOutdated') deps.toast(t('lib.toolsetOutdated'), 'error');
+    if (result.note === 'epicPluginMissing') deps.toast(t('lib.epicSplatMissing'), 'error');
     if (!result.ok) deps.toast(t(`lib.error.${result.error}`) === `lib.error.${result.error}` ? result.error : t(`lib.error.${result.error}`), 'error');
     return null;
   }

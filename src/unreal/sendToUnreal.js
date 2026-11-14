@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-19, REQ-16, REQ-81, REQ-83, REQ-84
+// @spec REQ-19, REQ-16, REQ-81, REQ-83, REQ-84, REQ-114
 //
 // Importa con `import_model` del toolset DBV (glTF por Interchange: malla, material y textura;
 // `StaticMeshTools.import_file` de Epic fuerza FBX y rechaza los .glb) y, si se pide, lo coloca
@@ -43,6 +43,31 @@ const parse = (result) => {
     return null;
   }
 };
+
+/** Lo que lee la IA cuando el usuario eligió el renderizador de Epic y el proyecto no tiene el plugin. @spec REQ-114 */
+export const EPIC_MISSING_WARNING = "The user chose the Epic GaussianSplat renderer in Settings, but that plugin is not enabled in this project, so the world was loaded with the DBV renderer. Tell the user: to use Epic's, enable the GaussianSplat plugin (Edit > Plugins) and restart the editor; the DBV renderer needs nothing.";
+
+/**
+ * Carga el splat con el renderizador elegido. Con `epic` y sin el plugin activo, carga con el nuestro y devuelve la
+ * nota `epicPluginMissing` para decírselo al usuario. El código de Epic lo da Rust (`library_epic_splat_code`), el
+ * mismo que usa el `--mcp` (D25). @spec REQ-114
+ * @returns {Promise<{ok: true, report: object, note?: string}|{ok: false, error: string}>}
+ */
+async function loadSplat(backend, dbv, renderer, sourceFile, actorLabel) {
+  let note;
+  const epicCode = renderer === 'epic' && backend.libraryEpicSplatCode ? await backend.libraryEpicSplatCode(sourceFile, actorLabel) : null;
+  if (epicCode?.ok) {
+    const ran = await backend.callTool(dbv, 'run_python', { code: epicCode.value }, SPLAT_TIMEOUT_SECONDS);
+    const report = ran.ok ? parse(ran.value)?.result ?? null : null;
+    if (report?.success) return { ok: true, report };
+    if (report?.error !== 'epic_plugin_missing') return { ok: false, error: ran.ok ? (report?.error ?? ran.value.text) : ran.error.message };
+    note = 'epicPluginMissing';
+  }
+  const loaded = await backend.callTool(dbv, 'load_gaussian_splat', { source_file: sourceFile, actor_label: actorLabel }, SPLAT_TIMEOUT_SECONDS);
+  const report = loaded.ok ? parse(loaded.value) : null;
+  if (!loaded.ok || !report?.success) return { ok: false, error: loaded.ok ? (report?.error ?? loaded.value.text) : loaded.error.message };
+  return { ok: true, report, ...(note ? { note } : {}) };
+}
 
 /** Código fijo para riggear y equipar una prenda en un MetaHuman del nivel. @spec REQ-81 */
 export function equipMetahumanCode(actorLabel, garmentSource, slot, scaleMultiplier = 1.05, zOffset = 0) {
@@ -170,10 +195,11 @@ export async function sendToUnreal(deps, entry, { project, place = true, folder:
       outcome = { ok: false, error: splatPath.error.message };
     } else {
       const splatActorLabel = `${assetName(entry.name)}_Splat`;
-      const loadedSplat = await backend.callTool(dbv, 'load_gaussian_splat', { source_file: splatPath.value, actor_label: splatActorLabel }, SPLAT_TIMEOUT_SECONDS);
-      const splatReport = loadedSplat.ok ? parse(loadedSplat.value) : null;
-      if (!loadedSplat.ok || !splatReport?.success) {
-        outcome = { ok: false, error: loadedSplat.ok ? (splatReport?.error ?? loadedSplat.value.text) : loadedSplat.error.message };
+      const renderer = backend.splatRenderer ? await backend.splatRenderer() : 'dbv';
+      const loadedSplat = await loadSplat(backend, dbv, renderer, splatPath.value, splatActorLabel);
+      const splatReport = loadedSplat.ok ? loadedSplat.report : null;
+      if (!loadedSplat.ok) {
+        outcome = { ok: false, error: loadedSplat.error };
       } else {
         let colliderActor = null;
         let colliderPath = null;
@@ -210,6 +236,8 @@ export async function sendToUnreal(deps, entry, { project, place = true, folder:
           ...(colliderActor ? { colliderActor } : {}),
           ...(colliderPath ? { colliderPath } : {}),
           ...(world ? { world } : {}),
+          renderer: splatReport.renderer ?? 'dbv',
+          ...(loadedSplat.note ? { note: loadedSplat.note, warning: EPIC_MISSING_WARNING } : {}),
         };
       }
     }

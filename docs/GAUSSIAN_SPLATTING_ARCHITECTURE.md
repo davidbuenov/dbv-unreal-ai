@@ -77,9 +77,11 @@ Los archivos `.spz` generados por World Labs utilizan el sistema de coordenadas 
 * **OpenCV:** $+X$ = Derecha, $+Y$ = Abajo, $+Z$ = Hacia adelante.
 * **Unreal Engine:** $+X$ = Hacia adelante, $+Y$ = Derecha, $+Z$ = Hacia arriba.
 
-### Regla de Transformación Verificada en UE 5.8:
-* **Rotación del Actor:** `Roll = 90.0°`, `Pitch = 0.0°`, `Yaw = 0.0°` (En Unreal: `FRotator(0.0f, 0.0f, 90.0f)`).
-* **Escala del Actor:** `100.0, 100.0, 100.0` (1 unidad OpenCV = 1 metro = 100 cm Unreal).
+### Regla de Transformación (corregida el 2026-11-14):
+* **Conversión:** Unreal = (z, x, −y)·100. OpenCV es de mano derecha y Unreal de mano izquierda, así que hace falta negar un eje además de girar.
+* **Rotación del Actor:** `Pitch = 0.0°`, `Yaw = -90.0°`, `Roll = 90.0°` (En Unreal: `FRotator(0.0f, -90.0f, 90.0f)`).
+* **Escala del Actor:** `-100.0, 100.0, 100.0` (1 unidad OpenCV = 1 metro = 100 cm Unreal; la X negada corrige la mano).
+* *Antes:* `Roll = 90°` con escala `100`: el suelo quedaba bien, pero el mundo salía en espejo de izquierda a derecha.
 * **Posición:** `(0, 0, 0)`.
 
 ---

@@ -305,6 +305,7 @@ pub fn run() {
             generation::commands::generation_delete_key,
             #[cfg(desktop)]
             generation::commands::generation_set_budget,
+            generation::commands::generation_set_splat_renderer,
             #[cfg(desktop)]
             generation::commands::generation_tool_specs,
             #[cfg(desktop)]
@@ -348,6 +349,7 @@ pub fn run() {
             #[cfg(desktop)]
             generation::commands::library_record_sent,
             generation::commands::library_world_place_code,
+            generation::commands::library_epic_splat_code,
             #[cfg(desktop)]
             generation::commands::library_location,
             #[cfg(desktop)]
