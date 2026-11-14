@@ -374,7 +374,7 @@ export function start() {
       followUp: (reply) => (state.connection?.status === 'online' ? pythonNudge(reply) : null),
       promptDomain: (_language, { agent = false } = {}) => {
         const connection = state.connection;
-        const base = unrealPrompt({ projectName: connection?.projectName ?? '', engineVersion: connection?.engineVersion ?? '', agent, convai: connection?.status === 'online' && Boolean(connection?.convai) });
+        const base = unrealPrompt({ projectName: connection?.projectName ?? '', engineVersion: connection?.engineVersion ?? '', agent, convai: connection?.status === 'online' && Boolean(connection?.convai), editorInstructions: connection?.status === 'online' ? connection?.editorInstructions ?? '' : '' });
         const memory = connection?.projectPath ? `\n\n${memoryPrompt({ active: projectMemory.isActive(), agent, summary: projectMemory.status?.summary ?? '' })}` : '';
         return connection?.status === 'online' ? `${base}${memory}` : `${base}${memory}\n\nNo Unreal project is connected right now: if the user asks to act on Unreal, tell them to connect one in the Project view.`;
       },

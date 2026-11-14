@@ -104,7 +104,9 @@ export function createProjectView(host, deps) {
       const mismatch = versionMismatch(project.engineAssociation, serverVersion);
       const engineVersion = serverVersion ? shortVersion(serverVersion) : project.engineAssociation;
       // Con Convai en el editor, la conversación recibe sus reglas (REQ-56).
-      deps.state.setConnection({ status: 'online', endpoint: actualEndpoint, engineVersion, toolsets: toolsets.length, convai: hasConvaiToolsets(toolsets) }, true);
+      // REQ-115: las instrucciones que el usuario puso en el MCP del editor (UE 5.9) van al prompt de la IA integrada.
+      const editorInstructions = Array.isArray(result.value) ? '' : (result.value.instructions ?? '');
+      deps.state.setConnection({ status: 'online', endpoint: actualEndpoint, engineVersion, toolsets: toolsets.length, convai: hasConvaiToolsets(toolsets), editorInstructions }, true);
       deps.toast(mismatch ? t('unreal.versionMismatch', mismatch) : t('project.connected', { n: String(toolsets.length) }), mismatch ? 'error' : undefined);
       await api.unrealRememberProject(project.path);
     } else {

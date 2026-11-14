@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { classifyTool } from '../../src/unreal/permissions.js';
-import { createUnrealTools, ue59Prompt, unrealPrompt } from '../../src/unreal/unrealTools.js';
+import { createUnrealTools, editorInstructionsPrompt, EDITOR_INSTRUCTIONS_LIMIT, ue59Prompt, unrealPrompt } from '../../src/unreal/unrealTools.js';
 import { isPreview, majorMinor, shortVersion, versionMismatch } from '../../src/unreal/engineVersion.js';
 import { checkLabel } from '../../src/app/projectView.js';
 import { pillState } from '../../src/app/app.js';
@@ -113,5 +113,22 @@ describe('prompt según la versión (REQ-112)', () => {
     for (const version of ['5.8.4', '', '5.8']) expect(ue59Prompt(version)).toBe('');
     expect(unrealPrompt({ projectName: 'P', engineVersion: '5.9.0' })).toContain('StartPIE');
     expect(unrealPrompt({ projectName: 'P', engineVersion: '5.8.4' })).not.toContain('StartPIE');
+  });
+
+  /** @spec REQ-115 */
+  it('en 5.9 le habla de la Knowledge Base y de las herramientas de Canvas si aparecen', () => {
+    expect(ue59Prompt('5.9.0')).toContain('ListKnowledgeBases');
+    expect(ue59Prompt('5.9.0')).toContain('EditorMcp.TopLevelTools');
+  });
+
+  /** @spec REQ-115 */
+  it('la IA integrada recibe las instrucciones del MCP del editor; el agente no (se las da el --mcp)', () => {
+    const integrated = unrealPrompt({ engineVersion: '5.9.0', editorInstructions: 'Usa siempre /Game/Juego.' });
+    expect(integrated).toContain('<<<\nUsa siempre /Game/Juego.\n>>>');
+    expect(unrealPrompt({ engineVersion: '5.9.0', agent: true, editorInstructions: 'Usa siempre /Game/Juego.' })).not.toContain('/Game/Juego');
+    expect(editorInstructionsPrompt('   ')).toBe('');
+    const long = editorInstructionsPrompt('x'.repeat(EDITOR_INSTRUCTIONS_LIMIT + 50));
+    expect(long).toContain('… (cut)');
+    expect(long.split('x').length - 1).toBe(EDITOR_INSTRUCTIONS_LIMIT);
   });
 });

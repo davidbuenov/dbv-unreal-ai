@@ -231,6 +231,8 @@ pub struct ConnectResponse {
     pub endpoint: Endpoint,
     /// Versión del editor conectado (`serverInfo.version`), para avisar si no es la del proyecto. @spec REQ-109
     pub server_version: String,
+    /// Instrucciones del MCP del editor (UE 5.9), vacías si no hay. La IA integrada las recibe. @spec REQ-115
+    pub instructions: String,
 }
 
 /// Ajustes persistentes del proyecto (autoría, etc.). @spec REQ-74
@@ -271,9 +273,9 @@ pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Connec
     blocking(move || {
         let state = app.state::<UnrealState>();
         let initial_url = initial_endpoint.url();
-        let initial_res = session_for(&state, &initial_url, true).and_then(|s| s.list_toolsets().map(|t| (t, initial_endpoint.clone(), s.server_version.clone())));
+        let initial_res = session_for(&state, &initial_url, true).and_then(|s| s.list_toolsets().map(|t| (t, initial_endpoint.clone(), s.server_version.clone(), s.instructions.clone())));
 
-        let (toolsets, active_endpoint, server_version) = match initial_res {
+        let (toolsets, active_endpoint, server_version, instructions) = match initial_res {
             Ok(pair) => pair,
             Err(first_err) => {
                 crate::logging::info(&format!("connect failed on {}: {}; probing ports 8000..=8005", initial_url, first_err));
@@ -287,11 +289,12 @@ pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Connec
                     if let Ok(sess) = McpSession::connect(&probe_url) {
                         if let Ok(toolsets) = sess.list_toolsets() {
                             let version = sess.server_version.clone();
+                            let instructions = sess.instructions.clone();
                             if let Ok(mut sessions) = state.sessions.lock() {
                                 sessions.insert(probe_url.clone(), sess);
                             }
                             crate::logging::info(&format!("auto-detected active MCP server on port {p} ({probe_url})"));
-                            found = Some((toolsets, probe_endpoint, version));
+                            found = Some((toolsets, probe_endpoint, version, instructions));
                             break;
                         }
                     }
@@ -301,7 +304,7 @@ pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Connec
         };
 
         crate::logging::info(&format!("connect {}: {} toolsets, editor {}", active_endpoint.url(), toolsets.len(), if server_version.is_empty() { "?" } else { server_version.as_str() }));
-        Ok(ConnectResponse { toolsets, endpoint: active_endpoint, server_version })
+        Ok(ConnectResponse { toolsets, endpoint: active_endpoint, server_version, instructions })
     })
     .await
 }

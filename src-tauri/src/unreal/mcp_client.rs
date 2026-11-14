@@ -60,6 +60,9 @@ pub struct McpSession {
     /// `serverInfo.version` del editor (`5.9.0-60351404`), o vacía si no la da. Es la versión del editor que está
     /// abierto, que puede no ser la del proyecto si el usuario lo abrió con otro motor. @spec REQ-109
     pub server_version: String,
+    /// `instructions` de `initialize`: lo que el usuario escribió en Project Settings › MCP Server › Instructions
+    /// (las suyas y las del proyecto). Solo UE 5.9, y solo si no están vacías. @spec REQ-115
+    pub instructions: String,
 }
 
 /// Una herramienta (nativa MCP o de un toolset).
@@ -176,6 +179,7 @@ impl McpSession {
             session_id,
             protocol_version: result.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL_VERSION).to_string(),
             server_version: result.pointer("/serverInfo/version").and_then(Value::as_str).unwrap_or("").to_string(),
+            instructions: result.get("instructions").and_then(Value::as_str).unwrap_or("").trim().to_string(),
         };
         session.notify("notifications/initialized")?;
         Ok(session)
@@ -617,6 +621,12 @@ pub(crate) mod tests {
         let bare = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18"}}"#;
         let (url, handle) = fake_server(vec![http("200 OK", "Mcp-Session-Id: s\r\n", bare), http("202 Accepted", "", "")]);
         assert_eq!(McpSession::connect(&url).unwrap().server_version, "");
+        handle.join().unwrap();
+        // REQ-115: las instrucciones del MCP del editor (UE 5.9), si el usuario las puso.
+        let with_instructions = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18","instructions":"  Usa siempre /Game/Juego.  "}}"#;
+        let (url, handle) = fake_server(vec![http("200 OK", "Mcp-Session-Id: s
+", with_instructions), http("202 Accepted", "", "")]);
+        assert_eq!(McpSession::connect(&url).unwrap().instructions, "Usa siempre /Game/Juego.");
         handle.join().unwrap();
 
         let result = serde_json::from_str::<Value>(&fixture_59("describe_toolsets.EditorToolset.EditorAppToolset.response.json")).unwrap()["result"].clone();

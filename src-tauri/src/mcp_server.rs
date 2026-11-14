@@ -86,6 +86,8 @@ pub struct McpServer {
     /// `list_toolsets` del editor, pedido una vez por proceso (REQ-51): se vuelve a pedir si la sesión caduca o si
     /// se nombra un toolset que no está.
     toolsets: Option<Vec<ToolsetSummary>>,
+    /// Ya se le dieron al agente las instrucciones del editor (van con la primera lista de toolsets). @spec REQ-115
+    instructions_shown: bool,
     board: JobBoard,
     cancels: Cancels,
     /// Arranque de este proceso: inicio de sesión si la ventana no está abierta.
@@ -409,6 +411,7 @@ impl McpServer {
             config,
             session: None,
             toolsets: None,
+            instructions_shown: false,
             board,
             cancels: Cancels::default(),
             started_at: now_secs(),
@@ -488,7 +491,16 @@ impl McpServer {
         let err = |e: UnrealError| e.to_string();
         let result = match name {
             // Acotada: UE 5.9 tiene 117 toolsets, y más con plugins (REQ-51, REQ-112).
-            "unreal_list_toolsets" => compact::toolset_list(&self.toolset_list(false).map_err(err)?),
+            "unreal_list_toolsets" => {
+                let list = compact::toolset_list(&self.toolset_list(false).map_err(err)?);
+                // REQ-115: las instrucciones que el usuario puso en el MCP del editor llegan con la primera lista,
+                // que es lo primero que pide un agente; el `initialize` de este servidor no puede esperar al editor.
+                let instructions = if self.instructions_shown { String::new() } else { compact::editor_instructions(&self.session().map(|s| s.instructions).unwrap_or_default()) };
+                self.instructions_shown = true;
+                if instructions.is_empty() { list } else { format!("{instructions}
+
+{list}") }
+            }
             "unreal_describe_toolset" => {
                 let full = self.resolve(&text(args, "toolset"))?;
                 let info = self.editor(|s| s.describe_toolset(&full)).map_err(err)?;
