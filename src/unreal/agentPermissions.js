@@ -13,7 +13,7 @@
 // herramienta de lectura (la misma regla del verbo que el asistente integrado, `classifyTool`) se conceden solas.
 // Lo demás —modificar, Python, gastar créditos y las herramientas propias del agente— sigue preguntando.
 
-import { autonomyDecision, classifyTool, DEFAULT_AUTONOMY } from './permissions.js';
+import { autonomyDecision, classifyTool, DEFAULT_AUTONOMY, isExecution } from './permissions.js';
 
 /** El nombre de la herramienta de nuestro servidor en el título que pone cada agente, o `null`. */
 const OWN_TOOL = /(?:^|[\s(`"'])(?:mcp__)?dbv-unreal-ai(?:__|[_.:/])([a-z][a-z0-9_]*)/i;
@@ -45,7 +45,9 @@ export function autoAllow(params, readOnlyTools, level = DEFAULT_AUTONOMY) {
   // Para modificar sin preguntar, la petición tiene que ser de verdad una herramienta nuestra: el título EMPIEZA por
   // ella (o viene en `toolName`/`name`). Un comando de terminal cuyo texto la mencione es del agente: «ejecutar».
   const strict = Boolean(tool) && (STRICT_OWN_TOOL.test(String(params?.toolCall?.title ?? '').trim()) || STRICT_OWN_TOOL.test(String(params?.toolCall?.toolName ?? params?.toolCall?.name ?? '').trim()));
-  const kind = read ? 'read' : strict && tool !== 'unreal_run_python' ? 'modify' : 'execute';
+  // Por `unreal_call_tool` también se llega al Python de Epic, a la consola o a los ficheros: eso es «ejecutar».
+  const executes = tool === 'unreal_run_python' || (inner !== '' && isExecution(String(raw.toolset ?? raw.toolset_name ?? ''), inner));
+  const kind = read ? 'read' : strict && !executes ? 'modify' : 'execute';
   // La llamada que gasta créditos (Tripo, World Labs) es la que lleva `confirm_cost: true`: pregunta en todos los niveles.
   const spends = raw.confirm_cost === true || raw.confirm_cost === 'true';
   const decision = spends ? 'ask' : autonomyDecision(level, kind);

@@ -299,10 +299,11 @@ export function createUnrealTools(deps) {
       const resolved = resolveToolset(toolset, await loadToolsets());
       if (!resolved.name) return `error: unknown toolset "${toolset}".${resolved.candidates.length ? ` Did you mean: ${resolved.candidates.join(', ')}?` : ' Call unreal_list_toolsets.'}`;
       if (/^run_?python$/i.test(String(tool))) return 'error: use the unreal_run_python tool to run Python (it validates the code first).';
-      const kind = classifyTool(tool, accessModes.get(modeKey(resolved.name, tool)));
+      const accessMode = accessModes.get(modeKey(resolved.name, tool)) ?? null;
+      const kind = classifyTool(tool, accessMode);
       const safeArgs = args && typeof args === 'object' ? args : {};
       // En el nivel «Preguntar» también se pregunta lo que solo lee (REQ-115).
-      const allowed = (kind === 'read' && !deps.askReads?.()) || (await approved({ kind: 'tool', toolset: resolved.name, tool, args: safeArgs, purpose }));
+      const allowed = (kind === 'read' && !deps.askReads?.()) || (await approved({ kind: 'tool', toolset: resolved.name, tool, accessMode, args: safeArgs, purpose }));
       const text = allowed ? formatResult(await invoke(resolved.name, tool, safeArgs, kind)) : 'The user DENIED this action. It was not executed. Do not retry it; ask the user what to do instead.';
       return text;
     },

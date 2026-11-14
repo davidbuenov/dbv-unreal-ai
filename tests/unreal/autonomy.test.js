@@ -39,6 +39,19 @@ describe('niveles de autonomía (REQ-115)', () => {
     expect(requestKind({ kind: 'tool', tool: 'SpawnActor' })).toBe('modify');
   });
 
+  /** El Python de Epic, la consola, Live Coding y los ficheros de UE 5.9 son «ejecutar», con marca o sin ella. @spec REQ-115, REQ-12 */
+  it('en 5.9 el Python de Epic, la consola y los ficheros cuentan como «ejecutar» y «Automático» los pregunta', () => {
+    const python = { kind: 'tool', toolset: 'editor_toolset.toolsets.python_scripting.PythonScriptingTools', tool: 'execute_python', accessMode: 'execute' };
+    const consoleCommand = { kind: 'tool', toolset: 'EditorMcp.TopLevelTools', tool: 'RunConsoleCommand' };
+    const writeFile = { kind: 'tool', toolset: 'FileSystemToolset.FileSystemToolset', tool: 'WriteTextFile', accessMode: 'write' };
+    const markedOnly = { kind: 'tool', toolset: 'X.Y', tool: 'DoSomething', accessMode: 'execute' };
+    for (const request of [python, consoleCommand, writeFile, markedOnly]) {
+      expect(requestKind(request)).toBe('execute');
+      expect(autonomyDecision('auto', requestKind(request))).toBe('ask');
+    }
+    expect(requestKind({ kind: 'tool', toolset: 'EditorToolset.ActorToolset', tool: 'SetActorLabel', accessMode: 'write' })).toBe('modify');
+  });
+
   /** @spec REQ-115 */
   it('el nivel se guarda y uno desconocido vuelve al de siempre', () => {
     const store = new Map();
@@ -81,6 +94,15 @@ describe('autonomía de los agentes (REQ-115, REQ-12)', () => {
     expect(autoAllow(python, READ_ONLY, 'auto')).toBeNull();
     expect(autoAllow(shell, READ_ONLY, 'auto')).toBeNull();
     expect(autoAllow(shell, READ_ONLY, 'full')).toMatchObject({ optionId: 'once' });
+  });
+
+  /** @spec REQ-115, REQ-12 */
+  it('«Automático» tampoco concede el Python de Epic, la consola ni los ficheros por unreal_call_tool', () => {
+    const viaCallTool = (toolset, tool) => request('mcp__dbv-unreal-ai__unreal_call_tool', { toolset, tool });
+    expect(autoAllow(viaCallTool('editor_toolset.toolsets.python_scripting.PythonScriptingTools', 'execute_python'), READ_ONLY, 'auto')).toBeNull();
+    expect(autoAllow(viaCallTool('TopLevelTools', 'RunConsoleCommand'), READ_ONLY, 'auto')).toBeNull();
+    expect(autoAllow(viaCallTool('FileSystemToolset.FileSystemToolset', 'DeleteFile'), READ_ONLY, 'auto')).toBeNull();
+    expect(autoAllow(viaCallTool('FileSystemToolset.FileSystemToolset', 'DeleteFile'), READ_ONLY, 'full')).toMatchObject({ optionId: 'once' });
   });
 
   /** @spec REQ-115, RNF-04 */

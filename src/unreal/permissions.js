@@ -75,10 +75,31 @@ export function autonomyDecision(level, kind) {
   return row[kind] ?? row.modify;
 }
 
+/**
+ * Herramientas de UE 5.9 que ejecutan código o comandos aunque el editor no lo diga (los agentes no ven `accessMode`):
+ * el Python de Epic (sin la validación de la app), la consola y Live Coding. @spec REQ-115
+ */
+export const EXECUTE_TOOLS = new Set(['execute_python', 'runconsolecommand', 'compilelivecoding', 'enablelivecoding']);
+
+/** Toolsets cuyas herramientas que no solo leen tocan ficheros de cualquier ruta del disco (UE 5.9). */
+const FILE_TOOLSETS = /(^|\.)FileSystemToolset(\.|$)/i;
+
+/**
+ * ¿Ejecuta código o comandos, o toca ficheros? Lo que el nivel *Automático* sigue preguntando: la marca
+ * `accessMode: execute` de UE 5.9, un nombre de `ALWAYS_ASK` o `EXECUTE_TOOLS`, o un toolset de ficheros. Sin esto,
+ * en *Automático* el Python de Epic o un comando de consola se ejecutaban sin preguntar. @spec REQ-115, REQ-12
+ * @param {string} toolset
+ * @param {string} tool
+ * @param {string|null} [accessMode]
+ */
+export function isExecution(toolset, tool, accessMode = null) {
+  const bare = String(tool ?? '').split('.').pop().toLowerCase();
+  return ALWAYS_ASK.has(bare) || EXECUTE_TOOLS.has(bare) || String(accessMode ?? '').toLowerCase() === 'execute' || FILE_TOOLSETS.test(String(toolset ?? ''));
+}
+
 /** Tipo de una petición de aprobación: `execute` si ejecuta código o toca ficheros; si no, `modify`. @spec REQ-115 */
 export function requestKind(request) {
-  const tool = String(request?.tool ?? '').split('.').pop().toLowerCase();
-  return request?.kind === 'python' || ALWAYS_ASK.has(tool) ? 'execute' : 'modify';
+  return request?.kind === 'python' || isExecution(request?.toolset, request?.tool, request?.accessMode) ? 'execute' : 'modify';
 }
 
 /** Nivel guardado (el de siempre si no hay o no es válido). */
