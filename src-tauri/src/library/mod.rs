@@ -335,8 +335,7 @@ impl Library {
         let text = serde_json::to_string_pretty(entries).map_err(|error| UnrealError::Format(error.to_string()))?;
         // Escritura atómica: un corte a mitad no deja el índice a medias.
         let tmp = self.root.join(format!("{INDEX}.tmp"));
-        std::fs::write(&tmp, text).map_err(|error| io_error(&tmp, &error))?;
-        std::fs::rename(&tmp, self.root.join(INDEX)).map_err(|error| io_error(&self.root, &error))
+        crate::paths::replace_file(&tmp, &self.root.join(INDEX), text.as_bytes()).map_err(|error| io_error(&self.root, &error))
     }
 
     /// Carpeta nueva y vacía para un asset (`<slug>-<marca de tiempo>`).

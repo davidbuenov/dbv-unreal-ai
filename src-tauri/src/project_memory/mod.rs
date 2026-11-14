@@ -173,8 +173,7 @@ fn write(path: &Path, text: &str) -> Result<(), UnrealError> {
         std::fs::create_dir_all(parent).map_err(|error| io_error(parent, &error))?;
     }
     let tmp = path.with_extension("md.tmp");
-    std::fs::write(&tmp, text).map_err(|error| io_error(&tmp, &error))?;
-    std::fs::rename(&tmp, path).map_err(|error| io_error(path, &error))
+    crate::paths::replace_file(&tmp, path, text.as_bytes()).map_err(|error| io_error(path, &error))
 }
 
 /// «Activar memoria del proyecto»: crea los ficheros que falten con su plantilla. Nunca sobrescribe uno que ya

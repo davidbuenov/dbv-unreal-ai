@@ -23,7 +23,7 @@ pub const RESULT_LIMIT: usize = 12_000;
 /// Caracteres como mucho de la descripción de una herramienta en la vista compacta.
 const SUMMARY_LIMIT: usize = 160;
 
-/// Caracteres como mucho de la descripción de cada toolset en `unreal_list_toolsets`. UE 5.9 tiene 139 toolsets y,
+/// Caracteres como mucho de la descripción de cada toolset en `unreal_list_toolsets`. UE 5.9 tiene 117 toolsets (139 contando por error las viñetas de sus descripciones) y,
 /// con la primera línea entera, la lista ocupaba 15.897 caracteres, por encima de `RESULT_LIMIT`; con 40 se queda en
 /// ~10.800 y sigue diciendo para qué es cada uno. Es el máximo: si hay más toolsets (con Unreal Canvas y GaussianSplat
 /// activos, el 2026-11-14, eran 154 y la lista llegaba a 12.087), `list_summary_limit` lo baja lo justo para que quepa.
@@ -158,14 +158,15 @@ mod tests {
         }
     }
 
-    /// La lista de los 139 toolsets de UE 5.9 (grabada en `PruebaUnreal59`) pasaba de 15.800 caracteres; ahora cabe
+    /// La lista de los 117 toolsets de UE 5.9 (grabada en `PruebaUnreal59`) pasaba de 15.800 caracteres; ahora cabe
     /// en el tope, conserva todos los nombres y coincide con la de JS (referencia común). @spec REQ-51, REQ-112, REQ-116
     #[test]
     fn la_lista_de_toolsets_de_ue_5_9_cabe_en_el_tope() {
         let path = format!("{FIXTURES}/unreal-mcp/ue-5.9/list_toolsets.response.json");
         let response: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         let toolsets = crate::unreal::mcp_client::parse_toolset_list(response["result"]["content"][0]["text"].as_str().unwrap());
-        assert_eq!(toolsets.len(), 139);
+        assert_eq!(toolsets.len(), 117, "sin las viñetas de las descripciones");
+        assert!(!toolsets.iter().any(|t| t.name == "Graph" || t.name.starts_with("Enum value")));
         let list = toolset_list(&toolsets);
         assert!(list.chars().count() <= RESULT_LIMIT, "{}", list.chars().count());
         assert!(!list.contains("(truncated"), "no hace falta recortarla");

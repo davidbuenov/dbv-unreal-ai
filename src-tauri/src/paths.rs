@@ -9,7 +9,7 @@
 // los mismos ajustes que la ventana. Tauri usa `<dataDir>/<identifier>` y `<configDir>/<identifier>`;
 // aquí se calculan igual a partir de las variables del sistema.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Identificador del bundle (`tauri.conf.json`).
 pub const IDENTIFIER: &str = "com.davidbuenov.dbv-unreal-ai";
@@ -57,9 +57,55 @@ pub fn config_dir() -> Option<PathBuf> {
     base.map(|b| b.join(IDENTIFIER))
 }
 
+/// Sustituye `path` por `content` sin dejarlo a medias: escribe el temporal `tmp` (en la misma carpeta) y lo renombra.
+/// Si el renombrado falla, escribe directamente sobre `path`. Pasa en dos casos vistos: en la versión de la Microsoft
+/// Store (MSIX), `%APPDATA%` está virtualizado y renombrar entre la carpeta virtual y la real da `os error 17`
+/// («no se puede mover el archivo a otra unidad»; un usuario no podía conectar Claude, 2026-11-14); y en Windows,
+/// si otro programa tiene el destino abierto sin permitir borrarlo (un antivirus, un editor). @spec REQ-90
+pub fn replace_file(tmp: &Path, path: &Path, content: &[u8]) -> std::io::Result<()> {
+    std::fs::write(tmp, content)?;
+    let replaced = match std::fs::rename(tmp, path) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            let _ = std::fs::remove_file(tmp);
+            std::fs::write(path, content)
+        }
+    };
+    replaced
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Si el renombrado no se puede hacer (aquí, el destino abierto por otro programa sin permitir borrarlo; en la
+    /// Store, `os error 17`), el fichero se escribe igual y no queda el temporal. @spec REQ-90
+    #[cfg(windows)]
+    #[test]
+    fn si_no_se_puede_renombrar_escribe_directamente() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ai-connections.json");
+        let tmp = dir.path().join("ai-connections.json.tmp");
+        std::fs::write(&path, "viejo").unwrap();
+        // FILE_SHARE_READ | FILE_SHARE_WRITE, sin FILE_SHARE_DELETE: el renombrado encima falla, la escritura no.
+        let _held = std::fs::OpenOptions::new().read(true).share_mode(0x1 | 0x2).open(&path).unwrap();
+        assert!(std::fs::rename(&path, dir.path().join("x")).is_err(), "el bloqueo impide renombrar");
+        replace_file(&tmp, &path, b"nuevo").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "nuevo");
+        assert!(!tmp.exists(), "no deja el temporal");
+    }
+
+    /// El caso normal: temporal y renombrado. @spec REQ-90
+    #[test]
+    fn sustituye_el_fichero_por_completo() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.json");
+        std::fs::write(&path, "un contenido largo de antes").unwrap();
+        replace_file(&dir.path().join("a.json.tmp"), &path, b"{}").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{}");
+        assert!(!dir.path().join("a.json.tmp").exists());
+    }
 
     /// Documentos salvo que la sincronice OneDrive; entonces la carpeta del usuario. @spec REQ-53
     #[test]

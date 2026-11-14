@@ -145,8 +145,7 @@ impl JobBoard {
         let text = serde_json::to_string_pretty(record).map_err(|error| UnrealError::Format(error.to_string()))?;
         let path = self.path(&record.id);
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, text).map_err(|error| io_error(&tmp, &error))?;
-        std::fs::rename(&tmp, &path).map_err(|error| io_error(&path, &error))
+        crate::paths::replace_file(&tmp, &path, text.as_bytes()).map_err(|error| io_error(&path, &error))
     }
 
     /// Los ficheros de trabajo tal cual están en disco.

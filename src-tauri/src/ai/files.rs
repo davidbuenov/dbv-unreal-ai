@@ -198,14 +198,7 @@ fn write_atomic(path: &Path, content: &str) -> Result<(), AiError> {
         std::fs::create_dir_all(parent).map_err(|e| io_error("crear la carpeta de", path, &e))?;
     }
     let temp = path.with_extension("dbv-ai.tmp");
-    std::fs::write(&temp, content).map_err(|e| io_error("escribir", &temp, &e))?;
-    match std::fs::rename(&temp, path) {
-        Ok(()) => Ok(()),
-        Err(_) => {
-            let _ = std::fs::remove_file(&temp);
-            std::fs::write(path, content).map_err(|e| io_error("escribir", path, &e))
-        }
-    }
+    crate::paths::replace_file(&temp, path, content.as_bytes()).map_err(|e| io_error("escribir", path, &e))
 }
 
 // ---------------------------------------------------------------------------

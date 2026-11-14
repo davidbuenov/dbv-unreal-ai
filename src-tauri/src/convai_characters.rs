@@ -75,8 +75,7 @@ pub fn save(config_dir: &Path, list: &[ConvaiCharacter]) -> Result<Vec<ConvaiCha
     std::fs::create_dir_all(config_dir).map_err(|e| e.to_string())?;
     let text = serde_json::to_string_pretty(&clean).map_err(|e| e.to_string())?;
     let tmp = config_dir.join(format!("{FILE}.tmp"));
-    std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, path(config_dir)).map_err(|e| e.to_string())?;
+    crate::paths::replace_file(&tmp, &path(config_dir), text.as_bytes()).map_err(|e| e.to_string())?;
     Ok(clean)
 }
 

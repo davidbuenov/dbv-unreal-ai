@@ -62,8 +62,7 @@ pub fn save(data_dir: &Path, root: &str, value: &Value) -> Result<(), AiError> {
         std::fs::create_dir_all(parent).map_err(|error| AiError::Config(error.to_string()))?;
     }
     let temp = path.with_extension("json.tmp");
-    std::fs::write(&temp, text).map_err(|error| AiError::Config(error.to_string()))?;
-    std::fs::rename(&temp, &path).map_err(|error| AiError::Config(error.to_string()))
+    crate::paths::replace_file(&temp, &path, text.as_bytes()).map_err(|error| AiError::Config(format!("no se pudo guardar «{}»: {error}", path.display())))
 }
 
 #[cfg(test)]

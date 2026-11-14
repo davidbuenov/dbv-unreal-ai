@@ -193,8 +193,7 @@ pub fn save(config_dir: &Path, file: &ConnectionsFile) -> Result<(), AiError> {
     let path = file_path(config_dir);
     let temp = path.with_extension("json.tmp");
     let text = serde_json::to_string_pretty(file).map_err(|error| AiError::Config(error.to_string()))?;
-    std::fs::write(&temp, text).map_err(|error| AiError::Config(error.to_string()))?;
-    std::fs::rename(&temp, &path).map_err(|error| AiError::Config(error.to_string()))
+    crate::paths::replace_file(&temp, &path, text.as_bytes()).map_err(|error| AiError::Config(format!("no se pudo guardar «{}»: {error}", path.display())))
 }
 
 #[cfg(test)]

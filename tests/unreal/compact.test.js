@@ -54,10 +54,12 @@ describe('Formato compacto de un toolset', () => {
 function recordedToolsets(text) {
   const toolsets = [];
   for (const line of text.split('\n')) {
-    if (line.startsWith('- ')) {
-      const rest = line.slice(2);
-      const colon = rest.indexOf(':');
-      toolsets.push({ name: (colon >= 0 ? rest.slice(0, colon) : rest).trim(), description: (colon >= 0 ? rest.slice(colon + 1) : '').trim() });
+    const rest = line.startsWith('- ') ? line.slice(2) : null;
+    const colon = rest?.indexOf(':') ?? -1;
+    const name = rest === null ? '' : (colon >= 0 ? rest.slice(0, colon) : rest).trim();
+    // Como `is_toolset_name` de Rust: una viñeta de la descripción («- Graph: …») no es un toolset.
+    if (name.includes('.') && !/\s/.test(name) && !name.startsWith('.') && !name.endsWith('.')) {
+      toolsets.push({ name, description: (colon >= 0 ? rest.slice(colon + 1) : '').trim() });
     } else if (toolsets.length && line.trim()) {
       const last = toolsets[toolsets.length - 1];
       last.description = last.description ? `${last.description}\n${line.trimEnd()}` : line.trimEnd();
@@ -67,11 +69,11 @@ function recordedToolsets(text) {
 }
 
 describe('Lista de toolsets de UE 5.9', () => {
-  /** Los 139 toolsets de `PruebaUnreal59`, con la misma referencia que Rust y dentro del tope. @spec REQ-51, REQ-112, REQ-116 */
+  /** Los 117 toolsets de `PruebaUnreal59` (sin las viñetas de sus descripciones), con la misma referencia que Rust y dentro del tope. @spec REQ-51, REQ-112, REQ-116 */
   it('coincide con la referencia común de Rust y cabe en el tope', () => {
     const response = JSON.parse(readFileSync(path.join(fixtures, 'unreal-mcp/ue-5.9/list_toolsets.response.json'), 'utf8'));
     const toolsets = recordedToolsets(response.result.content[0].text);
-    expect(toolsets).toHaveLength(139);
+    expect(toolsets).toHaveLength(117);
     const list = toolsetList(toolsets);
     expect(Array.from(list).length).toBeLessThanOrEqual(RESULT_LIMIT);
     const expected = readFileSync(path.join(fixtures, 'compact/list_toolsets.ue-5.9.txt'), 'utf8').replace(/\r\n/g, '\n').replace(/\n+$/, '');

@@ -306,11 +306,14 @@ pub fn parse_tool_list(tools: &Value) -> Vec<ToolInfo> {
 }
 
 /// `- Nombre: descripción` (la descripción puede seguir en varias líneas).
+/// Las descripciones de 5.8.4 y 5.9 traen viñetas que también empiezan por «- » (`- Graph: …`, `- Enum value lookups`):
+/// solo abre un toolset nuevo un nombre sin espacios y con punto (`Modulo.Toolset`), como todos los de Epic y el
+/// nuestro. Antes cada viñeta salía como un toolset más (22 de los «139» de 5.9). @spec REQ-02, REQ-51
 pub fn parse_toolset_list(text: &str) -> Vec<ToolsetSummary> {
     let mut toolsets: Vec<ToolsetSummary> = Vec::new();
     for line in text.lines() {
-        if let Some(rest) = line.strip_prefix("- ") {
-            let (name, description) = rest.split_once(':').unwrap_or((rest, ""));
+        let entry = line.strip_prefix("- ").map(|rest| rest.split_once(':').unwrap_or((rest, ""))).filter(|(name, _)| is_toolset_name(name.trim()));
+        if let Some((name, description)) = entry {
             toolsets.push(ToolsetSummary { name: name.trim().to_string(), description: description.trim().to_string() });
         } else if let Some(last) = toolsets.last_mut() {
             if !line.trim().is_empty() {
@@ -322,6 +325,11 @@ pub fn parse_toolset_list(text: &str) -> Vec<ToolsetSummary> {
         }
     }
     toolsets
+}
+
+/// ¿Es el nombre de un toolset (`Modulo.Toolset`, sin espacios) y no el principio de una viñeta de su descripción?
+fn is_toolset_name(name: &str) -> bool {
+    name.contains('.') && !name.contains(char::is_whitespace) && !name.starts_with('.') && !name.ends_with('.')
 }
 
 /// JSON de `describe_toolset`. Los nombres de herramienta vienen con el toolset delante
