@@ -26,7 +26,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::discovery::{self, EngineInstall, McpSettings, UProject, MCP_SECTION};
+use super::discovery::{self, EngineInstall, McpSettings, UProject};
 use super::{ini, io_error, UnrealError};
 
 /// Plugins de Epic que la preparación activa.
@@ -73,9 +73,22 @@ pub fn engine_plugins_present(engine_root: &Path, names: &[&'static str]) -> Vec
     names.iter().copied().filter(|n| found.contains(n)).collect()
 }
 
-/// Plugins para vestir que este motor trae (ninguno si no se conoce el motor). @spec REQ-87
-fn dressing_plugins(engine: Option<&EngineInstall>) -> Vec<&'static str> {
-    engine.map(|e| engine_plugins_present(Path::new(&e.root), &DRESSING_PLUGINS)).unwrap_or_default()
+/// Plugins que solo se piden desde UE 5.9, y solo si el motor los trae: `AllToolsets` evita el fallo conocido de Epic
+/// en 5.9 (el MCP activo con los toolsets apagados). @spec REQ-110
+pub const UE59_PLUGINS: [&str; 1] = ["AllToolsets"];
+
+/// Plugins que dependen del motor y que este trae: los de vestir y, desde 5.9, los de [`UE59_PLUGINS`] (ninguno si no
+/// se conoce el motor). Un solo recorrido del motor. @spec REQ-87, REQ-110
+fn engine_plugins(engine: Option<&EngineInstall>) -> Vec<&'static str> {
+    engine
+        .map(|e| {
+            let mut wanted: Vec<&'static str> = DRESSING_PLUGINS.to_vec();
+            if (e.major, e.minor) >= (5, 9) {
+                wanted.extend_from_slice(&UE59_PLUGINS);
+            }
+            engine_plugins_present(Path::new(&e.root), &wanted)
+        })
+        .unwrap_or_default()
 }
 
 /// Plugins que necesita este proyecto.
@@ -272,7 +285,7 @@ pub fn readiness_with_engine(uproject: &Path, source: &Path, engine: Option<Engi
             .map(|e| e.version.clone())
             .unwrap_or_else(|| project.engine_association.clone()),
     }];
-    for name in required_plugins(project.has_cpp, &dressing_plugins(engine.as_ref())) {
+    for name in required_plugins(project.has_cpp, &engine_plugins(engine.as_ref())) {
         let enabled = project.plugins.iter().any(|p| p.name == name && p.enabled);
         checks.push(Check {
             id: format!("plugin:{name}"),
@@ -470,7 +483,7 @@ pub fn plan_with_engine(
     let mut changes = Vec::new();
     // 1. Plugins del `.uproject`.
     let before = std::fs::read_to_string(uproject).map_err(|error| io_error(uproject, &error))?;
-    let mut wanted = required_plugins(discovery::read_uproject(uproject)?.has_cpp, &dressing_plugins(engine));
+    let mut wanted = required_plugins(discovery::read_uproject(uproject)?.has_cpp, &engine_plugins(engine));
     wanted.extend_from_slice(variant.plugins());
     let after = enable_plugins(&before, &wanted)?;
     if after != before {
@@ -482,17 +495,19 @@ pub fn plan_with_engine(
             origin: None,
         });
     }
-    // 2. Arranque automático del servidor MCP (ajustes del usuario).
+    // 2. Arranque automático del servidor MCP (ajustes del usuario), en la sección que lee el motor del proyecto:
+    //    en 5.9 el módulo cambió de nombre y la de 5.8 no tendría efecto (REQ-110).
     let settings = discovery::user_settings_ini(dir);
+    let section = discovery::mcp_section_for(engine);
     let current = read_optional(&settings)?;
     let mut text = ini::set(
         current.as_deref().unwrap_or(""),
-        MCP_SECTION,
+        section,
         "bAutoStartServer",
         "True",
     );
     if let Some(port) = port {
-        text = ini::set(&text, MCP_SECTION, "ServerPortNumber", &port.to_string());
+        text = ini::set(&text, section, "ServerPortNumber", &port.to_string());
     }
     if current.as_deref() != Some(text.as_str()) {
         changes.push(FileChange {
@@ -1097,5 +1112,45 @@ mod tests {
         // Revertir
         revert(&path, backups.path(), &id).unwrap();
         assert!(!target.exists());
+    }
+
+    /// En UE 5.9 «Preparar» escribe `bAutoStartServer` y el puerto en la sección que lee ese motor (el módulo cambió
+    /// de nombre); con 5.8, en la de siempre. @spec REQ-110
+    #[test]
+    fn preparar_escribe_los_ajustes_del_mcp_en_la_seccion_de_su_motor() {
+        let (_dir, path) = project();
+        let (_root, mut engine) = fake_engine(&[]);
+        let settings_of = |engine: &EngineInstall| {
+            let plan = plan_with_engine(&path, &source(), Variant::Python, Some(8123), Some(engine)).unwrap();
+            plan.changes.iter().find(|c| c.relative.ends_with("EditorPerProjectUserSettings.ini")).unwrap().after.clone()
+        };
+        let ue58 = settings_of(&engine);
+        assert!(ue58.contains(&format!("[{}]", discovery::MCP_SECTION)) && !ue58.contains(discovery::MCP_SECTION_59), "{ue58}");
+        engine.minor = 9;
+        engine.version = "5.9.0".into();
+        let ue59 = settings_of(&engine);
+        assert!(ue59.contains(&format!("[{}]", discovery::MCP_SECTION_59)), "{ue59}");
+        assert!(!ue59.contains(&format!("[{}]", discovery::MCP_SECTION)), "la de 5.8 no tendría efecto en 5.9: {ue59}");
+        assert!(ue59.contains("bAutoStartServer=True") && ue59.contains("ServerPortNumber=8123"));
+    }
+
+    /// Desde UE 5.9 «Preparar» pide `AllToolsets` si el motor lo trae (fallo conocido de Epic: el MCP activo con los
+    /// toolsets apagados); en 5.8, o si el motor no lo trae, no. @spec REQ-110
+    #[test]
+    fn en_ue_5_9_pide_all_toolsets_si_el_motor_lo_trae() {
+        let (_dir, path) = project();
+        let wants_all = |engine: &EngineInstall| {
+            let plan = plan_with_engine(&path, &source(), Variant::Python, None, Some(engine)).unwrap();
+            plan.changes.iter().find(|c| c.relative.ends_with("Demo.uproject")).unwrap().after.contains("\"Name\": \"AllToolsets\"")
+        };
+        let (_root, mut engine) = fake_engine(&[("Experimental/Toolsets", "AllToolsets")]);
+        assert!(!wants_all(&engine), "en 5.8 no se pide");
+        engine.minor = 9;
+        assert!(wants_all(&engine), "en 5.9 sí");
+        let missing = readiness_with_engine(&path, &source(), Some(engine.clone())).unwrap().checks.into_iter().filter(|c| !c.ok).map(|c| c.id).collect::<Vec<_>>();
+        assert!(missing.contains(&"plugin:AllToolsets".to_string()), "el diagnóstico lo comprueba: {missing:?}");
+        let (_root2, mut without) = fake_engine(&[]);
+        without.minor = 9;
+        assert!(!wants_all(&without), "nunca un plugin que el motor no trae");
     }
 }

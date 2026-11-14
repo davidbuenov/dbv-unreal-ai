@@ -11,12 +11,17 @@
 // ~2 MB) con la cámara, y opcionalmente una rejilla y etiquetas de actores pensadas para un agente con visión. Aquí
 // se reduce (lado mayor ≤ 1568 px) y se pasa a JPEG: es lo que cabe sin problema en cualquier proveedor. Lo usan el
 // asistente integrado (comando) y los agentes (MCP propio, contenido `image`).
+//
+// UE 5.9 quitó `CaptureViewport` de `EditorAppToolset` y la puso en `SceneCaptureToolset.CaptureEditorViewport`, con
+// los mismos parámetros (más `viewportId`). La imagen llega como bloque de contenido `image` y `returnValue.image` es
+// solo una referencia `urn:toolresult:`; la cámara va en `metadata.camera` y las etiquetas en `annotations` (verificado
+// en vivo el 2026-11-13 en PruebaUnreal59). `normalize` lo deja con la forma de 5.8 para que nada más cambie.
 
 use base64::Engine;
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use super::mcp_client::{McpSession, DEFAULT_TIMEOUT};
+use super::mcp_client::{McpSession, ToolImage, ToolResult, DEFAULT_TIMEOUT};
 use super::UnrealError;
 
 /// Lado mayor y calidad JPEG con `detail: "high"`: para leer etiquetas pequeñas y la rejilla.
@@ -35,6 +40,10 @@ pub const fn limits(high: bool) -> (u32, u8) {
     }
 }
 const TOOLSET: &str = "EditorToolset.EditorAppToolset";
+const TOOL: &str = "CaptureViewport";
+/// Dónde está la captura en UE 5.9. @spec REQ-109, REQ-112
+const TOOLSET_59: &str = "SceneCaptureToolset.SceneCaptureToolset";
+const TOOL_59: &str = "CaptureEditorViewport";
 
 /// Una captura lista para un modelo.
 #[derive(Debug, Clone, Serialize)]
@@ -78,13 +87,57 @@ pub fn from_response(value: &Value, high: bool) -> Result<Capture, UnrealError> 
     Ok(capture)
 }
 
-/// Captura el viewport del editor de `session`.
-pub fn capture(session: &McpSession, annotate: bool, high: bool) -> Result<Capture, UnrealError> {
-    let result = session.call_toolset_tool(TOOLSET, "CaptureViewport", arguments(annotate), DEFAULT_TIMEOUT)?;
-    if result.is_error {
-        return Err(UnrealError::Protocol(result.text));
+/// Respuesta de 5.9 con la forma de 5.8: la imagen del bloque `image` en `image`, la cámara en `cameraLocation`,
+/// `cameraRotation` y `cameraFOV`, y las etiquetas y la rejilla arriba. Sin `metadata` ni `annotations`, que no
+/// aportan nada al modelo y ocupan contexto (REQ-51). Una respuesta de 5.8 sale tal cual. @spec REQ-109, REQ-51
+pub fn normalize(value: &Value, images: &[ToolImage]) -> Value {
+    let mut out = value.clone();
+    let has_inline_image = value.pointer("/image/data").and_then(Value::as_str).is_some_and(|d| !d.is_empty());
+    if let Some(map) = out.as_object_mut() {
+        if let (false, Some(image)) = (has_inline_image, images.first()) {
+            map.insert("image".into(), json!({ "mimeType": image.mime_type, "data": image.data }));
+        }
+        if let Some(camera) = value.pointer("/metadata/camera") {
+            for (from, to) in [("location", "cameraLocation"), ("rotation", "cameraRotation"), ("fOV", "cameraFOV")] {
+                if let Some(field) = camera.get(from) {
+                    map.insert(to.into(), field.clone());
+                }
+            }
+        }
+        if let Some(annotations) = value.get("annotations").and_then(Value::as_object) {
+            for key in ["labeledActors", "grid"] {
+                if let Some(field) = annotations.get(key) {
+                    map.insert(key.into(), field.clone());
+                }
+            }
+        }
+        map.remove("metadata");
+        map.remove("annotations");
+        if map.get("warnings").and_then(Value::as_array).is_some_and(Vec::is_empty) {
+            map.remove("warnings");
+        }
     }
-    from_response(&result.value.unwrap_or(Value::Null), high)
+    out
+}
+
+/// Captura de un resultado de herramienta, venga de 5.8 o de 5.9.
+pub fn from_result(result: &ToolResult, high: bool) -> Result<Capture, UnrealError> {
+    from_response(&normalize(result.value.as_ref().unwrap_or(&Value::Null), &result.images), high)
+}
+
+/// Captura el viewport del editor de `session`: con la herramienta de 5.8 y, si el editor no la tiene, con la de 5.9.
+/// @spec REQ-13, REQ-109
+pub fn capture(session: &McpSession, annotate: bool, high: bool) -> Result<Capture, UnrealError> {
+    let legacy = session.call_toolset_tool(TOOLSET, TOOL, arguments(annotate), DEFAULT_TIMEOUT)?;
+    let result = if legacy.is_error {
+        let current = session.call_toolset_tool(TOOLSET_59, TOOL_59, arguments(annotate), DEFAULT_TIMEOUT)?;
+        // Si la de 5.8 no existe, el motivo útil es el de la de 5.9 (p. ej., no hay viewport abierto).
+        let reason = if legacy.text.contains("Unknown tool") { current.text.clone() } else { legacy.text.clone() };
+        if current.is_error { Err(UnrealError::Protocol(reason)) } else { Ok(current) }
+    } else {
+        Ok(legacy)
+    }?;
+    from_result(&result, high)
 }
 
 /// Resumen de texto que acompaña a la imagen (cámara y actores etiquetados).
@@ -130,6 +183,47 @@ mod tests {
         let small = from_response(&json!({ "image": { "data": base64::engine::general_purpose::STANDARD.encode(png(320, 200)) } }), false).unwrap();
         assert_eq!((small.width, small.height), (320, 200));
         assert!(matches!(from_response(&json!({ "image": { "data": "" } }), false), Err(UnrealError::Protocol(_))));
+    }
+
+    /// La captura grabada en UE 5.9 (`SceneCaptureToolset.CaptureEditorViewport`) se deja con la forma de 5.8: la
+    /// imagen del bloque `image`, la cámara y las etiquetas arriba, y sin `metadata` ni `annotations`. @spec REQ-109
+    #[test]
+    fn normaliza_la_captura_de_ue_5_9() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/unreal-mcp/ue-5.9/call_tool.SceneCaptureToolset.CaptureEditorViewport.response.json");
+        let recorded: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let result = crate::unreal::mcp_client::tool_result(&recorded["result"]);
+        assert!(result.value.as_ref().unwrap()["image"].as_str().unwrap().starts_with("urn:toolresult:"));
+        let normalized = normalize(result.value.as_ref().unwrap(), &result.images);
+        assert_eq!(normalized["image"]["mimeType"], "image/png");
+        assert_eq!(normalized["cameraFOV"], 90);
+        assert!(normalized["cameraLocation"]["x"].is_number() && normalized["cameraRotation"]["yaw"].is_number());
+        assert!(normalized["labeledActors"].as_array().is_some_and(|a| !a.is_empty()));
+        assert!(normalized.get("metadata").is_none() && normalized.get("annotations").is_none() && normalized.get("warnings").is_none());
+        let capture = from_result(&result, false).unwrap();
+        assert_eq!((capture.width, capture.height), (1, 1));
+        assert!(describe(&capture).contains("Labeled actors:"));
+    }
+
+    /// Contra el editor real, 5.8 o 5.9 (no corre por defecto):
+    /// `DBV_UNREAL_MCP_PORT=8000 cargo test -- --ignored en_vivo_captura`. @spec REQ-13, REQ-109
+    #[test]
+    #[ignore]
+    fn en_vivo_captura_el_viewport_y_describe_un_toolset() {
+        let port: u16 = std::env::var("DBV_UNREAL_MCP_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8000);
+        let session = McpSession::connect(&crate::unreal::mcp_client::endpoint_url(port, "/mcp")).unwrap();
+        let capture = capture(&session, true, false).unwrap();
+        assert!(capture.width > 0 && capture.height > 0 && !capture.base64.is_empty());
+        assert!(capture.info.get("cameraLocation").is_some(), "{}", capture.info);
+        let info = session.describe_toolset("EditorToolset.EditorAppToolset").unwrap();
+        assert!(!info.tools.is_empty());
+        println!("captura {}×{} · {} · EditorAppToolset: {} herramientas", capture.width, capture.height, describe(&capture), info.tools.len());
+    }
+
+    /// Una respuesta de 5.8 pasa por `normalize` sin cambios. @spec REQ-13
+    #[test]
+    fn normalize_no_toca_la_captura_de_ue_5_8() {
+        let response = json!({ "image": { "mimeType": "image/png", "data": "abc" }, "cameraLocation": { "x": 1.0 }, "cameraFOV": 90 });
+        assert_eq!(normalize(&response, &[ToolImage { mime_type: "image/png".into(), data: "otra".into() }]), response);
     }
 
     /// Epic exige los tres parámetros (con `{}` responde «needs a default value»). @spec REQ-13

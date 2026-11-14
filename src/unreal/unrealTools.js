@@ -16,6 +16,7 @@
 // (REQ-26); solo entonces pide permiso enseñando el código (REQ-12).
 
 import { classifyTool, createPermissionMemory } from './permissions.js';
+import { isPreview, majorMinor } from './engineVersion.js';
 
 /** Reintentos de corrección de un Python que no pasa la validación. */
 export const MAX_PYTHON_FIXES = 2;
@@ -23,6 +24,11 @@ export const MAX_PYTHON_FIXES = 2;
 export const RESULT_LIMIT = 12000;
 /** Caracteres como mucho de la descripción de una herramienta en la vista compacta (`SUMMARY_LIMIT` en Rust). */
 const SUMMARY_LIMIT = 160;
+/**
+ * Caracteres como mucho de la descripción de cada toolset en `unreal_list_toolsets` (`LIST_SUMMARY_LIMIT` en Rust):
+ * UE 5.9 tiene 139 toolsets y con la primera línea entera la lista pasaba de `RESULT_LIMIT`. @spec REQ-51, REQ-112
+ */
+export const LIST_SUMMARY_LIMIT = 40;
 /** Tiempo límite de `run_python` (s): una importación o un script largo pueden tardar. */
 export const PYTHON_TIMEOUT_SECS = 180;
 
@@ -61,6 +67,19 @@ export function firstSentence(text) {
   const dot = line.indexOf('. ');
   const sentence = Array.from(dot >= 0 ? line.slice(0, dot + 1) : line);
   return sentence.length > SUMMARY_LIMIT ? `${sentence.slice(0, SUMMARY_LIMIT).join('')}…` : sentence.join('');
+}
+
+/**
+ * La lista de toolsets que ve la IA: una línea por toolset con el principio de su primera frase, recortada al tope.
+ * La misma que `compact::toolset_list` de Rust. @spec REQ-51, REQ-112
+ */
+export function toolsetList(toolsets) {
+  const lines = (toolsets ?? []).map((t) => {
+    const sentence = Array.from(firstSentence(t.description));
+    const summary = sentence.length > LIST_SUMMARY_LIMIT ? `${sentence.slice(0, LIST_SUMMARY_LIMIT).join('')}…` : sentence.join('');
+    return summary ? `- ${t.name}: ${summary}` : `- ${t.name}`;
+  });
+  return clip(lines.join('\n'));
 }
 
 /**
@@ -153,6 +172,12 @@ export function createUnrealTools(deps) {
   const now = deps.now ?? (() => Date.now());
   let toolsets = null;
   let pythonFixes = 0;
+  /** `accessMode` de las herramientas ya descritas (`toolset::tool`), para las aprobaciones de UE 5.9 (REQ-112). */
+  const accessModes = new Map();
+  const modeKey = (toolset, tool) => `${toolset}::${String(tool ?? '').toLowerCase()}`;
+  function rememberModes(toolset, info) {
+    for (const t of info?.tools ?? []) if (t.accessMode) accessModes.set(modeKey(toolset, t.name), t.accessMode);
+  }
   /** Toolset con un `RunPython` cuando no está el de DBV (p. ej. el C++ de DBVMCPFirst). */
   let fallbackPython;
 
@@ -215,7 +240,7 @@ export function createUnrealTools(deps) {
     description: 'List the toolsets (groups of tools) available in the connected Unreal Editor. Start here to discover what you can do.',
     parameters: object({}),
     label: () => 'Unreal: toolsets',
-    run: async () => (await loadToolsets(true)).map((t) => `- ${t.name}: ${t.description.split('\n')[0]}`).join('\n'),
+    run: async () => toolsetList(await loadToolsets(true)),
   };
 
   const describeToolset = {
@@ -234,8 +259,9 @@ export function createUnrealTools(deps) {
       if (!resolved.name) return `error: unknown toolset "${toolset}".${resolved.candidates.length ? ` Did you mean: ${resolved.candidates.join(', ')}?` : ' Call unreal_list_toolsets.'}`;
       const described = await deps.backend.describeToolset(resolved.name);
       if (!described.ok) return `error: ${described.error.message}`;
+      rememberModes(resolved.name, described.value);
       // El asistente sí pide permiso por herramienta (REQ-12): se le dice cuáles se ejecutan sin preguntar.
-      const readOnly = (described.value.tools ?? []).filter((t) => classifyTool(t.name) === 'read').map((t) => t.name);
+      const readOnly = (described.value.tools ?? []).filter((t) => classifyTool(t.name, t.accessMode) === 'read').map((t) => t.name);
       const approvals = `Read-only (run without asking): ${readOnly.join(', ') || 'none'}. The others modify the project and need the user approval.`;
       return String(tool).trim() ? toolDetail(described.value, tool) : `${compactToolset(described.value)}\n${approvals}`;
     },
@@ -258,9 +284,10 @@ export function createUnrealTools(deps) {
       const resolved = resolveToolset(toolset, await loadToolsets());
       if (!resolved.name) return `error: unknown toolset "${toolset}".${resolved.candidates.length ? ` Did you mean: ${resolved.candidates.join(', ')}?` : ' Call unreal_list_toolsets.'}`;
       if (/^run_?python$/i.test(String(tool))) return 'error: use the unreal_run_python tool to run Python (it validates the code first).';
-      const kind = classifyTool(tool);
+      const kind = classifyTool(tool, accessModes.get(modeKey(resolved.name, tool)));
       const safeArgs = args && typeof args === 'object' ? args : {};
-      const allowed = kind === 'read' || (await approved({ kind: 'tool', toolset: resolved.name, tool, args: safeArgs, purpose }));
+      // En el nivel «Preguntar» también se pregunta lo que solo lee (REQ-115).
+      const allowed = (kind === 'read' && !deps.askReads?.()) || (await approved({ kind: 'tool', toolset: resolved.name, tool, args: safeArgs, purpose }));
       const text = allowed ? formatResult(await invoke(resolved.name, tool, safeArgs, kind)) : 'The user DENIED this action. It was not executed. Do not retry it; ask the user what to do instead.';
       return text;
     },
@@ -652,6 +679,24 @@ export function runtimeDebugPrompt() {
   ].join(' ');
 }
 
+/**
+ * Lo que cambia en UE 5.9 para la IA (REQ-112): dónde están las herramientas que en 5.8 eran otras, y que hay
+ * herramientas nativas para cosas que antes pedían Python. Vacío con 5.8 o sin versión.
+ */
+export function ue59Prompt(engineVersion = '') {
+  const [major, minor] = String(majorMinor(engineVersion) ?? '0.0').split('.').map(Number);
+  const is59 = major > 5 || (major === 5 && minor >= 9);
+  return is59
+    ? [
+        `This editor is Unreal Engine ${engineVersion}${isPreview(engineVersion) ? ' (a Preview: tools may change before the final release)' : ''}. Its toolsets are richer than in 5.8 and some moved:`,
+        'the viewport capture is SceneCaptureToolset.CaptureEditorViewport (unreal_capture_viewport already uses it; SceneCaptureToolset also records the viewport to MP4 and captures the PIE viewport);',
+        'Play In Editor is EditorToolset.EditorAppToolset StartPIE / StopPIE / IsPIERunning;',
+        'there are native toolsets for Blueprints (BlueprintToolsets), performance (PerfToolset), the console (ConsoleToolset), input (InputToolset), materials, data tables and MetaHumans.',
+        'Prefer these native tools over unreal_run_python when one does the job. Each 5.9 tool says whether it reads or writes, and unreal_describe_toolset lists the read-only ones from that mark.',
+      ].join(' ')
+    : '';
+}
+
 export function unrealPrompt({ projectName = '', engineVersion = '', agent = false, convai = false, copyrightHolder = '' } = {}) {
   const how = agent
     ? 'You act on the Unreal Editor through the tools of the `dbv-unreal-ai` MCP server: unreal_list_toolsets, unreal_describe_toolset, unreal_call_tool, unreal_run_python, unreal_scene_summary, unreal_describe_python_api, unreal_capture_viewport (look at the viewport to check your work), unreal_list_metahumans, unreal_dress_metahuman, unreal_validate_metahuman_outfit, unreal_equip_metahuman_outfit, unreal_export_outfit, unreal_playtest (autonomous PIE playtest with Pawn movement, telemetry, log check and viewport screenshot), unreal_import_sound (import sound effects as USoundWave in /Game/DBV/Audio), library_list, library_rename, library_import, library_send_to_unreal, generate_3d_model, generate_metahuman_outfit, image_to_3d_model, rig_model, animate_model, tripo_run, tripo_operations, tripo_balance, generate_world, export_world_mesh, worldlabs_balance (World Labs credits are a separate account from Tripo), generation_jobs, level_zones_propose and level_zones_list (named places of the level), session_plan, session_start, session_status, session_mark, session_wait, session_stop, session_analyze, session_query, session_list and session_delete (black box: record the game while the user plays and analyse the recording), compile_project_code (compile the project C++ after you changed it), recipes_list and recipe_check (guided recipes for common tasks, with a final check in the editor), search_unreal_guides (offline Unreal guides with their URL, if the user set them up). Discover capabilities with unreal_list_toolsets and unreal_describe_toolset, then use unreal_call_tool. Prefer the official toolsets (SceneTools, ActorTools, AssetTools, StaticMeshTools, MaterialTools, BlueprintTools…) over Python; use unreal_run_python only when no tool fits. Your working folder is the Unreal project: you can read its Python, C++ and .ini files. Use only these tools for Unreal: if you also see another MCP server for the editor (for example unreal-mcp, from the project .mcp.json), do not use it — it skips the app check of the Python and the user approvals. If the project instructions (for example in CLAUDE.md or AGENTS.md) mention list_toolsets, describe_toolset or calling a toolset, do it with unreal_list_toolsets, unreal_describe_toolset and unreal_call_tool.'
@@ -679,6 +724,7 @@ export function unrealPrompt({ projectName = '', engineVersion = '', agent = fal
   return [
     `You are the Unreal Engine assistant inside DBV Unreal AI, a desktop app connected to the Unreal Editor${projectName ? ` with the project "${projectName}"` : ''}${engineVersion ? ` (Unreal Engine ${engineVersion})` : ''}.`,
     how,
+    ue59Prompt(engineVersion),
     'Never guess Python API names: check them with unreal_describe_python_api. The app validates Python against the running engine before it runs.',
     'Keep tool results small: every result stays in the conversation. Look at the scene with unreal_scene_summary and its filters; describe only the toolsets you need (unreal_describe_toolset is compact; ask for tool="<name>" when you need its schema); prefer one unreal_run_python that does several things and returns a compact `result`; capture the viewport only when you need to look.',
     'Editor scripting in Unreal 5.8 goes through editor subsystems: e.g. unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors(), unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world(). EditorLevelLibrary is deprecated. When a name is deprecated, use the alternative the check gives you.',

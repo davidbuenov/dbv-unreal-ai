@@ -25,6 +25,8 @@ export const INSTALL_LINKS = {
   gemini: 'https://github.com/google-gemini/gemini-cli',
   codex: 'https://github.com/openai/codex',
   copilot: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
+  cursor: 'https://cursor.com/cli',
+  opencode: 'https://opencode.ai/docs/',
   node: 'https://nodejs.org',
 };
 
@@ -129,7 +131,7 @@ export function normalizeAgentModels(rawList, fallbackId = 'default') {
 
 function isGenericOrCorruptedModel(modelId, agentKey) {
   if (!modelId) return true;
-  if (modelId === agentKey || ['antigravity', 'agy', 'claude', 'codex', 'gemini', 'copilot', 'claude-sonnet', 'default'].includes(modelId)) {
+  if (modelId === agentKey || ['antigravity', 'agy', 'claude', 'codex', 'gemini', 'copilot', 'cursor', 'opencode', 'claude-sonnet', 'default'].includes(modelId)) {
     return true;
   }
   if (modelId.includes('|') || modelId.includes('**') || modelId.length > 64) {
@@ -524,6 +526,12 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
     // Otros agentes estándar
     for (const tool of detection.tools.filter((x) => ['claude', 'gemini', 'codex', 'copilot'].includes(x.name))) {
       appendAgentItem(tool, tool.name, t(`ai.agent.${tool.name}`));
+    }
+    // Cursor (`agent acp`, antes `cursor-agent`) y OpenCode (`opencode acp`), como en el Unreal Assistant de UE 5.9 (REQ-115).
+    if (detection.tools.length > 0) {
+      const cursor = detection.tools.find((x) => ['cursor-agent', 'agent'].includes(x.name) && x.path) ?? detection.tools.find((x) => x.name === 'agent');
+      appendAgentItem(cursor ? { ...cursor, name: 'cursor' } : null, 'cursor', t('ai.agent.cursor'));
+      appendAgentItem(detection.tools.find((x) => x.name === 'opencode') ?? null, 'opencode', t('ai.agent.opencode'));
     }
     if (detection.tools.length > 0) {
       agentCard.append(agentList);

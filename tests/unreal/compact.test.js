@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { clip, compactToolset, firstSentence, paramsLine, RESULT_LIMIT, toolDetail } from '../../src/unreal/unrealTools.js';
+import { clip, compactToolset, firstSentence, paramsLine, RESULT_LIMIT, toolDetail, toolsetList } from '../../src/unreal/unrealTools.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixtures = path.join(root, 'tests/fixtures');
@@ -47,5 +47,34 @@ describe('Formato compacto de un toolset', () => {
     expect(clipped).toContain(`truncated: ${RESULT_LIMIT + 5} characters; ask for less`);
     expect(firstSentence('Wires a\nMetaHuman up.\n\nAll paths are object paths.')).toBe('Wires a MetaHuman up.');
     expect(paramsLine({ type: 'object', properties: { a: { type: 'string' }, b: { type: 'array', items: { type: 'number' } }, c: { type: 'string', enum: ['x'] } }, required: ['a'] })).toBe('a*: string, b: array<number>, c: enum');
+  });
+});
+
+/** `list_toolsets` grabado, interpretado como `parse_toolset_list` de Rust (`- Nombre: descripción`, en varias líneas). */
+function recordedToolsets(text) {
+  const toolsets = [];
+  for (const line of text.split('\n')) {
+    if (line.startsWith('- ')) {
+      const rest = line.slice(2);
+      const colon = rest.indexOf(':');
+      toolsets.push({ name: (colon >= 0 ? rest.slice(0, colon) : rest).trim(), description: (colon >= 0 ? rest.slice(colon + 1) : '').trim() });
+    } else if (toolsets.length && line.trim()) {
+      const last = toolsets[toolsets.length - 1];
+      last.description = last.description ? `${last.description}\n${line.trimEnd()}` : line.trimEnd();
+    }
+  }
+  return toolsets;
+}
+
+describe('Lista de toolsets de UE 5.9', () => {
+  /** Los 139 toolsets de `PruebaUnreal59`, con la misma referencia que Rust y dentro del tope. @spec REQ-51, REQ-112, REQ-116 */
+  it('coincide con la referencia común de Rust y cabe en el tope', () => {
+    const response = JSON.parse(readFileSync(path.join(fixtures, 'unreal-mcp/ue-5.9/list_toolsets.response.json'), 'utf8'));
+    const toolsets = recordedToolsets(response.result.content[0].text);
+    expect(toolsets).toHaveLength(139);
+    const list = toolsetList(toolsets);
+    expect(Array.from(list).length).toBeLessThanOrEqual(RESULT_LIMIT);
+    const expected = readFileSync(path.join(fixtures, 'compact/list_toolsets.ue-5.9.txt'), 'utf8').replace(/\r\n/g, '\n').replace(/\n+$/, '');
+    expect(list).toBe(expected);
   });
 });

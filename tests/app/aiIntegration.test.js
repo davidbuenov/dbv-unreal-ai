@@ -98,6 +98,17 @@ describe('«Conectar una IA» con los agentes por suscripción @spec REQ-09, REQ
   }
   const agentItem = (host, name) => [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes(name));
 
+  /** Cursor (`agent`, antes `cursor-agent`) y OpenCode, como en el Unreal Assistant de UE 5.9. @spec REQ-115 */
+  it('ofrece Cursor y OpenCode: conectar si están instalados y, si no, cómo instalarlos', async () => {
+    const { host, backend, wizard } = wizardWith([{ name: 'agent', path: 'C:/cursor/agent.exe' }, { name: 'opencode', path: null }, { name: 'node', path: 'C:/node.exe' }]);
+    await wizard.open();
+    await vi.waitFor(() => expect(agentItem(host, 'Cursor')).toBeTruthy());
+    expect(agentItem(host, 'Cursor').classList.contains('is-ok')).toBe(true);
+    expect(agentItem(host, 'OpenCode').classList.contains('is-ok')).toBe(false);
+    agentItem(host, 'OpenCode').querySelector('button').click();
+    expect(backend.openExternalUrl).toHaveBeenCalledWith('https://opencode.ai/docs/');
+  });
+
   it('Antigravity solo con la CLI agy no se ofrece para conectar y lleva a la guía', async () => {
     const { host, backend, wizard } = wizardWith([{ name: 'agy', path: 'C:/agy.exe' }, { name: 'node', path: 'C:/node.exe' }]);
     await wizard.open();
@@ -197,5 +208,46 @@ describe('aislamiento de conversaciones, contadores por conversación y modelo p
     expect(usageEl.textContent).toContain('120');
     expect(usageEl.textContent).toContain('45');
     expect(usageEl.textContent).not.toContain('3429404');
+  });
+});
+
+describe('capturar el viewport adjunta la imagen a la conversación @spec REQ-73', () => {
+  /**
+   * El botón 📷 llamaba a dos funciones que no existían: la captura se guardaba en disco pero nunca llegaba a la caja
+   * de texto, y el error se perdía dentro de la promesa. Aquí se pulsa el botón de verdad y se busca la miniatura.
+   * @spec REQ-73
+   */
+  it('al pulsar 📷 aparece la miniatura de la captura junto a la caja de texto', async () => {
+    document.body.innerHTML = '<div id="panel"></div><div id="connect"></div>';
+    const capture = { kind: 'image', path: 'C:/tmp/viewport_1.jpg', name: 'viewport_1.jpg', mime: 'image/jpeg', base64: '/9j/4AAQ' };
+    const captureViewportAttachment = vi.fn(async () => capture);
+    const backend = {
+      on: vi.fn(async () => () => {}),
+      aiProviders: vi.fn(async () => ({ ok: true, value: [] })),
+      aiProjectStateLoad: vi.fn(async () => ({ ok: true, value: null })),
+      aiProjectStateSave: vi.fn(async () => ({ ok: true })),
+      aiListFiles: vi.fn(async () => ({ ok: true, value: [] })),
+    };
+    createAiApp({
+      backend,
+      host: {
+        elements: { panel: document.getElementById('panel'), connectBody: document.getElementById('connect') },
+        renderMarkdown: (el, text) => { el.textContent = text; },
+        toast: vi.fn(),
+        confirm: vi.fn(async () => 'send'),
+        showPanel: vi.fn(),
+        getFolderName: () => 'Demo',
+        getActive: () => null,
+        captureViewportAttachment,
+      },
+      initialFile: { showAi: true, active: null, connections: [] },
+    });
+    const button = document.querySelector('#panel .ai-panel__capture-viewport');
+    expect(button).not.toBeNull();
+    button.click();
+    await vi.waitFor(() => expect(document.querySelector('#panel .ai-chip__thumb')).not.toBeNull());
+    expect(captureViewportAttachment).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('#panel .ai-chip__thumb').getAttribute('src')).toBe('data:image/jpeg;base64,/9j/4AAQ');
+    expect(document.querySelector('#panel .ai-chip').textContent).toContain('viewport_1.jpg');
   });
 });

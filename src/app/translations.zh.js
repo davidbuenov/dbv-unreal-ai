@@ -12,6 +12,14 @@
 
 export const ZH_APP = {
   'unreal.pill.offline': '未连接编辑器',
+  'unreal.preview': '预览版',
+  'unreal.autonomy.hint': 'AI 无需询问你即可执行的范围。Tripo 或 World Labs 的费用始终需要确认。',
+  'unreal.autonomy.ask': '🛡 全部询问',
+  'unreal.autonomy.read': '👁 只读',
+  'unreal.autonomy.edit': '✋ 修改前询问',
+  'unreal.autonomy.auto': '⚡ 自动（仅代码时询问）',
+  'unreal.autonomy.full': '⚠ 完全（从不询问）',
+  'unreal.versionMismatch': '此项目属于 Unreal {project}，但当前用 {editor} 编辑器打开。一旦保存，就会转换为 {editor}，之后无法再用 {project} 打开。如果你不想转换，请不保存关闭编辑器并用 {project} 打开，或使用副本。',
   'unreal.pill.online': '{project} · UE {version} · :{port}',
   'unreal.pill.prep': '{project} · 需要准备',
   'unreal.pill.connecting': '正在连接 {project}…',
@@ -74,6 +82,7 @@ export const ZH_APP = {
   'check.why.autoStart': 'Epic 默认关闭它；这是每个用户的偏好设置，不在 .uproject 中。',
   'check.why.toolset': '提供带预先验证的不受限 Python、API 参考和 GLB 导入。',
   'check.why.plugin': '没有这个插件，编辑器不会提供 AI 使用的工具。',
+  'check.why.ue59': '在 Unreal 5.9 中启用 Epic 的全部工具集。没有它，MCP 服务器可能已开启但没有任何工具（5.9 的已知问题）。',
   'check.why.dressing': '用于给 MetaHuman 穿衣：让服装贴合身体、裙子和连衣裙的布料模拟以及计算库。这是 Epic 的实验性插件，仅在编辑器中启用；首次启动可能需要联网。',
   'chat.needProject': '请在「项目」视图中连接一个项目，AI 才能在 Unreal 中操作。',
   'gen.title': '生成 3D 模型',

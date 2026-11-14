@@ -21,6 +21,8 @@
       - Soporte para ficheros binarios (`.uasset`) en `prepare.rs` sin errores UTF-8.
       - Corrección de firma en `setup_cloth_for_character` (`dest_folder`) e importación automática de mallas de tela en `pipeline.py`.
       - Plugin sincronizado a `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI` y `Plugins\DBVUnrealAICpp`.
+* **RETOMAR AQUÍ PRIMERO (2026-11-13, tarde) — P1 de la v0.6.0 construido (S124–S130):** Rust 349, Vitest 435, en vivo contra `PruebaUnreal59`. Sin commit: el usuario lo revisa. Siguiente: `/test` (matriz de `walkthrough.md`: Tripo, Biblioteca, vestir, play-testing y caja negra en 5.9) y luego P2 (Canvas, splats de Epic, paridad con el Unreal Assistant, Fab).
+* **RETOMAR AQUÍ PRIMERO (2026-11-13) — v0.6.0 = compatible con UE 5.8.4 y 5.9, y todo lo del asistente de la 5.9 desde la app:** `/spec` hecho (`SPECIFICATIONS.md` v1.18, §3.24 `REQ-109..REQ-116` y §3.23 Fab `REQ-101..REQ-108`). Sale **antes del workshop del 2026-12-10** (práctico, 3 h). P1: REQ-109..REQ-112 y REQ-116. Siguiente: `/plan`. Las pruebas en 5.9 se hacen en `PruebaUnreal59` (`D:\temp\oscar\PruebaUnreal59`, C++, nativo de 5.9, MCP en el 8000); `DBVMCPFirst` no se abre con 5.9. UEFN y Verse pasan a la v0.7.0.
 * **RETOMAR AQUÍ PRIMERO (2026-11-12) — vestidos de tela funcionando de punta a punta; falta cerrar la versión:**
   - `unreal_dress_metahuman` viste `Victoria_VestidoAzul` con el vestido azul de Tripo: 5 pasos, validación `ok`, aprobado por el usuario. Nuevo `tailor.fit_dress` / `build_cloth_garment` (ajuste, tapas, mangas, mapa de `MaxDistance`), holgura de tela medida, material, ranuras y capturas corregidos, `flip_orientation` opcional. Tests: Python 206 (13 nuevos en `test_outfit_tailor_dress.py` y `test_outfit_cloth_dress.py`), Rust 338, Vitest 427, `dbv-lint --changed` limpio. Plugin sincronizado con `DBVMCPFirst`.
   - **Orientación del vestido corregida por la silueta** (el escote lo ponía al revés; informe del 2026-11-12). Vestido de `Victoria_VestidoAzul` regenerado con la orientación buena: **no volver a lanzar el pipeline sobre él** sin que lo pida el usuario. Para pruebas, usar una copia del personaje.
@@ -251,6 +253,31 @@
 - [x] **`/test` v0.4.1** — verificación de tests en Rust (243 pasados, 0 fallos), Vitest (386 pasados en 43 suites), Python (48 pasados) y `dbv-lint.py` limpio.
 - [x] **`/code-simplify` v0.4.1** — revisión de ergonomía, seguridad y robustez, clippy sin advertencias.
 - [x] **`/ship` v0.4.1** (2026-11-07) — bump a 0.4.1, notas de release en ES y EN (`v0.4.1.md`, `v0.4.1.en.md`), changelog actualizado, aislamiento de plugins para empaquetado standalone/VR (Android / Meta Quest), tag `v0.4.1` (sin publicación en Store a petición del usuario para pasar a v0.5.0).
+
+## v0.6.0 — Compatible con UE 5.8.4 y 5.9, todo lo del asistente de la 5.9 desde la app (REQ-109..REQ-116) y Fab (REQ-101..REQ-108)
+
+> **Cambio de alcance (2026-11-13, segunda decisión):** lo principal de la v0.6.0 es la compatibilidad con UE 5.9 y la paridad con su asistente (§3.24), antes del workshop del 2026-12-10. Fab pasa a ser una parte (P2).
+>
+> **Cambio de alcance (2026-11-13, primera decisión):** Fab era lo principal de la v0.6.0. UEFN y Verse (`REQ-78`, `REQ-79`, `P-14`, `S92`) pasan a la **v0.7.0**. Origen: investigación del plugin `Fab` de UE 5.9 (`Engine/Plugins/Fab/Source/Fab/Private/FabCatalogClient.cpp`, `FabToolset`) y del de 5.8.4.
+
+- [x] **`/spec` v0.6.0** (2026-11-13) — `SPECIFICATIONS.md` v1.17 §3.23 (`REQ-101..REQ-108`), riesgos `R-47..R-51`, preguntas `P-29..P-32`, eval de Fab, fuera de alcance; `DESIGN.md` con la vista «Fab». Decisiones del usuario: IA + vista propia, Biblioteca solo con referencia, 5.8.4 con cliente propio y preparado para 5.9.
+- [x] **`/spec` v0.6.0 ampliado** (2026-11-13) — `SPECIFICATIONS.md` v1.18 §3.24 (`REQ-109..REQ-116`), riesgos `R-52..R-56`, preguntas `P-33..P-37`, eval de 5.9 y fuera de alcance. Decisiones del usuario: Canvas de Epic en 5.9; lo de 5.9 solo en 5.9 salvo Fab; splats de Epic en 5.9 y los nuestros en 5.8.4; publicar antes del workshop.
+- [x] **Primera prueba en 5.9 (2026-11-13, `PruebaUnreal59`, app v0.5.1)** — «Preparar» (variante C++) y compilación correctas: cargan `DBVUnrealAICpp` y **también `DBVUnrealAICppRender`** (el render de splats compila en 5.9), se registra `DBVUnrealAICpp.DBVUnrealAICppToolset` y `get_project_info` responde por MCP. Sin conflictos: el `GaussianSplat` de Epic no está activo (`EnabledByDefault: false`), nuestras clases llevan prefijo `Dbv` y no registramos importador de `.ply`. Los dos `LogAutomationTest: Error: Condition failed` del arranque son pruebas internas de Epic (`UnifiedErrorTest`). Consecuencia para `REQ-111` / `P-37`: excluir el módulo de render en 5.9 es una decisión de producto (splats de Epic), no una necesidad técnica.
+- [x] **`/plan` v0.6.0** (2026-11-13) — `implementation_plan.md` §18: Architect Review (tres desviaciones de la spec resueltas: el render de splats se queda en 5.9 hasta REQ-114; el aviso de conversión salta al detectar un editor de otra versión; sin `accessMode` sigue la regla del verbo) y rebanadas. Aprobado por adelantado por el usuario («/plan y después /build sin preguntas»).
+  - [x] **S124 · `describe_toolsets`, captura de 5.9 y miniatura del botón 📷 (`REQ-109`, `REQ-112`, `REQ-73`)** — hecho y probado en vivo.
+  - [x] **S125 · Sección de ajustes del MCP según la versión (`REQ-110`)** — en 5.9 es `/Script/ModelContextProtocol.ModelContextProtocolSettings`.
+  - [x] **S126 · `AllToolsets` en «Preparar» con 5.9 (`REQ-110`)**
+  - [x] **S127 · Versión real del editor conectado, aviso de desajuste y «Preview» (`REQ-109`)**
+  - [x] **S128 · Aprobaciones con `accessMode` (`REQ-112`)**
+  - [x] **S129 · Prompt con las herramientas nativas de 5.9 (`REQ-112`)**
+  - [x] **S130 · Fixtures de 5.9 en los topes de contexto y matriz 5.8.4 × 5.9 (`REQ-116`)**
+  - [ ] **S131 · Canvas (`REQ-113`)** — bloqueada: hay que activar `UnrealCanvasBridge` en `PruebaUnreal59` y reiniciar el editor (P-34), con el usuario.
+  - [ ] **S132 · Splats con `GaussianSplat` de Epic en 5.9 (`REQ-114`)** — P-36 resuelta (`.ply`/`.spz` sin convertir, `spawn_actor_from_object`); falta activar el plugin y comprobar en vivo orientación y escala, con el usuario. Después, excluir `DBVUnrealAICppRender` en 5.9 (`REQ-111`).
+  - [x] **S133 · Agentes Cursor y OpenCode (`REQ-115`)** — `acp.rs`, `detect.rs`, `connections.rs`, `connectWizard.js`, traducciones. Tests: Rust (`cursor_y_opencode_se_lanzan_con_acp_y_sin_flags_de_modelo`) y Vitest (asistente de conexión). Falta probarlos en vivo con las CLI instaladas. **Llevar al dbv-tauri-starter** (subsistema común, REQ-48).
+  - [x] **S134 · Niveles de autonomía (`REQ-115`)** — `permissions.js` (`autonomyDecision`, `requestKind`, `loadAutonomy`/`saveAutonomy`), `agentPermissions.js` (nivel + `confirm_cost` siempre pregunta + título estricto para conceder modificaciones), selector opcional en `chatPanel.js`, envoltorio de `askApproval` en `app.js`, `askReads` en `unrealTools.js`. Tests: `tests/unreal/autonomy.test.js` (8).
+  - [x] **S135 · Avisos cuando la IA espera una aprobación (`REQ-115`)** — `src/app/attention.js` (parpadeo con `requestUserAttention` y pitido WebAudio, solo sin foco), permiso `core:window:allow-request-user-attention`, llamado desde las tarjetas de la IA integrada y de los agentes. Test: `tests/app/attention.test.js`.
+  - [ ] **S136 · `Instructions` del MCP y Knowledge Base en 5.9 (`REQ-115`)** — la Knowledge Base no viene activada por defecto.
+  - [x] **S137 · Fab en 5.9 (`REQ-108`)** — ya funciona a través de `FabToolset.FabToolset` (genérico). En 5.8.4 sigue pendiente el spike `REQ-101`.
 
 ## v0.5.0 — Ropa para MetaHumans, play-testing autónomo y Microsoft Store
 

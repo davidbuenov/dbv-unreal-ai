@@ -27,8 +27,22 @@ use serde_json::Value;
 
 use super::{ini, io_error, UnrealError};
 
-/// Sección de `UModelContextProtocolSettings` (módulo `ModelContextProtocolEngine`).
+/// Sección de `UModelContextProtocolSettings` en UE 5.8 (módulo `ModelContextProtocolEngine`).
 pub const MCP_SECTION: &str = "/Script/ModelContextProtocolEngine.ModelContextProtocolSettings";
+/// La misma en UE 5.9, que movió la clase al módulo `ModelContextProtocol` (visto en `PruebaUnreal59`, 2026-11-13).
+/// @spec REQ-110
+pub const MCP_SECTION_59: &str = "/Script/ModelContextProtocol.ModelContextProtocolSettings";
+
+/// Sección de los ajustes del MCP que lee el motor `engine`: la de 5.9 desde la 5.9; la de 5.8 si no se sabe.
+/// @spec REQ-110
+pub fn mcp_section_for(engine: Option<&EngineInstall>) -> &'static str {
+    let is_59 = engine.is_some_and(|e| (e.major, e.minor) >= (5, 9));
+    if is_59 {
+        MCP_SECTION_59
+    } else {
+        MCP_SECTION
+    }
+}
 pub const DEFAULT_MCP_PORT: u16 = 8000;
 pub const DEFAULT_MCP_PATH: &str = "/mcp";
 
@@ -240,19 +254,23 @@ pub fn default_settings_ini(project_dir: &Path) -> PathBuf {
     project_dir.join("Config").join("DefaultEditorPerProjectUserSettings.ini")
 }
 
-/// Ajustes MCP efectivos: los del usuario mandan sobre los del proyecto, y estos sobre los de Epic.
+/// Ajustes MCP efectivos: los del usuario mandan sobre los del proyecto, y estos sobre los de Epic. En cada fichero
+/// se leen la sección de 5.8 y la de 5.9 (gana la de 5.9): el `.ini` no dice qué motor lo escribió, y un proyecto
+/// que pasó de 5.8 a 5.9 puede tener las dos. @spec REQ-02, REQ-110
 pub fn read_mcp_settings(project_dir: &Path) -> McpSettings {
     let texts: Vec<String> = [default_settings_ini(project_dir), user_settings_ini(project_dir)].iter().filter_map(|p| std::fs::read_to_string(p).ok()).collect();
     let mut settings = McpSettings { port: DEFAULT_MCP_PORT, path: DEFAULT_MCP_PATH.to_string(), auto_start: None };
     for text in &texts {
-        if let Some(port) = ini::get(text, MCP_SECTION, "ServerPortNumber").and_then(|v| v.parse().ok()) {
-            settings.port = port;
-        }
-        if let Some(path) = ini::get(text, MCP_SECTION, "ServerUrlPath").filter(|v| v.starts_with('/')) {
-            settings.path = path;
-        }
-        if let Some(flag) = ini::get(text, MCP_SECTION, "bAutoStartServer") {
-            settings.auto_start = Some(flag.eq_ignore_ascii_case("true"));
+        for section in [MCP_SECTION, MCP_SECTION_59] {
+            if let Some(port) = ini::get(text, section, "ServerPortNumber").and_then(|v| v.parse().ok()) {
+                settings.port = port;
+            }
+            if let Some(path) = ini::get(text, section, "ServerUrlPath").filter(|v| v.starts_with('/')) {
+                settings.path = path;
+            }
+            if let Some(flag) = ini::get(text, section, "bAutoStartServer") {
+                settings.auto_start = Some(flag.eq_ignore_ascii_case("true"));
+            }
         }
     }
     settings
@@ -375,6 +393,21 @@ mod tests {
         std::fs::create_dir_all(user.parent().unwrap()).unwrap();
         std::fs::write(&user, format!("[{MCP_SECTION}]\nbAutoStartServer=True\n")).unwrap();
         assert_eq!(read_mcp_settings(dir.path()), McpSettings { port: 8100, path: "/mcp".into(), auto_start: Some(true) });
+    }
+
+    /// En UE 5.9 los ajustes van en otra sección (el módulo cambió de nombre): se lee también, y en un mismo fichero
+    /// gana la de 5.9. La sección se elige por el motor. @spec REQ-110
+    #[test]
+    fn lee_los_ajustes_del_mcp_de_ue_5_9() {
+        let dir = tempfile::tempdir().unwrap();
+        let user = user_settings_ini(dir.path());
+        std::fs::create_dir_all(user.parent().unwrap()).unwrap();
+        std::fs::write(&user, format!("[{MCP_SECTION}]\nServerPortNumber=8100\n\n[{MCP_SECTION_59}]\nServerPortNumber=8002\nbAutoStartServer=True\n")).unwrap();
+        assert_eq!(read_mcp_settings(dir.path()), McpSettings { port: 8002, path: "/mcp".into(), auto_start: Some(true) });
+        let engine = |minor: u32| EngineInstall { version: format!("5.{minor}.0"), major: 5, minor, patch: 0, root: String::new(), editor: String::new(), editor_exists: false };
+        assert_eq!(mcp_section_for(Some(&engine(8))), MCP_SECTION);
+        assert_eq!(mcp_section_for(Some(&engine(9))), MCP_SECTION_59);
+        assert_eq!(mcp_section_for(None), MCP_SECTION);
     }
 
     /// @spec REQ-01

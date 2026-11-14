@@ -153,7 +153,7 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 
 ### Estructura de la ventana
 
-- **Barra lateral izquierda (iconos + etiqueta):** Proyecto · Conversación · **Plan** (v0.2) · Generar · Biblioteca · Ajustes.
+- **Barra lateral izquierda (iconos + etiqueta):** Proyecto · Conversación · **Plan** (v0.2) · Generar · **Fab** (v0.6.0) · Biblioteca · Ajustes.
 - **Barra superior:** píldora de conexión con Unreal (proyecto, versión, puerto, estado), selector de IA con su etiqueta de destino, y gasto acumulado de la sesión (`cost`).
 - **Centro:** la vista activa (conversación por defecto).
 - **Panel derecho plegable:** contexto activo (fichas removibles) y registro de acciones de la sesión (REQ-14).
@@ -275,6 +275,21 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
   - En la barra de herramientas de la caja de conversación (junto a *«📷 Capturar viewport»* y *«Recetas»*), se añade el botón **«▶️ Probar en Play»**.
   - Durante los segundos que dura la sesión PIE, la píldora de conexión muestra el estado `▶️ Probando en Play (3s)…`.
   - Al finalizar, el resultado de la herramienta `unreal_playtest` se presenta en la conversación como una tarjeta compacta de telemetría (estado `✓ Superado` en `success` o `✗ Fallo detectado` en `error`, FPS medios/mínimos, desplazamiento del `PlayerPawn`, alertas de caída al vacío o errores de Blueprint en `--font-mono`) acompañada de la miniatura de 160 px de la captura tomada dentro de PIE.
+
+### Decisiones de diseño v0.6.0 (2026-11-13)
+
+- **Versión del motor (REQ-109):** la píldora de conexión y la vista *Proyecto* muestran la versión (`UE 5.8.4`, `UE 5.9`) y, en 5.9 Preview, la píldora `Preview` en `warning`. Al lanzar un proyecto 5.8 con el editor 5.9, un diálogo de confirmación en `warning`: «Abrir con 5.9 convierte el proyecto y no tiene vuelta atrás. Recomendado: abrir una copia», con las acciones **«Abrir una copia»** (primaria), «Abrir igualmente» y «Cancelar».
+- **Preparar en 5.9 (REQ-110):** la lista de preparación muestra las filas de la versión del motor (en 5.9, `AllToolsets` y, opcionales, `AllMetaHumanToolsets` y `Unreal Assistant`) y no muestra filas de plugins que el motor no trae.
+- **Generar en 5.9 (REQ-113):** con Canvas disponible, la vista *Generar* añade una pestaña **«Canvas (Epic)»** con los servicios que Canvas tiene configurados. La tarjeta de coste indica «Lo cobra <servicio> en tu cuenta». Sin Canvas, la pestaña explica cómo activarlo.
+- **Autonomía (REQ-115):** en la barra de la caja de conversación, un selector compacto con *Preguntar · Solo lectura · Editar · Automático · Total* (por defecto, el actual: pedir permiso para escribir). *Automático* y *Total* se muestran en `warning`.
+
+- **Vista «Fab» (REQ-106):** entrada propia en la barra lateral, entre *Generar* y *Biblioteca*.
+  - **Cabecera:** buscador a todo el ancho; debajo, una fila de filtros compactos (formato, «Solo gratis», categoría, orden) y, a la derecha, el estado de la sesión de Fab: píldora `● Sesión de Fab` en `success` o el botón secundario **«Iniciar sesión en Fab»**. Dos pestañas: **Catálogo** · **Mi biblioteca**.
+  - **Cuadrícula:** tarjetas con la misma forma que la *Tarjeta de asset* (REQ-17): miniatura, título, vendedor, píldora `Gratis` en `success` o precio en `--font-mono`, valoración (o «Sin valoraciones») y píldoras de formato (`UE`, `GLB`, `FBX`…). El contenido maduro lleva la miniatura difuminada y una píldora `18+` en `warning`, según la preferencia del usuario en Fab. Al final, **«Cargar más»** si hay `cursors.next`; nunca se muestra un total.
+  - **Ficha (panel lateral o diálogo):** galería, descripción, licencias, formatos con versiones de motor, enlace «Ver en fab.com» y el botón primario **«Instalar en el proyecto»**, con selector de formato y versión (la del editor preseleccionada). Si es de pago y no se tiene, el botón cambia a «Ver en fab.com» y se explica por qué.
+  - **Sin editor conectado:** la búsqueda funciona; *Mi biblioteca* y la instalación muestran el aviso «Conecta el editor de Unreal para ver tu biblioteca e instalar».
+  - **Instalación:** pasa por la *Tarjeta de aprobación* (REQ-12) con lo que se va a descargar, el tamaño si se conoce y la carpeta de destino; después, barra de progreso y tarjeta final con los assets creados o el error (EULA con su enlace, sin licencia, URL caducada).
+- **Biblioteca (REQ-107):** las entradas de Fab llevan la píldora `Fab` y el texto «Referencia: los ficheros se descargan de Fab al instalar»; su acción primaria es **«Instalar en este proyecto»**.
 
 ---
 

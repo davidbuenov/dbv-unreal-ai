@@ -33,13 +33,63 @@ export function firstWord(name) {
     .filter(Boolean)[0] ?? '';
 }
 
-/** `'read'` o `'modify'` para una herramienta (`tool` sin el toolset delante). */
-export function classifyTool(tool) {
+/**
+ * `'read'` o `'modify'` para una herramienta (`tool` sin el toolset delante). UE 5.9 publica `accessMode` (`read`,
+ * `write`, `execute`) y entonces manda la marca: `read` es lectura salvo las de `ALWAYS_ASK`; `write` y `execute`
+ * piden permiso aunque el verbo parezca de consulta (p. ej. `LoadLevel`). Sin marca (UE 5.8) sigue la regla del verbo,
+ * que ya pide permiso para todo verbo desconocido. @spec REQ-12, REQ-112
+ * @param {string} tool
+ * @param {string|null} [accessMode]
+ */
+export function classifyTool(tool, accessMode = null) {
   const bare = String(tool ?? '').split('.').pop();
   const lowered = bare.toLowerCase();
+  const mode = String(accessMode ?? '').toLowerCase();
+  const readByMark = mode === 'read';
+  const readByVerb = mode === '' && READ_VERBS.has(firstWord(bare));
   let kind = 'modify';
-  if (!ALWAYS_ASK.has(lowered) && READ_VERBS.has(firstWord(bare))) kind = 'read';
+  if (!ALWAYS_ASK.has(lowered) && (readByMark || readByVerb)) kind = 'read';
   return kind;
+}
+
+/**
+ * Niveles de autonomía, como los del Unreal Assistant de UE 5.9 (REQ-115): `ask` pregunta todo, también lo que solo
+ * lee; `read` solo deja leer y rechaza lo demás sin preguntar; `edit` (por defecto, el comportamiento de siempre) lee
+ * sin preguntar y pide permiso para modificar; `auto` modifica sin preguntar pero pide permiso para ejecutar código o
+ * tocar ficheros (`ALWAYS_ASK`); `full` no pregunta nada. El coste de Tripo o World Labs se confirma aparte en todos.
+ */
+export const AUTONOMY_LEVELS = ['ask', 'read', 'edit', 'auto', 'full'];
+export const DEFAULT_AUTONOMY = 'edit';
+const AUTONOMY_KEY = 'dbv.autonomy';
+
+/** Qué hacer con una acción de tipo `kind` (`read`, `modify`, `execute`) en el nivel `level`: `run`, `ask` o `deny`. @spec REQ-115, REQ-12 */
+export function autonomyDecision(level, kind) {
+  const table = {
+    ask: { read: 'ask', modify: 'ask', execute: 'ask' },
+    read: { read: 'run', modify: 'deny', execute: 'deny' },
+    edit: { read: 'run', modify: 'ask', execute: 'ask' },
+    auto: { read: 'run', modify: 'run', execute: 'ask' },
+    full: { read: 'run', modify: 'run', execute: 'run' },
+  };
+  const row = table[level] ?? table[DEFAULT_AUTONOMY];
+  return row[kind] ?? row.modify;
+}
+
+/** Tipo de una petición de aprobación: `execute` si ejecuta código o toca ficheros; si no, `modify`. @spec REQ-115 */
+export function requestKind(request) {
+  const tool = String(request?.tool ?? '').split('.').pop().toLowerCase();
+  return request?.kind === 'python' || ALWAYS_ASK.has(tool) ? 'execute' : 'modify';
+}
+
+/** Nivel guardado (el de siempre si no hay o no es válido). */
+export function loadAutonomy(storage = globalThis.localStorage) {
+  const stored = storage?.getItem?.(AUTONOMY_KEY) ?? null;
+  return AUTONOMY_LEVELS.includes(stored) ? stored : DEFAULT_AUTONOMY;
+}
+
+/** Guarda el nivel (si es uno de los conocidos). */
+export function saveAutonomy(level, storage = globalThis.localStorage) {
+  if (AUTONOMY_LEVELS.includes(level)) storage?.setItem?.(AUTONOMY_KEY, level);
 }
 
 /** Permisos «siempre en esta conversación» (REQ-12). Uno por conversación. */

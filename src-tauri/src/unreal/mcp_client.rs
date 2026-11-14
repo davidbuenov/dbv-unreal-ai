@@ -46,6 +46,9 @@ pub struct McpSession {
     pub url: String,
     pub session_id: Option<String>,
     pub protocol_version: String,
+    /// `serverInfo.version` del editor (`5.9.0-60351404`), o vacía si no la da. Es la versión del editor que está
+    /// abierto, que puede no ser la del proyecto si el usuario lo abrió con otro motor. @spec REQ-109
+    pub server_version: String,
 }
 
 /// Una herramienta (nativa MCP o de un toolset).
@@ -55,6 +58,9 @@ pub struct ToolInfo {
     pub name: String,
     pub description: String,
     pub input_schema: Value,
+    /// `annotations.accessMode` (`read`, `write`, `execute`): lo publica UE 5.9 en cada herramienta; 5.8, no. Las
+    /// aprobaciones lo usan cuando está (REQ-112). @spec REQ-112
+    pub access_mode: Option<String>,
 }
 
 /// Un toolset de `list_toolsets`.
@@ -84,6 +90,17 @@ pub struct ToolResult {
     pub is_error: bool,
     /// `text` interpretado como JSON y desenvuelto (`returnValue` anidados), si lo es.
     pub value: Option<Value>,
+    /// Bloques `image` del resultado (`mimeType`, base64). UE 5.9 manda así las capturas,
+    /// fuera de `returnValue` (que solo trae una referencia `urn:toolresult:`).
+    pub images: Vec<ToolImage>,
+}
+
+/// Imagen devuelta por una herramienta como bloque de contenido `image`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolImage {
+    pub mime_type: String,
+    pub data: String,
 }
 
 pub fn endpoint_url(port: u16, path: &str) -> String {
@@ -147,6 +164,7 @@ impl McpSession {
             url: url.to_string(),
             session_id,
             protocol_version: result.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL_VERSION).to_string(),
+            server_version: result.pointer("/serverInfo/version").and_then(Value::as_str).unwrap_or("").to_string(),
         };
         session.notify("notifications/initialized")?;
         Ok(session)
@@ -204,10 +222,24 @@ impl McpSession {
         Ok(parse_toolset_list(&result.text))
     }
 
-    /// Herramientas de un toolset (`describe_toolset`).
+    /// Herramientas de un toolset: `describe_toolset` en UE 5.8 y `describe_toolsets` (en plural, con una lista y
+    /// `include_schemas`) en UE 5.9, que ya no tiene la versión en singular. Se prueba la de 5.8 y, si el editor no
+    /// la conoce, la de 5.9; si las dos fallan, gana el error de la primera.
+    /// @spec REQ-109, REQ-112
     pub fn describe_toolset(&self, toolset: &str) -> Result<ToolsetInfo, UnrealError> {
-        let result = self.call("describe_toolset", json!({ "toolset_name": toolset }), DEFAULT_TIMEOUT)?;
-        let info = if result.is_error { Err(UnrealError::NotFound(result.text)) } else { parse_toolset_info(&result.text) };
+        let info = match self.call("describe_toolset", json!({ "toolset_name": toolset }), DEFAULT_TIMEOUT) {
+            Ok(result) if !result.is_error => parse_toolset_info(&result.text),
+            singular => {
+                let first = match singular {
+                    Ok(result) => UnrealError::NotFound(result.text),
+                    Err(error) => error,
+                };
+                match self.call("describe_toolsets", json!({ "toolset_names": [toolset], "include_schemas": true }), DEFAULT_TIMEOUT) {
+                    Ok(result) if !result.is_error => parse_toolset_info(&result.text),
+                    _ => Err(first),
+                }
+            }
+        };
         info
     }
 
@@ -228,6 +260,7 @@ pub fn parse_tool_list(tools: &Value) -> Vec<ToolInfo> {
                         name: tool.get("name")?.as_str()?.to_string(),
                         description: tool.get("description").and_then(Value::as_str).unwrap_or("").to_string(),
                         input_schema: tool.get("inputSchema").cloned().unwrap_or_else(|| json!({ "type": "object" })),
+                        access_mode: tool.pointer("/annotations/accessMode").and_then(Value::as_str).map(str::to_string),
                     })
                 })
                 .collect()
@@ -257,8 +290,13 @@ pub fn parse_toolset_list(text: &str) -> Vec<ToolsetSummary> {
 /// JSON de `describe_toolset`. Los nombres de herramienta vienen con el toolset delante
 /// (`DBVMCPFirst.MyCustomSceneToolset.RunPython`): se quedan solo con el último tramo,
 /// que es lo que espera `call_tool`.
+/// En UE 5.9 (`describe_toolsets`) llega envuelto en `{"toolsets": {"<nombre>": {...}}}`: se toma el primero.
 pub fn parse_toolset_info(text: &str) -> Result<ToolsetInfo, UnrealError> {
-    let value: Value = serde_json::from_str(text).map_err(|error| UnrealError::Protocol(format!("describe_toolset no devolvió JSON: {error}")))?;
+    let parsed: Value = serde_json::from_str(text).map_err(|error| UnrealError::Protocol(format!("describe_toolset no devolvió JSON: {error}")))?;
+    let value = match parsed.get("toolsets").and_then(Value::as_object).and_then(|map| map.values().next()) {
+        Some(inner) => inner.clone(),
+        None => parsed,
+    };
     let name = value.get("name").and_then(Value::as_str).unwrap_or("").to_string();
     let mut tools = parse_tool_list(value.get("tools").unwrap_or(&Value::Null));
     for tool in &mut tools {
@@ -294,9 +332,25 @@ pub fn tool_result(result: &Value) -> ToolResult {
         .and_then(Value::as_array)
         .map(|blocks| blocks.iter().filter_map(|b| b.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n"))
         .unwrap_or_default();
+    let images: Vec<ToolImage> = result
+        .get("content")
+        .and_then(Value::as_array)
+        .map(|blocks| {
+            blocks
+                .iter()
+                .filter(|b| b.get("type").and_then(Value::as_str) == Some("image"))
+                .filter_map(|b| {
+                    Some(ToolImage {
+                        mime_type: b.get("mimeType").and_then(Value::as_str).unwrap_or("image/png").to_string(),
+                        data: b.get("data")?.as_str()?.to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let structured = result.get("structuredContent").cloned();
     let value = structured.or_else(|| serde_json::from_str::<Value>(&text).ok()).map(unwrap_value);
-    ToolResult { is_error: result.get("isError").and_then(Value::as_bool).unwrap_or(false), value, text }
+    ToolResult { is_error: result.get("isError").and_then(Value::as_bool).unwrap_or(false), value, text, images }
 }
 
 #[cfg(test)]
@@ -462,6 +516,96 @@ pub(crate) mod tests {
         let average = started.elapsed() / CALLS as u32;
         handle.join().unwrap();
         assert!(average < Duration::from_millis(50), "media por llamada: {average:?}");
+    }
+
+    fn fixture_59(name: &str) -> String {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("tests").join("fixtures").join("unreal-mcp").join("ue-5.9").join(name);
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    /// Respuesta JSON-RPC con el `result` de un fixture grabado y el id que espera `fake_server`.
+    fn rpc_with_result_of_59(name: &str) -> String {
+        let result = serde_json::from_str::<Value>(&fixture_59(name)).unwrap()["result"].clone();
+        format!("{{\"jsonrpc\":\"2.0\",\"id\":{},\"result\":{}}}", "{{ID}}", result)
+    }
+
+    /// UE 5.9 responde `describe_toolsets` con `{"toolsets": {"<nombre>": {...}}}`: se lee igual que en 5.8.
+    /// @spec REQ-109, REQ-112
+    #[test]
+    fn interpreta_describe_toolsets_de_ue_5_9() {
+        let result = serde_json::from_str::<Value>(&fixture_59("describe_toolsets.EditorToolset.EditorAppToolset.response.json")).unwrap()["result"].clone();
+        let info = parse_toolset_info(&tool_result(&result).text).unwrap();
+        assert_eq!(info.name, "EditorToolset.EditorAppToolset");
+        assert_eq!(info.tools.len(), 42);
+        assert!(info.tools.iter().any(|t| t.name == "CaptureEditorImage"), "los nombres se acortan al último tramo");
+        assert!(!info.tools.iter().any(|t| t.name == "CaptureViewport"), "en 5.9 la captura del viewport ya no está aquí");
+    }
+
+    /// Si el editor no conoce `describe_toolset` (UE 5.9), se pide `describe_toolsets` con la lista y los esquemas,
+    /// tanto si responde con un resultado de error como con un error JSON-RPC. @spec REQ-109, REQ-112
+    #[test]
+    fn describe_toolset_usa_describe_toolsets_en_ue_5_9() {
+        let init = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18"}}"#;
+        let unknown_result = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"isError":true,"content":[{"type":"text","text":"Unknown tool describe_toolset"}]}}"#;
+        let unknown_rpc = r#"{"jsonrpc":"2.0","id":{{ID}},"error":{"code":-32602,"message":"Unknown tool: describe_toolset"}}"#;
+        let plural = rpc_with_result_of_59("describe_toolsets.EditorToolset.EditorAppToolset.response.json");
+        for unknown in [unknown_result, unknown_rpc] {
+            let (url, handle) = fake_server(vec![http("200 OK", "Mcp-Session-Id: s\r\n", init), http("202 Accepted", "", ""), http("200 OK", "", unknown), http("200 OK", "", &plural)]);
+            let session = McpSession::connect(&url).unwrap();
+            let info = session.describe_toolset("EditorToolset.EditorAppToolset").unwrap();
+            assert_eq!(info.tools.len(), 42);
+            let seen = handle.join().unwrap();
+            let body: Value = serde_json::from_str(seen[3].split_once("\r\n\r\n").unwrap().1).unwrap();
+            assert_eq!(body["params"]["name"], "describe_toolsets");
+            assert_eq!(body["params"]["arguments"], json!({ "toolset_names": ["EditorToolset.EditorAppToolset"], "include_schemas": true }));
+        }
+    }
+
+    /// La sesión guarda la versión del editor (`serverInfo.version`), vacía si no la da; y de cada herramienta de 5.9,
+    /// su `accessMode`. @spec REQ-109, REQ-112
+    #[test]
+    fn guarda_la_version_del_editor_y_la_marca_de_acceso() {
+        let init = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18","serverInfo":{"name":"unreal-mcp","version":"5.9.0-60351404"}}}"#;
+        let (url, handle) = fake_server(vec![http("200 OK", "Mcp-Session-Id: s\r\n", init), http("202 Accepted", "", "")]);
+        assert_eq!(McpSession::connect(&url).unwrap().server_version, "5.9.0-60351404");
+        handle.join().unwrap();
+        let bare = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18"}}"#;
+        let (url, handle) = fake_server(vec![http("200 OK", "Mcp-Session-Id: s\r\n", bare), http("202 Accepted", "", "")]);
+        assert_eq!(McpSession::connect(&url).unwrap().server_version, "");
+        handle.join().unwrap();
+
+        let result = serde_json::from_str::<Value>(&fixture_59("describe_toolsets.EditorToolset.EditorAppToolset.response.json")).unwrap()["result"].clone();
+        let info = parse_toolset_info(&tool_result(&result).text).unwrap();
+        let mode = |name: &str| info.tools.iter().find(|t| t.name == name).and_then(|t| t.access_mode.clone());
+        assert_eq!(mode("CaptureEditorImage").as_deref(), Some("read"));
+        assert!(info.tools.iter().all(|t| matches!(t.access_mode.as_deref(), Some("read" | "write" | "execute"))));
+        let old = parse_toolset_info(&tool_result(&result_of("describe_toolset.MyCustomSceneToolset.response.json")).text).unwrap();
+        assert!(old.tools.iter().all(|t| t.access_mode.is_none()), "5.8 no publica la marca");
+    }
+
+    /// Si tampoco existe `describe_toolsets`, el error que se devuelve es el de la primera petición. @spec REQ-02
+    #[test]
+    fn describe_toolset_sin_ninguna_de_las_dos_devuelve_el_primer_error() {
+        let init = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"protocolVersion":"2025-06-18"}}"#;
+        let missing = r#"{"jsonrpc":"2.0","id":{{ID}},"result":{"isError":true,"content":[{"type":"text","text":"Toolset X not found"}]}}"#;
+        let unknown = r#"{"jsonrpc":"2.0","id":{{ID}},"error":{"code":-32602,"message":"Unknown tool: describe_toolsets"}}"#;
+        let (url, handle) = fake_server(vec![http("200 OK", "Mcp-Session-Id: s\r\n", init), http("202 Accepted", "", ""), http("200 OK", "", missing), http("200 OK", "", unknown)]);
+        let session = McpSession::connect(&url).unwrap();
+        assert!(matches!(session.describe_toolset("X"), Err(UnrealError::NotFound(text)) if text.contains("Toolset X not found")));
+        handle.join().unwrap();
+    }
+
+    /// Los bloques `image` del resultado se guardan aparte del texto (así llegan las capturas en UE 5.9).
+    /// @spec REQ-109
+    #[test]
+    fn guarda_los_bloques_de_imagen_del_resultado() {
+        let result = serde_json::from_str::<Value>(&fixture_59("call_tool.SceneCaptureToolset.CaptureEditorViewport.response.json")).unwrap()["result"].clone();
+        let parsed = tool_result(&result);
+        assert_eq!(parsed.images.len(), 1);
+        assert_eq!(parsed.images[0].mime_type, "image/png");
+        assert!(!parsed.images[0].data.is_empty());
+        assert!(!parsed.text.contains(&parsed.images[0].data), "la imagen no se mezcla con el texto");
+        assert!(tool_result(&json!({ "content": [{ "type": "text", "text": "hola" }] })).images.is_empty());
     }
 
     /// Contra el editor real (no corre por defecto): `DBV_UNREAL_MCP_PORT=8000 cargo test -- --ignored en_vivo`.

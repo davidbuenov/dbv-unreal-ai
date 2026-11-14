@@ -15,13 +15,33 @@
 
 use serde_json::Value;
 
-use super::mcp_client::{ToolInfo, ToolsetInfo};
+use super::mcp_client::{ToolInfo, ToolsetInfo, ToolsetSummary};
 
 /// Caracteres como mucho en un resultado de herramienta. El mismo valor que `RESULT_LIMIT` de `unrealTools.js`.
 pub const RESULT_LIMIT: usize = 12_000;
 
 /// Caracteres como mucho de la descripción de una herramienta en la vista compacta.
 const SUMMARY_LIMIT: usize = 160;
+
+/// Caracteres como mucho de la descripción de cada toolset en `unreal_list_toolsets`. UE 5.9 tiene 139 toolsets y,
+/// con la primera línea entera, la lista ocupaba 15.897 caracteres, por encima de `RESULT_LIMIT`; con 40 se queda en
+/// ~10.800 y sigue diciendo para qué es cada uno. El mismo valor que en `unrealTools.js`. @spec REQ-51, REQ-112
+pub const LIST_SUMMARY_LIMIT: usize = 40;
+
+/// La lista de toolsets que ve la IA: una línea por toolset con el principio de su primera frase, recortada al
+/// tope. La misma que `toolsetList` de `unrealTools.js`. @spec REQ-51, REQ-112
+pub fn toolset_list(toolsets: &[ToolsetSummary]) -> String {
+    let lines: Vec<String> = toolsets
+        .iter()
+        .map(|t| {
+            let sentence = first_sentence(&t.description);
+            let short: String = sentence.chars().take(LIST_SUMMARY_LIMIT).collect();
+            let summary = if sentence.chars().count() > LIST_SUMMARY_LIMIT { format!("{short}…") } else { short };
+            if summary.is_empty() { format!("- {}", t.name) } else { format!("- {}: {summary}", t.name) }
+        })
+        .collect();
+    clip(&lines.join("\n"))
+}
 
 /// Recorta `text` a `RESULT_LIMIT` caracteres y, si recorta, lo dice y explica cómo pedir menos.
 pub fn clip(text: &str) -> String {
@@ -122,6 +142,29 @@ mod tests {
         }
     }
 
+    /// La lista de los 139 toolsets de UE 5.9 (grabada en `PruebaUnreal59`) pasaba de 15.800 caracteres; ahora cabe
+    /// en el tope, conserva todos los nombres y coincide con la de JS (referencia común). @spec REQ-51, REQ-112, REQ-116
+    #[test]
+    fn la_lista_de_toolsets_de_ue_5_9_cabe_en_el_tope() {
+        let path = format!("{FIXTURES}/unreal-mcp/ue-5.9/list_toolsets.response.json");
+        let response: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let toolsets = crate::unreal::mcp_client::parse_toolset_list(response["result"]["content"][0]["text"].as_str().unwrap());
+        assert_eq!(toolsets.len(), 139);
+        let list = toolset_list(&toolsets);
+        assert!(list.chars().count() <= RESULT_LIMIT, "{}", list.chars().count());
+        assert!(!list.contains("(truncated"), "no hace falta recortarla");
+        for t in &toolsets {
+            assert!(list.contains(&format!("- {}", t.name)), "{}", t.name);
+        }
+        assert!(list.contains("- DBVUnrealAICpp.DBVUnrealAICppToolset"));
+        let golden = format!("{FIXTURES}/compact/list_toolsets.ue-5.9.txt");
+        if std::env::var_os("DBV_UPDATE_GOLDEN").is_some() {
+            std::fs::write(&golden, format!("{list}\n")).unwrap();
+        }
+        let expected = std::fs::read_to_string(&golden).unwrap().replace("\r\n", "\n");
+        assert_eq!(list, expected.trim_end_matches('\n'));
+    }
+
     /// Niagara pasaba de 306 KB; ahora cabe en el tope y la herramienta concreta sigue disponible entera. @spec REQ-51
     #[test]
     fn un_toolset_enorme_cabe_en_el_tope_y_su_herramienta_se_pide_aparte() {
@@ -140,6 +183,7 @@ mod tests {
         let tools = std::fs::read_to_string(format!("{src}/unreal/unrealTools.js")).unwrap();
         assert!(tools.contains(&format!("export const RESULT_LIMIT = {RESULT_LIMIT};")), "RESULT_LIMIT de unrealTools.js");
         assert!(tools.contains(&format!("const SUMMARY_LIMIT = {SUMMARY_LIMIT};")), "SUMMARY_LIMIT de unrealTools.js");
+        assert!(tools.contains(&format!("export const LIST_SUMMARY_LIMIT = {LIST_SUMMARY_LIMIT};")), "LIST_SUMMARY_LIMIT de unrealTools.js");
         let memory = std::fs::read_to_string(format!("{src}/memory/memory.js")).unwrap();
         assert!(memory.contains(&format!("export const MAX_ENTRIES = {};", crate::project_memory::tools::MAX_ENTRIES)), "MAX_ENTRIES de memory.js");
     }

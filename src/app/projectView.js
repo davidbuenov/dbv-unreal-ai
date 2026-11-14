@@ -16,17 +16,21 @@ import * as api from './backend.js';
 import { baseName, button, dirName, el } from './dom.js';
 import { convaiCard, convaiLive, directAccessBanner, hasConvaiToolsets } from './convaiCard.js';
 import { isDbvToolset } from '../unreal/unrealTools.js';
+import { shortVersion, versionMismatch } from '../unreal/engineVersion.js';
 
 const BACKUP_KEY = 'dbv-unreal-ai:lastBackup:';
 
 /** Plugins de Epic que usa «vestir a un MetaHuman» (los mismos que `prepare::DRESSING_PLUGINS`). @spec REQ-87 */
 export const DRESSING_PLUGINS = ['GeometryScripting', 'ChaosClothAssetToolset', 'PythonFoundationPackages'];
+/** Plugins que «Preparar» pide solo desde UE 5.9 (los mismos que `prepare::UE59_PLUGINS`). @spec REQ-110 */
+export const UE59_PLUGINS = ['AllToolsets'];
 
 /** Texto y explicación de una comprobación del diagnóstico. */
 export function checkLabel(check) {
   const [kind, name] = check.id.split(':');
   const label = kind === 'plugin' ? t('check.plugin', { name }) : t(`check.${kind}`, { detail: check.detail || '—' });
-  const why = t(kind === 'plugin' && DRESSING_PLUGINS.includes(name) ? 'check.why.dressing' : `check.why.${kind}`);
+  const special = kind === 'plugin' && DRESSING_PLUGINS.includes(name) ? 'dressing' : kind === 'plugin' && UE59_PLUGINS.includes(name) ? 'ue59' : kind;
+  const why = t(`check.why.${special}`);
   return { label, why };
 }
 
@@ -94,9 +98,14 @@ export function createProjectView(host, deps) {
         deps.toast(t('unreal.identityMismatch', { port: String(actualEndpoint.port), found: identity.project_name, expected: project.name }), 'error');
         return;
       }
+      // El editor conectado puede ser de otra versión que el proyecto si el usuario lo abrió a mano con otro motor:
+      // se avisa (convertir no tiene vuelta atrás) y la píldora y la IA usan la versión real (REQ-109).
+      const serverVersion = Array.isArray(result.value) ? '' : (result.value.serverVersion ?? '');
+      const mismatch = versionMismatch(project.engineAssociation, serverVersion);
+      const engineVersion = serverVersion ? shortVersion(serverVersion) : project.engineAssociation;
       // Con Convai en el editor, la conversación recibe sus reglas (REQ-56).
-      deps.state.setConnection({ status: 'online', endpoint: actualEndpoint, toolsets: toolsets.length, convai: hasConvaiToolsets(toolsets) }, true);
-      deps.toast(t('project.connected', { n: String(toolsets.length) }));
+      deps.state.setConnection({ status: 'online', endpoint: actualEndpoint, engineVersion, toolsets: toolsets.length, convai: hasConvaiToolsets(toolsets) }, true);
+      deps.toast(mismatch ? t('unreal.versionMismatch', mismatch) : t('project.connected', { n: String(toolsets.length) }), mismatch ? 'error' : undefined);
       await api.unrealRememberProject(project.path);
     } else {
       deps.state.setConnection({ status: readiness?.ready === false ? 'prep' : 'offline' }, true);

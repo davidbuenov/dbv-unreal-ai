@@ -1,0 +1,153 @@
+{
+ "jsonrpc": "2.0",
+ "id": 3,
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\"returnValue\":{\"image\":\"urn:toolresult:SceneCaptureToolset.SceneCaptureToolset.CaptureEditorViewport:683dfee4-4083-e670-f64a-bc84d428f2a7:/returnValue/image\",\"width\":1003,\"height\":777,\"metadata\":{\"path\":\"EditorViewport\",\"world\":{\"world\":{\"refPath\":\"/Game/Maps/L_NuevoNivel.L_NuevoNivel\"},\"worldType\":\"Editor\",\"mapPath\":\"/Game/Maps/L_NuevoNivel\",\"pIEInstance\":-1,\"bCanCapture\":true},\"camera\":{\"location\":{\"x\":491.19711894203255,\"y\":-343.96946409216434,\"z\":155.40277128216817},\"rotation\":{\"pitch\":-19.050001300636666,\"yaw\":115.57500295390695,\"roll\":2.9221535060894143e-07},\"projectionMode\":\"Perspective\",\"fOV\":90,\"orthoWidth\":512,\"perspectiveNearClipPlane\":10},\"viewSource\":\"Level Viewport (Perspective)\",\"mode\":\"\",\"visualizationSubMode\":\"\",\"sourceDimensions\":{\"x\":1003,\"y\":777},\"viewRectMin\":{\"x\":0,\"y\":0},\"viewRectMax\":{\"x\":1003,\"y\":777},\"requestFrameNumber\":33580,\"worldTimeSeconds\":1406.3125385344028},\"annotations\":{\"grid\":{\"spacingCm\":200,\"extentCm\":1000,\"height\":0},\"labeledActors\":[{\"name\":\"StaticMeshActor_2\",\"label\":\"Coche_Fab_FreePack @(4,0,0)\",\"class\":{\"refPath\":\"/Script/Engine.StaticMeshActor\"},\"screenPosition\":{\"x\":414,\"y\":432},\"worldLocation\":{\"x\":400,\"y\":0,\"z\":0},\"distanceCm\":388.30648803710938},{\"name\":\"PlayerStart_0\",\"label\":\"InicioJugador @(0,0,1)\",\"class\":{\"refPath\":\"/Script/Engine.PlayerStart\"},\"screenPosition\":{\"x\":790,\"y\":273},\"worldLocation\":{\"x\":0,\"y\":0,\"z\":100},\"distanceCm\":602.2117919921875},{\"name\":\"Brush_0\",\"label\":\"Brush0 @(0,0,0)\",\"class\":{\"refPath\":\"/Script/Engine.Brush\"},\"screenPosition\":{\"x\":773,\"y\":367},\"worldLocation\":{\"x\":0,\"y\":0,\"z\":0},\"distanceCm\":619.46722412109375},{\"name\":\"StaticMeshActor_0\",\"label\":\"Suelo @(0,0,0)\",\"class\":{\"refPath\":\"/Script/Engine.StaticMeshActor\"},\"screenPosition\":{\"x\":765,\"y\":410},\"worldLocation\":{\"x\":0,\"y\":0,\"z\":-50},\"distanceCm\":633.861083984375}]},\"warnings\":[]}}"
+   },
+   {
+    "type": "image",
+    "mimeType": "image/png",
+    "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "annotations": {
+     "audience": [
+      "user",
+      "assistant"
+     ]
+    }
+   }
+  ],
+  "structuredContent": {
+   "returnValue": {
+    "image": "urn:toolresult:SceneCaptureToolset.SceneCaptureToolset.CaptureEditorViewport:683dfee4-4083-e670-f64a-bc84d428f2a7:/returnValue/image",
+    "width": 1003,
+    "height": 777,
+    "metadata": {
+     "path": "EditorViewport",
+     "world": {
+      "world": {
+       "refPath": "/Game/Maps/L_NuevoNivel.L_NuevoNivel"
+      },
+      "worldType": "Editor",
+      "mapPath": "/Game/Maps/L_NuevoNivel",
+      "pIEInstance": -1,
+      "bCanCapture": true
+     },
+     "camera": {
+      "location": {
+       "x": 491.19711894203255,
+       "y": -343.96946409216434,
+       "z": 155.40277128216817
+      },
+      "rotation": {
+       "pitch": -19.050001300636666,
+       "yaw": 115.57500295390695,
+       "roll": 2.9221535060894143e-07
+      },
+      "projectionMode": "Perspective",
+      "fOV": 90,
+      "orthoWidth": 512,
+      "perspectiveNearClipPlane": 10
+     },
+     "viewSource": "Level Viewport (Perspective)",
+     "mode": "",
+     "visualizationSubMode": "",
+     "sourceDimensions": {
+      "x": 1003,
+      "y": 777
+     },
+     "viewRectMin": {
+      "x": 0,
+      "y": 0
+     },
+     "viewRectMax": {
+      "x": 1003,
+      "y": 777
+     },
+     "requestFrameNumber": 33580,
+     "worldTimeSeconds": 1406.3125385344028
+    },
+    "annotations": {
+     "grid": {
+      "spacingCm": 200,
+      "extentCm": 1000,
+      "height": 0
+     },
+     "labeledActors": [
+      {
+       "name": "StaticMeshActor_2",
+       "label": "Coche_Fab_FreePack @(4,0,0)",
+       "class": {
+        "refPath": "/Script/Engine.StaticMeshActor"
+       },
+       "screenPosition": {
+        "x": 414,
+        "y": 432
+       },
+       "worldLocation": {
+        "x": 400,
+        "y": 0,
+        "z": 0
+       },
+       "distanceCm": 388.3064880371094
+      },
+      {
+       "name": "PlayerStart_0",
+       "label": "InicioJugador @(0,0,1)",
+       "class": {
+        "refPath": "/Script/Engine.PlayerStart"
+       },
+       "screenPosition": {
+        "x": 790,
+        "y": 273
+       },
+       "worldLocation": {
+        "x": 0,
+        "y": 0,
+        "z": 100
+       },
+       "distanceCm": 602.2117919921875
+      },
+      {
+       "name": "Brush_0",
+       "label": "Brush0 @(0,0,0)",
+       "class": {
+        "refPath": "/Script/Engine.Brush"
+       },
+       "screenPosition": {
+        "x": 773,
+        "y": 367
+       },
+       "worldLocation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       },
+       "distanceCm": 619.4672241210938
+      },
+      {
+       "name": "StaticMeshActor_0",
+       "label": "Suelo @(0,0,0)",
+       "class": {
+        "refPath": "/Script/Engine.StaticMeshActor"
+       },
+       "screenPosition": {
+        "x": 765,
+        "y": 410
+       },
+       "worldLocation": {
+        "x": 0,
+        "y": 0,
+        "z": -50
+       },
+       "distanceCm": 633.861083984375
+      }
+     ]
+    },
+    "warnings": []
+   }
+  }
+ }
+}

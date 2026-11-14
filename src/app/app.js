@@ -13,9 +13,11 @@
 
 import { getLanguage, registerTranslations, t } from '../ai/i18nBridge.js';
 import { createApprovalCard } from '../unreal/approvalCard.js';
-import { createPermissionMemory } from '../unreal/permissions.js';
+import { AUTONOMY_LEVELS, autonomyDecision, createPermissionMemory, loadAutonomy, requestKind, saveAutonomy } from '../unreal/permissions.js';
 import { createUnrealTools, describeCapture, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
 import { sendToUnreal } from '../unreal/sendToUnreal.js';
+import { isPreview } from '../unreal/engineVersion.js';
+import { needsAttention } from './attention.js';
 import { createChatJobs } from '../generation/chatJobs.js';
 import { createGenerationTools } from '../generation/generationTools.js';
 import { mountInlineViewer, viewableFile } from '../generation/preview.js';
@@ -84,7 +86,8 @@ export async function pastedAttachments(files, { saveImage, onError }) {
 
 /** Texto de la píldora de conexión con Unreal. */
 export function pillState(connection) {
-  const vars = { project: connection?.projectName ?? '', version: connection?.engineVersion ?? '', port: String(connection?.endpoint?.port ?? '') };
+  const version = connection?.engineVersion ?? '';
+  const vars = { project: connection?.projectName ?? '', version: isPreview(version) ? `${version} ${t('unreal.preview')}` : version, port: String(connection?.endpoint?.port ?? '') };
   const status = connection?.status ?? 'offline';
   const text = status === 'offline' ? t('unreal.pill.offline') : t(`unreal.pill.${status}`, vars);
   const className = { online: 'pill pill--online', prep: 'pill pill--prep', connecting: 'pill pill--prep pill--busy' }[status] ?? 'pill';
@@ -464,7 +467,16 @@ export function start() {
         }
       },
       onProposalApplied: (paths) => codeCompiler.afterApply(paths),
-      autoAllowPermission: (params) => autoAllow(params, readOnlyTools),
+      autoAllowPermission: (params) => autoAllow(params, readOnlyTools, loadAutonomy()),
+      // Un agente espera una aprobación: aviso si la ventana no está delante (REQ-115).
+      onAttention: () => needsAttention(),
+      // Niveles de autonomía como los del Unreal Assistant de UE 5.9 (REQ-115).
+      autonomy: {
+        levels: AUTONOMY_LEVELS.map((id) => ({ id, label: t(`unreal.autonomy.${id}`) })),
+        value: () => loadAutonomy(),
+        onChange: (level) => saveAutonomy(level),
+        hint: t('unreal.autonomy.hint'),
+      },
       // REQ-22: la IA solo propone cambios donde deja la regla de Rust (la misma que aplica al escribir).
       checkProposalPath: async (path) => {
         const problem = await api.unrealCodePathProblem(path);
@@ -475,9 +487,23 @@ export function start() {
         const askApproval = (request) => {
           // Las acciones de Convai guardan Blueprints: «Deshacer este turno» lo avisará (REQ-56, R-27).
           if (turnContext && /Convai/i.test(String(request.toolset ?? ''))) turnContext.convaiSaved = true;
-          const card = createApprovalCard(request);
-          panel.addNode(card.node);
-          return card.choice;
+          // El nivel de autonomía decide si se pregunta, se ejecuta o se rechaza sin tarjeta, y lo deja dicho (REQ-115).
+          const decision = autonomyDecision(loadAutonomy(), requestKind(request));
+          const label = String(request.tool ?? request.kind ?? '');
+          let choice;
+          if (decision === 'run') {
+            panel.addStep(t('ai.permAuto').replace('{tool}', label));
+            choice = Promise.resolve('once');
+          } else if (decision === 'deny') {
+            panel.addStep(t('ai.permAutoDenied').replace('{tool}', label));
+            choice = Promise.resolve('deny');
+          } else {
+            const card = createApprovalCard(request);
+            panel.addNode(card.node);
+            needsAttention();
+            choice = card.choice;
+          }
+          return choice;
         };
         // La captura se ve en la conversación como miniatura (pulsar la abre a tamaño completo).
         const showImage = (capture) => {
@@ -489,6 +515,7 @@ export function start() {
         const unreal = state.connection?.status === 'online' ? createUnrealTools({
           backend: unrealBackend(),
           askApproval,
+          askReads: () => loadAutonomy() === 'ask',
           onAction: log.add,
           permissions: memories.get(conversationId),
           vision,

@@ -483,19 +483,8 @@ impl McpServer {
         let text = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
         let err = |e: UnrealError| e.to_string();
         let result = match name {
-            "unreal_list_toolsets" => self
-                .toolset_list(false)
-                .map_err(err)?
-                .iter()
-                .map(|t| {
-                    format!(
-                        "- {}: {}",
-                        t.name,
-                        t.description.lines().next().unwrap_or("")
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
+            // Acotada: UE 5.9 tiene 139 toolsets (REQ-51, REQ-112).
+            "unreal_list_toolsets" => compact::toolset_list(&self.toolset_list(false).map_err(err)?),
             "unreal_describe_toolset" => {
                 let full = self.resolve(&text(args, "toolset"))?;
                 let info = self.editor(|s| s.describe_toolset(&full)).map_err(err)?;

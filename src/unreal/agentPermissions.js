@@ -13,10 +13,13 @@
 // herramienta de lectura (la misma regla del verbo que el asistente integrado, `classifyTool`) se conceden solas.
 // Lo demás —modificar, Python, gastar créditos y las herramientas propias del agente— sigue preguntando.
 
-import { classifyTool } from './permissions.js';
+import { autonomyDecision, classifyTool, DEFAULT_AUTONOMY } from './permissions.js';
 
 /** El nombre de la herramienta de nuestro servidor en el título que pone cada agente, o `null`. */
 const OWN_TOOL = /(?:^|[\s(`"'])(?:mcp__)?dbv-unreal-ai(?:__|[_.:/])([a-z][a-z0-9_]*)/i;
+
+/** Lo mismo, pero solo al principio: el título ES la herramienta (lo que cada agente pone al llamar a una de MCP). */
+const STRICT_OWN_TOOL = /^`?(?:mcp__)?dbv-unreal-ai(?:__|[_.:/])[a-z][a-z0-9_]*/i;
 
 /** Herramienta de nuestro servidor a la que se refiere la petición de permiso, o `null` si es de otro. */
 export function ownTool(params) {
@@ -32,12 +35,26 @@ export function ownTool(params) {
  * @param {string[]} readOnlyTools `READ_ONLY_TOOLS` de Rust.
  * @returns {{optionId: string, tool: string} | null}
  */
-export function autoAllow(params, readOnlyTools) {
+export function autoAllow(params, readOnlyTools, level = DEFAULT_AUTONOMY) {
   const tool = ownTool(params);
   const raw = params?.toolCall?.rawInput ?? {};
   const inner = tool === 'unreal_call_tool' ? String(raw.tool ?? raw.tool_name ?? '') : '';
   const read = Boolean(tool) && (readOnlyTools.includes(tool) || (inner !== '' && classifyTool(inner) === 'read'));
+  // Nivel de autonomía (REQ-115): las herramientas propias del agente (editar ficheros, terminal) y nuestro Python
+  // cuentan como «ejecutar»; las demás de nuestro servidor que no leen, como «modificar».
+  // Para modificar sin preguntar, la petición tiene que ser de verdad una herramienta nuestra: el título EMPIEZA por
+  // ella (o viene en `toolName`/`name`). Un comando de terminal cuyo texto la mencione es del agente: «ejecutar».
+  const strict = Boolean(tool) && (STRICT_OWN_TOOL.test(String(params?.toolCall?.title ?? '').trim()) || STRICT_OWN_TOOL.test(String(params?.toolCall?.toolName ?? params?.toolCall?.name ?? '').trim()));
+  const kind = read ? 'read' : strict && tool !== 'unreal_run_python' ? 'modify' : 'execute';
+  // La llamada que gasta créditos (Tripo, World Labs) es la que lleva `confirm_cost: true`: pregunta en todos los niveles.
+  const spends = raw.confirm_cost === true || raw.confirm_cost === 'true';
+  const decision = spends ? 'ask' : autonomyDecision(level, kind);
   const options = params?.options ?? [];
-  const option = read ? options.find((o) => o.kind === 'allow_once') ?? options.find((o) => String(o.kind ?? '').startsWith('allow')) : null;
-  return option ? { optionId: option.optionId, tool: inner || tool } : null;
+  const allowOption = options.find((o) => o.kind === 'allow_once') ?? options.find((o) => String(o.kind ?? '').startsWith('allow'));
+  const rejectOption = options.find((o) => o.kind === 'reject_once') ?? options.find((o) => String(o.kind ?? '').startsWith('reject'));
+  const label = inner || tool || String(params?.toolCall?.title ?? '');
+  let result = null;
+  if (decision === 'run' && allowOption) result = { optionId: allowOption.optionId, tool: label };
+  if (decision === 'deny' && rejectOption) result = { optionId: rejectOption.optionId, tool: label, denied: true };
+  return result;
 }

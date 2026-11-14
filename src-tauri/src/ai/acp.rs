@@ -93,6 +93,13 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
             if cfg!(target_os = "linux") { vec!["--uid=".into()] } else { Vec::new() },
         ),
         "copilot" => (need("copilot")?, vec!["--acp".into()]),
+        // Cursor y OpenCode, como en el panel del Unreal Assistant de UE 5.9 (REQ-115): `agent acp` (la CLI de Cursor
+        // se llamaba `cursor-agent` y se renombró a `agent`) y `opencode acp`.
+        "cursor" => (
+            which("cursor-agent").or_else(|| which("agent")).ok_or_else(|| AiError::Config("no se encuentra la CLI de Cursor («agent» o «cursor-agent») en el PATH".into()))?,
+            vec!["acp".into()],
+        ),
+        "opencode" => (need("opencode")?, vec!["acp".into()]),
         other => return Err(AiError::Config(format!("agente desconocido: {other}"))),
     };
 
@@ -102,7 +109,7 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
         "claude" => {
             // @agentclientprotocol/claude-agent-acp recibe el modelo y el esfuerzo por variable de entorno y session/set_config_option.
         }
-        "codex" | "antigravity" | "agy" => {
+        "codex" | "antigravity" | "agy" | "cursor" | "opencode" => {
             // Sin flags: un flag desconocido hace que el adaptador imprima la ayuda y termine. El modelo
             // llega por entorno (`agent_env`) y por `session/set_config_option`.
         }
@@ -594,6 +601,24 @@ mod tests {
         assert!(agent_command(&AgentSpec::new("nada")).is_err());
         // No existe el agente «custom» con una orden libre: es ejecución arbitraria por IPC.
         assert!(agent_command(&AgentSpec::new("custom")).is_err());
+    }
+
+    /// Cursor (`agent acp` o `cursor-agent acp`) y OpenCode (`opencode acp`), como en el Unreal Assistant de UE 5.9:
+    /// sin `--model` (el modelo lo elige su propia CLI); si no están instalados, el error dice cuál falta. @spec REQ-115
+    #[test]
+    fn cursor_y_opencode_se_lanzan_con_acp_y_sin_flags_de_modelo() {
+        for (id, missing) in [("cursor", "Cursor"), ("opencode", "opencode")] {
+            let spec = AgentSpec { id: id.into(), model: Some(id.into()), reasoning_effort: Some("high".into()) };
+            match agent_command(&spec) {
+                Ok((_bin, args)) => {
+                    assert_eq!(args.last().map(String::as_str), Some("acp"), "{id}: {args:?}");
+                    assert!(!args.iter().any(|a| a == "--model" || a == id), "{id}: {args:?}");
+                }
+                Err(error) => assert!(error.to_string().contains(missing), "{id}: {error}"),
+            }
+            assert!(agent_env(&spec).is_empty(), "{id}: sin variables propias");
+        }
+        assert!(crate::ai::detect::TOOLS.contains(&"opencode") && crate::ai::detect::TOOLS.contains(&"agent") && crate::ai::detect::TOOLS.contains(&"cursor-agent"));
     }
 
     #[test]

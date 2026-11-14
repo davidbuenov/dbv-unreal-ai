@@ -123,7 +123,8 @@ pub async fn unreal_open_project(path: String) -> Result<u32, UnrealError> {
         let project = discovery::read_uproject(Path::new(&path))?;
         let engines = discovery::find_engines();
         let engine = discovery::engine_for(&engines, &project.engine_association)
-            .ok_or_else(|| UnrealError::NotFound(format!("no hay una instalación de Unreal {} en este equipo", project.engine_association)))?;
+            // La app nunca lo abre con otro motor: abrirlo con otra versión lo convierte sin vuelta atrás (REQ-109).
+            .ok_or_else(|| UnrealError::NotFound(format!("no hay una instalación de Unreal {} en este equipo. Instálala desde el Epic Games Launcher; abrir el proyecto con otra versión lo convierte y ya no se puede volver atrás, así que si quieres probarlo con otra, hazlo con una copia", project.engine_association)))?;
         if !engine.editor_exists {
             return Err(UnrealError::NotFound(format!("la instalación {} no tiene el editor: {}", engine.version, engine.editor)));
         }
@@ -228,6 +229,8 @@ impl Endpoint {
 pub struct ConnectResponse {
     pub toolsets: Vec<ToolsetSummary>,
     pub endpoint: Endpoint,
+    /// Versión del editor conectado (`serverInfo.version`), para avisar si no es la del proyecto. @spec REQ-109
+    pub server_version: String,
 }
 
 /// Ajustes persistentes del proyecto (autoría, etc.). @spec REQ-74
@@ -268,9 +271,9 @@ pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Connec
     blocking(move || {
         let state = app.state::<UnrealState>();
         let initial_url = initial_endpoint.url();
-        let initial_res = session_for(&state, &initial_url, true).and_then(|s| s.list_toolsets().map(|t| (t, initial_endpoint.clone())));
+        let initial_res = session_for(&state, &initial_url, true).and_then(|s| s.list_toolsets().map(|t| (t, initial_endpoint.clone(), s.server_version.clone())));
 
-        let (toolsets, active_endpoint) = match initial_res {
+        let (toolsets, active_endpoint, server_version) = match initial_res {
             Ok(pair) => pair,
             Err(first_err) => {
                 crate::logging::info(&format!("connect failed on {}: {}; probing ports 8000..=8005", initial_url, first_err));
@@ -283,11 +286,12 @@ pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Connec
                     let probe_url = probe_endpoint.url();
                     if let Ok(sess) = McpSession::connect(&probe_url) {
                         if let Ok(toolsets) = sess.list_toolsets() {
+                            let version = sess.server_version.clone();
                             if let Ok(mut sessions) = state.sessions.lock() {
                                 sessions.insert(probe_url.clone(), sess);
                             }
                             crate::logging::info(&format!("auto-detected active MCP server on port {p} ({probe_url})"));
-                            found = Some((toolsets, probe_endpoint));
+                            found = Some((toolsets, probe_endpoint, version));
                             break;
                         }
                     }
@@ -296,8 +300,8 @@ pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Connec
             }
         };
 
-        crate::logging::info(&format!("connect {}: {} toolsets", active_endpoint.url(), toolsets.len()));
-        Ok(ConnectResponse { toolsets, endpoint: active_endpoint })
+        crate::logging::info(&format!("connect {}: {} toolsets, editor {}", active_endpoint.url(), toolsets.len(), if server_version.is_empty() { "?" } else { server_version.as_str() }));
+        Ok(ConnectResponse { toolsets, endpoint: active_endpoint, server_version })
     })
     .await
 }

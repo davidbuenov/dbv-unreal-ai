@@ -140,13 +140,33 @@ export function createChatPanel({ host, callbacks, renderMarkdown }) {
   });
   // «Capturar viewport» (@spec REQ-73): solo si el host puede capturar el editor.
   const captureViewport = button('📷', () => callbacks.onCaptureViewport?.(), 'button button--compact button--ghost ai-panel__capture-viewport', t('ai.captureViewportHint'));
+  // Nivel de autonomía (DBV Unreal AI, REQ-115): solo si el host lo ofrece. `{levels: [{id, label}], value(), onChange(id), hint}`.
+  const autonomy = el('select', 'ai-panel__autonomy');
+  if (callbacks.autonomy) {
+    for (const level of callbacks.autonomy.levels) {
+      const option = el('option', '', level.label);
+      option.value = level.id;
+      autonomy.append(option);
+    }
+    autonomy.value = callbacks.autonomy.value();
+    autonomy.title = callbacks.autonomy.hint ?? '';
+    autonomy.setAttribute('aria-label', callbacks.autonomy.hint ?? '');
+    const mark = () => autonomy.classList.toggle('ai-panel__autonomy--risky', ['auto', 'full'].includes(autonomy.value));
+    mark();
+    autonomy.addEventListener('change', () => {
+      callbacks.autonomy.onChange(autonomy.value);
+      mark();
+    });
+  } else {
+    autonomy.classList.add('hidden');
+  }
   if (!callbacks.onCaptureViewport) captureViewport.classList.add('hidden');
   const attachments = el('span', 'ai-panel__attachments');
   const usage = el('span', 'ai-panel__usage');
   const speed = el('span', 'ai-panel__usage ai-panel__speed');
   const stopButton = button(t('ai.stop'), () => callbacks.onStop(), 'button button--compact hidden');
   const sendButton = button(t('ai.send'), () => send(), 'button button--primary button--compact');
-  composerActions.append(attachFiles, captureViewport, attachSection, remember, recipes, playtest, blackboxWrap, attachments, speed, usage, stopButton, sendButton);
+  composerActions.append(attachFiles, captureViewport, attachSection, remember, recipes, playtest, blackboxWrap, autonomy, attachments, speed, usage, stopButton, sendButton);
   composer.append(mentionList, input, composerActions);
   host.append(header, destination, warning, contextBar, messages, composer);
 

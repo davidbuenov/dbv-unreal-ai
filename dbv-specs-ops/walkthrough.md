@@ -40,3 +40,25 @@ Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cual
 - **Un vestido sin curva lumbar clara se orienta por el escote** y puede salir girado: se corrige con `flip_orientation`.
 - **Piel limpia y recorte del cuerpo** (REQ-86) siguen desactivados en el pipeline, a la espera de decisión.
 - **Plantillas de tela del plugin** con referencias al proyecto de pruebas: en otro proyecto cargan con avisos de referencias que faltan.
+
+## Compatibilidad UE 5.8.4 × 5.9 (en curso para la v0.6.0, REQ-116)
+
+> Proyectos: `DBVMCPFirst` (5.8.4; no se abre nunca con 5.9) y `PruebaUnreal59` (5.9 MegaJam Preview, C++). Fixtures de 5.9 en `tests/fixtures/unreal-mcp/ue-5.9/`. Estado al 2026-11-13.
+
+| Caso | 5.8.4 | 5.9 | Cómo se ha comprobado |
+| --- | --- | --- | --- |
+| Detectar el motor y conectar | ✅ | ✅ | En vivo en los dos; la píldora marca la 5.9 como «Preview» (Vitest) |
+| Aviso si el editor conectado es de otra versión que el proyecto | — | ✅ | Vitest (`versionMismatch`); la app nunca abre un proyecto con otro motor |
+| «Preparar» (plugins, `AllToolsets` en 5.9, sección del `.ini` de cada versión) | ✅ | ✅ | En vivo en `PruebaUnreal59` (variante C++) y tests de `prepare.rs`/`discovery.rs` |
+| Plugin C++ `DBVUnrealAICpp` (incluido el render de splats) | ✅ | ✅ | Compila y carga en `PruebaUnreal59`; el toolset responde por MCP |
+| Ayuda de los toolsets (`describe_toolset` / `describe_toolsets`) | ✅ | ✅ | Rust con fixtures de las dos versiones y en vivo |
+| Lista de toolsets dentro del tope de contexto | ✅ (22) | ✅ (139) | Referencia común Rust/JS `compact/list_toolsets.ue-5.9.txt` |
+| Aprobaciones por la marca `accessMode` | — (regla del verbo) | ✅ | Vitest con el `EditorAppToolset` real de 5.9 |
+| Capturar el viewport y adjuntarlo | ✅ | ✅ | En vivo en 5.9; miniatura con test de integración |
+| Conversación, colocar actores, deshacer | ✅ | ✅ (parcial) | En vivo en 5.9 (coche de Fab colocado y texturizado) |
+| Generar con Tripo e importar | ✅ | ⏳ | Pendiente en 5.9 |
+| Biblioteca | ✅ | ⏳ | Pendiente en 5.9 |
+| Vestir un MetaHuman | ✅ (copia) | ⏳ | Pendiente con un MetaHuman de `PruebaUnreal59` |
+| Play-testing y caja negra | ✅ | ⏳ | Pendiente en 5.9 |
+| Splats, Convai, informe de VRAM | ✅ | ⏳ | Pendiente en 5.9 |
+| Proyecto de partida del workshop | ⏳ | — | Se prepara en 5.8.4 |

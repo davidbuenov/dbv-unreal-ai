@@ -226,12 +226,10 @@ export function createAiApp(deps) {
       onAttachFiles: host.pickAttachments ? () => attachExternal() : undefined,
       onPasteFiles: host.pasteAttachments ? (pasted) => attachPasted(pasted) : undefined,
       // Capturar viewport de Unreal y adjuntarlo como miniatura a la conversación (REQ-73):
+      // Se adjunta como una imagen pegada: misma forma (`kind: "image"`, `path`, `base64`) y mismo pintado.
       onCaptureViewport: host.captureViewportAttachment ? async () => {
         const attachment = await host.captureViewportAttachment();
-        if (attachment) {
-          currentAttachments().push(attachment);
-          renderConversationAttachments();
-        }
+        if (attachment) addExternalAttachments([attachment]);
       } : undefined,
       // La petición la escribe el host (sabe si hay memoria del proyecto y en qué idioma): REQ-35.
       onRemember: host.rememberRequest ? () => ask(host.rememberRequest(getLanguage())) : undefined,
@@ -239,6 +237,8 @@ export function createAiApp(deps) {
       onRecipes: host.openRecipes ? () => host.openRecipes({ panel, ask }) : undefined,
       // Prueba autónoma en Play (REQ-82): arranca PIE, mueve el Pawn y analiza telemetría y captura.
       onPlaytest: host.runPlaytest ? () => host.runPlaytest({ panel, ask }) : undefined,
+      // Nivel de autonomía del host (DBV Unreal AI, REQ-115).
+      autonomy: host.autonomy,
       // Caja negra (REQ-94): grabar lo que pasa mientras la persona juega; `mode` es pie, attach o choose.
       onBlackbox: host.runBlackbox ? (mode) => host.runBlackbox({ panel, ask, mode }) : undefined,
       onCopy: (code) => navigator.clipboard.writeText(code).then(() => host.toast(t('ai.copied'))),
@@ -830,9 +830,10 @@ export function createAiApp(deps) {
       // Lo que solo consulta no pregunta (en DBV Unreal AI, REQ-12): lo decide el host.
       const allowed = host.autoAllowPermission?.(params);
       if (allowed) {
-        panel.addStep(t('ai.permAuto').replace('{tool}', allowed.tool));
+        panel.addStep(t(allowed.denied ? 'ai.permAutoDenied' : 'ai.permAuto').replace('{tool}', allowed.tool));
         return allowed.optionId;
       }
+      host.onAttention?.();
       const permission = createPermissionCard(params, {
         toRelative,
         isDirty: (relative) => host.isOpenDocument(relative) && host.isDirty(),

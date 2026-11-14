@@ -1,17 +1,16 @@
 ---
-# Frontmatter de la fase vigente: v0.5.1, devolver prendas ajustadas a la biblioteca (REQ-100) e informe de memoria gráfica (REQ-99).
+# Frontmatter de la fase vigente: v0.6.0, compatible con UE 5.8.4 y 5.9 (REQ-109..REQ-116, §18).
 dependencies:
-  - UE 5.8 con DBVMCPFirst y MetaHumans en el nivel (BP_Pablo_fable / BP_Pablo_deportista_claude)
-  - Toolset DBV en Python con sastre (`outfit/tailor.py`) y `equip_metahuman_outfit`
-  - Biblioteca DBV Unreal AI (`src-tauri/src/library/mod.rs` y `generation/commands.rs`)
-  - Sistema de exportación de Unreal Engine (`AssetExportTask` / `GeometryScript_AssetUtils`)
+  - UE 5.8.4 con DBVMCPFirst (no se abre con 5.9) y UE 5.9 MegaJam Preview con PruebaUnreal59 (C++, MCP en el 8000)
+  - Fixtures grabados de 5.9 en tests/fixtures/unreal-mcp/ue-5.9/
+  - Toolsets de Epic de 5.9 con annotations.accessMode y describe_toolsets
 risks:
-  - "R-47: AssetExportTask puede no soportar materiales dinámicos sin exportador FBX/GLTF configurado -> fallback geométrico DynamicMesh a OBJ/MTL preservando UVs y texturas"
-  - "R-48: Concurrencia entre el proceso del editor y la app al escribir en la Biblioteca -> la exportación se hace a staging temporal y Rust gestiona la importación con cerrojo atómico"
-  - "R-49: MetaHumans sin prenda equipada o slot vacío -> validación defensiva temprana listando opciones disponibles sin fallos catastróficos"
+  - "R-52: la 5.9 es una Preview -> compatibilidad por capacidad (probar la forma de 5.8 y caer a la de 5.9), sin atarse a números de versión salvo para los .ini"
+  - "R-53: plazo del workshop (2026-12-10) -> solo P1 en esta entrega; lo P2 en v0.6.x"
+  - "R-55: ~109 toolsets en 5.9 -> topes de REQ-51 comprobados con los fixtures de 5.9"
 rollback_strategy: >
-  Un commit por slice. Si S120 o S121 fallan o se revierten, el pipeline de sastre en Unreal y la biblioteca
-  continúan funcionando de manera independiente como en v0.5.0 sin pérdida de datos.
+  Un commit por rebanada (S124..S130). Todas son aditivas: revertir una deja 5.8.4 como en la v0.5.1 y quita a 5.9
+  solo esa mejora.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -624,3 +623,54 @@ La grabadora y los análisis deben cumplir desde el principio la regla de un sol
 4. **S123 · Verificación E2E de ciclo de vida completo (`REQ-100`):**
    - Prueba de punta a punta: prenda creada/importada -> adaptada con `equip_metahuman_outfit` a MetaHuman -> exportada con `unreal_export_outfit` -> confirmada en la Biblioteca -> reequipada en MetaHuman con misma complexión.
    - Sincronización del plugin con `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI`.
+
+## 18. Plan v0.6.0 — Compatible con UE 5.8.4 y 5.9, y todo lo del asistente de la 5.9 desde la app (`REQ-109..REQ-116`)
+
+> **Modo:** Orquestador: Rust (`unreal/discovery.rs`, `prepare.rs`, `mcp_client.rs`, `commands.rs`), JS (`unrealTools.js`, `permissions.js`, `projectView.js`, traducciones) y fixtures.
+> **Aprobación:** el usuario autorizó el 2026-11-13 encadenar `/plan` → `/build` sin preguntas («continúa con el /plan y después /build sin preguntas, luego reviso»). Se construye lo **P1** de §3.24; lo **P2** queda planificado para después.
+> **Proyectos de prueba:** `PruebaUnreal59` (5.9, C++, MCP en el 8000) y `DBVMCPFirst` (5.8.4). `DBVMCPFirst` no se abre nunca con 5.9.
+
+### Evidencias recogidas en vivo (2026-11-13, `PruebaUnreal59`, `unreal-mcp 5.9.0-60351404`)
+
+1. Las metaherramientas cambian: `tools/list` da `call_tool`, `describe_tools`, `describe_toolsets` y `list_toolsets`, sin `describe_toolset` en singular. `describe_toolsets` responde `{"toolsets": {"<nombre>": {...}}}` y cada herramienta trae `annotations.accessMode` (`read`, `write` o `execute`).
+2. La captura pasa a `SceneCaptureToolset.CaptureEditorViewport`. La imagen llega como bloque `image` y `returnValue.image` es `urn:toolresult:…`; la cámara va en `metadata.camera`.
+3. **El módulo de ajustes se ha renombrado:** la sección del usuario en 5.9 es `[/Script/ModelContextProtocol.ModelContextProtocolSettings]`, y la app sigue usando la de 5.8 (`/Script/ModelContextProtocolEngine.ModelContextProtocolSettings`, `discovery::MCP_SECTION`). En 5.9 la app lee el puerto donde el editor no lo pone, y el `bAutoStartServer=True` que escribe «Preparar» no tiene efecto. Los ajustes del proyecto (`UModelContextProtocolProjectSettings`, `config=Game`, `defaultconfig`) van en `Config/DefaultGame.ini`, en `[/Script/ModelContextProtocol.ModelContextProtocolProjectSettings]`.
+4. `Build.version` de 5.9 (`5.9.0`, CL 60351404, `++UE5+Release-5.9`) no distingue la Preview de la final; `LauncherInstalled.dat` tampoco.
+5. La app abre siempre un proyecto con el motor de su `EngineAssociation` (`commands::unreal_open_project` → `discovery::engine_for`): **nunca** lanza un proyecto 5.8 con el editor 5.9. El caso real es que el usuario lo abra a mano con 5.9 y la app se conecte.
+6. `DBVUnrealAICpp` **compila y carga en 5.9 con el módulo de render** (`DBVUnrealAICppRender`), y su toolset responde por MCP.
+7. Las aprobaciones (`permissions.classifyTool`) deciden por el verbo del nombre porque 5.8 no publicaba `annotations` (ADR-V010-001 D5).
+
+### Architect Review
+
+```xml
+<architect_review>
+  <builder>Compatibilidad por capacidad, no por número de versión: la app prueba la forma de 5.8 y, si el editor no la conoce, la de 5.9 (como ya hacen `describe_toolset` y `capture`). Donde el editor no puede decirlo (ajustes en ficheros .ini antes de conectar), se decide por la versión del motor del proyecto (`EngineInstall.minor`). Rebanadas: (S125) sección de ajustes del MCP según la versión; (S126) `AllToolsets` en «Preparar» con 5.9; (S127) versión real del editor conectado (`serverInfo.version`), aviso si no coincide con el proyecto y marca «Preview»; (S128) aprobaciones con `accessMode` cuando el editor lo publica; (S129) prompt con las herramientas nativas de 5.9; (S130) fixtures de 5.9, topes de contexto y matriz de compatibilidad.</builder>
+  <adversary>REQ-111 dice que en 5.9 «no se compila ni se carga el módulo de render» porque los splats van con el plugin `GaussianSplat` de Epic (REQ-114). Pero REQ-114 es P2 y puede no llegar antes del workshop: si se excluye `DBVUnrealAICppRender` ahora, un usuario de 5.9 se queda sin splats de World Labs. Además, REQ-109 pide un aviso «al lanzar un proyecto 5.8 con el editor 5.9», y la app nunca hace eso (evidencia 5). Y en REQ-112 «si no la trae, tratándola como de escritura» rompería 5.8, donde ninguna herramienta trae la marca: todo pediría permiso y se perdería REQ-12 tal como está.</adversary>
+  <evidence>`SPECIFICATIONS.md` §3.24 (REQ-109, REQ-111, REQ-112, REQ-114); `src-tauri/src/unreal/commands.rs:120-131` (`unreal_open_project` con `engine_for`); `src/unreal/permissions.js:9-13` (regla del verbo, 5.8 sin `annotations`); log de `PruebaUnreal59` del 2026-11-13 (`DBVUnrealAICppRender` cargado); `Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini:344` de `PruebaUnreal59`.</evidence>
+  <builder>Resolución: (1) **REQ-111:** el módulo de render se mantiene en 5.9 hasta que REQ-114 esté hecho; su exclusión forma parte de REQ-114, no de esta entrega. Como compila (evidencia 6), mantenerlo no tiene coste. (2) **REQ-109:** el aviso se da cuando la conexión descubre que el editor conectado (`serverInfo.version`) es de otra versión que el `EngineAssociation` del proyecto (lo abrió el usuario a mano); y si no hay motor de la versión del proyecto, el error lo explica y desaconseja convertirlo. La app sigue sin convertir nunca. (3) **REQ-112:** `accessMode` manda cuando existe (`read` sin `ALWAYS_ASK` es lectura; `write` y `execute`, modificación); sin marca se mantiene la regla del verbo, que ya es segura (todo verbo desconocido pide permiso). Es lo que REQ-12 quería y no empeora 5.8. Las tres desviaciones se anotan en la spec.</builder>
+  <confidence_score edge_cases="high" security="high" concurrency="high" />
+</architect_review>
+```
+
+### Rebanadas P1 (`v0.6.0`, se construyen ahora)
+
+| # | Req. | Qué | Ficheros | Test |
+| --- | --- | --- | --- | --- |
+| S124 ✅ | REQ-109, REQ-112, REQ-73 | Ya hecho el 2026-11-13: `describe_toolsets`, captura de 5.9 y miniatura del botón 📷 | `mcp_client.rs`, `capture.rs`, `aiApp.js` | 6 Rust + 1 Vitest + en vivo |
+| S125 | REQ-110 | Sección de ajustes del MCP según la versión: se leen las dos (gana la de 5.9) y «Preparar» escribe en la del motor del proyecto | `discovery.rs`, `prepare.rs` | lectura de las dos secciones; plan de 5.9 escribe en la nueva |
+| S126 | REQ-110 | `AllToolsets` en «Preparar» si el motor es ≥ 5.9 y lo trae; nunca un plugin que el motor no trae | `prepare.rs` | motor 5.9 falso con y sin `AllToolsets`; 5.8 sin cambios |
+| S127 | REQ-109 | `serverInfo.version` en la sesión y en `ConnectResponse`; aviso si no coincide con el proyecto (con la versión real para el prompt); `EngineInstall.preview` según `PREVIEW_VERSIONS` y píldora «Preview» | `mcp_client.rs`, `commands.rs`, `discovery.rs`, `projectView.js`, traducciones | Rust: versión del servidor; Vitest: aviso por desajuste |
+| S128 | REQ-112 | `ToolInfo.access_mode` y `classifyTool(tool, accessMode)`; la lista «Read-only» y `unreal_call_tool` la usan | `mcp_client.rs`, `permissions.js`, `unrealTools.js` | Rust: se lee `accessMode`; Vitest: `write` con verbo de lectura pide permiso, `read` con verbo de escritura no, `ALWAYS_ASK` siempre pide |
+| S129 | REQ-112 | Prompt según la versión: en 5.9, las herramientas nativas (captura, PIE, Blueprint, `accessMode`) | `unrealTools.js` | Vitest: el párrafo solo sale con 5.9 |
+| S130 | REQ-116 | Fixtures de 5.9 en los tests de contexto (REQ-51): la lista de 109 toolsets y `EditorAppToolset` compacto dentro de tope; matriz 5.8.4 × 5.9 en `walkthrough.md` | `mcp_client.rs`/`compact.rs` (tests), `walkthrough.md` | Rust con fixtures `ue-5.9` |
+
+### Rebanadas P2 (planificadas, después)
+
+- **S131 · REQ-113 Canvas:** antes, el spike `P-34` (¿aparecen las herramientas de Canvas en `list_toolsets` del editor o hay que ir a `localhost:7777/mcp`?).
+- **S132 · REQ-114 splats con `GaussianSplat` de Epic** (spike `P-36`), y **solo entonces** excluir `DBVUnrealAICppRender` en 5.9 (REQ-111).
+- **S133 · REQ-115:** agentes Cursor y OpenCode; **S134** niveles de autonomía; **S135** avisos; **S136** Knowledge Base e `Instructions`.
+- **S137 · Fab:** spike `REQ-101` y lo que siga (§3.23).
+
+### Rollback
+
+Un commit por rebanada. Todas son aditivas sobre 5.8: si una se revierte, 5.8.4 sigue como en la v0.5.1, y 5.9 pierde solo esa mejora.
