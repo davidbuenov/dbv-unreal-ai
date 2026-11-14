@@ -93,7 +93,7 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
             if cfg!(target_os = "linux") { vec!["--uid=".into()] } else { Vec::new() },
         ),
         "copilot" => (need("copilot")?, vec!["--acp".into()]),
-        // Cursor y OpenCode, como en el panel del Unreal Assistant de UE 5.9 (REQ-115): `agent acp` (la CLI de Cursor
+        // Cursor y OpenCode, con los comandos que usa el Unreal Assistant de UE 5.9: `agent acp` (la CLI de Cursor
         // se llamaba `cursor-agent` y se renombró a `agent`) y `opencode acp`.
         "cursor" => (
             which("cursor-agent").or_else(|| which("agent")).ok_or_else(|| AiError::Config("no se encuentra la CLI de Cursor («agent» o «cursor-agent») en el PATH".into()))?,
@@ -604,7 +604,7 @@ mod tests {
     }
 
     /// Cursor (`agent acp` o `cursor-agent acp`) y OpenCode (`opencode acp`), como en el Unreal Assistant de UE 5.9:
-    /// sin `--model` (el modelo lo elige su propia CLI); si no están instalados, el error dice cuál falta. @spec REQ-115
+    /// sin `--model` (el modelo lo elige su propia CLI); si no están instalados, el error dice cuál falta.
     #[test]
     fn cursor_y_opencode_se_lanzan_con_acp_y_sin_flags_de_modelo() {
         for (id, missing) in [("cursor", "Cursor"), ("opencode", "opencode")] {

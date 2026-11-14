@@ -55,7 +55,7 @@ pub struct Detection {
 
 /// Programas que interesan: los agentes y lo que necesitan sus adaptadores.
 /// `cursor-agent` y `agent` son la CLI de Cursor (el nombre antiguo y el nuevo; se busca primero el antiguo porque
-/// `agent` es un nombre genérico); `opencode`, la de OpenCode (REQ-115).
+/// `agent` es un nombre genérico); `opencode`, la de OpenCode.
 pub const TOOLS: &[&str] = &["claude", "gemini", "antigravity", "agy", "agy_acp_server", "codex", "copilot", "cursor-agent", "agent", "opencode", "node", "npx"];
 
 /// Busca `name` en las carpetas de `path_var` (respeta `PATHEXT` en Windows).

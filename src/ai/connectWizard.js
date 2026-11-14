@@ -527,7 +527,7 @@ export function createConnectWizard({ host, backend, onChanged, onAgent, notify 
     for (const tool of detection.tools.filter((x) => ['claude', 'gemini', 'codex', 'copilot'].includes(x.name))) {
       appendAgentItem(tool, tool.name, t(`ai.agent.${tool.name}`));
     }
-    // Cursor (`agent acp`, antes `cursor-agent`) y OpenCode (`opencode acp`), como en el Unreal Assistant de UE 5.9 (REQ-115).
+    // Cursor (`agent acp`, antes `cursor-agent`) y OpenCode (`opencode acp`), con los comandos que usa el Unreal Assistant de UE 5.9.
     if (detection.tools.length > 0) {
       const cursor = detection.tools.find((x) => ['cursor-agent', 'agent'].includes(x.name) && x.path) ?? detection.tools.find((x) => x.name === 'agent');
       appendAgentItem(cursor ? { ...cursor, name: 'cursor' } : null, 'cursor', t('ai.agent.cursor'));
