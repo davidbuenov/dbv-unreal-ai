@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-14
+
+Version v0.6.0: **compatible with Unreal Engine 5.8.4 and 5.9** with the same app and the same plugin, and what the 5.9 assistant brings, from the app: **Cursor and OpenCode agents**, **autonomy levels** and **alerts** when the AI is waiting for your approval, the **Unreal Canvas tools**, the **editor MCP instructions** and the **Knowledge Base**. **World Labs worlds are no longer mirrored**, you can choose the **splat renderer** (ours or Epic's GaussianSplat plugin), and the **"os error 17" when connecting an AI in the Microsoft Store version** is fixed.
+
 ### Added
 - **Unreal Engine 5.9 support alongside 5.8.4 (REQ-109, REQ-110, REQ-112, REQ-116):** the same app and the same plugin work with both engines; where the editor answers differently, the app tries the 5.8 form and, if it does not exist, the 5.9 one.
   - **Version of the connected editor:** the connection reads the editor's real version (`serverInfo.version`). If the project is from another version (you opened it by hand with another engine), it warns that saving converts it with no way back. The connection pill and the AI use the real version, and 5.9 is marked as "Preview".
@@ -39,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **The "📷 Capture viewport" button did not attach the capture (REQ-73):** since v0.4.0 it called two functions that did not exist, so the image was saved to disk but its thumbnail never appeared in the text box nor reached the model, and the error was lost silently. It is now attached like a pasted image. New integration test that clicks the button and looks for the thumbnail.
 
 ### Known (/code-simplify review)
+- **Cursor and OpenCode not tested live (REQ-115):** they are launched with the same commands as the 5.9 Unreal Assistant and have tests, but they have not been tried with their CLIs installed.
+- **A light diagonal line in some world with our renderer:** seen in a capture of *Fantasy Seaside Golden Sands*; to be reviewed.
+- **Fab on UE 5.8.4 (REQ-101):** on 5.9 it works through Epic's toolset; on 5.8.4 it is still pending.
 - **[Important] The Cursor CLI is also looked up as `agent`, a generic name (REQ-115):** if another program with that name is on the PATH and `cursor-agent` is not, the app would think Cursor is installed and the agent would not start. `cursor-agent` is looked up first. Still to be tested live with the Cursor CLI installed.
 
 ## [0.5.1] - 2026-11-12

@@ -11,6 +11,10 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.6.0] - 2026-11-14
+
+Versión v0.6.0: **compatible con Unreal Engine 5.8.4 y 5.9** con la misma app y el mismo plugin, y lo que trae el asistente de la 5.9 desde la app: **agentes Cursor y OpenCode**, **niveles de autonomía** y **avisos** cuando la IA espera tu aprobación, las **herramientas de Unreal Canvas**, las **instrucciones del MCP del editor** y la **Knowledge Base**. Los **mundos de World Labs ya no salen en espejo**, puedes elegir el **renderizador de splats** (el nuestro o el plugin GaussianSplat de Epic) y se corrige el error **«os error 17» al conectar una IA en la versión de la Microsoft Store**.
+
 ### Añadido
 - **Compatibilidad con Unreal Engine 5.9 además de 5.8.4 (REQ-109, REQ-110, REQ-112, REQ-116):** la misma app y el mismo plugin funcionan con los dos motores; donde el editor responde distinto, la app prueba la forma de 5.8 y, si no existe, la de 5.9.
   - **Versión del editor conectado:** la conexión lee la versión real del editor (`serverInfo.version`). Si el proyecto es de otra versión (lo abriste a mano con otro motor), avisa de que guardar lo convierte sin vuelta atrás. La píldora de conexión y la IA usan la versión real, y la 5.9 sale marcada como «Preview».
@@ -39,6 +43,9 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - **El botón «📷 Capturar viewport» no adjuntaba la captura (REQ-73):** desde la v0.4.0 llamaba a dos funciones que no existían, así que la imagen se guardaba en disco pero nunca aparecía la miniatura en la caja de texto ni llegaba al modelo, y el error se perdía sin aviso. Ahora se adjunta igual que una imagen pegada. Nuevo test de integración que pulsa el botón y busca la miniatura.
 
 ### Conocido (revisión de /code-simplify)
+- **Cursor y OpenCode sin probar en vivo (REQ-115):** se lanzan con los mismos comandos que el Unreal Assistant de la 5.9 y tienen tests, pero no se han probado con sus CLI instaladas.
+- **Una línea diagonal clara en algún mundo con nuestro renderizador:** vista en una captura de *Fantasy Seaside Golden Sands*; pendiente de revisar.
+- **Fab en UE 5.8.4 (REQ-101):** en 5.9 funciona con el toolset de Epic; en 5.8.4 sigue pendiente.
 - **[Importante] La CLI de Cursor se busca también como `agent`, un nombre genérico (REQ-115):** si en el PATH hay otro programa con ese nombre y no está `cursor-agent`, la app creería que Cursor está instalado y el agente no arrancaría. Se busca primero `cursor-agent`. Pendiente de probar en vivo con la CLI de Cursor instalada.
 
 ## [0.5.1] - 2026-11-12

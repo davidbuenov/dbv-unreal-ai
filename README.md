@@ -5,9 +5,9 @@
 **🇪🇸 Español · [🇬🇧 English](./README.en.md)**
 
 [![Sitio Web](https://img.shields.io/badge/Sitio_Web-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/)
-[![Releases v0.5.1](https://img.shields.io/badge/Releases-v0.5.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.6.0](https://img.shields.io/badge/Releases-v0.6.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
-[![status](https://img.shields.io/badge/status-estable_%7C_v0.5.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.5.1)
+[![status](https://img.shields.io/badge/status-estable_%7C_v0.6.0-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.0)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -21,7 +21,7 @@
 [![Three.js](https://img.shields.io/badge/Three.js-Visor_3D-000000?style=flat&logo=threedotjs&logoColor=white)](https://threejs.org)
 [![framework](https://img.shields.io/badge/framework-dbv--specs--ops-24292e?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-specs-ops)
 
-> Copiloto de IA nativo para Unreal Engine 5.8: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo y World Labs directamente en el editor.
+> Copiloto de IA nativo para Unreal Engine 5.8 y 5.9: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo y World Labs directamente en el editor.
 >
 > 🌐 **Sitio web oficial:** https://davidbuenov.github.io/dbv-unreal-ai/
 
@@ -54,7 +54,7 @@
 
 **No necesitas Rust, Node.js ni ninguna herramienta de programación.** Descarga el instalador de tu sistema desde la **[última Release de GitHub](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)**: se compila automáticamente en cada versión para Windows, macOS (Intel y Apple Silicon) y Linux.
 
-Solo necesitas **Unreal Engine 5.8** para trabajar con un proyecto y, si quieres conversar, una IA (local, con clave de API o tu suscripción): la guía [`docs/IA.md`](./docs/IA.md) explica cada opción. Las claves de [Tripo](https://www.tripo3d.ai) y [World Labs](https://platform.worldlabs.ai) son opcionales y solo hacen falta para generar modelos y mundos 3D.
+Solo necesitas **Unreal Engine 5.8.4 o 5.9** para trabajar con un proyecto y, si quieres conversar, una IA (local, con clave de API o tu suscripción): la guía [`docs/IA.md`](./docs/IA.md) explica cada opción. Las claves de [Tripo](https://www.tripo3d.ai) y [World Labs](https://platform.worldlabs.ai) son opcionales y solo hacen falta para generar modelos y mundos 3D.
 
 > **Actualizaciones:** la app todavía no se actualiza sola. Para pasar a una versión nueva, descarga e instala el instalador nuevo desde Releases; la biblioteca, las conexiones y las claves se conservan.
 
@@ -122,9 +122,9 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 
 ## 📌 Sobre el proyecto
 
-**DBV Unreal AI** (`dbv-unreal-ai`) es una aplicación de escritorio nativa (Windows, macOS y Linux) que conversa contigo y actúa sobre el proyecto de Unreal Engine 5.8 que tengas abierto. Usa la IA que prefieras —un modelo local (Ollama, LM Studio), una API en la nube o tu suscripción de Claude Code, Codex o Copilot (Gemini CLI, con acceso de pago)— y la conecta con el editor a través de su servidor MCP integrado. Si el proyecto aún no está preparado, la aplicación lo prepara por ti. Genera modelos 3D con Tripo y mundos fotorrealistas con World Labs Marble, los guarda en una biblioteca local y los lleva al editor con un clic.
+**DBV Unreal AI** (`dbv-unreal-ai`) es una aplicación de escritorio nativa (Windows, macOS y Linux) que conversa contigo y actúa sobre el proyecto de Unreal Engine 5.8 o 5.9 que tengas abierto. Usa la IA que prefieras —un modelo local (Ollama, LM Studio), una API en la nube o tu suscripción de Claude Code, Codex o Copilot (Gemini CLI, con acceso de pago)— y la conecta con el editor a través de su servidor MCP integrado. Si el proyecto aún no está preparado, la aplicación lo prepara por ti. Genera modelos 3D con Tripo y mundos fotorrealistas con World Labs Marble, los guarda en una biblioteca local y los lleva al editor con un clic.
 
-**Construido con:** Rust, Tauri v2, HTML/CSS/JavaScript sin bundler, Unreal Engine 5.8 (MCP + Python + C++).
+**Construido con:** Rust, Tauri v2, HTML/CSS/JavaScript sin bundler, Unreal Engine 5.8 y 5.9 (MCP + Python + C++).
 
 ---
 
@@ -145,6 +145,13 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 <a name="status"></a>
 
 ## 🚧 Estado
+
+**v0.6.0** (2026-11-14). Lo nuevo:
+
+- **Unreal Engine 5.8.4 y 5.9 con la misma app y el mismo plugin (REQ-109..REQ-112, REQ-116):** la app detecta la versión del editor conectado, avisa si abres un proyecto con otro motor, prepara cada uno a su manera y la IA usa las herramientas nativas de la 5.9 (Blueprints, PIE, captura, consola, rendimiento…);
+- **Lo del asistente de la 5.9, desde la app (REQ-113..REQ-115):** agentes **Cursor** y **OpenCode**; **niveles de autonomía** (de *Preguntar todo* a *Total*; gastar créditos siempre pregunta); **aviso** con parpadeo y sonido cuando la IA espera tu aprobación; las **herramientas de Unreal Canvas** (splats, recortes, anotaciones, render y vídeo); las **instrucciones del MCP del editor** y la **Knowledge Base**;
+- **Splats sin espejo y renderizador a elegir (REQ-18, REQ-114):** los mundos de World Labs se veían volteados de izquierda a derecha con nuestro renderizador; ya no. En 5.9 puedes cargarlos con el plugin GaussianSplat de Epic (Ajustes › Biblioteca); por defecto, el nuestro, que no pide activar nada.;
+- **Correcciones:** «os error 17» al conectar una IA en la versión de la Microsoft Store; los mundos enviados desde la ventana no se colocaban a su escala; la lista de toolsets de 5.9 se recortaba y mostraba toolsets que no existían.
 
 **v0.5.1** (2026-11-12). Lo nuevo:
 

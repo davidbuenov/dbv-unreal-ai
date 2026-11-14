@@ -809,7 +809,7 @@ mod tests {
                 "{expected} debería fallar: {failing:?}"
             );
         }
-        assert_eq!(report.toolset_bundled, "0.5.1");
+        assert_eq!(report.toolset_bundled, "0.6.0");
     }
 
     /// @spec REQ-04, REQ-05

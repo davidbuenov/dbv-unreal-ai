@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 3,
-	"VersionName": "0.3.0",
+	"Version": 4,
+	"VersionName": "0.6.0",
 	"FriendlyName": "DBV Unreal AI Toolset (C++)",
 	"Description": "Native GPU 3D Gaussian Splatting renderer and C++ toolset for DBV Unreal AI. 100% open-source (MIT).",
 	"Category": "Rendering",
