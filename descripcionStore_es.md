@@ -6,25 +6,26 @@
 
 ## Descripción *
 
-(3341 / 10000)
+(3511 / 10000)
 
 ```text
-DBV Unreal AI es un copiloto de inteligencia artificial nativo para Unreal Engine 5.8: ligero, rápido, local por defecto y respetuoso con tu privacidad — sin suscripciones forzosas, sin publicidad y sin telemetría invasiva.
+DBV Unreal AI es un copiloto de inteligencia artificial nativo para Unreal Engine 5.8 y 5.9: ligero, rápido, local por defecto y respetuoso con tu privacidad — sin suscripciones forzosas, sin publicidad y sin telemetría invasiva.
 
 Conecta directamente con tu editor de Unreal Engine en marcha mediante su servidor nativo Model Context Protocol (MCP) HTTP. Permite crear, modificar y analizar escenas 3D mediante lenguaje natural, generar mundos y objetos con IA y ejecutar secuencias de comandos automatizadas de forma reversible y segura.
 
-Todo el flujo de trabajo con el motor es 100% local. El asistente de IA es flexible y opcional: puedes usar modelos locales con Ollama o LM Studio (sin salir de tu máquina), conectar tus suscripciones existentes a través de agentes CLI (Claude Code, Google Antigravity, GitHub Copilot, Codex, Gemini) o usar claves de API en la nube (Anthropic, OpenAI, Google AI Studio, OpenRouter) con control total de costes.
+Todo el flujo de trabajo con el motor es 100% local. El asistente de IA es flexible y opcional: puedes usar modelos locales con Ollama o LM Studio (sin salir de tu máquina), conectar tus suscripciones existentes a través de agentes CLI (Claude Code, Google Antigravity, GitHub Copilot, Codex, Gemini, Cursor, OpenCode) o usar claves de API en la nube (Anthropic, OpenAI, Google AI Studio, OpenRouter) con control total de costes.
 
 Características principales:
-• Comunicación nativa bidireccional con Unreal Engine 5.8 mediante MCP HTTP (puerto 8000)
+• Comunicación nativa bidireccional con Unreal Engine 5.8 y 5.9 mediante MCP HTTP (puerto 8000)
 • Caja negra: graba el juego sin tocar el proyecto, marca momentos con una tecla y analiza con datos para depurar fallos que solo ocurren al jugar
 • Vestir MetaHumans desde la app con una herramienta determinista: vestidos con tela (Chaos Cloth) ajustados al cuerpo, camisetas y pantalones ajustados conservando su material, y prendas guardadas en la Biblioteca para reutilizarlas
 • Efectos de sonido con un microservicio local, ElevenLabs y Freesound, e importación directa a Unreal
 • Asistente de IA con tres modalidades: Locales (offline), Suscripción (agentes CLI) y API Cloud
-• Soporte integrado de Google Antigravity CLI, Claude Code, GitHub Copilot, Codex y Gemini CLI
+• Soporte integrado de Google Antigravity CLI, Claude Code, GitHub Copilot, Codex, Gemini CLI, Cursor y OpenCode
+• Niveles de autonomía y aviso cuando la IA espera tu aprobación
 • Generación y colocación de mundos fotorrealistas con World Labs Marble (Gaussian Splatting .spz y colisión .glb)
 • Generación, auto-rigging y animación de modelos 3D con Tripo3D v3
-• Gaussian Splatting propio en C++, dibujado por la GPU con color según el ángulo: escenas de 10 millones de splats sin plugins comerciales
+• Gaussian Splatting propio en C++, dibujado por la GPU con color según el ángulo: escenas de 10 millones de splats sin plugins comerciales (en la 5.9, también con el plugin GaussianSplat de Epic)
 • La IA edita el código C++ del proyecto (siempre como cambios que revisas) y la app lo compila con Live Coding o Unreal Build Tool
 • Recetas guiadas paso a paso con comprobación final en el editor y búsqueda en las guías de Unreal sin conexión
 • Personajes conversacionales de Convai y zonas con nombre en el nivel
@@ -45,25 +46,25 @@ Características principales:
 
 ## Novedades de esta versión
 
-(803 / 1500)
+(668 / 1500)
 
 ```text
-v0.5.1:
-• Vestidos con tela de verdad: el vestido generado se ajusta al cuerpo del MetaHuman, se coloca solo del derecho, las mangas siguen a los brazos y la falda se mueve con Chaos Cloth sujeta al talle. La validación mide la holgura y solo da el visto bueno si nada atraviesa la piel.
-• Guarda en la Biblioteca una prenda ya ajustada y pónsela a otro personaje de la misma complexión sin volver a ajustarla.
-• Camisetas y pantalones de Tripo ajustados al cuerpo conservando su malla, sus texturas y su material.
-• Correcciones al vestir MetaHumans: faldas y vestidos ya se pueden equipar, un fallo no borra las prendas anteriores y no quedan restos en el proyecto.
-• Incluye las novedades de la v0.5.0: caja negra para depurar lo que pasa al jugar, vestir MetaHumans desde la app y efectos de sonido.
+v0.6.0:
+• Compatible con Unreal Engine 5.8.4 y 5.9 con la misma app: detecta la versión del editor, prepara cada proyecto a su manera y usa las herramientas nativas de la 5.9.
+• Nuevos agentes Cursor y OpenCode, niveles de autonomía (de «Preguntar todo» a «Total») y aviso con parpadeo y sonido cuando la IA espera tu aprobación.
+• En la 5.9, la IA usa las herramientas de Unreal Canvas, las instrucciones que pongas en el MCP del editor y la Knowledge Base.
+• Los mundos de World Labs ya no se ven en espejo, y en la 5.9 puedes cargarlos con el plugin GaussianSplat de Epic.
+• Corregido el error «os error 17» al conectar una IA en esta versión de la Microsoft Store.
 ```
 
 ---
 
 ## Características del producto (hasta 20)
 
-**1.** (50 / 200)
+**1.** (56 / 200)
 
 ```text
-Conexión nativa con Unreal Engine 5.8 vía MCP HTTP
+Conexión nativa con Unreal Engine 5.8 y 5.9 vía MCP HTTP
 ```
 
 **2.** (61 / 200)
@@ -72,10 +73,10 @@ Conexión nativa con Unreal Engine 5.8 vía MCP HTTP
 Asistente de IA con opciones Locales, Suscripción y API Cloud
 ```
 
-**3.** (60 / 200)
+**3.** (67 / 200)
 
 ```text
-Compatible con Google Antigravity CLI, Claude Code y Copilot
+Compatible con Claude Code, Antigravity, Copilot, Cursor y OpenCode
 ```
 
 **4.** (50 / 200)
@@ -230,29 +231,30 @@ Game Development
 
 ## Descripción corta (hasta 270 caracteres) *
 
-(247 / 270)
+(253 / 270)
 
 ```text
-Copiloto nativo de inteligencia artificial para Unreal Engine 5.8. Conecta vía MCP HTTP, asiste en la creación y modificación de escenas 3D, genera mundos fotorrealistas y personajes animados, respetando tu privacidad y funcionando de forma local.
+Copiloto nativo de inteligencia artificial para Unreal Engine 5.8 y 5.9. Conecta vía MCP HTTP, asiste en la creación y modificación de escenas 3D, genera mundos fotorrealistas y personajes animados, respetando tu privacidad y funcionando de forma local.
 ```
 
 ---
 
 ## Notas para la certificación
 
-(2451)
+(2667)
 
 ```text
-La aplicación se comunica de forma local con el editor de Unreal Engine 5.8 a través de un servidor HTTP Model Context Protocol en localhost (puerto 8000).
+La aplicación se comunica de forma local con el editor de Unreal Engine 5.8 o 5.9 a través de un servidor HTTP Model Context Protocol en localhost (puerto 8000).
 
 Las funciones de Inteligencia Artificial son 100% opcionales y están desactivadas por defecto:
 - La app funciona plenamente sin IA configurada (preparación de proyectos, inspección, visualización 3D y biblioteca de assets).
 - Si el usuario decide conectar una IA, puede elegir entre IAs 100% locales (Ollama o LM Studio sin salida a red), agentes CLI con sus propias credenciales, o modelos en la nube mediante su propia clave privada custodiada en el sistema.
 - Ningún dato ni proyecto sale del equipo sin la acción y consentimiento explícito del usuario.
-- Los agentes por suscripción (Claude Code, Codex, Gemini CLI, Google Antigravity, GitHub Copilot CLI) son programas aparte que el usuario instala y en los que inicia sesión por su cuenta; la app solo los lanza, con la carpeta del proyecto como directorio de trabajo, cuando el usuario conecta uno. Si un agente pide iniciar sesión, puede abrir el navegador del sistema para que el usuario entre en ese servicio.
+- Los agentes por suscripción (Claude Code, Codex, Gemini CLI, Google Antigravity, GitHub Copilot CLI, Cursor, OpenCode) son programas aparte que el usuario instala y en los que inicia sesión por su cuenta; la app solo los lanza, con la carpeta del proyecto como directorio de trabajo, cuando el usuario conecta uno. Si un agente pide iniciar sesión, puede abrir el navegador del sistema para que el usuario entre en ese servicio.
 - Cuando la IA cambia el código C++ del proyecto y el usuario acepta el cambio, la app compila con las herramientas de Unreal instaladas por el usuario (Live Coding a través del editor, o Unreal Build Tool con el editor cerrado) y vuelve a abrir el editor. Solo se compila el proyecto que el usuario tiene abierto.
 - La app guarda su biblioteca de assets en Documentos\DBV Unreal AI\Library y un registro local rotativo, sin claves ni datos personales.
 - Las imágenes que el usuario pega (Ctrl+V) o arrastra a la conversación se guardan en la carpeta temporal del sistema (como máximo las 20 últimas) para que la IA pueda usarlas por su ruta; solo llegan a una IA en la nube si el usuario ha conectado una y envía el mensaje.
 - La «Caja negra» (opcional) solo lee el juego que el usuario ejecuta en su editor y guarda sus grabaciones en la carpeta del proyecto de Unreal del usuario (Saved\DBVUnrealAI\Sessions, con un máximo de 20 sesiones); no envía nada a la red. Mientras graba, desactiva en memoria la opción del editor «Usar menos CPU en segundo plano» y la restaura al terminar.
 - Vestir un MetaHuman (opcional) crea los assets de la prenda dentro del proyecto de Unreal del usuario (Content/DBV/MetaHumanOutfits) y una copia del Blueprint del personaje; el original no se modifica. Todo el cálculo es local, sin red.
+- Con Unreal Engine 5.9, la app puede usar las herramientas que publica el propio editor, incluidas las de Unreal Canvas si el usuario lo tiene activo; no genera contenido a través de Canvas.
 ```

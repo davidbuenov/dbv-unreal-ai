@@ -176,3 +176,17 @@ Identidad en `bundle.config.json`:
 3. **Notas para la certificación:** pegar las de `descripcionStore_en.md` (un solo campo por envío).
 4. **Capturas (opcional):** una del vestido sobre un MetaHuman.
 5. **Enviar a certificación.**
+
+## 10. Envío de la v0.6.0 (2026-11-14)
+
+> ⚠️ **REQ-90 sigue abierto** (la matriz de ropa con la app instalada no se ha ejecutado). Esta versión corrige además el `os error 17` que un usuario de la Store tenía al conectar una IA: conviene enviarla para que le llegue.
+
+**Paquete:** `src-tauri/target/msix/dbv-unreal-ai_0.6.0.0.msixbundle` (generado con `npm run tauri:windows:build`). Identidad comprobada en el `AppxManifest.xml`: `davidbuenov.DBVUnrealAI`, `CN=13EE2A5D-F49E-48C9-8873-941069B15D63`, `Version="0.6.0.0"`, `x64`; capacidades sin cambios (`runFullTrust`, `internetClient`).
+
+**Fichas:** en `descripcionStore_es.md`, `descripcionStore_en.md` y `descripcionStore_zh.md` cambian *Novedades de esta versión* (v0.6.0), la *Descripción* (UE 5.8 y 5.9, Cursor y OpenCode, autonomía, splats con el plugin de Epic), las características 1, 3 y la de Gaussian Splatting, la *Descripción corta* y una nota nueva para la certificación (en 5.9 la app usa las herramientas que publica el propio editor, también las de Unreal Canvas, sin generar contenido a través de Canvas). Todo va en bloques de código con su recuento de caracteres.
+
+**Pasos en Partner Center:**
+1. **Paquetes:** subir `dbv-unreal-ai_0.6.0.0.msixbundle` y retirar del envío el anterior.
+2. **Fichas de Store** (español, inglés y chino): pegar *Novedades de esta versión*, la *Descripción*, la *Descripción corta* y las características 1, 3 y 6.
+3. **Notas para la certificación:** pegar las de `descripcionStore_en.md` (un solo campo por envío).
+4. **Enviar a certificación.**

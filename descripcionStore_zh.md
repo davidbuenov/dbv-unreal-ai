@@ -6,25 +6,26 @@
 
 ## 描述 / Description *
 
-(1482 / 10000)
+(1586 / 10000)
 
 ```text
-DBV Unreal AI 是一款面向 Unreal Engine 5.8 的原生 AI 助手：轻量、快速、默认在本地运行，并尊重你的隐私——没有强制订阅、没有广告，也没有侵入性的遥测。
+DBV Unreal AI 是一款面向 Unreal Engine 5.8 和 5.9 的原生 AI 助手：轻量、快速、默认在本地运行，并尊重你的隐私——没有强制订阅、没有广告，也没有侵入性的遥测。
 
 它通过 Unreal 编辑器自带的 Model Context Protocol（MCP）HTTP 服务器，直接连接正在运行的编辑器。你可以用自然语言创建、修改和分析 3D 场景，用 AI 生成世界和物体，并以可撤销、安全的方式执行自动化脚本。
 
-与引擎相关的整个工作流程都在本地完成。AI 助手灵活且可选：你可以使用 Ollama 或 LM Studio 运行本地模型（数据不离开你的电脑），通过命令行智能体使用你已有的订阅（Claude Code、Google Antigravity、GitHub Copilot、Codex、Gemini），或使用云端 API 密钥（Anthropic、OpenAI、Google AI Studio、OpenRouter），并完全掌控费用。
+与引擎相关的整个工作流程都在本地完成。AI 助手灵活且可选：你可以使用 Ollama 或 LM Studio 运行本地模型（数据不离开你的电脑），通过命令行智能体使用你已有的订阅（Claude Code、Google Antigravity、GitHub Copilot、Codex、Gemini、Cursor、OpenCode），或使用云端 API 密钥（Anthropic、OpenAI、Google AI Studio、OpenRouter），并完全掌控费用。
 
 主要功能：
-• 通过 MCP HTTP（端口 8000）与 Unreal Engine 5.8 原生双向通信
+• 通过 MCP HTTP（端口 8000）与 Unreal Engine 5.8 和 5.9 原生双向通信
 • 黑匣子：在不修改项目的情况下记录游戏，用按键标记时刻，并用数据分析，以调试只在游玩时出现的问题
 • 在应用中用确定性工具为 MetaHuman 穿衣：贴合身体的布料连衣裙（Chaos Cloth）、保留材质的贴身衬衫和裤子，以及可保存到资源库以便重复使用的服装
 • 使用本地微服务、ElevenLabs 和 Freesound 生成音效，并直接导入 Unreal
 • 三种 AI 助手模式：本地（离线）、订阅（命令行智能体）和云端 API
-• 内置支持 Google Antigravity CLI、Claude Code、GitHub Copilot、Codex 和 Gemini CLI
+• 内置支持 Google Antigravity CLI、Claude Code、GitHub Copilot、Codex、Gemini CLI、Cursor 和 OpenCode
+• 自主级别，以及 AI 等待你批准时的提醒
 • 使用 World Labs Marble 生成并放置照片级真实感世界（Gaussian Splatting .spz 与 .glb 碰撞网格）
 • 使用 Tripo3D v3 生成 3D 模型、自动绑定骨骼并制作动画
-• 自研 C++ Gaussian Splatting，由 GPU 绘制并支持随视角变化的颜色：无需商业插件即可显示 1000 万个 splat 的场景
+• 自研 C++ Gaussian Splatting，由 GPU 绘制并支持随视角变化的颜色：无需商业插件即可显示 1000 万个 splat 的场景（在 5.9 中也可使用 Epic 的 GaussianSplat 插件）
 • AI 可修改项目的 C++ 代码（始终以供你审阅的更改形式提出），应用会用 Live Coding 或 Unreal Build Tool 进行编译
 • 分步引导的配方，并在编辑器中做最终检查；可离线搜索 Unreal 指南
 • Convai 对话角色，以及关卡中带名称的区域
@@ -45,25 +46,25 @@ DBV Unreal AI 是一款面向 Unreal Engine 5.8 的原生 AI 助手：轻量、�
 
 ## 此版本的新增功能 / What's new in this version
 
-(304 / 1500)
+(326 / 1500)
 
 ```text
-v0.5.1:
-• 真正的布料连衣裙：生成的连衣裙会贴合 MetaHuman 的身体并自动正确穿上，袖子跟随手臂，裙摆借助 Chaos Cloth 自然摆动，腰身固定在身体上。验证会测量间隙，只有在没有任何部分穿透皮肤时才会通过。
-• 可将已调整好的服装保存到资源库，并直接穿到相同体型的其他角色身上，无需重新调整。
-• Tripo 的衬衫和裤子会贴合身体，同时保留其网格、纹理和材质。
-• MetaHuman 穿衣修复：现在可以穿上裙子和连衣裙，失败不会再删除之前的服装，也不会在项目中留下残留文件。
-• 包含 v0.5.0 的更新：用于调试游玩问题的黑匣子、在应用中为 MetaHuman 穿衣以及音效。
+v0.6.0:
+• 同一个应用即可支持 Unreal Engine 5.8.4 和 5.9：自动识别编辑器版本，按各自方式准备项目，并使用 5.9 的原生工具。
+• 新增 Cursor 和 OpenCode 智能体、自主级别（从“全部询问”到“完全自主”），以及 AI 等待你批准时的闪烁和提示音。
+• 在 5.9 中，AI 可以使用 Unreal Canvas 的工具、你在编辑器 MCP 中设置的说明以及知识库。
+• World Labs 世界不再出现镜像，并且在 5.9 中可以使用 Epic 的 GaussianSplat 插件加载。
+• 修复了在 Microsoft Store 版本中连接 AI 时出现的 “os error 17” 错误。
 ```
 
 ---
 
 ## 产品功能 / Product features (hasta 20)
 
-**1.** (34 / 200)
+**1.** (40 / 200)
 
 ```text
-通过 MCP HTTP 原生连接 Unreal Engine 5.8
+通过 MCP HTTP 原生连接 Unreal Engine 5.8 和 5.9
 ```
 
 **2.** (24 / 200)
@@ -72,10 +73,10 @@ v0.5.1:
 AI 助手支持本地、订阅和云端 API 三种方式
 ```
 
-**3.** (47 / 200)
+**3.** (52 / 200)
 
 ```text
-兼容 Google Antigravity CLI、Claude Code 和 Copilot
+兼容 Claude Code、Antigravity、Copilot、Cursor 和 OpenCode
 ```
 
 **4.** (34 / 200)
@@ -230,8 +231,8 @@ Gaussian Splatting
 
 ## 简短描述 / Short description (hasta 270 caracteres) *
 
-(96 / 270)
+(102 / 270)
 
 ```text
-面向 Unreal Engine 5.8 的原生 AI 助手。通过 MCP HTTP 连接编辑器，协助创建和修改 3D 场景，生成照片级真实感世界和带动画的角色，默认在本地运行并尊重你的隐私。
+面向 Unreal Engine 5.8 和 5.9 的原生 AI 助手。通过 MCP HTTP 连接编辑器，协助创建和修改 3D 场景，生成照片级真实感世界和带动画的角色，默认在本地运行并尊重你的隐私。
 ```
