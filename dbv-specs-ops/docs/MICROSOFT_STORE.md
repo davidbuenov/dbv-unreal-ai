@@ -190,3 +190,24 @@ Identidad en `bundle.config.json`:
 2. **Fichas de Store** (español, inglés y chino): pegar *Novedades de esta versión*, la *Descripción*, la *Descripción corta* y las características 1, 3 y 6.
 3. **Notas para la certificación:** pegar las de `descripcionStore_en.md` (un solo campo por envío).
 4. **Enviar a certificación.**
+
+## 11. Envío de la v0.6.1 (2026-11-15)
+
+> ⚠️ **REQ-90 sigue abierto** (la matriz de ropa con la app instalada). Esta versión es la que necesitaba el amigo del usuario: con la v0.6.0, un proyecto asociado a un motor por GUID decía «no hay una instalación de Unreal {GUID}» sin salida.
+
+**Paquete:** `src-tauri/target/msix/dbv-unreal-ai_0.6.1.0.msixbundle` (9,57 MB, generado con `npm run tauri:windows:build`). Identidad comprobada en el `AppxManifest.xml`: `davidbuenov.DBVUnrealAI`, `CN=13EE2A5D-F49E-48C9-8873-941069B15D63`, `Version="0.6.1.0"`, `x64`; capacidades sin cambios (`runFullTrust`, `internetClient`). Lleva `unreal-plugin-bin/5.8` y `5.9` (las DLL del plugin C++; el paquete crece 0,9 MB).
+
+**Fichas:** en `descripcionStore_es.md`, `descripcionStore_en.md` y `descripcionStore_zh.md` cambian:
+
+- *Novedades de esta versión* (v0.6.1);
+- una línea de Fab en la *Descripción*;
+- la característica 15 («Contenido de Fab con miniatura y enlace, solo gratis o tuyo», en lugar de los atajos);
+- tres puntos nuevos en las *Notas para la certificación*: la sesión de Fab es la del editor y nunca se compra nada, el registro de Windows solo se lee, y «Preparar» copia DLL del plugin en el proyecto del usuario.
+
+Todo va en bloques de código con su recuento de caracteres, recalculado.
+
+**Pasos en Partner Center:**
+1. **Paquetes:** subir `dbv-unreal-ai_0.6.1.0.msixbundle` y retirar del envío el anterior.
+2. **Fichas de Store** (español, inglés y chino): pegar *Novedades de esta versión*, la *Descripción* y la característica 15.
+3. **Notas para la certificación:** pegar las de `descripcionStore_en.md` (un solo campo por envío; ahora tienen 3.504 caracteres).
+4. **Enviar a certificación.**

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-15
+
+Version v0.6.1: **Fab on Unreal Engine 5.8.4** from the app. You ask "I want a car" and see each product with its **thumbnail and its fab.com link** before installing it, in the conversation and in the new **Fab view**. Only **free or already owned** products are installed (nothing is bought from the app), and only those **compatible with your editor version**, Quixel Megascans included. What you install stays as a **reference in the Library**. The app is also ready for machines without our tools: it **finds the engine** even when the project says a GUID, lets you **choose its folder**, ships the **C++ plugin already compiled** for 5.8 and the 5.9 Preview (Fab and splats without Visual Studio) and explains every step with a **diagnosis you can copy**.
+
 ### Fixed
 - **"Copy diagnostics" did not anonymize in two cases (REQ-120, `/code-simplify` review):** if the text had a character whose lowercase changes length, the user folder and name were not removed; and if the anonymized report could not be read back, the original was returned. Now the match is ASCII-only, the name is also removed as-is, and the worst case returns the anonymized text.
 - **Fab: a library error is no longer shown as "you do not own it" (REQ-104):** when checking whether a paid product is yours, a 404 from the account (the `ff_agents_api` flag) or any other error is reported as is, instead of `no_owned`.

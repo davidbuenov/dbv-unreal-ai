@@ -11,6 +11,10 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.6.1] - 2026-11-15
+
+Versión v0.6.1: **Fab en Unreal Engine 5.8.4** desde la app. Pides «quiero un coche» y ves cada producto con su **miniatura y su enlace a fab.com** antes de instalarlo, en la conversación y en la nueva **vista Fab**. Solo se instala lo **gratuito o lo que ya tienes** (nada se compra desde la app) y solo lo **compatible con tu versión del editor**, Quixel Megascans incluidos. Lo instalado queda como **referencia en la Biblioteca**. Además, la app se prepara para equipos sin nuestras herramientas: **encuentra el motor** aunque el proyecto diga un GUID, deja **elegir su carpeta**, trae el **plugin C++ ya compilado** para 5.8 y la 5.9 Preview (Fab y splats sin Visual Studio) y explica cada paso con un **diagnóstico que se puede copiar**.
+
 ### Corregido
 - **«Copiar diagnóstico» no anonimizaba en dos casos (REQ-120, revisión de `/code-simplify`):** si el texto tenía un carácter cuyo paso a minúsculas cambia de longitud, no se quitaba la carpeta ni el nombre del usuario; y si el informe anonimizado no se podía leer, se devolvía el original. Ahora la comparación es solo en ASCII, el nombre se quita también tal cual, y en el peor caso se devuelve el texto anonimizado.
 - **Fab: un error de la biblioteca ya no se presenta como «no lo tienes» (REQ-104):** al comprobar si un producto de pago es tuyo, un 404 de la cuenta (la marca `ff_agents_api`) o cualquier otro error se cuenta tal cual, en vez de `no_owned`.

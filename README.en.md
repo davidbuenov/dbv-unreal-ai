@@ -5,9 +5,9 @@
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
 
 [![Website](https://img.shields.io/badge/Website-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/en/)
-[![Releases v0.6.0](https://img.shields.io/badge/Releases-v0.6.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.6.1](https://img.shields.io/badge/Releases-v0.6.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
-[![status](https://img.shields.io/badge/status-stable_%7C_v0.6.0-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.0)
+[![status](https://img.shields.io/badge/status-stable_%7C_v0.6.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.1)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -145,6 +145,12 @@ These channels are not available yet; they will arrive in an upcoming version. I
 <a name="status"></a>
 
 ## 🚧 Status
+
+**v0.6.1** (2026-11-15). What's new:
+
+- **Fab on Unreal Engine 5.8.4 (REQ-101..REQ-108, REQ-117):** you ask "I want a car" and the conversation shows each product with its **thumbnail, seller and fab.com link** before installing it. Also from the new **Fab view** in the sidebar, with Catalog and My library tabs. It uses the Fab session you already have in the editor: click the **Fab** button in the Content Browser.
+- **Only what you can install:** **free or already owned** products, since nothing is bought from the app, and only those **compatible with your editor version**, checked in the code and not only in the prompt. `glb`, `gltf` and `fbx` are imported into `/Game/Fab/<Title>/` and, if they arrive in pieces, into a Blueprint that assembles them. Unreal packs are downloaded the way Epic does it. **Quixel Megascans**, now free, install in medium quality without choosing a zip. What you install stays as a **reference in the Library**.
+- **For machines without our tools (REQ-118..REQ-121):** the app **finds the engine** even when the project says a GUID or a registered name, lets you **choose its folder** if it cannot find it, ships the **C++ plugin already compiled** for 5.8 and the 5.9 Preview (Fab and splats without Visual Studio, also in Blueprint-only projects) and explains every step of the Project view with its fix, with a **"Copy diagnostics"** without keys or your user name.
 
 **v0.6.0** (2026-11-14). What's new:
 

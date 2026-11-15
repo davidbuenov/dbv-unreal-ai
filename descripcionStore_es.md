@@ -6,7 +6,7 @@
 
 ## Descripción *
 
-(3511 / 10000)
+(3728 / 10000)
 
 ```text
 DBV Unreal AI es un copiloto de inteligencia artificial nativo para Unreal Engine 5.8 y 5.9: ligero, rápido, local por defecto y respetuoso con tu privacidad — sin suscripciones forzosas, sin publicidad y sin telemetría invasiva.
@@ -17,6 +17,7 @@ Todo el flujo de trabajo con el motor es 100% local. El asistente de IA es flexi
 
 Características principales:
 • Comunicación nativa bidireccional con Unreal Engine 5.8 y 5.9 mediante MCP HTTP (puerto 8000)
+• Contenido de Fab en Unreal Engine 5.8.4 y 5.9: busca y mira cada producto con su miniatura y su enlace antes de instalarlo; solo lo gratuito o lo que ya tienes y compatible con tu editor, Quixel Megascans incluidos
 • Caja negra: graba el juego sin tocar el proyecto, marca momentos con una tecla y analiza con datos para depurar fallos que solo ocurren al jugar
 • Vestir MetaHumans desde la app con una herramienta determinista: vestidos con tela (Chaos Cloth) ajustados al cuerpo, camisetas y pantalones ajustados conservando su material, y prendas guardadas en la Biblioteca para reutilizarlas
 • Efectos de sonido con un microservicio local, ElevenLabs y Freesound, e importación directa a Unreal
@@ -46,15 +47,15 @@ Características principales:
 
 ## Novedades de esta versión
 
-(668 / 1500)
+(800 / 1500)
 
 ```text
-v0.6.0:
-• Compatible con Unreal Engine 5.8.4 y 5.9 con la misma app: detecta la versión del editor, prepara cada proyecto a su manera y usa las herramientas nativas de la 5.9.
-• Nuevos agentes Cursor y OpenCode, niveles de autonomía (de «Preguntar todo» a «Total») y aviso con parpadeo y sonido cuando la IA espera tu aprobación.
-• En la 5.9, la IA usa las herramientas de Unreal Canvas, las instrucciones que pongas en el MCP del editor y la Knowledge Base.
-• Los mundos de World Labs ya no se ven en espejo, y en la 5.9 puedes cargarlos con el plugin GaussianSplat de Epic.
-• Corregido el error «os error 17» al conectar una IA en esta versión de la Microsoft Store.
+v0.6.1:
+• Fab en Unreal Engine 5.8.4: pide «quiero un coche» y verás cada producto con su miniatura y su enlace a fab.com antes de instalarlo, en la conversación o en la nueva vista Fab.
+• Solo se instala lo gratuito o lo que ya tienes en tu biblioteca de Fab (nada se compra desde la app) y solo lo compatible con tu versión del editor, Quixel Megascans incluidos. Lo instalado queda como referencia en la Biblioteca.
+• La app encuentra el motor aunque el proyecto use un GUID o un motor registrado, y si no lo encuentra te deja elegir su carpeta.
+• El plugin C++ viene ya compilado para Unreal 5.8 y la 5.9 Preview: Fab y los splats funcionan sin Visual Studio.
+• La vista Proyecto explica cada paso con su solución y tiene «Copiar diagnóstico» para pedir ayuda, sin claves ni tu nombre de usuario.
 ```
 
 ---
@@ -145,10 +146,10 @@ Centro de Ayuda integrado con atajo rápido F1
 Atajos globales: F1, Ctrl+Mayús+I, Esc, Ctrl+S
 ```
 
-**15.** (32 / 200)
+**15.** (59 / 200)
 
 ```text
-100% privado y local por defecto
+Contenido de Fab con miniatura y enlace, solo gratis o tuyo
 ```
 
 **16.** (48 / 200)
@@ -241,7 +242,7 @@ Copiloto nativo de inteligencia artificial para Unreal Engine 5.8 y 5.9. Conecta
 
 ## Notas para la certificación
 
-(2667)
+(3630)
 
 ```text
 La aplicación se comunica de forma local con el editor de Unreal Engine 5.8 o 5.9 a través de un servidor HTTP Model Context Protocol en localhost (puerto 8000).
@@ -257,4 +258,7 @@ Las funciones de Inteligencia Artificial son 100% opcionales y están desactivad
 - La «Caja negra» (opcional) solo lee el juego que el usuario ejecuta en su editor y guarda sus grabaciones en la carpeta del proyecto de Unreal del usuario (Saved\DBVUnrealAI\Sessions, con un máximo de 20 sesiones); no envía nada a la red. Mientras graba, desactiva en memoria la opción del editor «Usar menos CPU en segundo plano» y la restaura al terminar.
 - Vestir un MetaHuman (opcional) crea los assets de la prenda dentro del proyecto de Unreal del usuario (Content/DBV/MetaHumanOutfits) y una copia del Blueprint del personaje; el original no se modifica. Todo el cálculo es local, sin red.
 - Con Unreal Engine 5.9, la app puede usar las herramientas que publica el propio editor, incluidas las de Unreal Canvas si el usuario lo tiene activo; no genera contenido a través de Canvas.
+- Contenido de Fab (opcional): la app usa la sesión de Fab que el usuario abre en su propio editor con el plugin oficial de Epic (botón Fab del Content Browser); el token de esa sesión no sale del editor. Solo descarga a su proyecto de Unreal contenido gratuito o que el usuario ya tiene en su biblioteca de Fab; nunca compra nada ni acepta licencias por él. Las miniaturas se cargan de media.fab.com y se guarda una por producto instalado en la biblioteca de la app.
+- Para encontrar el motor de Unreal, la app solo lee (no escribe) la clave del registro HKCU\Software\Epic Games\Unreal Engine\Builds. Si el usuario elige a mano la carpeta del motor, se guarda en Documentos\DBV Unreal AI\engine-overrides.json.
+- «Preparar proyecto», cuando el usuario lo acepta, copia en la carpeta Plugins del proyecto de Unreal del usuario el plugin de la app, que incluye dos DLL ya compiladas para su versión del editor (sin ellas habría que compilarlo con Visual Studio).
 ```
