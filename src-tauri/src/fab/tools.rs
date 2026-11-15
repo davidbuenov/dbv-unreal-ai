@@ -115,8 +115,11 @@ fn list_arg(args: &Value, key: &str) -> Vec<String> {
 
 /// Lanza un trabajo del plugin y espera a que termine. Devuelve el `result` del trabajo (también si es un error).
 pub fn run_job(editor: &mut dyn FabEditor, operation: &str, args: &Value, timeout: Duration) -> Result<Value, String> {
-    let started = editor.call_cpp("fab_start", json!({ "operation": operation, "args_json": args.to_string() }))?;
-    let job = started.get("job_id").and_then(Value::as_str).map(String::from).ok_or_else(|| format!("the editor did not start the Fab job: {started}. Is the DBVUnrealAICpp plugin compiled with Fab support (v0.6.1)?"))?;
+    // @spec REQ-108 En 5.9 la API pública de Fab es la misma (FabDownloader.h, AssetUtils.h, IEOSSDKManager): basta con
+    // nuestro cliente. Si el plugin no está compilado con Fab, se dice cómo arreglarlo y que el toolset de Epic también vale.
+    let hint = "The DBVUnrealAICpp plugin needs Fab support (v0.6.1): run «Prepare project» and compile with the editor closed. On UE 5.9, Epic's FabToolset.FabToolset also works through unreal_call_tool.";
+    let started = editor.call_cpp("fab_start", json!({ "operation": operation, "args_json": args.to_string() })).map_err(|e| format!("{e}. {hint}"))?;
+    let job = started.get("job_id").and_then(Value::as_str).map(String::from).ok_or_else(|| format!("the editor did not start the Fab job: {started}. {hint}"))?;
     let deadline = Instant::now() + timeout;
     let mut outcome = Err(format!("the Fab job did not finish in {} s", timeout.as_secs()));
     while Instant::now() < deadline {
@@ -397,6 +400,19 @@ mod tests {
         let text = listings_text(&listings, next.as_deref(), 0, "UE_5.8");
         assert!(text.contains("https://www.fab.com/listings/l1") && text.contains("Never state a total"));
         assert!(!text.contains("media.fab.com"), "la miniatura va a la tarjeta, no al modelo");
+    }
+
+    /// La eval de Fab (`scripts/eval/fab-eval.mjs`) usa estas definiciones desde un fixture: si cambian, hay que
+    /// regenerarlo (`UPDATE_FIXTURES=1 cargo test fab::`). @spec REQ-105
+    #[test]
+    fn las_definiciones_coinciden_con_el_fixture_de_la_eval() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/fab/tool_specs.json");
+        let current = serde_json::to_string_pretty(&specs()).unwrap() + "\n";
+        if std::env::var("UPDATE_FIXTURES").is_ok() {
+            std::fs::write(path, &current).unwrap();
+        }
+        let saved = std::fs::read_to_string(path).unwrap_or_default().replace("\r\n", "\n");
+        assert_eq!(saved, current, "regenera tests/fixtures/fab/tool_specs.json con UPDATE_FIXTURES=1");
     }
 
     /// @spec REQ-104 Quixel: se elige la calidad por el nombre del zip; si no, el único fichero principal.

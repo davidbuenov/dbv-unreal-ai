@@ -269,8 +269,8 @@
   - [x] **S142b · Quixel y modelos por piezas (REQ-104)** — `fab_install` con `quality` (por defecto `mid`) y `pick_file` (zip `_mid`, o el único principal); `dbv_unreal_ai/fab.py` → `assemble_blueprint` (un StaticMeshComponent por pieza, 2..64). En vivo: «Icelandic Rock» de Quixel (`gltf` `mid`) → `/Game/Fab/Icelandic_Rock` con material y texturas a 2K; «Camo muscle car» → `BP_Camo_muscle_car` con 5 piezas, colocado en `Fab_test` como un solo actor. Tests: Rust 3 nuevos y Python en `test_fab.py`.
   - [ ] **S144 · Vista Fab (REQ-106)**
   - [ ] **S145 · Referencia en la Biblioteca (REQ-107)**
-  - [ ] **S146 · Preparar y adaptador de 5.9 (REQ-108)**
-  - [ ] **S147 · Eval de Fab**
+  - [x] **S146 · Preparar y adaptador de 5.9 (REQ-108)** — `prepare.rs`: `FAB_PLUGINS` (`Fab`, `EOSShared`) solo cuentan si el `.uproject` los desactiva, y entonces «Preparar» los activa (test `fab_solo_se_activa_si_el_proyecto_lo_desactiva`). 5.9: la API pública de Fab es la misma (diff de `FabDownloader.h` y `AssetUtils.h`), así que basta con el cliente propio, y el error lo dice y menciona `FabToolset.FabToolset`. **Pendiente:** compilar y probar en `PruebaUnreal59`.
+  - [x] **S147 · Eval de Fab** — `scripts/eval/fab-eval.mjs` (Ollama) y `scripts/eval/fabEvalTasks.mjs` (catálogo simulado, 7 tareas y métricas `installsWithoutApproval`, `paidInstalledClaims`, `totalsStated` y `buyInApp`, todas a 0). Las definiciones vienen de `tests/fixtures/fab/tool_specs.json`, que un test de Rust mantiene al día. `tests/app/fabEval.test.js` (9) comprueba que cada juez pilla su infracción. **Pendiente:** ejecutarla con un modelo real (Ollama no estaba arrancado).
 
 ## v0.6.0 — Compatible con UE 5.8.4 y 5.9, todo lo del asistente de la 5.9 desde la app (REQ-109..REQ-116) y Fab (REQ-101..REQ-108)
 

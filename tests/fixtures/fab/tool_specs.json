@@ -1,0 +1,145 @@
+[
+  {
+    "name": "fab_search",
+    "description": "Search the Fab catalog (no sign-in needed). Returns up to 24 listings per page with title, seller, free or paid, rating, the formats that can be installed in THIS editor version, a thumbnail and the fab.com link. Only listings compatible with the editor are returned unless include_incompatible=true. Fab gives no total: never state or guess how many results exist; use next_cursor for more. When you show results to the user, always include the fab.com link of each listing you name (the app also shows them as cards with the thumbnail). To filter by seller use seller_id from a result, never the seller name. Read-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "What to look for, in English works best (e.g. \"car\", \"medieval house\")."
+        },
+        "free_only": {
+          "type": "boolean",
+          "description": "Only free listings. Use it unless the user asks for paid ones or for their library."
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "unreal-engine",
+              "glb",
+              "gltf",
+              "fbx",
+              "converted-files"
+            ]
+          },
+          "description": "Default: all installable formats."
+        },
+        "listing_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "For example 3d-model, material, environment, game-system."
+        },
+        "seller_id": {
+          "type": "string"
+        },
+        "sort_by": {
+          "type": "string",
+          "description": "For example -relevance, -createdAt, -averageRating."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "next_cursor of the previous page."
+        },
+        "include_incompatible": {
+          "type": "boolean",
+          "description": "Also show listings that cannot be installed in this editor (marked, never installable)."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "fab_listing_details",
+    "description": "Details of one Fab listing (no sign-in needed): description, licenses, formats compatible with this editor, thumbnail and fab.com link. If the listing is marked mature, ask the user before opening it. Read-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "listing_uid": {
+          "type": "string",
+          "description": "Listing uid from fab_search or fab_my_library."
+        }
+      },
+      "required": [
+        "listing_uid"
+      ]
+    }
+  },
+  {
+    "name": "fab_my_library",
+    "description": "Search the user's own Fab library (needs the Fab session of the open editor). Same compact listings as fab_search, marked owned. If there is no session, tell the user to click the Fab button in the Content Browser. Read-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "fab_install",
+    "description": "Install one Fab listing into the open Unreal project (asks the user for approval). Only free listings or listings in the user's library, and only a format compatible with this editor: the plugin checks both and answers no_owned or incompatible_engine without downloading. Nothing is ever bought: for a paid listing the user does not own, give the fab.com link. glb/gltf/fbx are imported into /Game/Fab/<Title>/; an unreal-engine pack goes to /Game/<Pack>/. Quixel Megascans (free) come in several qualities: pass quality (default mid). If a model arrives in several pieces, a Blueprint (BP_<Title>) that assembles them is created: place that one. If the answer is choose_file, ask the user which file and call again with artifact_id. If it is eula_required, give the link and do not retry. Can take minutes for big packs.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "listing_uid": {
+          "type": "string",
+          "description": "Listing uid from fab_search or fab_my_library."
+        },
+        "asset_format": {
+          "type": "string",
+          "enum": [
+            "unreal-engine",
+            "glb",
+            "gltf",
+            "fbx",
+            "converted-files"
+          ],
+          "description": "One of the listing's compatible formats."
+        },
+        "artifact_id": {
+          "type": "string",
+          "description": "Only after a choose_file answer."
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "low",
+            "mid",
+            "high",
+            "raw"
+          ],
+          "description": "For listings sold in several qualities (Quixel Megascans: low, mid, high, raw zips). Default mid."
+        }
+      },
+      "required": [
+        "listing_uid",
+        "asset_format"
+      ]
+    }
+  },
+  {
+    "name": "fab_sign_in",
+    "description": "Check the Fab session of the open editor. If there is none, it tells the user to click the Fab button in the Content Browser; with open_portal=true it opens the Epic account portal instead (asks for approval). It never claims the user is signed in: call it again to check.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "open_portal": {
+          "type": "boolean"
+        }
+      },
+      "required": []
+    }
+  }
+]

@@ -91,6 +91,16 @@ fn engine_plugins(engine: Option<&EngineInstall>) -> Vec<&'static str> {
         .unwrap_or_default()
 }
 
+/// Plugins de Fab (REQ-108): el plugin C++ los usa para la sesión y la descarga. Vienen activos por defecto en el motor,
+/// así que solo cuentan como pendientes si el `.uproject` los DESACTIVA (no se añaden a todos los proyectos).
+pub const FAB_PLUGINS: [&str; 2] = ["Fab", "EOSShared"];
+
+/// Los de [`FAB_PLUGINS`] que el proyecto desactiva a mano. @spec REQ-108
+fn disabled_fab_plugins(project: &UProject) -> Vec<&'static str> {
+    let disabled = FAB_PLUGINS.iter().copied().filter(|name| project.plugins.iter().any(|p| p.name == *name && !p.enabled)).collect();
+    disabled
+}
+
 /// Plugins que necesita este proyecto.
 fn required_plugins(has_cpp: bool, dressing: &[&'static str]) -> Vec<&'static str> {
     let mut plugins = REQUIRED_PLUGINS.to_vec();
@@ -293,6 +303,9 @@ pub fn readiness_with_engine(uproject: &Path, source: &Path, engine: Option<Engi
             detail: String::new(),
         });
     }
+    for name in FAB_PLUGINS {
+        checks.push(Check { id: format!("plugin:{name}"), ok: !disabled_fab_plugins(&project).contains(&name), detail: String::new() });
+    }
     let mcp = discovery::read_mcp_settings(dir);
     checks.push(Check {
         id: "autoStart".into(),
@@ -483,8 +496,10 @@ pub fn plan_with_engine(
     let mut changes = Vec::new();
     // 1. Plugins del `.uproject`.
     let before = std::fs::read_to_string(uproject).map_err(|error| io_error(uproject, &error))?;
-    let mut wanted = required_plugins(discovery::read_uproject(uproject)?.has_cpp, &engine_plugins(engine));
+    let project = discovery::read_uproject(uproject)?;
+    let mut wanted = required_plugins(project.has_cpp, &engine_plugins(engine));
     wanted.extend_from_slice(variant.plugins());
+    wanted.extend(disabled_fab_plugins(&project));
     let after = enable_plugins(&before, &wanted)?;
     if after != before {
         changes.push(FileChange {
@@ -948,6 +963,26 @@ mod tests {
         let value: Value = serde_json::from_str(&wanted(Some(&only_geometry))).unwrap();
         let entry = value["Plugins"].as_array().unwrap().iter().find(|p| p["Name"] == "GeometryScripting").unwrap().clone();
         assert_eq!(entry["TargetAllowList"], json!(["Editor", "Game"]), "la lista del usuario no se toca");
+    }
+
+    /// Fab y EOSShared vienen activos por defecto: no se añaden al `.uproject`, pero si el usuario los desactivó,
+    /// el diagnóstico lo dice y «Preparar» los vuelve a activar. @spec REQ-108
+    #[test]
+    fn fab_solo_se_activa_si_el_proyecto_lo_desactiva() {
+        let (_dir, path) = project();
+        let uproject_after = |path: &Path| plan(path, &source(), Variant::Cpp, None).unwrap().changes.into_iter().find(|c| c.relative.ends_with("Demo.uproject")).map(|c| c.after).unwrap_or_default();
+        assert!(!uproject_after(&path).contains("\"Fab\""), "activo por defecto: no se añade");
+        let ok = |path: &Path, id: &str| readiness(path, &source()).unwrap().checks.iter().find(|c| c.id == id).unwrap().ok;
+        assert!(ok(&path, "plugin:Fab") && ok(&path, "plugin:EOSShared"));
+
+        let mut mine: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        mine["Plugins"].as_array_mut().unwrap().push(json!({ "Name": "Fab", "Enabled": false }));
+        std::fs::write(&path, unreal_json(&mine, "
+").unwrap()).unwrap();
+        assert!(!ok(&path, "plugin:Fab"), "desactivado a mano: el diagnóstico lo dice");
+        let value: Value = serde_json::from_str(&uproject_after(&path)).unwrap();
+        let fab = value["Plugins"].as_array().unwrap().iter().find(|p| p["Name"] == "Fab").unwrap().clone();
+        assert_eq!(fab["Enabled"], json!(true), "«Preparar» lo vuelve a activar");
     }
 
     /// @spec REQ-87
