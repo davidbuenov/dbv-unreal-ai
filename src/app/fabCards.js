@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-117, REQ-106
+// @spec REQ-117
 //
 // Cada listing de Fab se ve antes de instalarlo: miniatura, título, vendedor, gratis / en tu biblioteca / de pago,
 // formatos compatibles con el editor y el enlace «Ver en fab.com». Las tarjetas salen de los datos de la herramienta,

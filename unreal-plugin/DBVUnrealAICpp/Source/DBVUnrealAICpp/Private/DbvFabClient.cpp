@@ -448,12 +448,6 @@ namespace
 								}
 							}
 							Item->SetBoolField(TEXT("has_download_url"), (*Entry)->HasField(TEXT("downloadUrl")));
-							TArray<TSharedPtr<FJsonValue>> Keys;
-							for (const auto& Pair : (*Entry)->Values)
-							{
-								Keys.Add(MakeShared<FJsonValueString>(FString(Pair.Key)));
-							}
-							Item->SetArrayField(TEXT("fields"), Keys);
 							Entries.Add(MakeShared<FJsonValueObject>(Item));
 						}
 					}

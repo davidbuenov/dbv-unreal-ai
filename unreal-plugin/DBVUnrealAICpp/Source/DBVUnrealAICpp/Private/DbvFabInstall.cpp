@@ -481,7 +481,8 @@ namespace
 				}
 			}
 		}
-		if (Code == 401 || Code == 0)
+		// Un error de la biblioteca (sin sesión, red, 404 de la marca ff_agents_api…) se cuenta tal cual: no es «no lo tienes».
+		if (Code < 200 || Code >= 300)
 		{
 			Fail(Ctx, HttpErrorCode(Code), ServerMessage(Body));
 		}

@@ -149,23 +149,26 @@ pub fn anonymize(text: &str, home: Option<&str>, user: Option<&str>) -> String {
     out
 }
 
+/// Reemplaza `needle` sin distinguir mayúsculas ASCII. `to_ascii_lowercase` no cambia la longitud en bytes (a diferencia
+/// de `to_lowercase`), así que las posiciones valen para el texto original con cualquier carácter; un nombre con letras
+/// no ASCII se reemplaza además tal cual.
 fn replace_ignore_case(text: &str, needle: &str, with: &str) -> String {
-    let lower = text.to_lowercase();
-    let wanted = needle.to_lowercase();
-    let mut out = String::with_capacity(text.len());
+    let exact = if needle.is_empty() { text.to_string() } else { text.replace(needle, with) };
+    let lower = exact.to_ascii_lowercase();
+    let wanted = needle.to_ascii_lowercase();
+    let mut out = String::with_capacity(exact.len());
     let mut last = 0;
-    // Solo si pasar a minúsculas no cambia las posiciones (ASCII y la mayoría de nombres): si no, se deja igual.
-    if lower.len() == text.len() && !wanted.is_empty() {
+    if !wanted.is_empty() {
         let mut from = 0;
         while let Some(found) = lower[from..].find(&wanted) {
             let start = from + found;
-            out.push_str(&text[last..start]);
+            out.push_str(&exact[last..start]);
             out.push_str(with);
             last = start + wanted.len();
             from = last;
         }
     }
-    out.push_str(&text[last..]);
+    out.push_str(&exact[last..]);
     out
 }
 
@@ -237,7 +240,8 @@ async fn app_diagnostics(app: tauri::AppHandle, project: Option<String>) -> Resu
         let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok();
         let user = std::env::var("USERNAME").or_else(|_| std::env::var("USER")).ok();
         let text = anonymize(&report.to_string(), home.as_deref(), user.as_deref());
-        serde_json::from_str(&text).unwrap_or(report)
+        // Si el texto anonimizado no se pudiera leer, se devuelve como texto: nunca el informe sin anonimizar.
+        serde_json::from_str(&text).unwrap_or(serde_json::Value::String(text))
     })
     .await
     .map_err(|error| error.to_string())
@@ -524,6 +528,9 @@ mod tests {
         assert!(out.contains("%USERPROFILE%") && out.contains("D:/Proyectos"));
         assert!(serde_json::from_str::<serde_json::Value>(&out).is_ok(), "sigue siendo JSON");
         assert_eq!(anonymize("sin datos", None, Some("ab")), "sin datos", "un nombre de 2 letras no se toca");
+        // Con caracteres cuyo paso a minúsculas cambia de longitud (İ), y con un nombre no ASCII.
+        let mixed = anonymize("İstanbul C:/Users/BUENO/x y Begoña", Some(r"C:\Users\bueno"), Some("Begoña"));
+        assert!(!mixed.to_lowercase().contains("bueno") && !mixed.contains("Begoña"), "{mixed}");
     }
 
     use unreal::commands::EditorStatus;
