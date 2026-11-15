@@ -9,13 +9,13 @@
 #
 # Para cada motor del Launcher indicado, `RunUAT BuildPlugin` compila `unreal-plugin/DBVUnrealAICpp` y deja en
 # `unreal-plugin-bin/<mayor.menor>/Win64/` solo lo que hace falta para cargarlo sin compilar: las DLL y
-# `UnrealEditor.modules` (con su BuildId, que «Preparar» compara con el CompatibleChangelist del motor del proyecto).
+# `UnrealEditor.modules` (con su BuildId, que «Preparar» compara con el del editor del motor del proyecto).
 # Sin `.pdb` (60 MB cada uno). Se ejecuta en el /ship de cada versión, en la máquina de desarrollo.
 #
 # Uso: powershell -File scripts/release/build-cpp-plugin.ps1 [-Engines "D:\Program Files\Epic Games\UE_5.8"]
 
 param(
-    [string[]]$Engines = @("D:\Program Files\Epic Games\UE_5.8")
+    [string[]]$Engines = @("D:\Program Files\Epic Games\UE_5.8", "C:\Program Files\Epic Games\UE_5.9")
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,9 +46,12 @@ foreach ($Engine in $Engines) {
     New-Item -ItemType Directory -Force $Out | Out-Null
     Copy-Item (Join-Path $Package "Binaries\Win64\*.dll") $Out
     Copy-Item (Join-Path $Package "Binaries\Win64\UnrealEditor.modules") $Out
+    # Unreal acepta el plugin si su BuildId es el del propio editor (Engine/Binaries/Win64/UnrealEditor.modules): en 5.8
+    # del Launcher es el CompatibleChangelist; en la 5.9 Preview (CompatibleChangelist 0), el Changelist.
     $Modules = Get-Content (Join-Path $Out "UnrealEditor.modules") -Raw | ConvertFrom-Json
-    if ("$($Modules.BuildId)" -ne "$($Version.CompatibleChangelist)") {
-        throw "BuildId $($Modules.BuildId) != CompatibleChangelist $($Version.CompatibleChangelist) for Unreal $Minor"
+    $EngineModules = Get-Content (Join-Path $Engine "Engine\Binaries\Win64\UnrealEditor.modules") -Raw | ConvertFrom-Json
+    if ("$($Modules.BuildId)" -ne "$($EngineModules.BuildId)") {
+        throw "BuildId $($Modules.BuildId) != engine BuildId $($EngineModules.BuildId) for Unreal $Minor"
     }
     $Size = (Get-ChildItem $Out | Measure-Object -Sum Length).Sum
     Write-Host ("   OK: BuildId {0}, {1:N0} bytes in {2}" -f $Modules.BuildId, $Size, $Out)

@@ -446,15 +446,25 @@ fn json_number(path: &Path, field: &str) -> Option<u64> {
     number
 }
 
-/// Los binarios del plugin C++ que trae la app para `engine`, solo si su `BuildId` es el `CompatibleChangelist` del
-/// motor (el mismo en todas las x.y.z del Launcher; distinto en un motor compilado desde código o en otra Preview).
-/// Solo Windows: son DLL de Win64. @spec REQ-121
+/// El `BuildId` con el que el motor acepta módulos: el de su propio `Engine/Binaries/Win64/UnrealEditor.modules`, que
+/// es lo que compara Unreal al cargar un plugin. En 5.8.4 del Launcher es el `CompatibleChangelist` (55116800); en la
+/// 5.9 Preview, cuyo `CompatibleChangelist` es 0, es su `Changelist` (60351404). Si no se puede leer, el
+/// `CompatibleChangelist` distinto de 0. @spec REQ-121
+pub fn engine_build_id(engine: &EngineInstall) -> Option<u64> {
+    let root = Path::new(&engine.root).join("Engine");
+    let id = json_number(&root.join("Binaries").join("Win64").join("UnrealEditor.modules"), "BuildId")
+        .or_else(|| json_number(&root.join("Build").join("Build.version"), "CompatibleChangelist").filter(|cl| *cl != 0));
+    id
+}
+
+/// Los binarios del plugin C++ que trae la app para `engine`, solo si su `BuildId` es el del motor (el mismo en todas
+/// las x.y.z del Launcher; distinto en un motor compilado desde código o en otra Preview). Solo Windows: son DLL de
+/// Win64. @spec REQ-121
 pub fn matching_binaries(source: &Path, engine: Option<&EngineInstall>) -> Option<PathBuf> {
     let engine = engine?;
     let dir = source.parent()?.join(BINARIES_DIR).join(format!("{}.{}", engine.major, engine.minor)).join("Win64");
     let build_id = json_number(&dir.join("UnrealEditor.modules"), "BuildId")?;
-    let compatible = json_number(&Path::new(&engine.root).join("Engine").join("Build").join("Build.version"), "CompatibleChangelist")?;
-    let matching = (cfg!(windows) && build_id == compatible).then_some(dir);
+    let matching = (cfg!(windows) && Some(build_id) == engine_build_id(engine)).then_some(dir);
     matching
 }
 
@@ -462,7 +472,7 @@ pub fn matching_binaries(source: &Path, engine: Option<&EngineInstall>) -> Optio
 pub fn cpp_plugin_state(dir: &Path, engine: Option<&EngineInstall>) -> &'static str {
     let plugin = dir.join("Plugins").join(CPP_PLUGIN);
     let modules = plugin.join("Binaries").join("Win64").join("UnrealEditor.modules");
-    let compatible = engine.and_then(|e| json_number(&Path::new(&e.root).join("Engine").join("Build").join("Build.version"), "CompatibleChangelist"));
+    let compatible = engine.and_then(engine_build_id);
     let state = if !plugin.join(format!("{CPP_PLUGIN}.uplugin")).is_file() {
         "absent"
     } else if compatible.is_some() && json_number(&modules, "BuildId") == compatible {
@@ -1067,7 +1077,10 @@ mod tests {
         let (_root, mut engine) = fake_engine(&[]);
         let build = Path::new(&engine.root).join("Engine").join("Build");
         std::fs::create_dir_all(&build).unwrap();
-        let write_version = |cl: u64| std::fs::write(build.join("Build.version"), format!("{{\"MajorVersion\":5,\"MinorVersion\":8,\"PatchVersion\":4,\"CompatibleChangelist\":{cl}}}")).unwrap();
+        let binaries = Path::new(&engine.root).join("Engine").join("Binaries").join("Win64");
+        std::fs::create_dir_all(&binaries).unwrap();
+        std::fs::write(build.join("Build.version"), "{\"MajorVersion\":5,\"MinorVersion\":8,\"PatchVersion\":4,\"CompatibleChangelist\":0}").unwrap();
+        let write_version = |id: u64| std::fs::write(binaries.join("UnrealEditor.modules"), format!("{{\"BuildId\": \"{id}\", \"Modules\": {{}}}}")).unwrap();
         let relatives = |engine: &EngineInstall| plan_with_engine(&path, &source(), Variant::Cpp, None, Some(engine)).unwrap().changes.into_iter().map(|c| c.relative).collect::<Vec<_>>();
 
         write_version(build_id);

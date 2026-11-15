@@ -1,0 +1,8 @@
+{
+	"BuildId": "60351404",
+	"Modules": 
+	{
+		"DBVUnrealAICpp": "UnrealEditor-DBVUnrealAICpp.dll",
+		"DBVUnrealAICppRender": "UnrealEditor-DBVUnrealAICppRender.dll"
+	}
+}
