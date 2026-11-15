@@ -11,6 +11,9 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+### Añadido
+- **Fab en UE 5.8.4, prueba de viabilidad (REQ-101, S138):** el plugin C++ usa la sesión de Fab que ya abriste en el editor para consultar tu biblioteca de Fab y la información de descarga, sin abrir otra sesión. El token se queda dentro del editor: no se guarda, no se escribe en los logs y no sale en ninguna respuesta. Las peticiones van como trabajos (`fab_start`, `fab_status`, `fab_cancel`) para no bloquear el editor mientras responde Fab.
+
 ## [0.6.0] - 2026-11-14
 
 Versión v0.6.0: **compatible con Unreal Engine 5.8.4 y 5.9** con la misma app y el mismo plugin, y lo que trae el asistente de la 5.9 desde la app: **agentes Cursor y OpenCode**, **niveles de autonomía** y **avisos** cuando la IA espera tu aprobación, las **herramientas de Unreal Canvas**, las **instrucciones del MCP del editor** y la **Knowledge Base**. Los **mundos de World Labs ya no salen en espejo**, puedes elegir el **renderizador de splats** (el nuestro o el plugin GaussianSplat de Epic) y se corrige el error **«os error 17» al conectar una IA en la versión de la Microsoft Store**.

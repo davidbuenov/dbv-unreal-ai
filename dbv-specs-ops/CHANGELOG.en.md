@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Fab on UE 5.8.4, feasibility spike (REQ-101, S138):** the C++ plugin uses the Fab session you already opened in the editor to read your Fab library and the download info, without opening another session. The token stays inside the editor: it is not stored, not written to the logs and not returned in any response. Requests run as jobs (`fab_start`, `fab_status`, `fab_cancel`) so the editor does not freeze while Fab answers.
+
 ## [0.6.0] - 2026-11-14
 
 Version v0.6.0: **compatible with Unreal Engine 5.8.4 and 5.9** with the same app and the same plugin, and what the 5.9 assistant brings, from the app: **Cursor and OpenCode agents**, **autonomy levels** and **alerts** when the AI is waiting for your approval, the **Unreal Canvas tools**, the **editor MCP instructions** and the **Knowledge Base**. **World Labs worlds are no longer mirrored**, you can choose the **splat renderer** (ours or Epic's GaussianSplat plugin), and the **"os error 17" when connecting an AI in the Microsoft Store version** is fixed.

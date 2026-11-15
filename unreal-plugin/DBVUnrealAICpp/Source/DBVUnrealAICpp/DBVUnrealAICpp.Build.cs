@@ -23,7 +23,12 @@ public class DBVUnrealAICpp : ModuleRules
 		});
 		PrivateDependencyModuleNames.AddRange(new string[] { 
 			"PythonScriptPlugin",
-			"Projects"
+			"Projects",
+			// @spec REQ-101 Fab con la sesión EOS del editor
+			"HTTP",
+			"Json",
+			"EOSSDK",
+			"EOSShared"
 		});
 	}
 }

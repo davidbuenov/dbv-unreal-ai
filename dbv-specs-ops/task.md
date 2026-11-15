@@ -21,6 +21,7 @@
       - Soporte para ficheros binarios (`.uasset`) en `prepare.rs` sin errores UTF-8.
       - Corrección de firma en `setup_cloth_for_character` (`dest_folder`) e importación automática de mallas de tela en `pipeline.py`.
       - Plugin sincronizado a `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI` y `Plugins\DBVUnrealAICpp`.
+* **RETOMAR AQUÍ PRIMERO (2026-11-15) — v0.6.1 = Fab en UE 5.8.4:** `/spec` hecho (`SPECIFICATIONS.md` v1.19, §3.23: REQ-101..REQ-108 y el nuevo **REQ-117**, que pide miniatura y enlace a fab.com en cada resultado, también en la conversación; la regla «solo lo gratuito o lo que ya tiene el usuario» se comprueba en el plugin). Pruebas en `DBVMCPFirst` (5.8.4), nivel `fab_test`, con los plugins al día. Siguiente: `/plan`, empezando por el spike REQ-101, que es la puerta.
 * **RETOMAR AQUÍ PRIMERO (2026-11-14) — v0.6.0 publicada:** versión 0.6.0 en `package.json`, `Cargo.toml`, `tauri.conf.json` y los dos plugins (`DBVUnrealAI` Version 8, `DBVUnrealAICpp` Version 4), CHANGELOG ES/EN, notas en `releases/v0.6.0*.md`, README, web y walkthrough. Tag `v0.6.0` subido: `release.yml` crea el borrador de la Release. MSIX `0.6.0.0` y fichas `descripcionStore_*.md` preparadas; enviar a certificación es decisión del usuario (REQ-90). Cambios comunes llevados al `dbv-tauri-starter` (guardado con `replace_file`, Cursor y OpenCode). Pendiente: probar Cursor y OpenCode en vivo, la tarjeta del renderizador en la app, la línea diagonal de `Seaside_atras` y el resto de la matriz 5.9 (Tripo, Biblioteca, vestir, caja negra).
 * **RETOMAR AQUÍ PRIMERO (2026-11-13, tarde) — P1 de la v0.6.0 construido (S124–S130):** Rust 349, Vitest 435, en vivo contra `PruebaUnreal59`. Sin commit: el usuario lo revisa. Siguiente: `/test` (matriz de `walkthrough.md`: Tripo, Biblioteca, vestir, play-testing y caja negra en 5.9) y luego P2 (Canvas, splats de Epic, paridad con el Unreal Assistant, Fab).
 * **RETOMAR AQUÍ PRIMERO (2026-11-13) — v0.6.0 = compatible con UE 5.8.4 y 5.9, y todo lo del asistente de la 5.9 desde la app:** `/spec` hecho (`SPECIFICATIONS.md` v1.18, §3.24 `REQ-109..REQ-116` y §3.23 Fab `REQ-101..REQ-108`). Sale **antes del workshop del 2026-12-10** (práctico, 3 h). P1: REQ-109..REQ-112 y REQ-116. Siguiente: `/plan`. Las pruebas en 5.9 se hacen en `PruebaUnreal59` (`D:\temp\oscar\PruebaUnreal59`, C++, nativo de 5.9, MCP en el 8000); `DBVMCPFirst` no se abre con 5.9. UEFN y Verse pasan a la v0.7.0.
@@ -254,6 +255,21 @@
 - [x] **`/test` v0.4.1** — verificación de tests en Rust (243 pasados, 0 fallos), Vitest (386 pasados en 43 suites), Python (48 pasados) y `dbv-lint.py` limpio.
 - [x] **`/code-simplify` v0.4.1** — revisión de ergonomía, seguridad y robustez, clippy sin advertencias.
 - [x] **`/ship` v0.4.1** (2026-11-07) — bump a 0.4.1, notas de release en ES y EN (`v0.4.1.md`, `v0.4.1.en.md`), changelog actualizado, aislamiento de plugins para empaquetado standalone/VR (Android / Meta Quest), tag `v0.4.1` (sin publicación en Store a petición del usuario para pasar a v0.5.0).
+
+## v0.6.1 — Fab en UE 5.8.4 (REQ-101..REQ-108, REQ-117)
+
+- [x] **`/spec` v0.6.1** (2026-11-15) — `SPECIFICATIONS.md` v1.19 §3.23. Decisiones del usuario: miniatura y enlace a fab.com en cada resultado, también en la conversación (REQ-117); nada se compra desde la app, solo se instala lo gratuito o lo que el usuario ya tiene, con la comprobación en el código (REQ-104); pruebas en `DBVMCPFirst`, nivel `fab_test`. `DESIGN.md`: tarjetas de Fab en la conversación.
+- [x] **`/plan` v0.6.1** (2026-11-15) — `implementation_plan.md` §19, Architect Review (concurrencia: trabajos asíncronos en C++; identidad de la plataforma EOS en el spike). **Pendiente de aprobación del usuario.**
+  - [x] **S138 · Spike REQ-101 (puerta)** — superado el 2026-11-15. `DbvFabClient.{h,cpp}` con trabajos (`fab_start`, `fab_status`, `fab_cancel`) y las operaciones `platforms`, `session`, `library_search` y `download_info`. En vivo en `DBVMCPFirst`: sesión encontrada tras abrir la pestaña Fab, biblioteca 200, `download-info` 200 de un `glb` gratuito y de un pack UE gratuito (`UE_4.27`), token 0 veces en el log. Tests de Automation `DBV.Fab.Jobs` y `DBV.Fab.RedactSecrets` en verde. Lecciones en `memory.md`.
+  - [ ] **S139 · Catálogo anónimo en Rust (REQ-102, REQ-108)**
+  - [ ] **S140 · Instalar binary con la regla gratis o en propiedad (REQ-104)**
+  - [ ] **S141 · Instalar asset_pack (REQ-104, P-30, P-31)**
+  - [ ] **S142 · Herramientas fab_* para la IA y el --mcp (REQ-103, REQ-105)**
+  - [ ] **S143 · Tarjetas de Fab en la conversación (REQ-117)**
+  - [ ] **S144 · Vista Fab (REQ-106)**
+  - [ ] **S145 · Referencia en la Biblioteca (REQ-107)**
+  - [ ] **S146 · Preparar y adaptador de 5.9 (REQ-108)**
+  - [ ] **S147 · Eval de Fab**
 
 ## v0.6.0 — Compatible con UE 5.8.4 y 5.9, todo lo del asistente de la 5.9 desde la app (REQ-109..REQ-116) y Fab (REQ-101..REQ-108)
 

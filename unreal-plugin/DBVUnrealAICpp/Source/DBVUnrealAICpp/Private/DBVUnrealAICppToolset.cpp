@@ -5,10 +5,11 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-06, REQ-25, REQ-26
+// @spec REQ-06, REQ-25, REQ-26, REQ-101
 
 #include "DBVUnrealAICppToolset.h"
 
+#include "DbvFabClient.h"
 #include "IPythonScriptPlugin.h"
 #include "Misc/Base64.h"
 
@@ -93,4 +94,19 @@ FString UDBVUnrealAICppToolset::get_scene_summary(const FString& name_filter, co
 FString UDBVUnrealAICppToolset::load_gaussian_splat(const FString& source_file, const FString& actor_label)
 {
 	return CallPython(TEXT("load_gaussian_splat"), { source_file, actor_label });
+}
+
+FString UDBVUnrealAICppToolset::fab_start(const FString& operation, const FString& args_json)
+{
+	return DbvFab::Start(operation, args_json);
+}
+
+FString UDBVUnrealAICppToolset::fab_status(const FString& job_id)
+{
+	return DbvFab::Status(job_id);
+}
+
+FString UDBVUnrealAICppToolset::fab_cancel(const FString& job_id)
+{
+	return DbvFab::Cancel(job_id);
 }

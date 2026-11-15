@@ -69,4 +69,16 @@ public:
 	/** Load a 3D Gaussian Splat (.spz or .ply) into a native ADbvGaussianSplatActor in the scene. Returns JSON (success, actor, num_splats, bounds). */
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString load_gaussian_splat(const FString& source_file, const FString& actor_label);
+
+	/** Start a Fab operation with the editor's own Fab session (operation: session, platforms, library_search, download_info; args_json: JSON object). Returns JSON (success, job_id). Poll it with fab_status. The session token never leaves the editor. */
+	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
+	static FString fab_start(const FString& operation, const FString& args_json);
+
+	/** State of a Fab job started with fab_start. Returns JSON (state: running, done or error; result). */
+	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
+	static FString fab_status(const FString& job_id);
+
+	/** Cancel a running Fab job. Returns JSON (success). */
+	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
+	static FString fab_cancel(const FString& job_id);
 };

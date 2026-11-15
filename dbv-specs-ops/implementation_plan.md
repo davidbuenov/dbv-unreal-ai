@@ -674,3 +674,76 @@ La grabadora y los análisis deben cumplir desde el principio la regla de un sol
 ### Rollback
 
 Un commit por rebanada. Todas son aditivas sobre 5.8: si una se revierte, 5.8.4 sigue como en la v0.5.1, y 5.9 pierde solo esa mejora.
+
+
+## 19. Plan v0.6.1 — Fab en UE 5.8.4 (`REQ-101..REQ-108`, `REQ-117`)
+
+> **Modo:** Orquestador. Cubre C++ (`DBVUnrealAICpp`: cliente autenticado e instalación), Rust (cliente anónimo, herramientas MCP, Biblioteca), JS (herramientas de la IA integrada, tarjetas en la conversación, vista Fab, traducciones) y fixtures.
+> **Aprobación:** pendiente. El usuario pidió `/spec` y `/plan` el 2026-11-15; `/build` empieza cuando lo apruebe.
+> **Proyecto de prueba:** `DBVMCPFirst` (UE 5.8.4), nivel `fab_test`, con los plugins al día con «Preparar». **Para compilar el plugin C++ hay que cerrar el editor** (sin Live Coding, ver memoria del usuario), así que cada rebanada en C++ acaba en «cierra el editor, compilo y lo vuelves a abrir».
+> **Puerta:** S138 (spike REQ-101). Si no conseguimos el token EOS de la sesión de Fab, o `library/search` no responde 2xx con él, se para todo lo que necesita sesión (S140–S142 y la pestaña *Mi biblioteca*) y se vuelve a hablar con el usuario. Lo anónimo (S139, S143, el catálogo de S144) no depende de la puerta: se puede construir igual y daría buscar y ver con miniatura y enlace, sin instalar.
+
+```yaml
+# Frontmatter de §19 (v0.6.1)
+dependencies:
+  - UE 5.8.4 con DBVMCPFirst abierto, nivel fab_test, sesión de Fab iniciada en la pestaña Fab del editor
+  - Plugins del motor Fab (0.0.21) y EOSShared activos (vienen por defecto)
+  - API https://www.fab.com/p/agents/* (no documentada; marca ff_agents_api en la cuenta)
+  - ureq 3 ya en Cargo.toml para la búsqueda anónima
+risks:
+  - "R-47: API sin documentar -> puerto FabCatalog con respuestas grabadas; errores con el mensaje del servidor; función experimental"
+  - "R-48: varias plataformas EOS activas -> solo se usa una candidata única (sin nombre de configuración y con cuenta Epic iniciada); si hay 0 o más de 1, no se envía ningún token"
+  - "R-49: flujo de packs privado de Epic -> FFabDownloadRequest/BuildPatchInstallRequest públicos (FAB_API); si no basta, packs fuera y solo binary"
+  - "R-51: URLs firmadas que caducan -> download-info justo antes de descargar y un único reintento"
+  - "Nuevo: las herramientas AICallable corren en el hilo del juego y el HTTP de UE completa en ese mismo hilo -> trabajos asíncronos (start + status), nunca bloquear esperando la respuesta"
+rollback_strategy: >
+  Un commit por rebanada (S138..S147). Todo es aditivo: el plugin C++ solo gana funciones nuevas, y la app, herramientas y una vista
+  nuevas. Revertir una rebanada quita esa parte y no toca lo de la v0.6.0 (en 5.9, Fab sigue yendo con FabToolset).
+```
+
+### Evidencias recogidas (2026-11-15)
+
+1. **Búsqueda anónima en vivo** (`GET https://www.fab.com/p/agents/listings/search?q=car&is_free=true&count=2` → 200). Cada resultado trae `uid`, `title`, `fabUrl`, `user.{sellerName,sellerId}`, `isFree`, `ratings.{averageRating,total}`, `isMature`, `category`, `licenses`, `tags`, `listingType` y `assetFormats[].assetFormatType.code`, más `thumbnails[0].images[]` con el mismo JPG de `https://media.fab.com/...` a 144, 160, 320, 640 y 960 px. El primer coche gratis solo tiene `blender` y `fbx`.
+2. **Cómo abre Fab su sesión en 5.8.4** (`Engine/Plugins/Fab/Source/Fab/Private/FabAuthentication.cpp:20-100`): crea la plataforma con `IEOSSDKManager::CreatePlatform(EOS_Platform_Options&)`, con opciones a mano (ProductId, SandboxId y credenciales del asset `FabEos`), **sin nombre de configuración**. Su token sale de `EOS_Auth_CopyUserAuthToken` (líneas 367-421, `GetAuthToken()`), en una cabecera **privada**: no se puede llamar desde nuestro plugin.
+3. **API pública de EOSShared** (`IEOSSDKManager.h:52-134`): `GetActivePlatforms()` devuelve `IEOSPlatformHandlePtr`, y cada handle da `GetConfigName()` y convierte a `EOS_HPlatform`. No da el ProductId. Así que P-29 se resuelve con: plataforma sin nombre de configuración + cuenta Epic iniciada + (en el spike) el campo `App` del `EOS_Auth_Token`, que no es secreto. Lo que manda al final es que `library/search` responda 2xx.
+4. **Patrón del toolset C++** (`DBVUnrealAICppToolset.h:34-71`): funciones `static FString` con `UFUNCTION(meta = (AICallable))` que devuelven JSON. `DBVUnrealAICpp.Build.cs` aún no depende de `HTTP`, `Json`, `EOSShared`, `EOSSDK` ni `Fab`, y el `.uplugin` no declara `Fab` ni `EOSShared`.
+5. **Conversación** (`src/ai/agentLoop.js:196-201`): un resultado de herramienta con forma `{text, images}` ya se separa en texto para el modelo e imágenes aparte, y `onStep({tool, label, result})` llega a `aiApp.js:691` → `panel.addStep`. Ahí se engancha `fabListings` sin pasar por el modelo.
+6. **Seguridad del DOM** (`src/ai/markdown.js:8-19`): sin `innerHTML`, por el riesgo de `<img onerror>` con `withGlobalTauri`. Las tarjetas siguen esa regla. El CSP de Tauri es `null` (`tauri.conf.json:22`), así que una `<img>` de `media.fab.com` carga sin tocar la configuración, y la lista de dominios permitidos la ponemos en JS.
+7. **Enlaces externos:** `openExternalUrl` (`src/ai/backend.js:39`) ya usa el plugin `opener`.
+
+### Architect Review
+
+```xml
+<architect_review>
+  <builder>Dos clientes detrás de un puerto (REQ-108). (1) Lo anónimo (catálogo y ficha) en Rust con ureq, sin editor: `src-tauri/src/fab/` con `FabCatalog`, que devuelve un `FabListing` compacto (uid, título, vendedor, gratis o precio, formatos instalables, `fabUrl`, una sola miniatura de 320 px, maduro). (2) Lo que necesita sesión (estado, biblioteca, download-info, instalar) en C++ dentro del editor: `DbvFabClient` busca la plataforma EOS de Fab, copia el token en cada petición y llama con `FHttpModule` a `https://www.fab.com`. El token nunca sale del proceso. La app habla con el C++ por el toolset como siempre, y cada resultado pasa por la misma forma `FabListing`. La regla de compra va en el C++ (`fab_install` comprueba `isFree` o propiedad antes de `download-info`) y se repite en la UI (no hay botón «Instalar» si no se puede). Las tarjetas de la conversación se pintan con los `fabListings` del resultado de la herramienta, no con el texto del modelo.</builder>
+  <adversary>REQ-103 exige que el token «se lee en cada petición» y REQ-104 que la descarga tenga «progreso». Pero las funciones `AICallable` del toolset son `static FString` síncronas (evidencia 4) y corren en el hilo del juego. El HTTP de UE (`FHttpModule`) completa sus callbacks en ese mismo hilo, en el tick. Si `fab_library_search` espera a la respuesta dentro de la llamada, el editor se queda bloqueado para siempre. Si no espera, no tiene nada que devolver. Además, la «plataforma sin nombre de configuración» de la evidencia 3 no identifica a Fab con seguridad: cualquier plugin (Convai, un Online Subsystem del juego) puede crear otra igual con `CreatePlatform(Options)`, y le mandaríamos a fab.com el token de otro producto (R-48).</adversary>
+  <evidence>`SPECIFICATIONS.md` §3.23 (REQ-101 «el token no aparece en ningún log», REQ-103 «se lee en cada petición… un único reintento tras un 401», REQ-104 «con el progreso de la descarga», R-48); `DBVUnrealAICppToolset.h:34-71` (funciones estáticas síncronas); `FabAuthentication.cpp:100` (`CreatePlatform(PlatformOptions)` sin nombre); `IEOSSDKManager.h:66,134` (`GetConfigName`, `GetActivePlatforms`); `agentLoop.js:196-201`; `markdown.js:8-19`; respuesta grabada de `listings/search?q=car` del 2026-11-15.</evidence>
+  <builder>Resolución: (1) **Concurrencia:** todo lo que hace HTTP en C++ va como trabajo: `fab_start(op, args_json)` devuelve `job_id` al momento, y `fab_status(job_id)` da `running` (con `progress` si hay descarga), `done` (con el resultado) o `error`. El trabajo vive en un mapa del módulo y se limpia al leerlo terminado o a los 10 minutos. Rust espera con sondeo (cada 300 ms, con tiempo límite y cancelación con `fab_cancel`), igual que ya hacemos con los trabajos de Tripo en `generation/jobs.rs`. Para la IA y el `--mcp` sigue siendo una sola herramienta síncrona. (2) **Identidad de la plataforma (R-48):** el spike registra, sin el token, el nombre de configuración, si hay cuenta iniciada y el `App` y `ClientId` del token de cada plataforma activa. Con eso fijamos la regla (por ejemplo, `App` igual al de Fab). La regla queda **fija en el código** y, si no hay exactamente una plataforma que la cumpla, se devuelve `no_session` o `ambiguous_session` y **no se envía nada**. (3) **401:** se vuelve a copiar el token una vez (el plugin de Fab lo refresca) y, si falla otra vez, `no_session`. (4) **Logs:** los mensajes de error se escriben con un ayudante que borra cualquier `Bearer …` y cualquier campo `access_token` antes de registrar; un test de C++ (`Tests/`) lo comprueba.</builder>
+  <confidence_score edge_cases="medium" security="high" concurrency="medium" />
+</architect_review>
+```
+
+*Por qué `medium`:* la identidad de la plataforma y el flujo de packs dependen de lo que salga en el spike S138 (puerta). Hasta entonces no hay validación en vivo. Si el spike lo confirma, los dos ejes suben a `high` y se anota aquí.
+
+*Tras S138 (2026-11-15):* **concurrencia → `high`**, porque los trabajos funcionan en vivo sin bloquear el editor. **Casos límite → sigue en `medium`**: la identidad de la plataforma está validada (una sola, sin nombre de configuración, 200 en la biblioteca), pero la instalación de packs (S141) aún no se ha probado. Ajustes que salen del spike: `engineVersion` en formato `UE_X.Y`; la biblioteca anida el producto en `listing`; `fab_sign_in` primero pide abrir la pestaña Fab, y `Fab.Login` (portal de cuenta) solo con aprobación.
+
+### Rebanadas
+
+| # | Req. | Qué | Ficheros | Test |
+| --- | --- | --- | --- | --- |
+| **S138** (puerta) | REQ-101, P-29 | Spike en C++: dependencias (`HTTP`, `Json`, `EOSShared`, `EOSSDK`, `Fab` en `Build.cs` y `.uplugin`), `DbvFabClient` (busca la plataforma, copia el token, `fab_start`/`fab_status`/`fab_cancel`), operaciones `session` y `library_search`. Diagnóstico de plataformas **sin el token**. Compilar con el editor cerrado | `DBVUnrealAICpp.Build.cs`, `.uplugin`, `DbvFabClient.{h,cpp}`, `DBVUnrealAICppToolset.{h,cpp}` | En vivo en `DBVMCPFirst`: `session` = iniciada; `library_search` 2xx; búsqueda del token en el log del editor = 0. Test de C++: el ayudante borra `Bearer` |
+| S139 | REQ-102, REQ-108 (puerto) | Cliente anónimo en Rust: `fab::catalog` (URL con filtros, `cursors.next`, sin total, 400/429/404/403), `FabListing` compacto (miniatura de 320 px, `fabUrl`, solo dominios de Fab), formatos instalables por defecto | `src-tauri/src/fab/{mod,catalog,listing}.rs`, fixtures `tests/fixtures/fab/` (de la búsqueda `car` grabada, recortada) | Rust: URL, paginación, compactado, maduro, miniatura de otro dominio descartada, errores |
+| S140 | REQ-104 | C++ `install` de `binary`: comprueba si es gratis o del usuario (antes de `download-info`) → `no_owned` + `fabUrl`. Después `download-info`, descarga en `Saved/DBV/Fab/tmp`, importación en `/Game/Fab/<Título>/` (fábrica de Fab o, si no, nuestro `import_model`), un reintento si la URL ha caducado, varios ficheros → `choose_file`, y al cancelar se borra lo temporal | `DbvFabClient.cpp`, `DbvFabInstall.{h,cpp}` | En vivo: un `glb` gratuito en `fab_test`; uno de pago que no se tiene → `no_owned` sin descargar |
+| S141 | REQ-104, P-30, P-31 | C++ `install` de `manifest` + `asset_pack` con `FFabDownloadRequest` / `BuildPatchInstallRequest` en `ProjectDir()` (P-30) y aviso de los plugins que pida el pack. `code_plugin` solo se detecta y se da el enlace (P-31) | `DbvFabInstall.cpp` | En vivo: un pack gratuito aparece en el Content Browser |
+| S142 | REQ-103, REQ-105, REQ-108 | Herramientas `fab_search`, `fab_listing_details` (Rust, anónimas), `fab_my_library`, `fab_install` y `fab_sign_in` (C++ por el toolset, con sondeo). Descripciones con las reglas de §3.23 (siempre el `fabUrl`, nunca comprar). `fab_install` y `fab_sign_in` son de escritura y piden aprobación. Se acotan según REQ-51. En la IA integrada, el resultado es `{text, fabListings}` | `mcp_server.rs`, `src/unreal/unrealTools.js`, `permissions.js`, traducciones | Rust: forma del resultado, tope, `no_owned`; Vitest: escritura con aprobación, `fabListings` aparte del texto |
+| S143 | REQ-117 | Tarjetas de Fab en la conversación: `agentLoop` pasa `fabListings` en `onStep`; `fabCards.js` pinta la tira (nodos y `textContent`, `img` solo de `https://media.fab.com/`, enlace solo a `https://www.fab.com/listings/`, maduro difuminado, «Instalar» solo si es gratis o del usuario, con aprobación) | `src/ai/agentLoop.js`, `src/ai/aiApp.js`, `src/ai/chatPanel.js`, `src/app/fabCards.js`, `styles.css`, traducciones | Vitest: dominios, maduro, gratis, en propiedad, de pago sin «Instalar»; en vivo: «quiero un coche gratis para Unreal» |
+| S144 | REQ-106 | Vista «Fab»: barra lateral, buscador y filtros, cuadrícula con «Cargar más» (reutiliza `fabCards.js`), ficha con «Ver en fab.com», pestañas *Catálogo* y *Mi biblioteca*, estado de la sesión, aviso sin editor e instalación con aprobación y progreso | `src/app/fabView.js`, `app.js`, `index.html`, `styles.css`, traducciones | Vitest de la vista; en vivo: buscar, ficha e instalar sin la IA; temas claro y oscuro; ES y EN |
+| S145 | REQ-107 | La Biblioteca guarda una referencia: `LibraryEntry` con `provider: "fab"`, miniatura, enlace y proyectos con sus rutas, sin ficheros; «Instalar en este proyecto» vuelve a pedirlo a Fab | `src-tauri/src/library/mod.rs`, `libraryView.js` | Rust: sin duplicados, segundo proyecto añadido, sin ficheros copiados |
+| S146 | REQ-108, REQ-04 | «Preparar» comprueba que `Fab` está activo. En 5.9 se elige el adaptador: el cliente propio si funciona igual; si no, `FabToolset` con la misma forma `FabListing` (enlace a partir del `uid` si no trae miniatura) | `prepare.rs`, `fab/mod.rs` | Rust: `Fab` desactivado → se propone activarlo; adaptador de 5.9 con su fixture |
+| S147 | Evals §8 | Eval de Fab con un catálogo simulado: ningún total, cero instalaciones sin aprobación, cero compras, el enlace de cada listing que se nombra, EULA sin reintento | `tests/evals/` | Suite de evals |
+
+**Orden:** S138 primero, porque es la puerta. S139 y S143 se pueden hacer mientras se compila o si la puerta falla. Después S140 → S141 → S142 → S144 → S145 → S146 → S147.
+
+### Rollback
+
+Un commit por rebanada. Si S138 falla, se revierte el C++ de Fab (el plugin queda como en la v0.6.0), se anota en la Rejection Memory y se habla con el usuario. S139 y S143 siguen valiendo solo con la búsqueda anónima.

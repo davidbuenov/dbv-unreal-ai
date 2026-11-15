@@ -36,6 +36,14 @@
 		{
 			"Name": "ToolsetRegistry",
 			"Enabled": true
+		},
+		{
+			"Name": "EOSShared",
+			"Enabled": true
+		},
+		{
+			"Name": "Fab",
+			"Enabled": true
 		}
 	]
 }
