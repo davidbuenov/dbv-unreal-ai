@@ -34,6 +34,38 @@ export function checkLabel(check) {
   return { label, why };
 }
 
+/** Solución de una comprobación que falla, en una frase (REQ-120). */
+export function checkFix(check) {
+  const [kind] = check.id.split(':');
+  const key = `check.fix.${kind}`;
+  const text = t(key);
+  return text === key ? '' : text;
+}
+
+/**
+ * Pasos del diagnóstico en orden (REQ-120): las comprobaciones de «Preparar», el editor abierto, su servidor MCP y el
+ * plugin C++. Cada uno con su texto, si está bien y, si no, cómo arreglarlo.
+ */
+export function diagnosticSteps(readiness, editor) {
+  const steps = (readiness?.checks ?? []).map((check) => ({ ok: check.ok, label: checkLabel(check).label, fix: check.ok ? '' : checkFix(check) }));
+  const port = String(editor?.mcp?.port ?? readiness?.mcp?.port ?? '');
+  steps.push({ ok: Boolean(editor), label: t('step.editor'), fix: editor ? '' : t('step.editorFix') });
+  steps.push({ ok: Boolean(editor?.listening), label: t('step.mcp', { port }), fix: editor?.listening ? '' : t(editor ? 'step.mcpFix' : 'step.editorFix') });
+  if (readiness?.cppPlugin && readiness.cppPlugin !== 'absent') {
+    const compiled = readiness.cppPlugin === 'compiled';
+    steps.push({ ok: compiled, label: t(compiled ? 'step.cppCompiled' : 'step.cppNeedsCompile'), fix: compiled ? '' : t(readiness.cppBinaries ? 'step.cppFixPrepare' : 'step.cppFixCompile') });
+  }
+  return steps;
+}
+
+/** Texto para «Copiar diagnóstico» (REQ-120): los pasos legibles y el informe anonimizado de Rust. */
+export function diagnosticsText(projectName, steps, report) {
+  const lines = [`# ${t('project.diagnosticsTitle', { project: projectName })}`, ''];
+  for (const step of steps) lines.push(`${step.ok ? '✓' : '✗'} ${step.label}${step.fix ? ` — ${step.fix}` : ''}`);
+  lines.push('', '```json', JSON.stringify(report ?? {}, null, 2), '```');
+  return lines.join('\n');
+}
+
 /**
  * Líneas de un diff para enseñar (`+`, `-`, ` `), con `context` líneas iguales alrededor de cada cambio.
  * Un fichero nuevo se enseña entero como añadido.
@@ -123,7 +155,8 @@ export function createProjectView(host, deps) {
       { className: 'checklist' },
       report.checks.map((check) => {
         const { label, why } = checkLabel(check);
-        return el('li', { className: 'check' }, el('span', { className: check.ok ? 'check-ok' : 'check-fail', text: check.ok ? '✓' : '✗', attrs: { 'aria-label': check.ok ? 'ok' : 'falta' } }), el('div', {}, el('span', { text: label }), check.ok ? null : el('details', {}, el('summary', { text: '?' }), why)));
+        const fix = check.ok ? '' : checkFix(check);
+        return el('li', { className: 'check' }, el('span', { className: check.ok ? 'check-ok' : 'check-fail', text: check.ok ? '✓' : '✗', attrs: { 'aria-label': check.ok ? 'ok' : 'falta' } }), el('div', {}, el('span', { text: label }), fix ? el('p', { className: 'check-fix', text: fix }) : null, check.ok ? null : el('details', {}, el('summary', { text: '?' }), why)));
       }),
     );
   }
@@ -278,9 +311,10 @@ export function createProjectView(host, deps) {
     return el(
       'div',
       { className: 'card' },
-      el('div', { className: 'row' }, el('h3', { text: `${project.name} · ${t('project.readiness')}` }), el('span', { className: 'spacer' })),
+      el('div', { className: 'row' }, el('h3', { text: `${project.name} · ${t('project.readiness')}` }), el('span', { className: 'spacer' }), button(t('project.copyDiagnostics'), () => copyDiagnostics(project, editor), 'btn-ghost')),
       readiness.ready ? el('p', { className: 'check-ok', text: t('project.ready') }) : null,
       renderChecks(readiness),
+      extraSteps(editor),
       engineChoice(readiness),
       el(
         'div',
@@ -302,6 +336,20 @@ export function createProjectView(host, deps) {
         }, 'btn-ghost') : null,
       ),
     );
+  }
+
+  /** Pasos del diagnóstico que no son de «Preparar»: editor, servidor MCP y plugin C++ (REQ-120). */
+  function extraSteps(editor) {
+    const steps = diagnosticSteps({ ...readiness, checks: [] }, editor);
+    return el('ul', { className: 'checklist' }, steps.map((step) => el('li', { className: 'check' }, el('span', { className: step.ok ? 'check-ok' : 'check-fail', text: step.ok ? '✓' : '✗' }), el('div', {}, el('span', { text: step.label }), step.fix ? el('p', { className: 'check-fix', text: step.fix }) : null))));
+  }
+
+  /** «Copiar diagnóstico» (REQ-120): pasos legibles e informe sin claves ni la carpeta del usuario. */
+  async function copyDiagnostics(project, editor) {
+    const report = await api.appDiagnostics(project.path ?? selected);
+    if (!report.ok) return deps.toast(report.error.message, 'error');
+    await navigator.clipboard.writeText(diagnosticsText(project.name, diagnosticSteps(readiness, editor), report.value));
+    return deps.toast(t('settings.diagnosticsCopied'));
   }
 
   /**

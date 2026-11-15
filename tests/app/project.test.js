@@ -6,7 +6,7 @@
 // =============================================================================
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createProjectView } from '../../src/app/projectView.js';
+import { createProjectView, diagnosticSteps, diagnosticsText } from '../../src/app/projectView.js';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
 
 const PROJECT = 'D:/Unreal/Demo/Demo.uproject';
@@ -144,5 +144,39 @@ describe('Vista Proyecto', () => {
     await vi.waitFor(() => expect(deps.toast).toHaveBeenCalled());
     expect(deps.toast).toHaveBeenCalledWith('El editor en el puerto 8000 pertenece a «Otro», no a «Demo».', 'error');
     expect(deps.state.setConnection).toHaveBeenLastCalledWith({ status: 'offline' }, true);
+  });
+});
+
+describe('Diagnóstico en lenguaje llano (REQ-120)', () => {
+  const readiness = {
+    mcp: { port: 8000 },
+    cppPlugin: 'needsCompile',
+    cppBinaries: true,
+    checks: [{ id: 'engine', ok: false, detail: '{95B798E8}' }, { id: 'plugin:ModelContextProtocol', ok: true, detail: '' }, { id: 'autoStart', ok: false, detail: '8000' }],
+  };
+
+  it('cada paso que falla lleva su solución en una frase; sin editor, se dice cómo abrirlo', () => {
+    const steps = diagnosticSteps(readiness, null);
+    const engine = steps.find((s) => s.label.startsWith('Unreal Engine 5.8'));
+    expect(engine.ok).toBe(false);
+    expect(engine.fix).toContain('Elegir la carpeta de Unreal');
+    expect(steps.find((s) => s.label.startsWith('Plugin ModelContextProtocol')).fix).toBe('');
+    expect(steps.find((s) => s.label.startsWith('Arranque automático')).fix).toContain('Preparar proyecto');
+    expect(steps.find((s) => s.label === 'Editor de Unreal abierto con este proyecto').fix).toContain('Abrir en Unreal');
+    expect(steps.find((s) => s.label.startsWith('Plugin C++ sin compilar')).fix).toContain('ya compilado');
+  });
+
+  it('con el editor abierto y el MCP respondiendo, esos pasos salen bien', () => {
+    const steps = diagnosticSteps({ ...readiness, cppPlugin: 'compiled' }, { listening: true, mcp: { port: 8001 } });
+    expect(steps.find((s) => s.label === 'Servidor MCP del editor respondiendo (puerto 8001)').ok).toBe(true);
+    expect(steps.find((s) => s.label.startsWith('Plugin C++ compilado')).ok).toBe(true);
+  });
+
+  it('el texto copiado lleva los pasos legibles y el informe', () => {
+    const text = diagnosticsText('Demo', diagnosticSteps(readiness, null), { version: '0.6.1', project: { engineAssociation: '{95B798E8}' } });
+    expect(text.startsWith('# Diagnóstico de DBV Unreal AI · Demo')).toBe(true);
+    expect(text).toContain('✗ Unreal Engine 5.8 o posterior instalado ({95B798E8}) — Instala Unreal 5.8');
+    expect(text).toContain('```json');
+    expect(text).toContain('"engineAssociation": "{95B798E8}"');
   });
 });

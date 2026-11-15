@@ -133,6 +133,68 @@ pub fn diagnostics(
     })
 }
 
+/// Quita del diagnóstico lo que identifica a la persona: su carpeta de usuario pasa a `%USERPROFILE%` (con `\`, `/` o
+/// `\\` de JSON) y su nombre de usuario a `<user>`. Las claves ya las quita `logging::scrub`. @spec REQ-120
+pub fn anonymize(text: &str, home: Option<&str>, user: Option<&str>) -> String {
+    let mut out = text.to_string();
+    if let Some(home) = home.filter(|h| h.len() > 3) {
+        let variants = [home.to_string(), home.replace('\\', "/"), home.replace('\\', "\\\\")];
+        for variant in variants {
+            out = replace_ignore_case(&out, &variant, "%USERPROFILE%");
+        }
+    }
+    if let Some(user) = user.filter(|u| u.len() >= 3) {
+        out = replace_ignore_case(&out, user, "<user>");
+    }
+    out
+}
+
+fn replace_ignore_case(text: &str, needle: &str, with: &str) -> String {
+    let lower = text.to_lowercase();
+    let wanted = needle.to_lowercase();
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    // Solo si pasar a minúsculas no cambia las posiciones (ASCII y la mayoría de nombres): si no, se deja igual.
+    if lower.len() == text.len() && !wanted.is_empty() {
+        let mut from = 0;
+        while let Some(found) = lower[from..].find(&wanted) {
+            let start = from + found;
+            out.push_str(&text[last..start]);
+            out.push_str(with);
+            last = start + wanted.len();
+            from = last;
+        }
+    }
+    out.push_str(&text[last..]);
+    out
+}
+
+/// El proyecto abierto en la app para el diagnóstico (REQ-120): asociación, motor resuelto y de dónde salió, las
+/// comprobaciones y el plugin C++. Sin contenido del proyecto.
+#[cfg(desktop)]
+pub fn project_report(project: &str) -> serde_json::Value {
+    let path = std::path::Path::new(project);
+    let source = unreal::prepare::toolset_source();
+    let readiness = source.as_ref().ok().map(|s| unreal::prepare::readiness(path, s));
+    let value = match readiness {
+        Some(Ok(r)) => serde_json::json!({
+            "path": project,
+            "engineAssociation": r.project.engine_association,
+            "hasCpp": r.project.has_cpp,
+            "engine": r.engine.as_ref().map(|e| serde_json::json!({ "version": e.version, "root": e.root, "editorExists": e.editor_exists })),
+            "engineSource": r.engine_source,
+            "cppBinariesBundled": r.cpp_binaries,
+            "cppPlugin": r.cpp_plugin,
+            "ready": r.ready,
+            "checks": r.checks.iter().map(|c| serde_json::json!({ "id": c.id, "ok": c.ok, "detail": c.detail })).collect::<Vec<_>>(),
+            "mcp": { "port": r.mcp.port, "autoStart": r.mcp.auto_start },
+        }),
+        Some(Err(error)) => serde_json::json!({ "path": project, "error": error.to_string() }),
+        None => serde_json::json!({ "path": project, "error": "the app plugin files were not found" }),
+    };
+    value
+}
+
 /// Rutas reales de la app y si existen, y el final del log (RNF-08, REQ-53): lo que faltó para ver que la biblioteca
 /// de la Store estaba en otra carpeta.
 #[cfg(desktop)]
@@ -150,7 +212,7 @@ pub fn paths_report(data_dir: &std::path::Path, library_dir: &std::path::Path) -
 /// @spec RNF-08
 #[cfg(desktop)]
 #[tauri::command]
-async fn app_diagnostics(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+async fn app_diagnostics(app: tauri::AppHandle, project: Option<String>) -> Result<serde_json::Value, String> {
     use tauri::Manager;
     let data = app.path().app_data_dir().map_err(|error| error.to_string())?;
     let config = app.path().app_config_dir().map_err(|error| error.to_string())?;
@@ -164,7 +226,18 @@ async fn app_diagnostics(app: tauri::AppHandle) -> Result<serde_json::Value, Str
         if let (Some(map), serde_json::Value::Object(paths)) = (report.as_object_mut(), paths_report(&data, &library)) {
             map.extend(paths);
         }
-        report
+        // REQ-120: el proyecto abierto y los motores registrados (GUID o nombre → carpeta).
+        if let Some(map) = report.as_object_mut() {
+            map.insert("registeredEngines".into(), serde_json::json!(unreal::discovery::registered_builds().iter().map(|(id, path)| serde_json::json!({ "id": id, "path": path })).collect::<Vec<_>>()));
+            if let Some(project) = project.as_deref() {
+                map.insert("project".into(), project_report(project));
+            }
+        }
+        // REQ-120: sin la carpeta ni el nombre de la persona.
+        let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok();
+        let user = std::env::var("USERNAME").or_else(|_| std::env::var("USER")).ok();
+        let text = anonymize(&report.to_string(), home.as_deref(), user.as_deref());
+        serde_json::from_str(&text).unwrap_or(report)
     })
     .await
     .map_err(|error| error.to_string())
@@ -415,9 +488,13 @@ pub fn run() {
             sessions::commands::sessions_tool_specs,
             #[cfg(desktop)]
             sessions::commands::sessions_run_tool,
+            #[cfg(desktop)]
             unreal::commands::unreal_pick_engine,
+            #[cfg(desktop)]
             unreal::commands::unreal_clear_engine,
+            #[cfg(desktop)]
             fab::commands::fab_tool_specs,
+            #[cfg(desktop)]
             fab::commands::fab_run_tool,
             #[cfg(desktop)]
             sessions::commands::sessions_active,
@@ -437,6 +514,18 @@ pub fn run() {
 #[cfg(all(test, desktop))]
 mod tests {
     use super::*;
+
+    /// El diagnóstico no lleva la carpeta ni el nombre de la persona, escriba la ruta como la escriba. @spec REQ-120
+    #[test]
+    fn el_diagnostico_no_lleva_la_carpeta_ni_el_nombre_del_usuario() {
+        let report = serde_json::json!({ "root": r"C:\Users\Bueno\UE_5.8", "log": ["open c:/users/bueno/Docs/P.uproject by bueno"], "other": "D:/Proyectos" }).to_string();
+        let out = anonymize(&report, Some(r"C:\Users\bueno"), Some("bueno"));
+        assert!(!out.to_lowercase().contains("bueno"), "{out}");
+        assert!(out.contains("%USERPROFILE%") && out.contains("D:/Proyectos"));
+        assert!(serde_json::from_str::<serde_json::Value>(&out).is_ok(), "sigue siendo JSON");
+        assert_eq!(anonymize("sin datos", None, Some("ab")), "sin datos", "un nombre de 2 letras no se toca");
+    }
+
     use unreal::commands::EditorStatus;
     use unreal::discovery::{EngineInstall, McpSettings, RunningEditor};
 

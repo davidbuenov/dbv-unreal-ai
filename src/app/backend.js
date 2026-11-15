@@ -86,7 +86,7 @@ export const aiReadAttachment = (path) => call('ai_read_attachment', { path });
 /** Guarda en disco una imagen pegada del portapapeles (`Ctrl+V`) y devuelve `{kind: 'image', path, name, mime, base64}` (REQ-68). */
 export const aiSaveClipboardImage = (mime, data, name = null) => call('ai_save_clipboard_image', { mime, data, name });
 /** Diagnóstico sin secretos para una incidencia (RNF-08). */
-export const appDiagnostics = () => call('app_diagnostics');
+export const appDiagnostics = (project = null) => call('app_diagnostics', { project });
 
 // ─── Generación y biblioteca ─────────────────────────────────────────
 export const generationStatus = () => call('generation_status');

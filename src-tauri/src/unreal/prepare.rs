@@ -164,6 +164,9 @@ pub struct Readiness {
     /// La app trae el plugin C++ ya compilado para este motor: la variante C++ (Fab, splats) no necesita Visual
     /// Studio, también en un proyecto de solo Blueprints. @spec REQ-121
     pub cpp_binaries: bool,
+    /// El plugin C++ en el proyecto: `absent` (no está), `compiled` (sus DLL casan con el motor) o `needsCompile` (solo
+    /// el código, o DLL de otro motor). Informativo: no cuenta en `ready`. @spec REQ-120, REQ-121
+    pub cpp_plugin: String,
     pub mcp: McpSettings,
     pub proposed_port: u16,
     pub checks: Vec<Check>,
@@ -348,6 +351,7 @@ pub fn readiness_with_engine(uproject: &Path, source: &Path, engine: Option<Engi
     let result = Readiness {
         project,
         cpp_binaries: matching_binaries(source, engine.as_ref()).is_some(),
+        cpp_plugin: cpp_plugin_state(dir, engine.as_ref()).to_string(),
         engine,
         engine_source: None,
         mcp,
@@ -452,6 +456,21 @@ pub fn matching_binaries(source: &Path, engine: Option<&EngineInstall>) -> Optio
     let compatible = json_number(&Path::new(&engine.root).join("Engine").join("Build").join("Build.version"), "CompatibleChangelist")?;
     let matching = (cfg!(windows) && build_id == compatible).then_some(dir);
     matching
+}
+
+/// Estado del plugin C++ instalado en el proyecto `dir` para `engine`. @spec REQ-120, REQ-121
+pub fn cpp_plugin_state(dir: &Path, engine: Option<&EngineInstall>) -> &'static str {
+    let plugin = dir.join("Plugins").join(CPP_PLUGIN);
+    let modules = plugin.join("Binaries").join("Win64").join("UnrealEditor.modules");
+    let compatible = engine.and_then(|e| json_number(&Path::new(&e.root).join("Engine").join("Build").join("Build.version"), "CompatibleChangelist"));
+    let state = if !plugin.join(format!("{CPP_PLUGIN}.uplugin")).is_file() {
+        "absent"
+    } else if compatible.is_some() && json_number(&modules, "BuildId") == compatible {
+        "compiled"
+    } else {
+        "needsCompile"
+    };
+    state
 }
 
 /// Ficheros del plugin C++ con los binarios de la app: todo menos `Source/` (sin código, el editor no intenta
