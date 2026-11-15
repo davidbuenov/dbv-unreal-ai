@@ -593,3 +593,21 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
     animation: none;
   }
 }
+
+/* ─── Fab: tarjetas en la conversación y en la vista Fab (REQ-117, REQ-106) ─── */
+.fab-strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 8px; margin: 4px 0; scroll-snap-type: x proximity; }
+.fab-card { flex: 0 0 200px; display: grid; gap: 6px; align-content: start; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--bg-primary); scroll-snap-align: start; }
+.fab-card__thumb { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background: var(--bg-secondary, var(--bg-primary)); display: block; }
+.fab-card__thumb--empty { display: grid; place-items: center; color: var(--text-secondary); font-size: 28px; border: 1px dashed var(--border); }
+.fab-card__thumb--mature { filter: blur(12px); }
+.fab-card__title { font-weight: 600; font-size: 13px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fab-card__seller { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fab-card__pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.fab-card__actions { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.fab-card__link { font-size: 12px; color: var(--accent); text-decoration: none; }
+.fab-card__link:hover { text-decoration: underline; }
+.fab-card__install { padding: 2px 10px; min-height: 0; font-size: 12px; }
+.fab-pill { border-radius: 9999px; padding: 1px 8px; font-size: 10px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.fab-pill--ok { color: var(--status-ok); border-color: var(--status-ok); }
+.fab-pill--paid { font-family: var(--font-mono); }
+.fab-pill--warn { color: var(--status-warn); border-color: var(--status-warn); }

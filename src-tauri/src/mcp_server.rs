@@ -143,7 +143,7 @@ const fn schema_object() -> &'static str {
 /// Herramientas que solo consultan (REQ-12): se publican con `readOnlyHint` y, cuando un agente de la conversación
 /// pide permiso para usarlas, la app lo concede sola. Lo que modifica, ejecuta Python o gasta créditos sigue
 /// preguntando (pedido por el usuario el 2026-11-01: las aprobaciones de simples consultas eran muy pesadas).
-pub const READ_ONLY_TOOLS: [&str; 25] = [
+pub const READ_ONLY_TOOLS: [&str; 28] = [
     "unreal_list_toolsets",
     "unreal_describe_toolset",
     "unreal_capture_viewport",
@@ -170,6 +170,10 @@ pub const READ_ONLY_TOOLS: [&str; 25] = [
     "session_analyze",
     "session_query",
     "session_wait",
+    // Fab (REQ-105): buscar, ver la ficha y la biblioteca. Instalar e iniciar sesión preguntan.
+    "fab_search",
+    "fab_listing_details",
+    "fab_my_library",
 ];
 
 /// Las herramientas de solo lectura, para que la ventana apruebe sola sus permisos. @spec REQ-12
@@ -335,6 +339,8 @@ pub fn tool_specs() -> Vec<Value> {
     specs.push(crate::convai_characters::spec());
     // Caja negra (REQ-91..REQ-93): la misma definición que el asistente integrado (D69).
     specs.extend(sessions::specs());
+    // Fab (REQ-105): la misma definición que el asistente integrado.
+    specs.extend(crate::fab::tools::specs());
     // Anotación estándar de MCP: algunos agentes ya no preguntan por lo que solo consulta.
     for spec in &mut specs {
         let read_only = spec["name"]
@@ -381,6 +387,20 @@ fn is_dbv(name: &str) -> bool {
 /// El editor visto por las herramientas de la caja negra: Python por `run_python` y Play por `StartPIE`/`StopPIE`,
 /// la misma ruta que `unreal_playtest` (D71). @spec REQ-92
 struct McpEditor<'a>(&'a mut McpServer);
+
+/// El toolset C++ del editor para las herramientas de Fab (REQ-105).
+struct McpFab<'a>(&'a mut McpServer);
+
+impl crate::fab::tools::FabEditor for McpFab<'_> {
+    fn call_cpp(&mut self, tool: &str, args: Value) -> Result<Value, String> {
+        let out = self
+            .0
+            .editor(|s| s.call_toolset_tool(crate::fab::tools::FAB_TOOLSET, tool, args.clone(), DEFAULT_TIMEOUT))
+            .map_err(|e| e.to_string())
+            .map(|r| r.value.unwrap_or(Value::String(r.text)));
+        out
+    }
+}
 
 impl session_control::Editor for McpEditor<'_> {
     fn run_python(&mut self, code: &str) -> Result<String, String> {
@@ -741,6 +761,18 @@ impl McpServer {
             tool if sessions::is_tool(tool) => {
                 let root = self.sessions_root()?;
                 sessions::run_tool(tool, args, &root, &mut McpEditor(self))?
+            }
+            // Fab (REQ-105): el catálogo sin sesión; biblioteca e instalación por el plugin C++ con la sesión del editor.
+            tool if crate::fab::tools::is_tool(tool) => {
+                let out = crate::fab::tools::run_tool(tool, args, Some(&mut McpFab(self)), "")?;
+                // REQ-117: el agente no ve nuestras tarjetas, así que recibe también las miniaturas.
+                let thumbnails: Vec<Value> = out.fab_listings.iter().filter_map(|l| Some(json!({ "uid": l.uid, "thumbnail": l.thumbnail.clone()? }))).collect();
+                if thumbnails.is_empty() {
+                    out.text
+                } else {
+                    format!("{}
+Thumbnails (show them as images if your client renders Markdown): {}", out.text, Value::Array(thumbnails))
+                }
             }
             "tripo_operations" => tools::operations_text(args)?,
             "tripo_balance" => self.balance()?,

@@ -15,6 +15,9 @@ import { getLanguage, registerTranslations, t } from '../ai/i18nBridge.js';
 import { createApprovalCard } from '../unreal/approvalCard.js';
 import { AUTONOMY_LEVELS, autonomyDecision, createPermissionMemory, loadAutonomy, requestKind, saveAutonomy } from '../unreal/permissions.js';
 import { createUnrealTools, describeCapture, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
+import { createFabTools } from '../unreal/fabTools.js';
+import { fabCardStrip } from './fabCards.js';
+import { openExternalUrl } from '../ai/backend.js';
 import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import { isPreview } from '../unreal/engineVersion.js';
 import { needsAttention } from './attention.js';
@@ -243,6 +246,7 @@ export function start() {
   // Recetas guiadas (REQ-23): definiciones de Rust, como las del MCP propio.
   let recipeSpecs = [];
   let sessionSpecs = [];
+  let fabSpecs = [];
   // Guías de Unreal sin red (REQ-25): la herramienta de Rust, como en el MCP propio.
   let guidesSpec = null;
   // Consultas del servidor MCP de la app: un agente no pide permiso para ellas (REQ-12).
@@ -608,7 +612,28 @@ export function start() {
               return found.ok ? found.value : `error: ${found.error.message ?? found.error}`;
             } }]
           : [];
-        return withUsage([...unreal, ...generation, ...memory, ...zones, ...convai, ...recipes, ...guides], turnContext?.usage);
+        // Fab (REQ-105, REQ-117): buscar funciona sin editor; cada resultado se ve como tarjeta con miniatura y enlace.
+        const online = state.connection?.status === 'online';
+        const fab = createFabTools({
+          specs: fabSpecs,
+          run: (name, args) => api.fabRunTool(online ? state.connection.endpoint : null, state.connection?.engineVersion ?? null, name, args),
+          askApproval,
+          permissions: memories.get(conversationId),
+          onAction: log.add,
+          showListings: (listings) => panel.addNode(fabCardStrip(listings, {
+            onOpen: openExternalUrl,
+            // «Instalar» desde la tarjeta pasa por la misma aprobación que la IA (REQ-12).
+            onInstall: online ? async (listing, format) => {
+              const install = fab.find((tool) => tool.name === 'fab_install');
+              toast(t('fab.installing', { title: listing.title }));
+              const text = String(await install.run({ listing_uid: listing.uid, asset_format: format, purpose: listing.title }));
+              const failed = text.startsWith('error') || text.includes('DENIED');
+              const folder = /"folder":"([^"]+)"/.exec(text)?.[1] ?? '';
+              toast(failed ? t('fab.installFailed', { title: listing.title, message: text.slice(0, 200) }) : t('fab.installed', { title: listing.title, folder }), failed ? 'error' : 'info');
+            } : null,
+          })),
+        });
+        return withUsage([...unreal, ...generation, ...memory, ...zones, ...convai, ...recipes, ...guides, ...fab], turnContext?.usage);
       },
       // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): el diálogo del sistema y Rust los leen.
       pickAttachments: async () => {
@@ -655,12 +680,13 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools(), api.sessionsToolSpecs()])
-        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly, sessions]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools(), api.sessionsToolSpecs(), api.fabToolSpecs()])
+        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly, sessions, fab]) => {
           readOnlyTools = readOnly?.ok && Array.isArray(readOnly.value) ? readOnly.value : [];
           // Un backend que no conoce el comando devuelve `null`: sin estas comprobaciones, la IA no cargaría (lección de la v0.2.0).
           recipeSpecs = recipes?.ok && Array.isArray(recipes.value) ? recipes.value : [];
           sessionSpecs = sessions?.ok && Array.isArray(sessions.value) ? sessions.value : [];
+          fabSpecs = fab?.ok && Array.isArray(fab.value) ? fab.value : [];
           guidesSpec = guides?.ok && guides.value?.name ? guides.value : null;
           convaiCharactersSpec = characters?.ok ? characters.value : null;
           generationSpecs = specs.ok ? specs.value : [];

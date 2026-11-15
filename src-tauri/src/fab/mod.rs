@@ -21,6 +21,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod commands;
+pub mod tools;
+
 pub const API_HOST: &str = "https://www.fab.com";
 pub const LISTING_URL_PREFIX: &str = "https://www.fab.com/listings/";
 pub const THUMBNAIL_URL_PREFIX: &str = "https://media.fab.com/";
@@ -82,6 +85,8 @@ pub struct FabListing {
     pub seller_name: String,
     pub seller_id: String,
     pub is_free: bool,
+    /// Está en la biblioteca del usuario (solo se sabe con sesión: `fab_my_library`).
+    pub owned: bool,
     /// `None` = «sin valoraciones» (nunca 0).
     pub rating: Option<f64>,
     pub rating_count: u64,
@@ -214,9 +219,11 @@ pub fn compact_listing(listing: &Value, engine: Option<&str>) -> FabListing {
     let rating = listing.pointer("/ratings/averageRating").and_then(Value::as_f64).filter(|_| rating_count > 0);
     let compact = FabListing {
         title: text(listing, "/title"),
-        seller_name: text(listing, "/user/sellerName"),
-        seller_id: text(listing, "/user/sellerId"),
+        // El catálogo lo trae en `user`; la biblioteca, en `publisher`.
+        seller_name: Some(text(listing, "/user/sellerName")).filter(|s| !s.is_empty()).unwrap_or_else(|| text(listing, "/publisher/sellerName")),
+        seller_id: Some(text(listing, "/user/sellerId")).filter(|s| !s.is_empty()).unwrap_or_else(|| text(listing, "/publisher/sellerId")),
         is_free: listing.get("isFree").and_then(Value::as_bool).unwrap_or(false),
+        owned: false,
         rating,
         rating_count,
         category: text(listing, "/category/name"),
@@ -289,8 +296,8 @@ pub fn search(query: &SearchQuery) -> Result<SearchPage, FabError> {
     result
 }
 
-/// Ficha de un listing: la forma compacta más la descripción (sin HTML), las licencias y las imágenes. @spec REQ-102
-pub fn listing_details(uid: &str, engine_version: &str) -> Result<Value, FabError> {
+/// Ficha de un listing: la forma compacta (para la tarjeta) y la misma con la descripción (sin HTML) y las licencias. @spec REQ-102
+pub fn listing_details(uid: &str, engine_version: &str) -> Result<(FabListing, Value), FabError> {
     let result = listing_url(uid).and_then(|url| get_json(&url)).map(|body| {
         let tag = engine_tag(engine_version);
         let compact = compact_listing(&body, tag.as_deref());
@@ -299,8 +306,9 @@ pub fn listing_details(uid: &str, engine_version: &str) -> Result<Value, FabErro
             object.insert("description".into(), Value::String(strip_html(&text(&body, "/description")).chars().take(1500).collect()));
             let licenses: Vec<Value> = body.get("licenses").and_then(Value::as_array).map(|list| list.iter().filter_map(|l| l.get("name").cloned()).collect()).unwrap_or_default();
             object.insert("licenses".into(), Value::Array(licenses));
+            object.remove("thumbnail");
         }
-        value
+        (compact, value)
     });
     result
 }
@@ -425,8 +433,9 @@ mod tests {
         assert!(!page.listings.is_empty());
         assert!(page.listings.iter().all(|l| l.compatible && l.fab_url.starts_with(LISTING_URL_PREFIX)));
         assert!(page.listings.iter().any(|l| l.thumbnail.is_some()));
-        let details = listing_details(&page.listings[0].uid, "5.8.4").unwrap();
+        let (card, details) = listing_details(&page.listings[0].uid, "5.8.4").unwrap();
         assert!(details.get("description").is_some());
+        assert_eq!(card.uid, page.listings[0].uid);
     }
 
     #[test]

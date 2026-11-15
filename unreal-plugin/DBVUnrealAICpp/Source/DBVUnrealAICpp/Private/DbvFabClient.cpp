@@ -26,6 +26,7 @@
 #include "IEOSSDKManager.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
+#include "Misc/EngineVersion.h"
 #include "Misc/Guid.h"
 #include "Misc/ScopeLock.h"
 #include "Serialization/JsonReader.h"
@@ -353,45 +354,6 @@ namespace
 		}
 	}
 
-	/** Forma compacta de un listing de la biblioteca: lo justo para el spike y para la IA. */
-	TSharedRef<FJsonObject> CompactListing(const TSharedPtr<FJsonObject>& Listing)
-	{
-		const TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
-		for (const TCHAR* Field : { TEXT("uid"), TEXT("title"), TEXT("listingType"), TEXT("fabUrl") })
-		{
-			FString Value;
-			if (Listing->TryGetStringField(Field, Value))
-			{
-				Out->SetStringField(Field, Value);
-			}
-		}
-		for (const TCHAR* Field : { TEXT("isFree"), TEXT("canRequestDownloadUrl"), TEXT("isMature") })
-		{
-			bool bValue = false;
-			if (Listing->TryGetBoolField(Field, bValue))
-			{
-				Out->SetBoolField(Field, bValue);
-			}
-		}
-		TArray<TSharedPtr<FJsonValue>> Formats;
-		const TArray<TSharedPtr<FJsonValue>>* AssetFormats = nullptr;
-		if (Listing->TryGetArrayField(TEXT("assetFormats"), AssetFormats))
-		{
-			for (const TSharedPtr<FJsonValue>& Format : *AssetFormats)
-			{
-				const TSharedPtr<FJsonObject>* FormatObject = nullptr;
-				const TSharedPtr<FJsonObject>* Type = nullptr;
-				FString Code;
-				if (Format->TryGetObject(FormatObject) && (*FormatObject)->TryGetObjectField(TEXT("assetFormatType"), Type) && (*Type)->TryGetStringField(TEXT("code"), Code))
-				{
-					Formats.Add(MakeShared<FJsonValueString>(Code));
-				}
-			}
-		}
-		Out->SetArrayField(TEXT("formats"), Formats);
-		return Out;
-	}
-
 	/** @spec REQ-101 Biblioteca del usuario: `/p/agents/library/search`. */
 	void StartLibrarySearch(const FString& JobId, const TSharedPtr<FJsonObject>& Args)
 	{
@@ -404,28 +366,38 @@ namespace
 		SendGet(JobId, FabHost + TEXT("/p/agents/library/search") + Query, true, JsonHandler(JobId, [](const TSharedPtr<FJsonObject>& Body)
 		{
 			const TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
-			TArray<TSharedPtr<FJsonValue>> Listings;
+			// Cada entrada de la biblioteca con su `listing` (el producto) y `canRequestDownloadUrl`: Rust la compacta
+			// a la misma forma que el catálogo (miniatura, enlace, formatos compatibles). Sin `technicalDetails` (HTML largo).
+			TArray<TSharedPtr<FJsonValue>> Entries;
 			const TArray<TSharedPtr<FJsonValue>>* Results = nullptr;
 			if (Body.IsValid() && Body->TryGetArrayField(TEXT("results"), Results))
 			{
 				for (const TSharedPtr<FJsonValue>& Result : *Results)
 				{
+					const TSharedPtr<FJsonObject>* Entry = nullptr;
 					const TSharedPtr<FJsonObject>* Listing = nullptr;
-					if (Result->TryGetObject(Listing))
+					if (Result->TryGetObject(Entry) && (*Entry)->TryGetObjectField(TEXT("listing"), Listing))
 					{
-						Listings.Add(MakeShared<FJsonValueObject>(CompactListing(*Listing)));
+						const TArray<TSharedPtr<FJsonValue>>* Formats = nullptr;
+						if ((*Listing)->TryGetArrayField(TEXT("assetFormats"), Formats))
+						{
+							for (const TSharedPtr<FJsonValue>& Format : *Formats)
+							{
+								const TSharedPtr<FJsonObject>* FormatObject = nullptr;
+								const TSharedPtr<FJsonObject>* Specs = nullptr;
+								if (Format->TryGetObject(FormatObject) && (*FormatObject)->TryGetObjectField(TEXT("technicalSpecs"), Specs))
+								{
+									(*Specs)->RemoveField(TEXT("technicalDetails"));
+								}
+							}
+						}
+						bool bCanDownload = false;
+						(*Entry)->TryGetBoolField(TEXT("canRequestDownloadUrl"), bCanDownload);
+						const TSharedRef<FJsonObject> Item = MakeShared<FJsonObject>();
+						Item->SetObjectField(TEXT("listing"), *Listing);
+						Item->SetBoolField(TEXT("canRequestDownloadUrl"), bCanDownload);
+						Entries.Add(MakeShared<FJsonValueObject>(Item));
 					}
-				}
-				// Solo para el spike: los nombres de los campos del primer resultado (sin valores).
-				const TSharedPtr<FJsonObject>* First = nullptr;
-				if (Results->Num() > 0 && (*Results)[0]->TryGetObject(First))
-				{
-					TArray<TSharedPtr<FJsonValue>> Keys;
-					for (const auto& Pair : (*First)->Values)
-					{
-						Keys.Add(MakeShared<FJsonValueString>(FString(Pair.Key)));
-					}
-					Out->SetArrayField(TEXT("result_fields"), Keys);
 				}
 			}
 			const TSharedPtr<FJsonObject>* Cursors = nullptr;
@@ -434,7 +406,7 @@ namespace
 			{
 				(*Cursors)->TryGetStringField(TEXT("next"), Next);
 			}
-			Out->SetArrayField(TEXT("listings"), Listings);
+			Out->SetArrayField(TEXT("entries"), Entries);
 			Out->SetStringField(TEXT("next_cursor"), Next);
 			return Out;
 		}));
@@ -500,6 +472,8 @@ namespace
 		const TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
 		Out->SetBoolField(TEXT("success"), true);
 		Out->SetBoolField(TEXT("signed_in"), Candidates == 1);
+		const FEngineVersion& Version = FEngineVersion::Current();
+		Out->SetStringField(TEXT("engine_tag"), FString::Printf(TEXT("UE_%d.%d"), Version.GetMajor(), Version.GetMinor()));
 		Out->SetStringField(TEXT("reason"), Candidates == 1 ? TEXT("") : (Candidates == 0 ? TEXT("no_session") : TEXT("ambiguous_session")));
 		return ToJson(Out);
 	}
