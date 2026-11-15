@@ -747,3 +747,46 @@ rollback_strategy: >
 ### Rollback
 
 Un commit por rebanada. Si S138 falla, se revierte el C++ de Fab (el plugin queda como en la v0.6.0), se anota en la Rejection Memory y se habla con el usuario. S139 y S143 siguen valiendo solo con la búsqueda anónima.
+
+## 20. Plan v0.6.1 — Que funcione en un equipo sin nuestras herramientas (`REQ-118..REQ-121`)
+
+> **Modo:** Orquestador. Rust (`unreal/discovery.rs`, `commands.rs`, `prepare.rs`, ajustes), JS (`projectView.js`, traducciones), un script de PowerShell y los binarios del plugin.
+> **Aprobación:** pendiente.
+> **Origen:** el error del amigo del usuario (2026-11-15), «no hay una instalación de Unreal {95B798E8-…}», con una `EngineAssociation` que es un GUID.
+
+### Evidencias (2026-11-15)
+
+1. `discovery::engine_for` (`discovery.rs:207`) solo compara `mayor.menor` con la asociación. Un GUID, un nombre registrado o una asociación vacía no encuentran nada, y `commands.rs:127` manda al Launcher.
+2. En los proyectos de esta máquina hay asociaciones `""`, `Aximmetry DE 4.26` y `Pixotope_22.305.6.1940`, además de los números de versión.
+3. Linux ya lee `Install.ini` (`candidate_roots`), pero solo para añadir carpetas: el GUID no se asocia a ninguna.
+4. `UnrealEditor.modules` del plugin compilado: `"BuildId": "55116800"`, que es el `CompatibleChangelist` de UE 5.8.4 (`Changelist` 58902052). Las dos DLL suman 1 MB sin los `.pdb` (`DBVUnrealAICpp` 550 KB y `DBVUnrealAICppRender` 448 KB).
+5. `tauri.conf.json` empaqueta `../unreal-plugin/` entero como recurso, y `prepare::toolset_source` lo busca junto al ejecutable.
+
+### Architect Review
+
+```xml
+<architect_review>
+  <builder>REQ-118: una función pura `resolve_association(association, engines, registered: &[(id, ruta)], project_dir, overrides)` con el orden de la especificación. Las fuentes del sistema (registro de Windows, `Install.ini`) se leen aparte y se le pasan, así se prueba sin tocar el sistema. REQ-119: `engine_overrides.json` en la carpeta de datos de la app (`ruta del .uproject → raíz del motor`) y los comandos `unreal_pick_engine` y `unreal_clear_engine`. Todo lo que hoy llama a `engine_for` pasa por la nueva función. REQ-121: `scripts/release/build-cpp-plugin.ps1` (RunUAT BuildPlugin por motor) deja `unreal-plugin-bin/5.8/Win64/`; «Preparar» lo copia si el `BuildId` coincide.</builder>
+  <adversary>REQ-121 promete que «Preparar» deja el plugin cargado en un proyecto de solo Blueprints. Pero el `.uplugin` copiado trae `Source/`. Al abrir, el editor compara las fechas de `Source/` con las de `Binaries/` y, si el código es más nuevo, pide recompilar, cosa que sin Visual Studio no puede hacer. Lo mismo pasa si `Intermediate/` del proyecto tiene restos de otra compilación. Además, «Preparar» copia hoy el plugin fichero a fichero con su fecha de modificación actual, así que el código copiado siempre sería más nuevo que las DLL. Y el registro de Windows desde la Store (MSIX) podría estar virtualizado.</adversary>
+  <evidence>`SPECIFICATIONS.md` §3.25 (REQ-118 «Solo se lee el registro», REQ-121 «Preparar copia los binarios solo si el BuildId coincide», aceptación «deja el plugin cargado al abrir el editor»); `prepare.rs:221` (`toolset_source`) y el bucle de `plan_with_engine` que copia ficheros; `UnrealEditor.modules` del plugin (BuildId 55116800); MSIX: las lecturas de HKCU fuera del paquete van al registro real (sin redirección para lectura).</evidence>
+  <builder>Resolución: (1) Con binarios compatibles, «Preparar» copia el plugin **sin `Source/`**, como hacen los plugins de código de Fab y del Marketplace. Sin `Source/`, el editor no intenta compilar: carga la DLL si el `BuildId` coincide. Con un proyecto con C++ y Visual Studio, se sigue copiando el código, como hoy. (2) Se borra `Plugins/DBVUnrealAICpp/Intermediate/` del proyecto al instalar los binarios. (3) El registro solo se lee (`RegOpenKeyEx` con `KEY_READ` vía el crate `winreg`), que el MSIX deja pasar al registro real. Se prueba en el MSIX antes de cerrar REQ-118.</builder>
+  <confidence_score edge_cases="medium" security="high" concurrency="high" />
+</architect_review>
+```
+
+*Por qué `medium`:* falta comprobar en un equipo sin Visual Studio que el editor carga el plugin sin `Source/`. Se probará copiando el plugin compilado a un proyecto de Blueprints en esta máquina, con `Source/` quitado.
+
+### Rebanadas
+
+| # | Req. | Qué | Ficheros | Test |
+| --- | --- | --- | --- | --- |
+| S148 | REQ-118 | `resolve_association` y lectura del registro (Windows, `winreg`) y de `Install.ini` (Linux y macOS). Todos los usos de `engine_for` pasan por ella. Mensaje de error que explica la asociación | `discovery.rs`, `commands.rs`, `Cargo.toml` | Rust: GUID, nombre, vacía, desconocida, por encima de la versión |
+| S149 | REQ-119 | Motor elegido a mano: `engine_overrides.json`, `unreal_pick_engine` (subir hasta `Engine/`, validar ≥ 5.8 y editor) y `unreal_clear_engine`; botón en la vista Proyecto y en el error; el `--mcp` lo lee | `discovery.rs`, `commands.rs`, `mcp_server.rs`, `projectView.js`, traducciones | Rust: validación y persistencia; Vitest: el botón solo cuando hace falta |
+| S150 | REQ-120 | Pasos del diagnóstico con su solución, y «Copiar diagnóstico» sin secretos ni el nombre de usuario | `projectView.js`, `commands.rs` (`unreal_diagnostics_text`), `logging.rs` | Vitest y Rust: el texto no lleva claves, `Bearer` ni `%USERPROFILE%` real |
+| S151 | REQ-121 | `build-cpp-plugin.ps1` (RunUAT BuildPlugin, 5.8; 5.9 cuando sea estable) → `unreal-plugin-bin/<v>/Win64/`; «Preparar» copia DLL y `.modules` sin `Source/` si el `BuildId` coincide y borra `Intermediate/`; si no, código y aviso. Mensajes de Fab y de splats sin plugin | `scripts/release/`, `unreal-plugin-bin/`, `prepare.rs`, `tauri.conf.json`, `fab/tools.rs` | Rust: BuildId igual o distinto, sin binarios; en vivo: proyecto de Blueprints sin `Source/` |
+
+**Orden:** S148 primero, que es lo que le pasó a tu amigo. Después S149, S151 y S150.
+
+### Rollback
+
+Un commit por rebanada. S148 y S149 solo añaden caminos de búsqueda: si se revierten, queda la detección de hoy. S151 se puede desactivar dejando `unreal-plugin-bin/` vacío, y entonces «Preparar» copia el código como hasta ahora.

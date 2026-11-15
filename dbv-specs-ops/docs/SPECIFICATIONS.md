@@ -1,7 +1,7 @@
 # 📋 Especificaciones: DBV Unreal AI (`dbv-unreal-ai`)
 
 > **Fase:** `/spec` (Especificación)
-> **Estado:** Borrador `/spec` v0.6.1 (v1.19: Fab en UE 5.8.4 pasa a la **v0.6.1**; cada resultado de Fab, también en la conversación, lleva miniatura y enlace a fab.com —REQ-117—, y la regla «solo lo gratuito o lo que ya tiene el usuario» se comprueba en el código y no solo en el prompt —REQ-104—; v1.18: la v0.6.0 pasa a ser **compatible con UE 5.8.4 y 5.9** y a hacer desde la app todo lo del asistente de la 5.9 más lo nuestro —REQ-109..REQ-116—, con Fab —REQ-101..REQ-108— como una parte, antes del workshop del 2026-12-10; v1.17: contenido de Fab desde la app; UEFN y Verse pasan a la v0.7.0; v1.16: devolver prendas ajustadas a la biblioteca —REQ-100— e informe de memoria gráfica —REQ-99—; v1.15: prendas ceñidas como carcasa del cuerpo —REQ-98—, holgura medida de verdad en REQ-89 y matriz de 12 casos en REQ-90, tras ver a `Pablo_Deportista` mal vestido (REJECTED-13); v1.14: caja negra, depurar supervisando la partida del usuario —REQ-91..REQ-97—, a partir de `docs/Propuesta_CajaNegra_DBVUnrealAI.md`; v1.13: vestir un MetaHuman de principio a fin desde la app —REQ-83..REQ-90—, y UEFN y Verse pasan a la v0.6.0; v1.12: integración con UEFN y lenguaje Verse —REQ-78, REQ-79—, generación y rigging automático de ropa para MetaHumans con Tripo Quads y GeometryScript —REQ-80, REQ-81—, y Play-testing autónomo en PIE —REQ-82—; v1.11: REQ-76, REQ-77 entregados en v0.4.1; v1.10: REQ-71..REQ-75 en v0.4.0)
+> **Estado:** Borrador `/spec` v0.6.1 (v1.20: encontrar el motor de cualquier proyecto, elegirlo a mano, diagnóstico que se puede copiar y plugin C++ ya compilado para quien no tiene Visual Studio —REQ-118..REQ-121, §3.25—; v1.19: Fab en UE 5.8.4 pasa a la **v0.6.1**; cada resultado de Fab, también en la conversación, lleva miniatura y enlace a fab.com —REQ-117—, y la regla «solo lo gratuito o lo que ya tiene el usuario» se comprueba en el código y no solo en el prompt —REQ-104—; v1.18: la v0.6.0 pasa a ser **compatible con UE 5.8.4 y 5.9** y a hacer desde la app todo lo del asistente de la 5.9 más lo nuestro —REQ-109..REQ-116—, con Fab —REQ-101..REQ-108— como una parte, antes del workshop del 2026-12-10; v1.17: contenido de Fab desde la app; UEFN y Verse pasan a la v0.7.0; v1.16: devolver prendas ajustadas a la biblioteca —REQ-100— e informe de memoria gráfica —REQ-99—; v1.15: prendas ceñidas como carcasa del cuerpo —REQ-98—, holgura medida de verdad en REQ-89 y matriz de 12 casos en REQ-90, tras ver a `Pablo_Deportista` mal vestido (REJECTED-13); v1.14: caja negra, depurar supervisando la partida del usuario —REQ-91..REQ-97—, a partir de `docs/Propuesta_CajaNegra_DBVUnrealAI.md`; v1.13: vestir un MetaHuman de principio a fin desde la app —REQ-83..REQ-90—, y UEFN y Verse pasan a la v0.6.0; v1.12: integración con UEFN y lenguaje Verse —REQ-78, REQ-79—, generación y rigging automático de ropa para MetaHumans con Tripo Quads y GeometryScript —REQ-80, REQ-81—, y Play-testing autónomo en PIE —REQ-82—; v1.11: REQ-76, REQ-77 entregados en v0.4.1; v1.10: REQ-71..REQ-75 en v0.4.0)
 > **Última Revisión:** 2026-11-15
 
 ---
@@ -831,6 +831,57 @@ La conexión a IAs (detección, conexiones, agentes ACP, asistente «Conectar un
   - *Aceptación:* en 5.8.4 todo funciona con el cliente propio; en 5.9 las cinco herramientas responden igual (las mismas formas de resultado) con cualquiera de los dos adaptadores.
   - *Decisión de `/build` (S146, 2026-11-15):* **basta con el cliente propio**. La API pública de Fab que usa (`FabDownloader.h`, `Utilities/AssetUtils.h`, `IEOSSDKManager`) es idéntica en 5.8.4 y en 5.9, y el plugin `Fab` de 5.9 crea su plataforma EOS igual (`CreatePlatform(Options)`). No hay segundo adaptador: si el plugin C++ no tiene Fab, la herramienta dice cómo arreglarlo y recuerda que en 5.9 `FabToolset.FabToolset` también vale con `unreal_call_tool`. «Preparar» no añade `Fab` ni `EOSShared` al `.uproject`, porque vienen activos por defecto: solo los vuelve a activar si el proyecto los desactiva. **Pendiente:** compilar y probar en `PruebaUnreal59`.
 
+### 3.25. Que funcione en un equipo sin nuestras herramientas: motor, diagnóstico y plugin compilado [v0.6.1]
+
+*Por qué:* el 2026-11-15, un amigo del usuario instaló la app y la vista Proyecto le mostró «no hay una instalación de Unreal {95B798E8-4CE8-821F-3703-E085BBF457EF} en este equipo». Quien instala desde la Store no puede leer un log, editar un `.uproject` ni compilar. Para él, eso es que «la app no funciona». Decisión del usuario: estar preparados para equipos que no tienen todo instalado y para los casos raros.
+
+*Causa de ese error (revisada en el código el 2026-11-15):* `discovery::engine_for` solo entiende una `EngineAssociation` con número de versión (`5.8`). Unreal escribe otras cosas:
+
+- un **GUID** cuando el proyecto se asoció a un motor compilado desde código o registrado a mano (Windows: valores de `HKCU\Software\Epic Games\Unreal Engine\Builds`; Linux y macOS: `[Installations]` de `Install.ini`);
+- un **nombre** de motor registrado (en los proyectos del usuario: `Aximmetry DE 4.26`, `Pixotope_22.305.6.1940`), que se resuelve con la misma lista;
+- **nada** (`""`) cuando el proyecto vive dentro del árbol del motor.
+
+*Plugin C++ (P-37, medido el 2026-11-15):* Fab en 5.8.4, el renderizador de splats y la variante C++ del toolset necesitan `DBVUnrealAICpp` **compilado**. Un proyecto sin C++, o un equipo sin Visual Studio, no puede compilarlo: el editor dice que faltan módulos y no abre el plugin. El `.modules` de los binarios lleva `"BuildId": "55116800"`, que es el `CompatibleChangelist` de `Build.version`, el mismo para todas las 5.8.x del Launcher (5.8.4 tiene `Changelist` 58902052 y `CompatibleChangelist` 55116800). Por eso **un binario por versión menor** vale para todos los usuarios del Launcher de esa versión, como hacen los plugins de código de Fab. Las dos DLL pesan 1 MB sin los `.pdb`. Un motor compilado desde código tiene otro `BuildId` y necesita compilar, pero quien compila su motor tiene Visual Studio.
+
+- [ ] **REQ-118 · Encontrar el motor de un proyecto aunque no venga del Launcher:**
+  - **Ámbito:** la `EngineAssociation` se resuelve por este orden:
+    1. el motor que el usuario eligió a mano para ese proyecto (REQ-119);
+    2. un número de versión (`5.8`), como hoy;
+    3. un GUID o un nombre registrado: en Windows, los valores de `HKCU\Software\Epic Games\Unreal Engine\Builds`; en Linux y macOS, `[Installations]` de `Install.ini`;
+    4. vacía: la carpeta del motor que contiene el proyecto.
+    Un motor así se trata igual que uno del Launcher, con `Build.version` y el editor, y se marca `source_build` si su `Build.version` no es `IsPromotedBuild`. Solo se **lee** el registro: no se escribe nada en él ni en el `.uproject`.
+  - *Aceptación:* tests de `discovery.rs` con un registro simulado (GUID con llaves, nombre con espacios, ruta con `/` o `\`), un `Install.ini`, una asociación vacía dentro de un motor falso y un GUID desconocido. Con el GUID del amigo registrado en un registro de prueba, la vista Proyecto encuentra el motor.
+
+- [ ] **REQ-119 · Elegir a mano la carpeta del motor:**
+  - **Ámbito:** si no se encuentra el motor de un proyecto, o el usuario quiere otro, la vista Proyecto ofrece **«Elegir la carpeta de Unreal…»**, con el diálogo de carpetas del sistema. Vale la carpeta raíz del motor (la que contiene `Engine/`) o cualquiera de dentro, porque se sube hasta encontrar `Engine/Build/Build.version`.
+    - Se comprueba que es una instalación válida, de la versión 5.8 o posterior, con el editor.
+    - Se guarda en los ajustes de la app como `asociación → ruta`, por proyecto, sin tocar el `.uproject` ni el registro.
+    - Desde ese momento lo usan «Abrir en Unreal», el diagnóstico, «Preparar», compilar y el `--mcp`.
+    - Se puede volver a la detección automática.
+    - El mensaje de error deja de mandar solo al Launcher: dice qué asociación tiene el proyecto, qué significa en palabras llanas (un número de versión, un motor compilado o registrado, o ninguno) y ofrece el botón.
+  - *Aceptación:* con un proyecto de asociación desconocida, elegir la carpeta del motor lo deja listo y «Abrir en Unreal» lo abre con ese motor. Una carpeta que no es un motor, o un motor 5.7, se rechaza con el motivo. La elección sobrevive a reiniciar la app. Hay tests de Rust (validación y subir hasta `Engine/`) y de Vitest (el botón aparece solo cuando hace falta), y el texto está en ES, EN y ZH.
+
+- [ ] **REQ-120 · Diagnóstico en lenguaje llano y «Copiar diagnóstico»:**
+  - **Ámbito:** la vista Proyecto enseña los pasos en orden, cada uno con su estado y, si falla, su solución en una frase con su botón cuando lo hay:
+    1. motor encontrado (cuál y de dónde: Launcher, registro, elegido a mano);
+    2. versión compatible;
+    3. editor abierto;
+    4. servidor MCP activo y en qué puerto;
+    5. plugins de Epic;
+    6. toolset DBV instalado;
+    7. plugin C++ compilado para este motor (REQ-121);
+    8. sesión de Fab (solo si el editor está conectado).
+    **«Copiar diagnóstico»** pone en el portapapeles un texto con esos pasos, la versión de la app y del sistema, si es de la Store y las últimas líneas del log local (RNF-08). **Nunca** lleva claves, tokens ni datos de cuentas, y las rutas de usuario van como `%USERPROFILE%`.
+  - *Aceptación:* con el editor cerrado, cada paso da su solución. El texto copiado no contiene ninguna clave del llavero, ningún `Bearer` ni el nombre del usuario de Windows (un test lo comprueba con datos falsos). Hay tests de Vitest de la vista.
+
+- [ ] **REQ-121 · Plugin C++ ya compilado para quien no tiene Visual Studio (resuelve P-37):**
+  - **Ámbito:**
+    - **Compilación:** la app incluye los binarios de `DBVUnrealAICpp` (`Binaries/Win64/*.dll` y `UnrealEditor.modules`, sin `.pdb`) **por versión menor del motor**: 5.8, y 5.9 cuando deje de ser Preview. Se hacen en la máquina de desarrollo con `RunUAT BuildPlugin` contra cada motor del Launcher, con `scripts/release/build-cpp-plugin.ps1`, en el `/ship` de cada versión. Se guardan en git en `unreal-plugin-bin/<mayor.menor>/Win64/` (1 MB por versión), para que las versiones que compila el CI sin Unreal también los lleven, y viajan como recurso de la app con su `BuildId`.
+    - **«Preparar»:** copia los binarios **solo si** el `BuildId` coincide con el `CompatibleChangelist` del motor del proyecto. Si no coinciden (motor compilado desde código, Preview distinta) o no los hay para esa versión, copia solo el código y lo dice en el diagnóstico: «hay que compilar el plugin (Visual Studio)». Si los binarios del proyecto son de otra versión, los cambia.
+    - **Herramientas:** sin el plugin compilado, Fab, el renderizador de splats y la variante C++ dicen exactamente esto, en vez de fallar sin explicación. El toolset en Python sigue funcionando sin compilar.
+  - *Aceptación:* en un proyecto de solo Blueprints con UE 5.8.4 del Launcher y sin Visual Studio (o con `Source/` del plugin quitado), «Preparar» deja el plugin cargado al abrir el editor y `fab_sign_in` responde. Con un `BuildId` distinto no se copian los binarios y el diagnóstico lo explica. El MSIX no crece más de 3 MB. Hay tests de Rust de la decisión de copiar (`BuildId` igual o distinto, sin binarios para esa versión).
+
+
 ### 3.24. Compatibilidad con UE 5.9 y todo lo de su asistente desde la app [v0.6.0, funcionalidad principal]
 
 *Por qué:* el 2026-11-09 Epic publicó la **UE 5.9 MegaJam Preview**, que trae:
@@ -1077,6 +1128,8 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
   - **Mitigación:** aviso antes de abrir con 5.9 un proyecto de 5.8; las pruebas de 5.9 se hacen en `PruebaUnreal59`, nativo de 5.9, y `DBVMCPFirst` no se abre nunca con 5.9.
 - **R-55 · Demasiadas herramientas para la IA** (REQ-112): ~80 toolsets pueden disparar el contexto y confundir a los modelos pequeños o locales.
   - **Mitigación:** búsqueda de herramientas y topes de REQ-51; en modelos locales, un subconjunto recomendado; evals con un modelo local.
+- **R-57 · Binarios del plugin que no casan con el motor** (REQ-121): un hotfix que cambie el `CompatibleChangelist`, una Preview nueva o un motor compilado desde código.
+  - **Mitigación:** la copia depende de que el `BuildId` sea exactamente igual. Si no lo es, se copia el código y el diagnóstico dice que hay que compilar. Los binarios se rehacen en cada `/ship`. El renderizador de splats y Fab dicen qué falta en vez de fallar.
 - **R-56 · El coste de Canvas se cobra fuera de la app** (REQ-113): fal, Scenario o Luma facturan a la cuenta del usuario.
   - **Mitigación:** confirmación antes de cada generación con el servicio y el coste si se conoce; la generación de Canvas no cuenta en el gasto de la sesión de la app salvo que Canvas dé el coste.
 - ~~**R-13 · «Copilot» es una marca registrada de Microsoft.**~~ *Retirado el 2026-10-24: el usuario cambió el nombre visible a «DBV Unreal AI», que no usa la marca.*
@@ -1121,7 +1174,7 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
 - [x] **P-34 · ¿Cómo llega la app a las herramientas de Canvas? (REQ-113).** *Resuelta (2026-11-14):* por el MCP del editor, en `tools/list` (no en `list_toolsets`); `localhost:7777` no responde. Son herramientas de escena, no de generación. *Avance (2026-11-14):* en `PruebaUnreal59` Canvas no está activo (`UnrealCanvasBridge` no viene activado por defecto y nada escucha en `localhost:7777`); hay que activarlo y reiniciar el editor para resolverla. A través del MCP del editor (el bridge registra Canvas con `MCPClientToolset`) o conectándose directamente a `localhost:7777/mcp`. Recomendación: a través del editor si las herramientas aparecen en `list_toolsets`, que es una conexión menos.
 - [x] **P-35 · ¿Traen las herramientas de 5.9 la marca de lectura o escritura? (REQ-112).** *Resuelta en vivo (2026-11-13, `PruebaUnreal59`):* sí. `describe_toolsets` publica `annotations.accessMode` con `read`, `write` o `execute` en cada herramienta (`EditorAppToolset`: 21 / 20 / 1). La aprobación se decide con ella, y `execute` cuenta como escritura. Además, en 5.9 `describe_toolset` (singular) ya no existe: son `describe_toolsets` (lista + `include_schemas`) y `describe_tools`; y la captura pasa a `SceneCaptureToolset.CaptureEditorViewport`, con la imagen como bloque `image`. Las dos cosas ya están corregidas en la app.
 - [x] **P-36 · Formato de los splats de World Labs para el plugin de Epic (REQ-114).** *Resuelta (2026-11-14, código de UE 5.9):* `UGaussianSplatFactory` importa `.ply` y `.spz` (`GaussianSplatFactory.cpp:805-806`), lo que da World Labs: no hace falta convertir. Hay `UGaussianSplatActorFactory`, así que se coloca con `spawn_actor_from_object`. *Comprobado en vivo (2026-11-14):* la escala sale bien (la factoría ya aplica ×100), pero el mundo queda boca abajo, porque la factoría trata todo `.spz` como RUB y World Labs lo guarda en RDF; se corrige girando el actor (pitch 0, yaw 180, roll 180). Al compararlo con la miniatura se vio que el nuestro estaba en espejo (corregido). El plugin `GaussianSplat` no viene activado por defecto. El plugin de Epic importa `.ply`; hay que comprobar qué formato llega de World Labs (`.spz`, `.ply`) y si hace falta convertirlo.
-- [ ] **P-37 · ¿Cómo se distribuye el plugin C++ para dos motores? (REQ-111).** Hoy se compila en el proyecto del usuario. Hay que confirmar que las cabeceras de 5.9 compilan sin el módulo de render, y si conviene excluirlo con una condición en el `.Build.cs` o en el `.uplugin`.
+- [x] **P-37 · ¿Cómo se distribuye el plugin C++ para dos motores? (REQ-111).** *Resuelta en `/spec` v1.20 (2026-11-15): binarios por versión menor dentro de la app, copiados por «Preparar» solo si el `BuildId` coincide con el `CompatibleChangelist` del motor; si no, el código y el aviso de compilar (REQ-121).* Hoy se compila en el proyecto del usuario. Hay que confirmar que las cabeceras de 5.9 compilan sin el módulo de render, y si conviene excluirlo con una condición en el `.Build.cs` o en el `.uplugin`.
 
 ## 🧪 8. Criterios de Evaluación y Evals (No Deterministas)
 
