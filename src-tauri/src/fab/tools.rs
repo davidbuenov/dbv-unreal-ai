@@ -81,11 +81,12 @@ pub fn specs() -> Vec<Value> {
         ),
         tool(
             "fab_install",
-            "Install one Fab listing into the open Unreal project (asks the user for approval). Only free listings or listings in the user's library, and only a format compatible with this editor: the plugin checks both and answers no_owned or incompatible_engine without downloading. Nothing is ever bought: for a paid listing the user does not own, give the fab.com link. glb/gltf/fbx are imported into /Game/Fab/<Title>/; an unreal-engine pack goes to /Game/<Pack>/. If the answer is choose_file, ask the user which file and call again with artifact_id. If it is eula_required, give the link and do not retry. Can take minutes for big packs.",
+            "Install one Fab listing into the open Unreal project (asks the user for approval). Only free listings or listings in the user's library, and only a format compatible with this editor: the plugin checks both and answers no_owned or incompatible_engine without downloading. Nothing is ever bought: for a paid listing the user does not own, give the fab.com link. glb/gltf/fbx are imported into /Game/Fab/<Title>/; an unreal-engine pack goes to /Game/<Pack>/. Quixel Megascans (free) come in several qualities: pass quality (default mid). If a model arrives in several pieces, a Blueprint (BP_<Title>) that assembles them is created: place that one. If the answer is choose_file, ask the user which file and call again with artifact_id. If it is eula_required, give the link and do not retry. Can take minutes for big packs.",
             json!({
                 "listing_uid": uid,
                 "asset_format": { "type": "string", "enum": ["unreal-engine", "glb", "gltf", "fbx", "converted-files"], "description": "One of the listing's compatible formats." },
-                "artifact_id": { "type": "string", "description": "Only after a choose_file answer." }
+                "artifact_id": { "type": "string", "description": "Only after a choose_file answer." },
+                "quality": { "type": "string", "enum": ["low", "mid", "high", "raw"], "description": "For listings sold in several qualities (Quixel Megascans: low, mid, high, raw zips). Default mid." }
             }),
             &["listing_uid", "asset_format"],
         ),
@@ -232,10 +233,52 @@ fn fab_my_library(editor: &mut dyn FabEditor, args: &Value) -> Result<FabToolRes
     Ok(out)
 }
 
+/// De la lista de `choose_file`, el fichero de la calidad pedida (`_mid.zip`, como Quixel) o el único principal. @spec REQ-104
+pub fn pick_file(files: &Value, quality: &str) -> Option<String> {
+    let list = files.as_array().cloned().unwrap_or_default();
+    let id = |f: &Value| f.get("artifact_id").and_then(Value::as_str).map(String::from);
+    let suffix = format!("_{}.", quality.to_ascii_lowercase());
+    let by_quality = list.iter().find(|f| f.get("name").and_then(Value::as_str).is_some_and(|n| n.to_ascii_lowercase().contains(&suffix))).and_then(id);
+    let mains: Vec<&Value> = list.iter().filter(|f| f.get("is_main_file").and_then(Value::as_bool) == Some(true)).collect();
+    let picked = by_quality.or_else(|| if mains.len() == 1 { id(mains[0]) } else { None });
+    picked
+}
+
+fn hex(value: &Value) -> String {
+    value.to_string().bytes().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Si el modelo llegó por piezas, un Blueprint que las junta (`dbv_unreal_ai.fab.assemble_blueprint`). @spec REQ-104
+fn assemble_blueprint(editor: &mut dyn FabEditor, folder: &str, title: &str) -> Option<Value> {
+    let payload = hex(&json!({ "folder": folder, "title": title }));
+    let code = format!("import json\nimport dbv_unreal_ai.fab as _f\n_p = json.loads(bytes.fromhex(\"{payload}\").decode(\"utf-8\"))\nresult = _f.assemble_blueprint(_p[\"folder\"], _p[\"title\"])\n");
+    let ran = editor.call_cpp("run_python", json!({ "code": code })).ok();
+    let result = ran.and_then(|v| v.get("result").cloned()).filter(|r| r.get("blueprint").is_some_and(|b| !b.is_null()));
+    result
+}
+
 fn fab_install(editor: &mut dyn FabEditor, args: &Value) -> Result<FabToolResult, String> {
-    let job_args = json!({ "listing_uid": text_arg(args, "listing_uid"), "asset_format": text_arg(args, "asset_format"), "artifact_id": text_arg(args, "artifact_id") });
-    let result = run_job(editor, "install", &job_args, INSTALL_TIMEOUT)?;
-    let text = job_error_text(&result).unwrap_or_else(|| format!("{result}\nInstalled. Tell the user where it is (folder) and offer to place it in the level."));
+    let quality = Some(text_arg(args, "quality")).filter(|q| !q.is_empty()).unwrap_or_else(|| "mid".to_string());
+    let mut job_args = json!({ "listing_uid": text_arg(args, "listing_uid"), "asset_format": text_arg(args, "asset_format"), "artifact_id": text_arg(args, "artifact_id") });
+    let mut result = run_job(editor, "install", &job_args, INSTALL_TIMEOUT)?;
+    // Varios ficheros (Quixel: low/mid/high/raw): se elige solo si la calidad lo deja claro.
+    if result.get("error").and_then(Value::as_str) == Some("choose_file") {
+        if let Some(artifact) = pick_file(result.get("files").unwrap_or(&Value::Null), &quality) {
+            job_args["artifact_id"] = json!(artifact);
+            result = run_job(editor, "install", &job_args, INSTALL_TIMEOUT)?;
+        }
+    }
+    let installed_binary = result.get("success").and_then(Value::as_bool) == Some(true) && result.get("kind").and_then(Value::as_str) == Some("binary");
+    if installed_binary {
+        let folder = result.get("folder").and_then(Value::as_str).unwrap_or_default().to_string();
+        let title = result.pointer("/listing/title").and_then(Value::as_str).unwrap_or_default().to_string();
+        if let Some(assembled) = assemble_blueprint(editor, &folder, &title) {
+            result["blueprint"] = assembled.get("blueprint").cloned().unwrap_or(Value::Null);
+            result["pieces"] = assembled.get("pieces").cloned().unwrap_or(Value::Null);
+        }
+    }
+    let place = if result.get("blueprint").is_some_and(|b| !b.is_null()) { "It arrived in pieces: place the Blueprint in `blueprint`, which assembles them." } else { "Offer to place it in the level." };
+    let text = job_error_text(&result).unwrap_or_else(|| format!("{result}\nInstalled. Tell the user where it is (folder). {place}"));
     Ok(FabToolResult { text, fab_listings: Vec::new() })
 }
 
@@ -354,6 +397,49 @@ mod tests {
         let text = listings_text(&listings, next.as_deref(), 0, "UE_5.8");
         assert!(text.contains("https://www.fab.com/listings/l1") && text.contains("Never state a total"));
         assert!(!text.contains("media.fab.com"), "la miniatura va a la tarjeta, no al modelo");
+    }
+
+    /// @spec REQ-104 Quixel: se elige la calidad por el nombre del zip; si no, el único fichero principal.
+    #[test]
+    fn se_elige_el_fichero_por_calidad() {
+        let files = json!([
+            { "artifact_id": "a", "name": "rock_ue_raw.zip", "is_main_file": false },
+            { "artifact_id": "b", "name": "rock_ue_high.zip", "is_main_file": false },
+            { "artifact_id": "c", "name": "rock_ue_mid.zip", "is_main_file": false },
+            { "artifact_id": "d", "name": "rock_ue_low.zip", "is_main_file": false }
+        ]);
+        assert_eq!(pick_file(&files, "mid").as_deref(), Some("c"));
+        assert_eq!(pick_file(&files, "LOW").as_deref(), Some("d"));
+        let mains = json!([{ "artifact_id": "x", "name": "a.zip", "is_main_file": true }, { "artifact_id": "y", "name": "b.zip", "is_main_file": false }]);
+        assert_eq!(pick_file(&mains, "mid").as_deref(), Some("x"));
+        assert_eq!(pick_file(&json!([{ "artifact_id": "x", "name": "a.zip" }, { "artifact_id": "y", "name": "b.zip" }]), "mid"), None);
+    }
+
+    /// @spec REQ-104 Quixel sin calidad: se repite la instalación con el zip `mid`.
+    #[test]
+    fn quixel_se_instala_en_calidad_media_sin_preguntar() {
+        let choose = json!({ "success": false, "error": "choose_file", "files": [{ "artifact_id": "hi", "name": "r_ue_high.zip" }, { "artifact_id": "md", "name": "r_ue_mid.zip" }] });
+        let mut replies: VecDeque<Value> = job(choose).into();
+        replies.extend(job(json!({ "success": true, "kind": "asset_pack", "folder": "/Game/R" })));
+        let mut editor = FakeEditor { replies, calls: Vec::new() };
+        let out = run_tool("fab_install", &json!({ "listing_uid": "q", "asset_format": "gltf" }), Some(&mut editor), "").unwrap();
+        assert!(!out.text.starts_with("error"));
+        let second_start = editor.calls.iter().filter(|(t, _)| t == "fab_start").nth(1).unwrap();
+        assert!(second_start.1["args_json"].as_str().unwrap().contains("\"artifact_id\":\"md\""));
+    }
+
+    /// @spec REQ-104 Un modelo por piezas: tras instalar se pide el Blueprint que las junta.
+    #[test]
+    fn un_modelo_por_piezas_acaba_en_un_blueprint() {
+        let installed = json!({ "success": true, "kind": "binary", "folder": "/Game/Fab/Car", "listing": { "title": "Car" } });
+        let mut replies: VecDeque<Value> = job(installed).into();
+        replies.push_back(json!({ "success": true, "result": { "created": true, "blueprint": "/Game/Fab/Car/BP_Car", "pieces": 5 } }));
+        let mut editor = FakeEditor { replies, calls: Vec::new() };
+        let out = run_tool("fab_install", &json!({ "listing_uid": "x", "asset_format": "fbx" }), Some(&mut editor), "").unwrap();
+        assert!(out.text.contains("/Game/Fab/Car/BP_Car") && out.text.contains("place the Blueprint"));
+        let (tool, args) = editor.calls.last().unwrap();
+        assert_eq!(tool, "run_python");
+        assert!(args["code"].as_str().unwrap().contains("assemble_blueprint"));
     }
 
     /// @spec REQ-104 Si el trabajo no acaba a tiempo, se cancela.
