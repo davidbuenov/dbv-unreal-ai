@@ -269,7 +269,7 @@
   - [x] **S142b · Quixel y modelos por piezas (REQ-104)** — `fab_install` con `quality` (por defecto `mid`) y `pick_file` (zip `_mid`, o el único principal); `dbv_unreal_ai/fab.py` → `assemble_blueprint` (un StaticMeshComponent por pieza, 2..64). En vivo: «Icelandic Rock» de Quixel (`gltf` `mid`) → `/Game/Fab/Icelandic_Rock` con material y texturas a 2K; «Camo muscle car» → `BP_Camo_muscle_car` con 5 piezas, colocado en `Fab_test` como un solo actor. Tests: Rust 3 nuevos y Python en `test_fab.py`.
   - [ ] **S144 · Vista Fab (REQ-106)**
 - [x] **`/spec` y `/plan` §3.25 (2026-11-15)** — que funcione sin nuestras herramientas, tras el error del amigo del usuario («no hay una instalación de Unreal {95B798E8-…}»): REQ-118..REQ-121, R-57 y P-37 resuelta. `implementation_plan.md` §20. **Pendiente de aprobación.**
-  - [ ] **S148 · Resolver GUID, nombre o asociación vacía (REQ-118)**
+  - [x] **S148 · Resolver GUID, nombre o asociación vacía (REQ-118)** — `discovery.rs`: `registered_builds` (registro con `winreg`, solo lectura; `Install.ini`), `resolve_engine` (pura: versión → registrado → motor que contiene el proyecto), `engine_of_project`, `describe_association` y `engine_not_found`; `commands.rs`, `compile.rs` y `prepare.rs` pasan por ella. `UProject.engine_version` en `unreal_read_project`, y la vista Proyecto lo usa en vez de la asociación. Tests: Rust 2 nuevos (376). **Pendiente:** comprobar la lectura del registro desde el MSIX.
   - [ ] **S149 · Elegir la carpeta del motor a mano (REQ-119)**
   - [ ] **S150 · Diagnóstico en lenguaje llano y «Copiar diagnóstico» (REQ-120)**
   - [ ] **S151 · Plugin C++ ya compilado por versión menor (REQ-121)**

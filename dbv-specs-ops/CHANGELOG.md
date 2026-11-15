@@ -11,6 +11,9 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+### Corregido
+- **«No hay una instalación de Unreal {GUID}» con proyectos de un motor registrado (REQ-118, S148):** la app ya encuentra el motor cuando el proyecto no dice `5.8`, sino un GUID o un nombre. Es el caso de un motor compilado desde código o registrado a mano, que se lee de `HKCU\Software\Epic Games\Unreal Engine\Builds` en Windows o de `Install.ini` en Linux y macOS. También cuando no dice nada porque vive dentro de la carpeta del motor. El registro solo se lee. Si aun así no lo encuentra, el mensaje explica en palabras llanas qué motor pide el proyecto y deja de mandar solo al Epic Games Launcher. La vista Proyecto muestra la versión real del motor y no el GUID.
+
 ### Añadido
 - **Fab en UE 5.8.4, prueba de viabilidad (REQ-101, S138):** el plugin C++ usa la sesión de Fab que ya abriste en el editor para consultar tu biblioteca de Fab y la información de descarga, sin abrir otra sesión. El token se queda dentro del editor: no se guarda, no se escribe en los logs y no sale en ninguna respuesta. Las peticiones van como trabajos (`fab_start`, `fab_status`, `fab_cancel`) para no bloquear el editor mientras responde Fab.
 - **«Preparar» y Fab (REQ-108, S146):** si el proyecto tiene desactivados los plugins `Fab` o `EOSShared`, el diagnóstico lo dice y «Preparar» los vuelve a activar. No se añaden a los proyectos que no los tocan, porque vienen activos por defecto. En UE 5.9 sirve el mismo cliente, porque la API de Fab que usa es la misma.

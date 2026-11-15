@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **"There is no Unreal installation {GUID}" with projects of a registered engine (REQ-118, S148):** the app now finds the engine when the project does not say `5.8` but a GUID or a name. That is the case of an engine built from source or registered by hand, read from `HKCU\Software\Epic Games\Unreal Engine\Builds` on Windows or from `Install.ini` on Linux and macOS. Also when it says nothing because it lives inside the engine folder. The registry is only read. If it still cannot find it, the message explains in plain words which engine the project asks for and no longer only points to the Epic Games Launcher. The Project view shows the real engine version instead of the GUID.
+
 ### Added
 - **Fab on UE 5.8.4, feasibility spike (REQ-101, S138):** the C++ plugin uses the Fab session you already opened in the editor to read your Fab library and the download info, without opening another session. The token stays inside the editor: it is not stored, not written to the logs and not returned in any response. Requests run as jobs (`fab_start`, `fab_status`, `fab_cancel`) so the editor does not freeze while Fab answers.
 - **"Prepare" and Fab (REQ-108, S146):** if the project has the `Fab` or `EOSShared` plugins disabled, the diagnosis says so and "Prepare" enables them again. They are not added to projects that leave them alone, since they are enabled by default. On UE 5.9 the same client works, because the Fab API it uses is the same.
