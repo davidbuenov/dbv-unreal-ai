@@ -17,6 +17,7 @@ import { AUTONOMY_LEVELS, autonomyDecision, createPermissionMemory, loadAutonomy
 import { createUnrealTools, describeCapture, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
 import { createFabTools } from '../unreal/fabTools.js';
 import { fabCardStrip } from './fabCards.js';
+import { createFabView } from './fabView.js';
 import { openExternalUrl } from '../ai/backend.js';
 import { sendToUnreal } from '../unreal/sendToUnreal.js';
 import { isPreview } from '../unreal/engineVersion.js';
@@ -254,6 +255,8 @@ export function start() {
   // Personajes de Convai registrados en Ajustes (REQ-58): misma definición que en el MCP propio.
   let convaiCharactersSpec = null;
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
+  // Vista Fab (REQ-106): buscar, ver la ficha e instalar sin escribir a la IA, con las mismas reglas.
+  views.fab = createFabView($('#view-fab'), { state, toast, confirm, openModal, closeModal });
   views.library = createLibraryView($('#view-library'), {
     state,
     confirm,
