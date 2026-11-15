@@ -69,8 +69,8 @@ pub fn specs() -> Vec<Value> {
         ),
         tool(
             "fab_listing_details",
-            "Details of one Fab listing (no sign-in needed): description, licenses, formats compatible with this editor, thumbnail and fab.com link. If the listing is marked mature, ask the user before opening it. Read-only.",
-            json!({ "listing_uid": uid }),
+            "Details of one Fab listing (no sign-in needed): description, licenses, formats compatible with this editor, thumbnail and fab.com link. A listing marked mature is only opened with confirm_mature=true, after the user said yes. Read-only.",
+            json!({ "listing_uid": uid, "confirm_mature": { "type": "boolean", "description": "Only after the user agreed to see a listing marked mature." } }),
             &["listing_uid"],
         ),
         tool(
@@ -183,11 +183,19 @@ fn fab_search(args: &Value, engine: &str) -> Result<FabToolResult, String> {
     result
 }
 
+/// Un listing maduro no se abre sin que el usuario lo haya aceptado (`confirm_mature`): la regla va en el código, no en la
+/// memoria del modelo, así vale también para los modelos locales (eval del 2026-11-15 con qwen3:8b). @spec REQ-105
+pub fn mature_guard(card: &FabListing, args: &Value) -> Option<String> {
+    let confirmed = args.get("confirm_mature").and_then(Value::as_bool).unwrap_or(false);
+    let guard = (card.mature && !confirmed).then(|| format!("\"{}\" is marked mature. Ask the user whether they want to see it; only if they say yes, call fab_listing_details again with confirm_mature=true.", card.title));
+    guard
+}
+
 fn fab_details(args: &Value, engine: &str) -> Result<FabToolResult, String> {
-    let result = listing_details(&text_arg(args, "listing_uid"), engine)
-        .map_err(|e| e.to_string())
-        .map(|(card, details)| FabToolResult { text: format!("{details}
-Show the user the fab_url."), fab_listings: vec![card] });
+    let result = listing_details(&text_arg(args, "listing_uid"), engine).map_err(|e| e.to_string()).map(|(card, details)| match mature_guard(&card, args) {
+        Some(text) => FabToolResult { text, fab_listings: Vec::new() },
+        None => FabToolResult { text: format!("{details}\nShow the user the fab_url."), fab_listings: vec![card] },
+    });
     result
 }
 
@@ -413,6 +421,16 @@ mod tests {
         }
         let saved = std::fs::read_to_string(path).unwrap_or_default().replace("\r\n", "\n");
         assert_eq!(saved, current, "regenera tests/fixtures/fab/tool_specs.json con UPDATE_FIXTURES=1");
+    }
+
+    /// @spec REQ-105 La ficha de un listing maduro solo sale con confirm_mature=true.
+    #[test]
+    fn un_listing_maduro_no_se_abre_sin_confirmar() {
+        let card = crate::fab::compact_listing(&json!({ "uid": "m1", "title": "Wreck", "isMature": true }), None);
+        assert!(mature_guard(&card, &json!({ "listing_uid": "m1" })).unwrap().contains("confirm_mature=true"));
+        assert!(mature_guard(&card, &json!({ "listing_uid": "m1", "confirm_mature": true })).is_none());
+        let normal = crate::fab::compact_listing(&json!({ "uid": "n1", "title": "Car" }), None);
+        assert!(mature_guard(&normal, &json!({})).is_none());
     }
 
     /// @spec REQ-104 Quixel: se elige la calidad por el nombre del zip; si no, el único fichero principal.

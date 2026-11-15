@@ -57,13 +57,17 @@
   },
   {
     "name": "fab_listing_details",
-    "description": "Details of one Fab listing (no sign-in needed): description, licenses, formats compatible with this editor, thumbnail and fab.com link. If the listing is marked mature, ask the user before opening it. Read-only.",
+    "description": "Details of one Fab listing (no sign-in needed): description, licenses, formats compatible with this editor, thumbnail and fab.com link. A listing marked mature is only opened with confirm_mature=true, after the user said yes. Read-only.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "listing_uid": {
           "type": "string",
           "description": "Listing uid from fab_search or fab_my_library."
+        },
+        "confirm_mature": {
+          "type": "boolean",
+          "description": "Only after the user agreed to see a listing marked mature."
         }
       },
       "required": [

@@ -37,7 +37,10 @@ export function createFabTools(deps) {
       run: async (args = {}) => {
         const { purpose = '', ...rest } = args ?? {};
         let result;
-        if (writes && !deps.permissions?.isAllowed?.('Fab', spec.name)) {
+        // Un listing maduro solo se abre si lo acepta la persona, no el modelo (eval con qwen3:8b, 2026-11-15): el
+        // modelo pone `confirm_mature` y la app lo pregunta con la misma tarjeta de aprobación.
+        const asksMature = spec.name === 'fab_listing_details' && rest.confirm_mature === true;
+        if ((writes && !deps.permissions?.isAllowed?.('Fab', spec.name)) || asksMature) {
           const choice = await deps.askApproval({ kind: 'tool', toolset: 'Fab', tool: spec.name, args: rest, purpose });
           if (choice === 'always') deps.permissions?.allow?.('Fab', spec.name);
           if (choice !== 'once' && choice !== 'always') result = 'The user DENIED this action. It was not executed.';

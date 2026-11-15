@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **A mature Fab product's details are no longer opened without asking (REQ-105):** the Fab eval with `qwen3:8b` opened one without asking. Now `fab_listing_details` does not return it without `confirm_mature`, and the app asks the person with the approval card even if the model sets it on its own. The rule lives in the code, so it also holds for local models.
 - **"There is no Unreal installation {GUID}" with projects of a registered engine (REQ-118, S148):** the app now finds the engine when the project does not say `5.8` but a GUID or a name. That is the case of an engine built from source or registered by hand, read from `HKCU\Software\Epic Games\Unreal Engine\Builds` on Windows or from `Install.ini` on Linux and macOS. Also when it says nothing because it lives inside the engine folder. The registry is only read. If it still cannot find it, the message explains in plain words which engine the project asks for and no longer only points to the Epic Games Launcher. The Project view shows the real engine version instead of the GUID.
 
 ### Added

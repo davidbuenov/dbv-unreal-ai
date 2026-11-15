@@ -107,6 +107,17 @@ describe('herramientas de Fab en la ventana (REQ-105)', () => {
     expect(showListings).toHaveBeenCalledWith([expect.objectContaining({ uid: 'l1' })]);
   });
 
+  it('abrir un listing maduro con confirm_mature lo pregunta a la persona @spec REQ-105', async () => {
+    const detailSpecs = [{ name: 'fab_listing_details', description: 'Details', inputSchema: { type: 'object', properties: { listing_uid: { type: 'string' }, confirm_mature: { type: 'boolean' } }, required: ['listing_uid'] } }];
+    const run = vi.fn(async () => ({ ok: true, value: { text: 'details', fabListings: [] } }));
+    const askApproval = vi.fn(async () => 'deny');
+    const [details] = createFabTools({ specs: detailSpecs, run, askApproval });
+    expect(await details.run({ listing_uid: 'm1', confirm_mature: true })).toContain('DENIED');
+    expect(run).not.toHaveBeenCalled();
+    expect(await details.run({ listing_uid: 'n1' })).toBe('details');
+    expect(askApproval).toHaveBeenCalledTimes(1);
+  });
+
   it('instalar pide aprobación y, si se niega, no se ejecuta', async () => {
     const run = vi.fn();
     const tools = createFabTools({ specs, run, askApproval: vi.fn(async () => 'deny') });

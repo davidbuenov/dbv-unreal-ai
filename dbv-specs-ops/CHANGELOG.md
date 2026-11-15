@@ -12,6 +12,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 ## [Sin publicar] / [Unreleased]
 
 ### Corregido
+- **La ficha de un producto maduro de Fab ya no se abre sin preguntar (REQ-105):** la eval de Fab con `qwen3:8b` la abrió sin preguntar. Ahora `fab_listing_details` no la devuelve sin `confirm_mature`, que la app pregunta a la persona con la tarjeta de aprobación aunque el modelo lo ponga por su cuenta. La regla va en el código, así que también vale para los modelos locales.
 - **«No hay una instalación de Unreal {GUID}» con proyectos de un motor registrado (REQ-118, S148):** la app ya encuentra el motor cuando el proyecto no dice `5.8`, sino un GUID o un nombre. Es el caso de un motor compilado desde código o registrado a mano, que se lee de `HKCU\Software\Epic Games\Unreal Engine\Builds` en Windows o de `Install.ini` en Linux y macOS. También cuando no dice nada porque vive dentro de la carpeta del motor. El registro solo se lee. Si aun así no lo encuentra, el mensaje explica en palabras llanas qué motor pide el proyecto y deja de mandar solo al Epic Games Launcher. La vista Proyecto muestra la versión real del motor y no el GUID.
 
 ### Añadido
