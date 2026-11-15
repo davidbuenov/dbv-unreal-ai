@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-101, REQ-103
+// @spec REQ-101, REQ-103, REQ-104
 //
 // Ver DbvFabClient.h. La plataforma EOS de Fab se reconoce así (P-29, R-48): el plugin `Fab` la crea con
 // `IEOSSDKManager::CreatePlatform(EOS_Platform_Options&)`, sin nombre de configuración
@@ -14,7 +14,11 @@
 // para fijar la regla en el spike.
 
 #include "DbvFabClient.h"
+#include "DbvFabDetail.h"
 
+#include "Async/Async.h"
+#include "FabDownloader.h"
+#include "HAL/FileManager.h"
 #include "Dom/JsonObject.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "HAL/PlatformTime.h"
@@ -46,8 +50,41 @@ namespace
 		FString ResultJson;
 		FString Error;
 		TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request;
+		TSharedPtr<FFabDownloadRequest> Download;
+		FString StagingDir;
+		float Progress = -1.0f;
 		double StartedAt = 0.0;
 	};
+
+	/** Suelta una descarga fuera de la pila actual: su propio callback puede ser quien termina el trabajo. */
+	void ReleaseLater(TSharedPtr<FFabDownloadRequest> Download)
+	{
+		if (Download.IsValid())
+		{
+			AsyncTask(ENamedThreads::GameThread, [Download]() {});
+		}
+	}
+
+	/** Cancela la descarga de un trabajo y borra su carpeta temporal. Con `JobsLock` tomado. */
+	void AbortJobLocked(FFabJob& Job)
+	{
+		if (Job.Request.IsValid())
+		{
+			Job.Request->OnProcessRequestComplete().Unbind();
+			Job.Request->CancelRequest();
+		}
+		if (Job.Download.IsValid())
+		{
+			Job.Download->OnDownloadComplete().Clear();
+			Job.Download->OnDownloadProgress().Clear();
+			Job.Download->Cancel();
+			ReleaseLater(Job.Download);
+		}
+		if (!Job.StagingDir.IsEmpty())
+		{
+			IFileManager::Get().DeleteDirectory(*Job.StagingDir, false, true);
+		}
+	}
 
 	FCriticalSection JobsLock;
 	TMap<FString, FFabJob> Jobs;
@@ -78,6 +115,8 @@ namespace
 			Job->ResultJson = ResultJson;
 			Job->Error = Error;
 			Job->Request.Reset();
+			ReleaseLater(Job->Download);
+			Job->Download.Reset();
 		}
 	}
 
@@ -89,10 +128,7 @@ namespace
 		{
 			if (Now - It->Value.StartedAt > JobLifetimeSeconds)
 			{
-				if (It->Value.Request.IsValid())
-				{
-					It->Value.Request->CancelRequest();
-				}
+				AbortJobLocked(It->Value);
 				It.RemoveCurrent();
 			}
 		}
@@ -185,8 +221,8 @@ namespace
 
 	using FResponseHandler = TFunction<void(int32 /*Status*/, const FString& /*Body*/)>;
 
-	/** GET con sesión a www.fab.com. Un único reintento tras un 401, con el token copiado otra vez. */
-	void SendAuthed(const FString& JobId, const FString& Url, FResponseHandler OnDone, bool bRetried = false)
+	/** GET a www.fab.com, con o sin sesión. Con sesión, un único reintento tras un 401, con el token copiado otra vez. */
+	void SendGet(const FString& JobId, const FString& Url, bool bAuth, FResponseHandler OnDone, bool bRetried = false)
 	{
 		FString Token;
 		FString Reason;
@@ -194,7 +230,7 @@ namespace
 		{
 			Finish(JobId, ErrorJson(TEXT("insecure_host"), TEXT("The Fab token is only sent to https://www.fab.com.")), TEXT("insecure_host"));
 		}
-		else if (!CopyFabToken(Token, Reason))
+		else if (bAuth && !CopyFabToken(Token, Reason))
 		{
 			Finish(JobId, ErrorJson(Reason, TEXT("No Fab session in this editor. Click the Fab button in the Content Browser (it opens the Fab tab and signs you in), then try again.")), Reason);
 		}
@@ -205,15 +241,22 @@ namespace
 			Request->SetURL(Url);
 			Request->SetTimeout(RequestTimeoutSeconds);
 			Request->SetHeader(TEXT("accept"), TEXT("application/json"));
-			Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *Token));
+			if (bAuth)
+			{
+				Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *Token));
+			}
 			Token.Reset();
 			Request->OnProcessRequestComplete().BindLambda(
-				[JobId, Url, OnDone, bRetried](FHttpRequestPtr, FHttpResponsePtr Response, bool bConnected)
+				[JobId, Url, bAuth, OnDone, bRetried](FHttpRequestPtr, FHttpResponsePtr Response, bool bConnected)
 				{
 					const int32 Code = (bConnected && Response.IsValid()) ? Response->GetResponseCode() : 0;
-					if (Code == 401 && !bRetried)
+					if (!DbvFab::Detail::IsRunning(JobId))
 					{
-						SendAuthed(JobId, Url, OnDone, true);
+						return;
+					}
+					if (Code == 401 && bAuth && !bRetried)
+					{
+						SendGet(JobId, Url, bAuth, OnDone, true);
 					}
 					else
 					{
@@ -231,7 +274,7 @@ namespace
 		}
 	}
 
-	TSharedPtr<FJsonObject> ParseObject(const FString& Text)
+	TSharedPtr<FJsonObject> ParseJson(const FString& Text)
 	{
 		TSharedPtr<FJsonObject> Object;
 		const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
@@ -243,7 +286,7 @@ namespace
 	FString ServerMessage(const FString& Body)
 	{
 		FString Message;
-		const TSharedPtr<FJsonObject> Object = ParseObject(Body);
+		const TSharedPtr<FJsonObject> Object = ParseJson(Body);
 		if (Object.IsValid() && !Object->TryGetStringField(TEXT("detail"), Message))
 		{
 			Object->TryGetStringField(TEXT("message"), Message);
@@ -273,7 +316,7 @@ namespace
 		{
 			if (Code >= 200 && Code < 300)
 			{
-				const TSharedRef<FJsonObject> Result = Build(ParseObject(Body));
+				const TSharedRef<FJsonObject> Result = Build(ParseJson(Body));
 				Result->SetBoolField(TEXT("success"), true);
 				Result->SetNumberField(TEXT("http_status"), Code);
 				Finish(JobId, ToJson(Result), FString());
@@ -358,7 +401,7 @@ namespace
 		AddQuery(Query, TEXT("listing_types"), Arg(Args, TEXT("listing_types")));
 		AddQuery(Query, TEXT("cursor"), Arg(Args, TEXT("cursor")));
 		AddQuery(Query, TEXT("count"), Arg(Args, TEXT("count")).IsEmpty() ? TEXT("12") : Arg(Args, TEXT("count")));
-		SendAuthed(JobId, FabHost + TEXT("/p/agents/library/search") + Query, JsonHandler(JobId, [](const TSharedPtr<FJsonObject>& Body)
+		SendGet(JobId, FabHost + TEXT("/p/agents/library/search") + Query, true, JsonHandler(JobId, [](const TSharedPtr<FJsonObject>& Body)
 		{
 			const TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
 			TArray<TSharedPtr<FJsonValue>> Listings;
@@ -411,7 +454,7 @@ namespace
 		}
 		else
 		{
-			SendAuthed(JobId, FabHost + TEXT("/p/agents/listings/") + FGenericPlatformHttp::UrlEncode(Uid) + TEXT("/download-info") + Query, JsonHandler(JobId, [](const TSharedPtr<FJsonObject>& Body)
+			SendGet(JobId, FabHost + TEXT("/p/agents/listings/") + FGenericPlatformHttp::UrlEncode(Uid) + TEXT("/download-info") + Query, true, JsonHandler(JobId, [](const TSharedPtr<FJsonObject>& Body)
 			{
 				const TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
 				TArray<TSharedPtr<FJsonValue>> Entries;
@@ -482,6 +525,46 @@ namespace
 	}
 }
 
+namespace DbvFab::Detail
+{
+	void Finish(const FString& JobId, const FString& ResultJson, const FString& Error) { ::Finish(JobId, ResultJson, Error); }
+
+	bool IsRunning(const FString& JobId)
+	{
+		FScopeLock Lock(&JobsLock);
+		const FFabJob* Job = Jobs.Find(JobId);
+		return Job && Job->State == TEXT("running");
+	}
+
+	void SetProgress(const FString& JobId, float Progress)
+	{
+		FScopeLock Lock(&JobsLock);
+		if (FFabJob* Job = Jobs.Find(JobId))
+		{
+			Job->Progress = FMath::Clamp(Progress, 0.0f, 1.0f);
+		}
+	}
+
+	void SetDownload(const FString& JobId, const TSharedPtr<FFabDownloadRequest>& Download, const FString& StagingDir)
+	{
+		FScopeLock Lock(&JobsLock);
+		if (FFabJob* Job = Jobs.Find(JobId))
+		{
+			Job->Download = Download;
+			Job->StagingDir = StagingDir;
+		}
+	}
+
+	void Get(const FString& JobId, const FString& Url, bool bAuth, FResponseHandler OnDone) { SendGet(JobId, Url, bAuth, MoveTemp(OnDone)); }
+	FString FabHost() { return ::FabHost; }
+	TSharedPtr<FJsonObject> ParseJson(const FString& Text) { return ::ParseJson(Text); }
+	FString ToJson(const TSharedRef<FJsonObject>& Object) { return ::ToJson(Object); }
+	FString ErrorJson(const FString& Code, const FString& Message) { return ::ErrorJson(Code, Message); }
+	FString HttpErrorCode(int32 Code) { return ::HttpErrorCode(Code); }
+	FString ServerMessage(const FString& Body) { return ::ServerMessage(Body); }
+	void AddQuery(FString& Query, const TCHAR* Name, const FString& Value) { ::AddQuery(Query, Name, Value); }
+}
+
 namespace DbvFab
 {
 	FString Start(const FString& Operation, const FString& ArgsJson)
@@ -493,7 +576,7 @@ namespace DbvFab
 			FFabJob& Job = Jobs.Add(JobId);
 			Job.StartedAt = FPlatformTime::Seconds();
 		}
-		const TSharedPtr<FJsonObject> Args = ParseObject(ArgsJson.IsEmpty() ? TEXT("{}") : ArgsJson);
+		const TSharedPtr<FJsonObject> Args = ParseJson(ArgsJson.IsEmpty() ? TEXT("{}") : ArgsJson);
 		if (Operation == TEXT("session"))
 		{
 			Finish(JobId, SessionJson(), FString());
@@ -509,6 +592,10 @@ namespace DbvFab
 		else if (Operation == TEXT("download_info"))
 		{
 			StartDownloadInfo(JobId, Args);
+		}
+		else if (Operation == TEXT("install"))
+		{
+			StartInstall(JobId, Args);
 		}
 		else
 		{
@@ -528,9 +615,13 @@ namespace DbvFab
 		{
 			const TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
 			Out->SetStringField(TEXT("state"), Job->State);
+			if (Job->Progress >= 0.0f)
+			{
+				Out->SetNumberField(TEXT("progress"), Job->Progress);
+			}
 			if (Job->State != TEXT("running"))
 			{
-				const TSharedPtr<FJsonObject> Inner = ParseObject(Job->ResultJson);
+				const TSharedPtr<FJsonObject> Inner = ParseJson(Job->ResultJson);
 				if (Inner.IsValid())
 				{
 					Out->SetObjectField(TEXT("result"), Inner);
@@ -549,11 +640,7 @@ namespace DbvFab
 			FScopeLock Lock(&JobsLock);
 			if (FFabJob* Job = Jobs.Find(JobId))
 			{
-				if (Job->Request.IsValid())
-				{
-					Job->Request->OnProcessRequestComplete().Unbind();
-					Job->Request->CancelRequest();
-				}
+				AbortJobLocked(*Job);
 				Jobs.Remove(JobId);
 				bFound = true;
 			}

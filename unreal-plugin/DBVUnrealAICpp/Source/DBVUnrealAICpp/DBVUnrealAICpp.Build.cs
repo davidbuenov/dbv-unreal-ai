@@ -28,7 +28,10 @@ public class DBVUnrealAICpp : ModuleRules
 			"HTTP",
 			"Json",
 			"EOSSDK",
-			"EOSShared"
+			"EOSShared",
+			// @spec REQ-104 Descarga e importación de Fab (FFabDownloadRequest, FAssetUtils)
+			"Fab",
+			"AssetRegistry"
 		});
 	}
 }

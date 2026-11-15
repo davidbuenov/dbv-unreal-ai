@@ -70,7 +70,7 @@ public:
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString load_gaussian_splat(const FString& source_file, const FString& actor_label);
 
-	/** Start a Fab operation with the editor's own Fab session (operation: session, platforms, library_search, download_info; args_json: JSON object). Returns JSON (success, job_id). Poll it with fab_status. The session token never leaves the editor. */
+	/** Start a Fab operation with the editor's own Fab session (operation: session, platforms, library_search, download_info, install; args_json: JSON object, for install {listing_uid, asset_format, artifact_id?}). Install only takes free listings or listings in the user's Fab library, and only formats compatible with this editor. Returns JSON (success, job_id). Poll it with fab_status. The session token never leaves the editor. */
 	UFUNCTION(meta = (AICallable), Category = "DBV Unreal AI")
 	static FString fab_start(const FString& operation, const FString& args_json);
 

@@ -21,7 +21,7 @@
 
 namespace DbvFab
 {
-	/** Inicia una operación (`session`, `platforms`, `library_search`, `download_info`). Devuelve JSON con `job_id` o el error. */
+	/** Inicia una operación (`session`, `platforms`, `library_search`, `download_info`, `install`). Devuelve JSON con `job_id` o el error. */
 	FString Start(const FString& Operation, const FString& ArgsJson);
 
 	/** Estado de un trabajo: `running`, `done` (con `result`) o `error`. Un trabajo terminado se borra al leerlo. */
