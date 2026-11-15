@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-15
+
+Version v0.6.2: **urgent fix for v0.6.1**. **Claude Code and Codex start again** on machines with Node.js installed in its default folder (`C:\Program Files\nodejs`). Thanks to **Victor Osuna**, who tested the freshly published v0.6.1 from the Microsoft Store and found both problems in this version.
+
+### Fixed
+- **Claude Code and Codex did not start when Node.js was in a folder with spaces (the default install, `C:\Program Files\nodejs`):** the app launched `npx.cmd` with `cmd.exe /d /s /c <path>` and Windows split the path at the space ("'C:\Program' is not recognized as an internal or external command"), before anything was sent to the agent. Now the `.cmd` is launched by its path and Rust's `Command` does the quoting. It affected any CLI installed as a `.cmd` in a path with spaces the same way (also when reading its model list). The tests did not show it because the development machine has Node in `C:\nodejs`; a new test launches a `.cmd` from `Program Files\nodejs`.
+
+### Security
+- **The arguments of a CLI installed as a `.cmd` are no longer interpreted by `cmd.exe` (`/code-simplify` review):** with the previous wrapper, an argument containing `&` (for example a model name typed in Settings) would have run as another command. Launching the `.cmd` by its path, Rust escapes every argument; the new test checks that `a&echo colado` arrives as text.
+
+### Known
+- **The MCP connector of Claude Desktop (or another agent) can be left pointing to an executable that no longer exists after updating the app:** the app does not write those agents' configuration, it only gives the JSON block in Settings, so a path copied from a previous install is not corrected on its own. Fix: copy the block from **Settings** again and paste it into the agent's configuration. The README explains it. No code was changed for this.
+
+### Acknowledgements
+- **Victor Osuna**, for testing v0.6.1 as soon as it reached the Microsoft Store and finding both problems: Claude Code not starting and the MCP connector with the old path.
+
 ## [0.6.1] - 2026-11-15
 
 Version v0.6.1: **Fab on Unreal Engine 5.8.4** from the app. You ask "I want a car" and see each product with its **thumbnail and its fab.com link** before installing it, in the conversation and in the new **Fab view**. Only **free or already owned** products are installed (nothing is bought from the app), and only those **compatible with your editor version**, Quixel Megascans included. What you install stays as a **reference in the Library**. The app is also ready for machines without our tools: it **finds the engine** even when the project says a GUID, lets you **choose its folder**, ships the **C++ plugin already compiled** for 5.8 and the 5.9 Preview (Fab and splats without Visual Studio) and explains every step with a **diagnosis you can copy**.
@@ -452,7 +468,7 @@ First release: connection to Unreal 5.8 through MCP, project preparation, conver
 - **[Important]** A job id could clash between the window and an agent's `--mcp` if both launched in the same millisecond; it now carries the process id.
 - Review nits (3): early `return`s outside guard clauses in `tools::build`, `resolve_source` and `uploadable`.
 
-[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.6.2...HEAD
 [0.5.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...v0.4.1

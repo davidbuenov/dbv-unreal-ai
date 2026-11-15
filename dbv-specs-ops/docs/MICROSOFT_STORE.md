@@ -211,3 +211,16 @@ Todo va en bloques de código con su recuento de caracteres, recalculado.
 2. **Fichas de Store** (español, inglés y chino): pegar *Novedades de esta versión*, la *Descripción* y la característica 15.
 3. **Notas para la certificación:** pegar las de `descripcionStore_en.md` (un solo campo por envío; ahora tienen 3.504 caracteres).
 4. **Enviar a certificación.**
+
+## 12. Envío de la v0.6.2 (2026-11-15)
+
+> ⚠️ **Arreglo urgente de la v0.6.1.** Con la v0.6.1 de la Store, Claude Code y Codex no arrancan en los equipos con Node.js en su carpeta por defecto (`C:\Program Files\nodejs`): «"C:\Program" no se reconoce como un comando interno o externo». Lo detectó Victor Osuna con la versión recién aprobada. **REQ-90 sigue abierto.**
+
+**Paquete:** `src-tauri/target/msix/dbv-unreal-ai_0.6.2.0.msixbundle` (9,59 MB, generado con `npm run tauri:windows:build`). Identidad comprobada en el `AppxManifest.xml`: `davidbuenov.DBVUnrealAI`, `CN=13EE2A5D-F49E-48C9-8873-941069B15D63`, `Version="0.6.2.0"`, `x64`; capacidades sin cambios (`runFullTrust`, `internetClient`). Lleva los mismos `unreal-plugin-bin/5.8` y `5.9`; los plugins de Unreal siguen en `0.6.1`.
+
+**Fichas:** en `descripcionStore_es.md`, `descripcionStore_en.md` y `descripcionStore_zh.md` solo cambia *Novedades de esta versión*: una línea de la v0.6.2 delante de las de la v0.6.1, con el recuento recalculado. La descripción, las características y las notas para la certificación no cambian.
+
+**Pasos en Partner Center:**
+1. **Paquetes:** subir `dbv-unreal-ai_0.6.2.0.msixbundle` y retirar del envío el anterior.
+2. **Fichas de Store** (español, inglés y chino): pegar *Novedades de esta versión*.
+3. **Enviar a certificación.**

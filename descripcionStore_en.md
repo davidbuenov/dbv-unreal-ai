@@ -47,9 +47,12 @@ Key Features:
 
 ## What's new in this version
 
-(819 / 1500)
+(1043 / 1500)
 
 ```text
+v0.6.2:
+• Fixed: Claude Code and Codex did not start when Node.js was installed in its default folder (C:\Program Files\nodejs). If you saw "'C:\Program' is not recognized as an internal or external command", it is solved.
+
 v0.6.1:
 • Fab on Unreal Engine 5.8.4: ask "I want a car" and you see each product with its thumbnail and its fab.com link before installing it, in the conversation or in the new Fab view.
 • Only free products or those already in your Fab library are installed (nothing is bought from the app), and only those compatible with your editor version, Quixel Megascans included. What you install stays as a reference in the Library.

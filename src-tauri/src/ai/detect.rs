@@ -80,10 +80,8 @@ pub fn is_vscode_copilot_shim(path: &Path) -> bool {
 
 /// El programa responde a `--version` con éxito en menos de 5 s.
 fn answers_version(path: &Path) -> bool {
-    let (cmd, args) = launcher(path);
-    let mut command = std::process::Command::new(cmd);
+    let mut command = std::process::Command::new(path);
     command
-        .args(args)
         .arg("--version")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -206,17 +204,6 @@ pub fn detect() -> Detection {
             LocalServer { provider: "lmStudio", running: lmstudio.is_some(), models: lmstudio.as_ref().map(model_names).unwrap_or_default() },
         ],
         tools: TOOLS.iter().map(|name| Tool { name, path: which(name).map(|path| path.to_string_lossy().to_string()) }).collect(),
-    }
-}
-
-/// Ejecutable de verdad para lanzar `name` en Windows: un `.cmd`/`.bat` (como
-/// `npx.cmd`) no se puede lanzar directamente con `Command::new`.
-pub fn launcher(path: &Path) -> (PathBuf, Vec<String>) {
-    let is_script = path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("cmd") || ext.eq_ignore_ascii_case("bat"));
-    if cfg!(windows) && is_script {
-        (PathBuf::from("cmd.exe"), vec!["/d".into(), "/s".into(), "/c".into(), path.to_string_lossy().to_string()])
-    } else {
-        (path.to_path_buf(), Vec::new())
     }
 }
 
@@ -408,9 +395,7 @@ pub fn parse_codex_models(json_text: &str) -> Vec<AgentModelOption> {
 
 fn query_agy_models() -> Vec<AgentModelOption> {
     let Some(bin) = which("agy").or_else(|| which("antigravity")) else { return Vec::new() };
-    let (cmd, args) = launcher(&bin);
-    let mut cmd_builder = std::process::Command::new(cmd);
-    cmd_builder.args(args);
+    let mut cmd_builder = std::process::Command::new(&bin);
     cmd_builder.arg("models");
     #[cfg(windows)]
     {
@@ -427,9 +412,7 @@ fn query_agy_models() -> Vec<AgentModelOption> {
 
 fn query_claude_models() -> Vec<AgentModelOption> {
     let Some(bin) = which("claude") else { return Vec::new() };
-    let (cmd, args) = launcher(&bin);
-    let mut cmd_builder = std::process::Command::new(cmd);
-    cmd_builder.args(args);
+    let mut cmd_builder = std::process::Command::new(&bin);
     cmd_builder.args([
         "-p",
         "--input-format=stream-json",
@@ -459,9 +442,7 @@ fn query_claude_models() -> Vec<AgentModelOption> {
 
 fn query_codex_models() -> Vec<AgentModelOption> {
     if let Some(bin) = which("codex") {
-        let (cmd, args) = launcher(&bin);
-        let mut cmd_builder = std::process::Command::new(cmd);
-        cmd_builder.args(args);
+        let mut cmd_builder = std::process::Command::new(&bin);
         cmd_builder.args(["debug", "models"]);
         #[cfg(windows)]
         {
@@ -674,14 +655,19 @@ mod tests {
     }
 
     #[test]
-    fn en_windows_un_cmd_se_lanza_con_cmd_exe() {
-        let (program, args) = launcher(Path::new("C:/nodejs/npx.cmd"));
-        if cfg!(windows) {
-            assert_eq!(program, PathBuf::from("cmd.exe"));
-            assert_eq!(args.last().unwrap(), "C:/nodejs/npx.cmd");
-        } else {
-            assert!(args.is_empty());
-        }
+    #[cfg(windows)]
+    fn un_cmd_en_una_carpeta_con_espacios_se_lanza_y_recibe_sus_argumentos() {
+        // Node se instala por defecto en `C:\Program Files\nodejs`: con `cmd.exe /d /s /c <ruta>` la ruta se partía
+        // en el espacio («"C:\Program" no se reconoce…») y Claude Code y Codex no arrancaban (v0.6.1).
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join("Program Files").join("nodejs");
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("npx.cmd");
+        std::fs::write(&script, "@echo off\r\necho [%1][%2][%~3][%4]\r\n").unwrap();
+        // El último argumento lleva `&`: tiene que llegar como texto, no ejecutarse como otra orden (p. ej. un nombre de modelo).
+        let output = std::process::Command::new(&script).args(["-y", "@scope/pkg", "con espacio", "a&echo colado"]).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "[-y][@scope/pkg][con espacio][\"a&echo colado\"]");
     }
 
     #[test]

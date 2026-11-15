@@ -33,7 +33,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::oneshot;
 
-use super::detect::{launcher, which};
+use super::detect::which;
 use super::files::{is_skipped_dir, is_text_document};
 use super::AiError;
 
@@ -121,9 +121,8 @@ pub fn agent_command(spec: &AgentSpec) -> Result<(PathBuf, Vec<String>), AiError
         }
     }
 
-    let (program, mut prefix) = launcher(&program);
-    prefix.extend(args);
-    Ok((program, prefix))
+    // Un `.cmd` (como `npx.cmd`) se lanza por su ruta: `Command` ya lo pasa por `cmd.exe` con las comillas bien puestas.
+    Ok((program, args))
 }
 
 fn resolve_clean_model(spec: &AgentSpec) -> Option<&str> {

@@ -47,9 +47,12 @@ DBV Unreal AI 是一款面向 Unreal Engine 5.8 和 5.9 的原生 AI 助手：�
 
 ## 此版本的新增功能 / What's new in this version
 
-(365 / 1500)
+(488 / 1500)
 
 ```text
+v0.6.2:
+• 已修复：当 Node.js 安装在默认文件夹（C:\Program Files\nodejs）时，Claude Code 和 Codex 无法启动。如果你看到过“'C:\Program' 不是内部或外部命令”，现在已解决。
+
 v0.6.1:
 • Unreal Engine 5.8.4 中的 Fab：说“我想要一辆车”，在安装前即可在对话或新的 Fab 视图中看到每个产品的缩略图和 fab.com 链接。
 • 只安装免费内容或已在你的 Fab 库中的内容（应用内不会购买任何东西），并且只安装与你的编辑器版本兼容的内容，包括 Quixel Megascans。已安装的内容会作为引用保存在资源库中。

@@ -1,7 +1,23 @@
-# 🧭 Walkthrough — DBV Unreal AI v0.6.1
+# 🧭 Walkthrough — DBV Unreal AI v0.6.2
 
-> **Fecha:** 2026-11-15 · **Versión:** 0.6.1 (Patch, desde la 0.6.0; decisión del usuario: la v0.7.0 queda para UEFN y Verse) · **Autores:** David Bueno Vallejo y David Bueno Carmona
-> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.23 y §3.25) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.6.1.md`](./releases/v0.6.1.md) · **Plan:** [`implementation_plan.md`](./implementation_plan.md) §19 y §20
+> **Fecha:** 2026-11-15 · **Versión:** 0.6.2 (Patch: arreglo urgente de la 0.6.1, que a su vez fue Patch desde la 0.6.0) · **Autores:** David Bueno Vallejo y David Bueno Carmona
+> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.23 y §3.25) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.6.2.md`](./releases/v0.6.2.md) y [`releases/v0.6.1.md`](./releases/v0.6.1.md) · **Plan:** [`implementation_plan.md`](./implementation_plan.md) §19 y §20
+
+## Qué cambia en v0.6.2
+
+Un usuario de la Microsoft Store (**Victor Osuna**) probó la v0.6.1 recién aprobada y Claude Code no arrancaba: «"C:\Program" no se reconoce como un comando interno o externo».
+
+| Qué | Detalle |
+| --- | --- |
+| **Causa** | `detect::launcher` lanzaba `npx.cmd` como `cmd.exe /d /s /c <ruta> …`. Con Node en `C:\Program Files\nodejs` (la instalación por defecto), `/s` quita las comillas y Windows ejecuta `C:\Program`. Afectaba a Claude Code y a Codex (los dos van por `npx`) y a cualquier CLI instalada como `.cmd` en una ruta con espacios. |
+| **Arreglo** | `launcher` se elimina: el `.cmd` se lanza por su ruta y `std::process::Command` lo pasa por `cmd.exe` con las comillas y el escapado correctos (`ai/detect.rs`, `ai/acp.rs`). De paso, un argumento con `&` ya no lo interpreta `cmd.exe`. |
+| **Por qué no lo vieron los tests** | En el equipo de desarrollo Node está en `C:\nodejs` y el test solo miraba los argumentos. El test nuevo (`un_cmd_en_una_carpeta_con_espacios_se_lanza_y_recibe_sus_argumentos`) lanza de verdad un `.cmd` desde `Program Files\nodejs`. |
+| **Conector MCP con la ruta antigua** | El segundo problema que detectó: Claude Desktop apuntaba a un ejecutable que ya no existe. La app no escribe esa configuración; se resuelve copiando otra vez el bloque de Ajustes. Documentado en el README; sin cambios de código. |
+| **Plugins de Unreal** | Sin cambios: siguen en `0.6.1` (`DBVUnrealAI` Version 9, `DBVUnrealAICpp` Version 5) para que nadie tenga que volver a preparar sus proyectos. |
+
+**Comprobado:** reproducción con el `npx` real detrás de una ruta con espacios (la orden antigua da el error del usuario; la nueva devuelve la versión). **No comprobado:** la app instalada arrancando Claude Code de principio a fin en un equipo con Node en `Program Files`.
+
+Lo que sigue describe la v0.6.1, que es todo lo demás que lleva esta versión.
 
 ## Qué es
 

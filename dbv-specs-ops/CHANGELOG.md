@@ -11,6 +11,22 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.6.2] - 2026-11-15
+
+Versión v0.6.2: **arreglo urgente de la v0.6.1**. **Claude Code y Codex vuelven a arrancar** en los equipos con Node.js instalado en su carpeta por defecto (`C:\Program Files\nodejs`). Gracias a **Victor Osuna**, que probó la v0.6.1 recién publicada en la Microsoft Store y detectó los dos problemas de esta versión.
+
+### Corregido
+- **Claude Code y Codex no arrancaban si Node.js estaba en una carpeta con espacios (la instalación por defecto, `C:\Program Files\nodejs`):** la app lanzaba `npx.cmd` con `cmd.exe /d /s /c <ruta>` y Windows partía la ruta en el espacio («"C:\Program" no se reconoce como un comando interno o externo»), antes de enviar nada al agente. Ahora el `.cmd` se lanza por su ruta y es `Command` de Rust quien pone las comillas. Afectaba igual a cualquier CLI instalada como `.cmd` en una ruta con espacios (también al leer su lista de modelos). No se vio en las pruebas porque el equipo de desarrollo tiene Node en `C:\nodejs`; hay un test nuevo que lanza un `.cmd` desde `Program Files\nodejs`.
+
+### Seguridad
+- **Los argumentos de una CLI instalada como `.cmd` ya no los interpreta `cmd.exe` (revisión de `/code-simplify`):** con el envoltorio anterior, un argumento con `&` (por ejemplo un nombre de modelo escrito en Ajustes) se habría ejecutado como otra orden. Al lanzar el `.cmd` por su ruta, Rust escapa cada argumento; el test nuevo comprueba que `a&echo colado` llega como texto.
+
+### Conocido
+- **El conector MCP de Claude Desktop (u otro agente) puede quedar apuntando a un ejecutable que ya no existe tras actualizar la app:** la app no escribe la configuración de esos agentes, solo da el bloque JSON en Ajustes, así que una ruta copiada de una instalación anterior no se corrige sola. Solución: copiar otra vez el bloque de **Ajustes** y pegarlo en la configuración del agente. El README lo explica. No se ha cambiado código para esto.
+
+### Agradecimientos
+- **Victor Osuna**, por probar la v0.6.1 nada más salir en la Microsoft Store y detectar los dos problemas: el arranque de Claude Code y el conector MCP con la ruta antigua.
+
 ## [0.6.1] - 2026-11-15
 
 Versión v0.6.1: **Fab en Unreal Engine 5.8.4** desde la app. Pides «quiero un coche» y ves cada producto con su **miniatura y su enlace a fab.com** antes de instalarlo, en la conversación y en la nueva **vista Fab**. Solo se instala lo **gratuito o lo que ya tienes** (nada se compra desde la app) y solo lo **compatible con tu versión del editor**, Quixel Megascans incluidos. Lo instalado queda como **referencia en la Biblioteca**. Además, la app se prepara para equipos sin nuestras herramientas: **encuentra el motor** aunque el proyecto diga un GUID, deja **elegir su carpeta**, trae el **plugin C++ ya compilado** para 5.8 y la 5.9 Preview (Fab y splats sin Visual Studio) y explica cada paso con un **diagnóstico que se puede copiar**.
@@ -456,7 +472,7 @@ Primera versión: conexión con Unreal 5.8 por MCP, preparación del proyecto, c
 - **[Importante]** El id de un trabajo podía coincidir entre la ventana y el `--mcp` de un agente si lanzaban en el mismo milisegundo; ahora lleva el id del proceso.
 - Nits de la revisión (3): `return` tempranos fuera de las guardas en `tools::build`, `resolve_source` y `uploadable`.
 
-[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.1...HEAD
+[Sin publicar]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.6.2...HEAD
 [0.5.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/davidbuenov/dbv-unreal-ai/compare/v0.4.0...v0.4.1

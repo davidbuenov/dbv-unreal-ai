@@ -5,9 +5,9 @@
 **🇪🇸 Español · [🇬🇧 English](./README.en.md)**
 
 [![Sitio Web](https://img.shields.io/badge/Sitio_Web-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/)
-[![Releases v0.6.1](https://img.shields.io/badge/Releases-v0.6.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.6.2](https://img.shields.io/badge/Releases-v0.6.2-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
-[![status](https://img.shields.io/badge/status-estable_%7C_v0.6.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.1)
+[![status](https://img.shields.io/badge/status-estable_%7C_v0.6.2-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.2)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -44,6 +44,7 @@
 - [Tests](#tests)
 - [Estructura del proyecto](#structure)
 - [Changelog](#changelog)
+- [Agradecimientos](#thanks)
 - [Licencia](#license)
 
 ---
@@ -145,6 +146,11 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 <a name="status"></a>
 
 ## 🚧 Estado
+
+**v0.6.2** (2026-11-15). Arreglo urgente de la v0.6.1:
+
+- **Claude Code y Codex vuelven a arrancar con Node.js en su carpeta por defecto:** con Node en `C:\Program Files\nodejs`, la v0.6.1 fallaba al conectar con «"C:\Program" no se reconoce como un comando interno o externo». Si te pasó, basta con actualizar.
+- **Si tu agente (Claude Desktop, Cursor…) no encuentra la app tras actualizar,** copia otra vez el bloque de Ajustes: ver [Usarlo desde otros agentes](#mcp).
 
 **v0.6.1** (2026-11-15). Lo nuevo:
 
@@ -293,6 +299,8 @@ El propio ejecutable es un servidor MCP por stdio (sin puerto de red). En Claude
 
 La vista **Ajustes** te da este bloque con la ruta exacta. Ofrece el puente al editor (con la validación del Python), la biblioteca (listar, importar, renombrar, «Enviar a Unreal») y **toda la API de Tripo**: `generate_3d_model`, `image_to_3d_model`, `rig_model`, `animate_model`, `tripo_run` (cualquier otra operación), `tripo_operations` (catálogo con precios), `tripo_balance` y `generation_jobs`. Lo que cuesta créditos exige `confirm_cost: true` tras decirle el precio al usuario; los trabajos corren en segundo plano y la app enseña su progreso.
 
+**Si el agente deja de encontrar la app después de actualizarla** (por ejemplo, Claude Desktop dice que el ejecutable no existe), su configuración guarda la ruta de la instalación anterior. La app no escribe la configuración de otros programas: copia otra vez el bloque de **Ajustes** y sustituye el antiguo.
+
 ---
 
 <a name="tests"></a>
@@ -340,6 +348,14 @@ Contra un editor real abierto (solo lectura): `DBV_UNREAL_MCP_PORT=8000 cargo te
 Ver [CHANGELOG.md](./dbv-specs-ops/CHANGELOG.md).
 
 Las notas de cada versión están en dos ficheros, [`dbv-specs-ops/releases/vX.Y.Z.md`](./dbv-specs-ops/releases/) (español) y `vX.Y.Z.en.md` (inglés), y la Release de GitHub las lleva las dos.
+
+---
+
+<a name="thanks"></a>
+
+## 🙏 Agradecimientos
+
+- **Victor Osuna**, por las pruebas: probó la v0.6.1 nada más salir en la Microsoft Store y detectó los dos problemas que resuelve la v0.6.2.
 
 ---
 

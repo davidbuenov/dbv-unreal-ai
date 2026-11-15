@@ -47,9 +47,12 @@ Características principales:
 
 ## Novedades de esta versión
 
-(800 / 1500)
+(1029 / 1500)
 
 ```text
+v0.6.2:
+• Corregido: Claude Code y Codex no arrancaban si Node.js estaba instalado en su carpeta por defecto (C:\Program Files\nodejs). Si veías «"C:\Program" no se reconoce como un comando interno o externo», ya está resuelto.
+
 v0.6.1:
 • Fab en Unreal Engine 5.8.4: pide «quiero un coche» y verás cada producto con su miniatura y su enlace a fab.com antes de instalarlo, en la conversación o en la nueva vista Fab.
 • Solo se instala lo gratuito o lo que ya tienes en tu biblioteca de Fab (nada se compra desde la app) y solo lo compatible con tu versión del editor, Quixel Megascans incluidos. Lo instalado queda como referencia en la Biblioteca.

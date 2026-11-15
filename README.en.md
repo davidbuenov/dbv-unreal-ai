@@ -5,9 +5,9 @@
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
 
 [![Website](https://img.shields.io/badge/Website-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/en/)
-[![Releases v0.6.1](https://img.shields.io/badge/Releases-v0.6.1-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.6.2](https://img.shields.io/badge/Releases-v0.6.2-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
-[![status](https://img.shields.io/badge/status-stable_%7C_v0.6.1-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.1)
+[![status](https://img.shields.io/badge/status-stable_%7C_v0.6.2-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.2)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -44,6 +44,7 @@
 - [Tests](#tests)
 - [Project structure](#structure)
 - [Changelog](#changelog)
+- [Acknowledgements](#thanks)
 - [License](#license)
 
 ---
@@ -145,6 +146,11 @@ These channels are not available yet; they will arrive in an upcoming version. I
 <a name="status"></a>
 
 ## 🚧 Status
+
+**v0.6.2** (2026-11-15). Urgent fix for v0.6.1:
+
+- **Claude Code and Codex start again with Node.js in its default folder:** with Node in `C:\Program Files\nodejs`, v0.6.1 failed to connect with "'C:\Program' is not recognized as an internal or external command". If that happened to you, updating is enough.
+- **If your agent (Claude Desktop, Cursor…) cannot find the app after updating,** copy the block from Settings again: see [Use it from other agents](#mcp).
 
 **v0.6.1** (2026-11-15). What's new:
 
@@ -293,6 +299,8 @@ The executable itself is a stdio MCP server (no network port). In Claude Code, C
 
 The **Settings** view gives you this block with the exact path. It offers the bridge to the editor (with Python validation), the library (list, import, rename, "Send to Unreal") and **the whole Tripo API**: `generate_3d_model`, `image_to_3d_model`, `rig_model`, `animate_model`, `tripo_run` (any other operation), `tripo_operations` (catalogue with prices), `tripo_balance` and `generation_jobs`. Anything that costs credits requires `confirm_cost: true` after telling the user the price; jobs run in the background and the app shows their progress.
 
+**If the agent stops finding the app after you update it** (for example, Claude Desktop says the executable does not exist), its configuration holds the path of the previous install. The app does not write other programs' configuration: copy the block from **Settings** again and replace the old one.
+
 ---
 
 <a name="tests"></a>
@@ -340,6 +348,14 @@ Against a real open editor (read-only): `DBV_UNREAL_MCP_PORT=8000 cargo test --m
 See [CHANGELOG.en.md](./dbv-specs-ops/CHANGELOG.en.md).
 
 Each version's release notes are in two files, [`dbv-specs-ops/releases/vX.Y.Z.en.md`](./dbv-specs-ops/releases/) (English) and `vX.Y.Z.md` (Spanish), and the GitHub Release carries both.
+
+---
+
+<a name="thanks"></a>
+
+## 🙏 Acknowledgements
+
+- **Victor Osuna**, for testing: he tried v0.6.1 as soon as it reached the Microsoft Store and found the two problems that v0.6.2 solves.
 
 ---
 
