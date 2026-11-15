@@ -264,7 +264,10 @@ export function createProjectView(host, deps) {
   function readinessCard(editor) {
     const project = readiness.project;
     const variant = el('select', { attrs: { 'aria-label': t('project.variant') } }, el('option', { text: t('project.variant.python'), attrs: { value: 'python' } }), el('option', { text: t('project.variant.cpp'), attrs: { value: 'cpp' } }));
-    if (!project.hasCpp) variant.disabled = true;
+    // REQ-121: con el plugin C++ ya compilado para este motor, la variante C++ (Fab, splats) no necesita Visual Studio,
+    // también en un proyecto de solo Blueprints, y va preseleccionada.
+    if (!project.hasCpp && !readiness.cppBinaries) variant.disabled = true;
+    if (readiness.cppBinaries) variant.value = 'cpp';
     const port = el('input', { attrs: { type: 'number', min: '1024', max: '65535', value: String(readiness.proposedPort ?? readiness.mcp.port), 'aria-label': t('project.port') } });
     let backup = null;
     try {

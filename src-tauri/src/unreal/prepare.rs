@@ -161,6 +161,9 @@ pub struct Readiness {
     pub engine: Option<EngineInstall>,
     /// De dónde salió el motor (versión, registrado, el que contiene el proyecto o elegido a mano). @spec REQ-119
     pub engine_source: Option<discovery::EngineSource>,
+    /// La app trae el plugin C++ ya compilado para este motor: la variante C++ (Fab, splats) no necesita Visual
+    /// Studio, también en un proyecto de solo Blueprints. @spec REQ-121
+    pub cpp_binaries: bool,
     pub mcp: McpSettings,
     pub proposed_port: u16,
     pub checks: Vec<Check>,
@@ -344,6 +347,7 @@ pub fn readiness_with_engine(uproject: &Path, source: &Path, engine: Option<Engi
     let convai = super::convai::status(dir, &project, engine.as_ref(), engine_ok);
     let result = Readiness {
         project,
+        cpp_binaries: matching_binaries(source, engine.as_ref()).is_some(),
         engine,
         engine_source: None,
         mcp,
@@ -428,6 +432,42 @@ pub fn enable_plugins(text: &str, plugins: &[&str]) -> Result<String, UnrealErro
 }
 
 /// Ficheros de un plugin de origen (sin cachés de Python), como rutas relativas con `/`.
+/// Carpeta hermana de `unreal-plugin/` con los binarios del plugin C++ por versión menor (`5.8/Win64/`). @spec REQ-121
+pub const BINARIES_DIR: &str = "unreal-plugin-bin";
+
+fn json_number(path: &Path, field: &str) -> Option<u64> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    let number = value.get(field).and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+    number
+}
+
+/// Los binarios del plugin C++ que trae la app para `engine`, solo si su `BuildId` es el `CompatibleChangelist` del
+/// motor (el mismo en todas las x.y.z del Launcher; distinto en un motor compilado desde código o en otra Preview).
+/// Solo Windows: son DLL de Win64. @spec REQ-121
+pub fn matching_binaries(source: &Path, engine: Option<&EngineInstall>) -> Option<PathBuf> {
+    let engine = engine?;
+    let dir = source.parent()?.join(BINARIES_DIR).join(format!("{}.{}", engine.major, engine.minor)).join("Win64");
+    let build_id = json_number(&dir.join("UnrealEditor.modules"), "BuildId")?;
+    let compatible = json_number(&Path::new(&engine.root).join("Engine").join("Build").join("Build.version"), "CompatibleChangelist")?;
+    let matching = (cfg!(windows) && build_id == compatible).then_some(dir);
+    matching
+}
+
+/// Ficheros del plugin C++ con los binarios de la app: todo menos `Source/` (sin código, el editor no intenta
+/// compilarlo y carga las DLL, comprobado el 2026-11-15 en un proyecto de solo Blueprints) más `Binaries/Win64/`.
+/// @spec REQ-121
+fn cpp_binary_files(source: &Path, binaries: &Path) -> Result<Vec<(String, PathBuf)>, UnrealError> {
+    let skip = [format!("Plugins/{CPP_PLUGIN}/Source/"), format!("Plugins/{CPP_PLUGIN}/Binaries/"), format!("Plugins/{CPP_PLUGIN}/Intermediate/")];
+    let mut files: Vec<(String, PathBuf)> = plugin_files(source, CPP_PLUGIN)?.into_iter().filter(|(relative, _)| !skip.iter().any(|s| relative.starts_with(s.as_str()))).collect();
+    let entries = std::fs::read_dir(binaries).map_err(|error| io_error(binaries, &error))?;
+    for entry in entries.flatten().filter(|e| e.path().is_file()) {
+        files.push((format!("Plugins/{CPP_PLUGIN}/Binaries/Win64/{}", entry.file_name().to_string_lossy()), entry.path()));
+    }
+    files.sort();
+    Ok(files)
+}
+
 fn plugin_files(source: &Path, plugin: &str) -> Result<Vec<(String, PathBuf)>, UnrealError> {
     let root = source.join(plugin);
     let mut files = Vec::new();
@@ -539,9 +579,14 @@ pub fn plan_with_engine(
             origin: None,
         });
     }
-    // 3. El toolset.
+    // 3. El toolset. El plugin C++ va ya compilado si la app trae binarios para este motor (REQ-121).
+    let binaries = matching_binaries(source, engine);
     for plugin in variant.plugins() {
-        for (relative, origin) in plugin_files(source, plugin)? {
+        let files = match (*plugin == CPP_PLUGIN, binaries.as_deref()) {
+            (true, Some(dir)) => cpp_binary_files(source, dir)?,
+            _ => plugin_files(source, plugin)?,
+        };
+        for (relative, origin) in files {
             match std::fs::read_to_string(&origin) {
                 Ok(content) => {
                     let before = read_optional(&dir.join(&relative))?;
@@ -991,6 +1036,38 @@ mod tests {
         assert_eq!(fab["Enabled"], json!(true), "«Preparar» lo vuelve a activar");
     }
 
+    /// Con binarios de la app para el motor (mismo BuildId que su CompatibleChangelist), el plugin C++ va compilado y sin
+    /// `Source/`; con otro BuildId, con el código como siempre. @spec REQ-121
+    #[test]
+    fn el_plugin_cpp_va_compilado_si_los_binarios_casan_con_el_motor() {
+        let bundled = source().parent().unwrap().join(BINARIES_DIR).join("5.8").join("Win64").join("UnrealEditor.modules");
+        let Some(build_id) = json_number(&bundled, "BuildId") else {
+            return; // Sin binarios en el repo (no se han compilado aún): nada que probar.
+        };
+        let (_dir, path) = project();
+        let (_root, mut engine) = fake_engine(&[]);
+        let build = Path::new(&engine.root).join("Engine").join("Build");
+        std::fs::create_dir_all(&build).unwrap();
+        let write_version = |cl: u64| std::fs::write(build.join("Build.version"), format!("{{\"MajorVersion\":5,\"MinorVersion\":8,\"PatchVersion\":4,\"CompatibleChangelist\":{cl}}}")).unwrap();
+        let relatives = |engine: &EngineInstall| plan_with_engine(&path, &source(), Variant::Cpp, None, Some(engine)).unwrap().changes.into_iter().map(|c| c.relative).collect::<Vec<_>>();
+
+        write_version(build_id);
+        assert_eq!(matching_binaries(&source(), Some(&engine)).is_some(), cfg!(windows));
+        let files = relatives(&engine);
+        if cfg!(windows) {
+            assert!(files.iter().any(|r| r == "Plugins/DBVUnrealAICpp/Binaries/Win64/UnrealEditor-DBVUnrealAICpp.dll"));
+            assert!(files.iter().any(|r| r == "Plugins/DBVUnrealAICpp/Binaries/Win64/UnrealEditor.modules"));
+            assert!(!files.iter().any(|r| r.starts_with("Plugins/DBVUnrealAICpp/Source/")), "sin código: el editor no intenta compilar");
+            assert!(files.iter().any(|r| r == "Plugins/DBVUnrealAICpp/DBVUnrealAICpp.uplugin"));
+        }
+
+        write_version(build_id + 1);
+        assert!(matching_binaries(&source(), Some(&engine)).is_none(), "otro motor (compilado o Preview): no se copian");
+        assert!(relatives(&engine).iter().any(|r| r.starts_with("Plugins/DBVUnrealAICpp/Source/")));
+        engine.minor = 7;
+        assert!(matching_binaries(&source(), Some(&engine)).is_none(), "sin binarios para esa versión");
+    }
+
     /// @spec REQ-87
     #[test]
     fn el_recorrido_del_motor_no_cuenta_ficheros_de_dentro_de_un_plugin() {
@@ -1005,10 +1082,11 @@ mod tests {
     fn la_variante_cpp_instala_tambien_el_paquete_python() {
         let (_dir, path) = project();
         let plan = plan(&path, &source(), Variant::Cpp, None).unwrap();
+        // El plugin C++ va con su código o, si la app trae binarios para el motor de esta máquina, compilado (REQ-121).
         assert!(plan
             .changes
             .iter()
-            .any(|c| c.relative.starts_with("Plugins/DBVUnrealAICpp/Source/")));
+            .any(|c| c.relative.starts_with("Plugins/DBVUnrealAICpp/Source/") || c.relative == "Plugins/DBVUnrealAICpp/Binaries/Win64/UnrealEditor-DBVUnrealAICpp.dll"));
         assert!(plan.changes.iter().any(|c| c
             .relative
             .starts_with("Plugins/DBVUnrealAI/Content/Python/")));

@@ -40,7 +40,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../unreal-plugin/": "unreal-plugin/"
+      "../unreal-plugin/": "unreal-plugin/",
+      "../unreal-plugin-bin/": "unreal-plugin-bin/"
     }
   }
 }

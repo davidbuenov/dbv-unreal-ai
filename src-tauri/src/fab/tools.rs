@@ -117,7 +117,7 @@ fn list_arg(args: &Value, key: &str) -> Vec<String> {
 pub fn run_job(editor: &mut dyn FabEditor, operation: &str, args: &Value, timeout: Duration) -> Result<Value, String> {
     // @spec REQ-108 En 5.9 la API pública de Fab es la misma (FabDownloader.h, AssetUtils.h, IEOSSDKManager): basta con
     // nuestro cliente. Si el plugin no está compilado con Fab, se dice cómo arreglarlo y que el toolset de Epic también vale.
-    let hint = "The DBVUnrealAICpp plugin needs Fab support (v0.6.1): run «Prepare project» and compile with the editor closed. On UE 5.9, Epic's FabToolset.FabToolset also works through unreal_call_tool.";
+    let hint = "Fab needs the DBVUnrealAICpp plugin (v0.6.1): ask the user to run «Prepare project» with the C++ variant in the app (for Unreal 5.8 from the Epic Games Launcher it is installed already compiled; otherwise it has to be compiled with Visual Studio, with the editor closed) and reopen the editor. On UE 5.9, Epic's FabToolset.FabToolset also works through unreal_call_tool.";
     let started = editor.call_cpp("fab_start", json!({ "operation": operation, "args_json": args.to_string() })).map_err(|e| format!("{e}. {hint}"))?;
     let job = started.get("job_id").and_then(Value::as_str).map(String::from).ok_or_else(|| format!("the editor did not start the Fab job: {started}. {hint}"))?;
     let deadline = Instant::now() + timeout;

@@ -79,6 +79,22 @@ describe('Vista Proyecto', () => {
     await vi.waitFor(() => expect(deps.toast).toHaveBeenCalledWith('Listo: este proyecto usará Unreal 5.8.4.'));
   });
 
+  it('con el plugin C++ ya compilado, un proyecto de solo Blueprints puede elegir la variante C++ y va marcada @spec REQ-121', async () => {
+    const base = window.__TAURI__.core.invoke.getMockImplementation();
+    const readinessFor = (cppBinaries) => ({ project: { name: 'Demo', path: PROJECT, hasCpp: false }, engine: { version: '5.8.4', root: 'E:/UE_5.8' }, cppBinaries, mcp: { port: 8000 }, checks: [{ id: 'engine', ok: true, detail: '5.8.4' }, { id: 'toolset', ok: false, detail: '' }], ready: false });
+    const deps = { state: { connection: null, setConnection: vi.fn() }, toast: vi.fn(), openModal: vi.fn(), closeModal: vi.fn() };
+    window.__TAURI__.core.invoke.mockImplementation(async (command, args) => (command === 'unreal_readiness' ? readinessFor(true) : base(command, args)));
+    const withBinaries = document.createElement('div');
+    await createProjectView(withBinaries, deps).select(PROJECT);
+    const select = withBinaries.querySelector('select');
+    expect(select.disabled).toBe(false);
+    expect(select.value).toBe('cpp');
+    window.__TAURI__.core.invoke.mockImplementation(async (command, args) => (command === 'unreal_readiness' ? readinessFor(false) : base(command, args)));
+    const without = document.createElement('div');
+    await createProjectView(without, deps).select(PROJECT);
+    expect(without.querySelector('select').disabled).toBe(true);
+  });
+
   it('con el motor encontrado no enseña el botón; elegido a mano, enseña cuál y la vuelta a la automática @spec REQ-119', async () => {
     const host = document.createElement('div');
     const deps = { state: { connection: null, setConnection: vi.fn() }, toast: vi.fn(), openModal: vi.fn(), closeModal: vi.fn() };
