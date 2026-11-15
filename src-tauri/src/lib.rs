@@ -60,6 +60,9 @@ pub mod sessions;
 // Cuánto devuelven las herramientas a la IA, compartido entre la ventana y el `--mcp` (REQ-51).
 #[cfg(desktop)]
 pub mod tool_usage;
+// Catálogo de Fab sin sesión: búsqueda y ficha con miniatura, enlace y compatibilidad (REQ-102, REQ-117).
+#[cfg(desktop)]
+pub mod fab;
 
 /// Lo que devolvieron las herramientas al proyecto desde `since` (ms): la ventana lo pide al acabar un turno para
 /// enseñar el contador, también con las llamadas que hizo el `--mcp` de un agente. @spec REQ-51

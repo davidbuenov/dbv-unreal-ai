@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **Fab on UE 5.8.4, feasibility spike (REQ-101, S138):** the C++ plugin uses the Fab session you already opened in the editor to read your Fab library and the download info, without opening another session. The token stays inside the editor: it is not stored, not written to the logs and not returned in any response. Requests run as jobs (`fab_start`, `fab_status`, `fab_cancel`) so the editor does not freeze while Fab answers.
+- **Fab catalog search without a session (REQ-102, REQ-117, S139):** the app searches Fab without needing the editor open. Each result comes with a thumbnail (only from `media.fab.com`), the link to its fab.com page, the seller, whether it is free and its rating ("no ratings" instead of 0). Only products that can be installed in your editor's version show up: an Unreal format without `UE_5.8` does not count on 5.8, and `glb`, `gltf` and `fbx` files always do.
 
 ## [0.6.0] - 2026-11-14
 

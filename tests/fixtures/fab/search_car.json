@@ -1,0 +1,566 @@
+{
+ "aggregations": null,
+ "cursors": {
+  "next": "bz0xMg==",
+  "previous": null
+ },
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "assetFormats": [
+    {
+     "fileSizesRange": {
+      "lower": 143725491,
+      "upper": 143725491
+     },
+     "assetFormatType": {
+      "code": "blender",
+      "icon": "blender",
+      "name": "Blender",
+      "groupName": "3D DCC Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    },
+    {
+     "fileSizesRange": {
+      "lower": 2047052,
+      "upper": 2047052
+     },
+     "assetFormatType": {
+      "code": "fbx",
+      "icon": "cube",
+      "name": "FBX",
+      "groupName": "3D Exchange Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "polygonsCountRange": {
+       "lower": 595,
+       "upper": 596
+      },
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    }
+   ],
+   "availableInEurope": true,
+   "category": {
+    "uid": "edffef4a-0710-430b-b05e-0f667df2161b",
+    "name": "Cars & Trucks",
+    "path": "vehicles-transportation/cars-trucks",
+    "slug": "vehicles-transportation--cars-trucks"
+   },
+   "fabUrl": "https://www.fab.com/listings/c78fc5db-a5ea-4586-970a-5d279a3908e7",
+   "isDiscounted": false,
+   "hasEffectiveDiscounts": false,
+   "isFree": true,
+   "licenses": [
+    {
+     "name": "Personal",
+     "uid": "eec3bdd5-ba7a-45a8-b15d-67462b9630f6"
+    },
+    {
+     "name": "Professional",
+     "uid": "eec3bdd5-ba7a-45a8-b15d-67462b9630f9"
+    }
+   ],
+   "listingType": "3d-model",
+   "productType": "3d-model",
+   "publishedAt": "2026-09-08T16:16:27.981918Z",
+   "ratings": {
+    "averageRating": 5.0,
+    "total": 1
+   },
+   "isMature": false,
+   "tags": [
+    {
+     "name": "Car",
+     "slug": "car",
+     "uid": "1b19907d-7199-4bea-888b-434c45591ad6"
+    },
+    {
+     "name": "Lowpoly",
+     "slug": "lowpoly",
+     "uid": "451806dc-649e-43b7-9c2e-a54485de14b6"
+    }
+   ],
+   "visibilityStatus": "PUBLIC",
+   "thumbnails": [
+    {
+     "images": [
+      {
+       "uid": "00dd17dc-3f7a-4918-a380-0d8e6a724d11",
+       "url": "https://media.fab.com/image_previews/gallery_images/9e18a215-7fcb-41b9-9903-2fd65d092165/00dd17dc-3f7a-4918-a380-0d8e6a724d11.jpg",
+       "width": 160,
+       "height": 90,
+       "size": 4682
+      },
+      {
+       "uid": "80346cdb-ba49-4824-a212-2cf5e3d4c076",
+       "url": "https://media.fab.com/image_previews/gallery_images/9e18a215-7fcb-41b9-9903-2fd65d092165/80346cdb-ba49-4824-a212-2cf5e3d4c076.jpg",
+       "width": 320,
+       "height": 180,
+       "size": 13156
+      },
+      {
+       "uid": "6f994927-e6f6-4550-a4ab-377171446685",
+       "url": "https://media.fab.com/image_previews/gallery_images/9e18a215-7fcb-41b9-9903-2fd65d092165/6f994927-e6f6-4550-a4ab-377171446685.jpg",
+       "width": 640,
+       "height": 360,
+       "size": 40915
+      }
+     ],
+     "mediaUrl": "https://media.fab.com/image_previews/gallery_images/9e18a215-7fcb-41b9-9903-2fd65d092165/bea825ca-cc89-426b-8051-027e66147925.png",
+     "name": "bea825ca-cc89-426b-8051-027e66147925.png",
+     "position": null,
+     "processingStatus": "succeeded",
+     "type": "thumbnail",
+     "uid": "70ce8ec1-776d-4e03-9726-f12b8d5bbed6"
+    }
+   ],
+   "title": "Camo muscle car",
+   "uid": "c78fc5db-a5ea-4586-970a-5d279a3908e7",
+   "user": {
+    "sellerName": "FoulQuince",
+    "sellerId": "o-9rl58wku2rsbln9yscvbqdd668nw83"
+   }
+  },
+  {
+   "assetFormats": [
+    {
+     "fileSizesRange": {
+      "lower": 674046,
+      "upper": 674046
+     },
+     "assetFormatType": {
+      "code": "blender",
+      "icon": "blender",
+      "name": "Blender",
+      "groupName": "3D DCC Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    },
+    {
+     "fileSizesRange": {
+      "lower": 823225,
+      "upper": 823225
+     },
+     "assetFormatType": {
+      "code": "fbx",
+      "icon": "cube",
+      "name": "FBX",
+      "groupName": "3D Exchange Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "polygonsCountRange": {
+       "lower": 0,
+       "upper": 1
+      },
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    },
+    {
+     "fileSizesRange": {
+      "lower": 564901,
+      "upper": 564901
+     },
+     "assetFormatType": {
+      "code": "obj",
+      "icon": "cube",
+      "name": "OBJ",
+      "groupName": "3D Exchange Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "polygonsCountRange": {
+       "lower": 0,
+       "upper": 1
+      },
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    },
+    {
+     "fileSizesRange": {
+      "lower": 660835,
+      "upper": 1728957
+     },
+     "assetFormatType": {
+      "code": "converted-files",
+      "icon": "cube",
+      "name": "Converted Files",
+      "groupName": null
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    },
+    {
+     "fileSizesRange": {
+      "lower": 26113841,
+      "upper": 26113841
+     },
+     "assetFormatType": {
+      "code": "additional-files",
+      "icon": "file",
+      "name": "Additional files",
+      "groupName": "Other Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    },
+    {
+     "fileSizesRange": null,
+     "assetFormatType": {
+      "code": "unreal-engine",
+      "icon": "unreal-engine",
+      "name": "Unreal Engine",
+      "groupName": "Game Engine Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "unrealEngineEngineVersions": [
+       "UE_5.6",
+       "UE_5.7"
+      ],
+      "unrealEngineTargetPlatforms": [
+       "Windows"
+      ],
+      "unrealEngineDistributionMethod": "complete_project",
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    }
+   ],
+   "availableInEurope": true,
+   "category": {
+    "uid": "edffef4a-0710-430b-b05e-0f667df2161b",
+    "name": "Cars & Trucks",
+    "path": "vehicles-transportation/cars-trucks",
+    "slug": "vehicles-transportation--cars-trucks"
+   },
+   "fabUrl": "https://www.fab.com/listings/6e2451c3-fbeb-4cb8-9cc6-603256c37082",
+   "isDiscounted": false,
+   "hasEffectiveDiscounts": false,
+   "isFree": true,
+   "licenses": [
+    {
+     "name": "Personal",
+     "uid": "eec3bdd5-ba7a-45a8-b15d-67462b9630f6"
+    },
+    {
+     "name": "Professional",
+     "uid": "eec3bdd5-ba7a-45a8-b15d-67462b9630f9"
+    }
+   ],
+   "listingType": "3d-model",
+   "productType": "3d-model",
+   "publishedAt": "2026-06-13T12:08:09.876162Z",
+   "ratings": {
+    "averageRating": 0.0,
+    "total": 0
+   },
+   "isMature": false,
+   "tags": [
+    {
+     "name": "Pbr",
+     "slug": "pbr",
+     "uid": "080edd3b-d10a-4f32-ace2-30f5baa480dc"
+    },
+    {
+     "name": "Vehicle",
+     "slug": "vehicle",
+     "uid": "08971b1b-8ab3-4de7-8500-b9b3e00382cb"
+    }
+   ],
+   "visibilityStatus": "PUBLIC",
+   "thumbnails": [
+    {
+     "images": [
+      {
+       "uid": "e6a26d3c-7ee4-4275-b773-2ad7f0572318",
+       "url": "https://media.fab.com/image_previews/gallery_images/d9e00085-2ecb-4de2-a136-e124c2174526/e6a26d3c-7ee4-4275-b773-2ad7f0572318.jpg",
+       "width": 160,
+       "height": 90,
+       "size": 6901
+      },
+      {
+       "uid": "b2db96ad-48b0-4bdc-bcad-4a13dbd36d4e",
+       "url": "https://media.fab.com/image_previews/gallery_images/d9e00085-2ecb-4de2-a136-e124c2174526/b2db96ad-48b0-4bdc-bcad-4a13dbd36d4e.jpg",
+       "width": 320,
+       "height": 180,
+       "size": 20305
+      },
+      {
+       "uid": "98620ba2-c0e2-4a9a-927c-6889da6c23b2",
+       "url": "https://media.fab.com/image_previews/gallery_images/d9e00085-2ecb-4de2-a136-e124c2174526/98620ba2-c0e2-4a9a-927c-6889da6c23b2.jpg",
+       "width": 640,
+       "height": 360,
+       "size": 96649
+      }
+     ],
+     "mediaUrl": "https://media.fab.com/image_previews/gallery_images/d9e00085-2ecb-4de2-a136-e124c2174526/7cb34107-b7fa-4048-96b4-12baa049c0d3.png",
+     "name": "7cb34107-b7fa-4048-96b4-12baa049c0d3.png",
+     "position": null,
+     "processingStatus": "succeeded",
+     "type": "thumbnail",
+     "uid": "3417af63-7c91-480a-9da6-2ed8bd4bb827"
+    }
+   ],
+   "title": "Lowpoly Car",
+   "uid": "6e2451c3-fbeb-4cb8-9cc6-603256c37082",
+   "user": {
+    "sellerName": "xiaofeiArt",
+    "sellerId": "o-xv33wuu2vzcn3nfu3zjalw839qq4wt"
+   }
+  },
+  {
+   "assetFormats": [
+    {
+     "fileSizesRange": null,
+     "assetFormatType": {
+      "code": "unreal-engine",
+      "icon": "unreal-engine",
+      "name": "Unreal Engine",
+      "groupName": "Game Engine Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "unrealEngineEngineVersions": [
+       "UE_4.21",
+       "UE_4.22",
+       "UE_4.23",
+       "UE_4.24",
+       "UE_4.25",
+       "UE_4.26",
+       "UE_4.27"
+      ],
+      "unrealEngineTargetPlatforms": [
+       "Win32",
+       "Windows"
+      ],
+      "unrealEngineDistributionMethod": "asset_pack",
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    }
+   ],
+   "availableInEurope": true,
+   "category": {
+    "uid": "0bb33d40-c52f-4f88-86df-eeff7fcf7ba9",
+    "name": "Vehicles & Transportation",
+    "path": "vehicles-transportation",
+    "slug": "vehicles-transportation"
+   },
+   "fabUrl": "https://www.fab.com/listings/5e895fd3-8439-4ac1-a09b-cf01731a8cc1",
+   "isDiscounted": false,
+   "hasEffectiveDiscounts": false,
+   "isFree": true,
+   "licenses": [
+    {
+     "name": "CC-BY",
+     "uid": "fc23593c-8271-45b8-a041-ca58c53e0146"
+    }
+   ],
+   "listingType": "3d-model",
+   "productType": "3d-model",
+   "publishedAt": "2024-11-07T17:57:13.403255Z",
+   "ratings": {
+    "averageRating": 4.0,
+    "total": 16
+   },
+   "isMature": false,
+   "tags": [
+    {
+     "name": "Vehicle",
+     "slug": "vehicle",
+     "uid": "08971b1b-8ab3-4de7-8500-b9b3e00382cb"
+    },
+    {
+     "name": "Car",
+     "slug": "car",
+     "uid": "1b19907d-7199-4bea-888b-434c45591ad6"
+    }
+   ],
+   "visibilityStatus": "PUBLIC",
+   "thumbnails": [
+    {
+     "images": [
+      {
+       "uid": "79b65ccd-2cc3-4f9c-beec-575e28be19b4",
+       "url": "https://media.fab.com/image_previews/gallery_images/71f164f5-593c-4426-9839-5c888c354c06/01eb8808-0f85-4202-bd88-aa38ad3d7a93.jpg",
+       "width": 160,
+       "height": 87,
+       "size": 7386
+      },
+      {
+       "uid": "93552655-0268-48ef-8259-10ee3707ce49",
+       "url": "https://media.fab.com/image_previews/gallery_images/71f164f5-593c-4426-9839-5c888c354c06/a6c6480f-0998-4042-8778-9d65901f202f.jpg",
+       "width": 320,
+       "height": 174,
+       "size": 24141
+      },
+      {
+       "uid": "29f1d34b-f5f8-4af5-83e6-3774abf42c6d",
+       "url": "https://media.fab.com/image_previews/gallery_images/71f164f5-593c-4426-9839-5c888c354c06/e725ae39-c70b-4baa-8143-36707202e72b.jpg",
+       "width": 640,
+       "height": 349,
+       "size": 81926
+      }
+     ],
+     "mediaUrl": "https://media.fab.com/image_previews/gallery_images/71f164f5-593c-4426-9839-5c888c354c06/5287cd3b-8259-4eb3-9bd1-22a123fdfb27.png",
+     "name": "5287cd3b-8259-4eb3-9bd1-22a123fdfb27.png",
+     "position": null,
+     "processingStatus": "succeeded",
+     "type": "thumbnail",
+     "uid": "adea5905-a50f-4e2d-95b3-d6fb956fefa6"
+    }
+   ],
+   "title": "Driveable Car \"Infrod\"",
+   "uid": "5e895fd3-8439-4ac1-a09b-cf01731a8cc1",
+   "user": {
+    "sellerName": "Ele.G",
+    "sellerId": "o-fe846y8e2tuxy6ctxpqd6zkw2ndgk7"
+   }
+  },
+  {
+   "assetFormats": [
+    {
+     "fileSizesRange": null,
+     "assetFormatType": {
+      "code": "unreal-engine",
+      "icon": "unreal-engine",
+      "name": "Unreal Engine",
+      "groupName": "Game Engine Formats"
+     },
+     "technicalSpecs": {
+      "technicalDetails": null,
+      "unrealEngineEngineVersions": [
+       "UE_4.19",
+       "UE_4.20",
+       "UE_4.21",
+       "UE_4.22",
+       "UE_4.23",
+       "UE_4.24",
+       "UE_4.25",
+       "UE_4.26",
+       "UE_4.27",
+       "UE_5.0",
+       "UE_5.1",
+       "UE_5.2",
+       "UE_5.3",
+       "UE_5.4",
+       "UE_5.5",
+       "UE_5.6",
+       "UE_5.7",
+       "UE_5.8"
+      ],
+      "unrealEngineTargetPlatforms": [
+       "Windows"
+      ],
+      "unrealEngineDistributionMethod": "asset_pack",
+      "unityMinimalCompatibleVersion": null,
+      "bundledUnityMinimalCompatibleVersions": null
+     }
+    }
+   ],
+   "availableInEurope": true,
+   "category": {
+    "uid": "eec3bdd5-ba7a-45a8-b15d-67462b9630f6",
+    "name": "Buildings & Architecture",
+    "path": "buildings-architecture",
+    "slug": "buildings-architecture"
+   },
+   "fabUrl": "https://www.fab.com/listings/01100b99-56c4-42f6-a1a3-dd553fa88126",
+   "isDiscounted": false,
+   "hasEffectiveDiscounts": false,
+   "isFree": false,
+   "licenses": [
+    {
+     "name": "Personal",
+     "uid": "eec3bdd5-ba7a-45a8-b15d-67462b9630f6"
+    },
+    {
+     "name": "Professional",
+     "uid": "eec3bdd5-ba7a-45a8-b15d-67462b9630f9"
+    }
+   ],
+   "listingType": "3d-model",
+   "productType": "3d-model",
+   "publishedAt": "2026-06-29T14:24:15.007216Z",
+   "ratings": {
+    "averageRating": 5.0,
+    "total": 10
+   },
+   "isMature": false,
+   "tags": [
+    {
+     "name": "Vehicle",
+     "slug": "vehicle",
+     "uid": "08971b1b-8ab3-4de7-8500-b9b3e00382cb"
+    },
+    {
+     "name": "Car",
+     "slug": "car",
+     "uid": "1b19907d-7199-4bea-888b-434c45591ad6"
+    }
+   ],
+   "visibilityStatus": "PUBLIC",
+   "thumbnails": [
+    {
+     "images": [
+      {
+       "uid": "eb361de0-88ad-47c1-9a57-980ab14d15f1",
+       "url": "https://media.fab.com/image_previews/gallery_images/f3d2fa62-b134-4ec0-a44f-08604cfbc84b/eb361de0-88ad-47c1-9a57-980ab14d15f1.jpg",
+       "width": 160,
+       "height": 87,
+       "size": 7619
+      },
+      {
+       "uid": "833112e7-7181-4edd-a0ac-102a2fb64567",
+       "url": "https://media.fab.com/image_previews/gallery_images/f3d2fa62-b134-4ec0-a44f-08604cfbc84b/833112e7-7181-4edd-a0ac-102a2fb64567.jpg",
+       "width": 320,
+       "height": 174,
+       "size": 24864
+      },
+      {
+       "uid": "6844bc65-6367-461e-bdb4-83551d009c95",
+       "url": "https://media.fab.com/image_previews/gallery_images/f3d2fa62-b134-4ec0-a44f-08604cfbc84b/6844bc65-6367-461e-bdb4-83551d009c95.jpg",
+       "width": 640,
+       "height": 349,
+       "size": 83429
+      }
+     ],
+     "mediaUrl": "https://media.fab.com/image_previews/gallery_images/f3d2fa62-b134-4ec0-a44f-08604cfbc84b/6ed7e93b-a0d2-4bf3-80e4-73c032ca1143.png",
+     "name": "6ed7e93b-a0d2-4bf3-80e4-73c032ca1143.png",
+     "position": null,
+     "processingStatus": "succeeded",
+     "type": "thumbnail",
+     "uid": "3f1116ec-3c37-43d2-88ca-62495a800741"
+    }
+   ],
+   "title": "Car Asset Sedan",
+   "uid": "01100b99-56c4-42f6-a1a3-dd553fa88126",
+   "user": {
+    "sellerName": "huiz",
+    "sellerId": "o-nx38dshbcsvvhbf6a7fefhfhr46mr9"
+   }
+  }
+ ]
+}

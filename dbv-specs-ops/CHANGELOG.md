@@ -13,6 +13,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Añadido
 - **Fab en UE 5.8.4, prueba de viabilidad (REQ-101, S138):** el plugin C++ usa la sesión de Fab que ya abriste en el editor para consultar tu biblioteca de Fab y la información de descarga, sin abrir otra sesión. El token se queda dentro del editor: no se guarda, no se escribe en los logs y no sale en ninguna respuesta. Las peticiones van como trabajos (`fab_start`, `fab_status`, `fab_cancel`) para no bloquear el editor mientras responde Fab.
+- **Búsqueda en el catálogo de Fab sin sesión (REQ-102, REQ-117, S139):** la app busca en Fab sin necesitar el editor abierto. Cada resultado trae una miniatura (solo de `media.fab.com`), el enlace a su ficha en fab.com, el vendedor, si es gratis y su valoración («sin valoraciones» en vez de 0). Solo salen los productos que se pueden instalar en la versión de tu editor: un formato Unreal sin `UE_5.8` no cuenta en 5.8, y los ficheros `glb`, `gltf` y `fbx` valen siempre.
 
 ## [0.6.0] - 2026-11-14
 
