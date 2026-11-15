@@ -14,6 +14,8 @@
 
 import { t } from '../ai/i18nBridge.js';
 import { cutMismatch, listMetahumans, sendToUnreal } from '../unreal/sendToUnreal.js';
+import { openExternalUrl } from '../ai/backend.js';
+import { safeListingUrl } from './fabCards.js';
 import * as api from './backend.js';
 import { button, el } from './dom.js';
 import { confirmAndLaunch } from './generateView.js';
@@ -304,8 +306,31 @@ export function createLibraryView(host, deps) {
     input.select();
   }
 
+  /**
+   * «Instalar en este proyecto» de una referencia de Fab (REQ-107): se vuelve a pedir a Fab (las URLs caducan), con
+   * las mismas reglas (gratis o tuyo, compatible con el editor). El diálogo de confirmación es la aprobación.
+   */
+  async function installFab(entry, statusLine) {
+    const connection = deps.state.connection;
+    const output = entry.output ?? {};
+    if (connection?.status !== 'online') {
+      statusLine.textContent = t('lib.fabNeedsEditor');
+      return;
+    }
+    const choice = await deps.confirm({ title: t('lib.fabInstall'), text: t('lib.fabInstallConfirm', { name: entry.name, format: output.format ?? '', project: connection.projectName ?? '' }), choices: [{ key: 'install', label: t('fab.install') }, { key: 'cancel', label: t('gen.cancel') }] });
+    if (choice !== 'install') return;
+    statusLine.textContent = t('fab.installing', { title: entry.name });
+    const ran = await api.fabRunTool(connection.endpoint, connection.engineVersion ?? null, 'fab_install', { listing_uid: output.listingUid, asset_format: output.format }, connection.projectPath ?? null);
+    const text = ran.ok ? String(ran.value?.text ?? '') : String(ran.error?.message ?? '');
+    const failed = !ran.ok || text.startsWith('error');
+    const folder = /"folder":"([^"]+)"/.exec(text)?.[1] ?? '';
+    statusLine.textContent = failed ? t('fab.installFailed', { title: entry.name, message: text.slice(0, 200) }) : t('fab.installed', { title: entry.name, folder });
+    if (!failed) await render();
+  }
+
   /** El paso siguiente que tiene sentido para cada tipo de asset. */
   function nextStep(entry) {
+    if (entry.provider === 'fab') return null;
     const steps = {
       model: () => button(t('lib.rig'), () => launch('rig_model', { id: entry.id })),
       rig: () => button(t('lib.animate'), () => pickAnimations(entry)),
@@ -319,7 +344,10 @@ export function createLibraryView(host, deps) {
     const date = new Date(entry.createdAt * 1000).toLocaleDateString();
     const parent = entry.parent ? entries.find((e) => e.id === entry.parent) : null;
     const kind = t(`lib.kind.${entry.kind}`) === `lib.kind.${entry.kind}` ? entry.kind : t(`lib.kind.${entry.kind}`);
-    const canSend = ['model', 'rig', 'animation', 'sound'].includes(entry.kind);
+    // Una referencia de Fab no tiene ficheros: se instala pidiéndola a Fab otra vez (REQ-107).
+    const isFab = entry.provider === 'fab';
+    const fabUrl = isFab ? safeListingUrl(entry.output?.fabUrl) : null;
+    const canSend = !isFab && ['model', 'rig', 'animation', 'sound'].includes(entry.kind);
     const hasPreview = viewableFile(entry) || entry.thumbnail;
 
     let audioPlayer = null;
@@ -357,6 +385,8 @@ export function createLibraryView(host, deps) {
         el('div', { className: 'asset-name', text: entry.name }),
         el('div', { className: 'asset-meta', text: `${kind}${garmentKindOf(entry) ? ` (${t(`gen.garmentKind.${garmentKindOf(entry)}`)})` : ''} · ${entry.provider} · ${date}${entry.credits ? ` · ${t('lib.credits', { n: String(entry.credits) })}` : ''}` }),
         parent ? el('div', { className: 'asset-meta', text: t('lib.from', { name: parent.name }) }) : null,
+        isFab ? el('div', { className: 'asset-meta' }, el('span', { className: 'fab-pill fab-pill--ok', text: 'Fab' }), ' ', t('lib.fabReference')) : null,
+        isFab && entry.sentTo?.length ? el('div', { className: 'asset-meta', text: t('lib.fabInstalledIn', { n: String(new Set(entry.sentTo.map((s) => s.project)).size) }) }) : null,
         audioPlayer,
         statusLine,
       ),
@@ -364,6 +394,8 @@ export function createLibraryView(host, deps) {
         'div',
         { className: 'asset-actions' },
         canSend ? button(t('lib.send'), () => send(entry, statusLine), 'btn-primary') : null,
+        isFab ? button(t('lib.fabInstall'), () => installFab(entry, statusLine), 'btn-primary') : null,
+        fabUrl ? button(t('fab.view'), () => openExternalUrl(fabUrl), 'btn-ghost') : null,
         viewableFile(entry)
           ? button(t('preview.open'), () =>
             openPreview(entry, {

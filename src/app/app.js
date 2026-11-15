@@ -616,7 +616,7 @@ export function start() {
         const online = state.connection?.status === 'online';
         const fab = createFabTools({
           specs: fabSpecs,
-          run: (name, args) => api.fabRunTool(online ? state.connection.endpoint : null, state.connection?.engineVersion ?? null, name, args),
+          run: (name, args) => api.fabRunTool(online ? state.connection.endpoint : null, state.connection?.engineVersion ?? null, name, args, state.connection?.projectPath ?? null),
           askApproval,
           permissions: memories.get(conversationId),
           onAction: log.add,

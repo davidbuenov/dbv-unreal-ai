@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::unreal::{io_error, prepare::inside, UnrealError};
 
@@ -986,6 +986,79 @@ impl Library {
         })
     }
 
+    /// Referencia de un listing de Fab instalado (REQ-107): no se copian los ficheros, solo el uid, el título, el
+    /// vendedor, el formato, el enlace, la miniatura (que sí se guarda) y los proyectos y rutas `/Game/...` donde se
+    /// instaló. Instalarlo en otro proyecto añade ese proyecto a la misma entrada (`fab-<uid>`), sin duplicarla.
+    /// `install` es el resultado de `fab_install`. @spec REQ-107
+    pub fn record_fab_install(&self, install: &Value, project: &str, thumbnail: Option<&[u8]>) -> Result<LibraryEntry, UnrealError> {
+        let text = |pointer: &str| install.pointer(pointer).and_then(Value::as_str).unwrap_or_default().to_string();
+        let uid = text("/listing/uid");
+        if uid.is_empty() || !uid.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err(UnrealError::Format("the Fab install result has no valid listing uid".into()));
+        }
+        let id = format!("fab-{uid}");
+        let folder = text("/folder");
+        let dir = inside(&self.root, &id)?;
+        std::fs::create_dir_all(&dir).map_err(|error| io_error(&dir, &error))?;
+        // Solo JPG o PNG y como mucho 2 MB (las de Fab pesan unos 13 KB a 320 px).
+        let image = thumbnail.filter(|b| b.len() <= 2 * 1024 * 1024).and_then(|b| {
+            let name = if b.starts_with(&[0xFF, 0xD8, 0xFF]) { Some("thumbnail.jpg") } else if b.starts_with(&[0x89, b'P', b'N', b'G']) { Some("thumbnail.png") } else { None };
+            name.map(|n| (n, b))
+        });
+        let saved_thumbnail = match image {
+            Some((name, bytes)) => std::fs::write(dir.join(name), bytes).ok().map(|_| name.to_string()),
+            None => None,
+        };
+        let output = json!({
+            "reference": true,
+            "listingUid": uid,
+            "fabUrl": text("/listing/fab_url"),
+            "sellerName": text("/listing/seller_name"),
+            "isFree": install.pointer("/listing/is_free").and_then(Value::as_bool).unwrap_or(false),
+            "format": text("/format"),
+            "engineTag": text("/engine_tag"),
+            "blueprint": install.get("blueprint").cloned().unwrap_or(Value::Null),
+        });
+        let sent = SentRecord { project: project.to_string(), asset_path: install.get("blueprint").and_then(Value::as_str).map(str::to_string).unwrap_or(folder), at: now_secs() };
+        let kind = if text("/kind") == "asset_pack" { "pack" } else { "model" };
+        let name = Some(text("/listing/title")).filter(|t| !t.is_empty()).unwrap_or_else(|| uid.clone());
+        self.update(|entries| {
+            let entry = match entries.iter_mut().find(|e| e.id == id) {
+                Some(existing) => {
+                    if !existing.sent_to.iter().any(|s| s.project == sent.project && s.asset_path == sent.asset_path) {
+                        existing.sent_to.push(sent.clone());
+                    }
+                    if saved_thumbnail.is_some() {
+                        existing.thumbnail = saved_thumbnail.clone();
+                    }
+                    existing.output = output.clone();
+                    existing.clone()
+                }
+                None => {
+                    let entry = LibraryEntry {
+                        id: id.clone(),
+                        name: name.clone(),
+                        provider: "fab".into(),
+                        kind: kind.into(),
+                        prompt: String::new(),
+                        parameters: json!({}),
+                        task_id: String::new(),
+                        created_at: now_secs(),
+                        credits: None,
+                        files: Vec::new(),
+                        thumbnail: saved_thumbnail.clone(),
+                        sent_to: vec![sent.clone()],
+                        parent: None,
+                        output: output.clone(),
+                    };
+                    entries.push(entry.clone());
+                    entry
+                }
+            };
+            Ok(entry)
+        })
+    }
+
     /// Anota que `id` se envió a un proyecto.
     pub fn record_sent(&self, id: &str, project: &str, asset_path: &str) -> Result<LibraryEntry, UnrealError> {
         crate::logging::info(&format!("sent to unreal {id} -> {asset_path} ({project})"));
@@ -1348,6 +1421,31 @@ mod tests {
         assert_eq!(library.list().len(), 1);
         assert!(!folder1.exists());
         assert!(folder2.exists());
+    }
+
+    /// Lo instalado desde Fab queda como referencia, sin ficheros; un segundo proyecto se añade a la misma entrada.
+    /// @spec REQ-107
+    #[test]
+    fn lo_instalado_desde_fab_queda_como_referencia_sin_duplicar() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = Library::new(dir.path().to_path_buf());
+        let install = json!({ "success": true, "kind": "binary", "format": "fbx", "engine_tag": "UE_5.8", "folder": "/Game/Fab/Car", "blueprint": "/Game/Fab/Car/BP_Car",
+            "listing": { "uid": "c78f-1", "title": "Camo muscle car", "fab_url": "https://www.fab.com/listings/c78f-1", "seller_name": "FoulQuince", "is_free": true } });
+        let jpg = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3];
+        let first = library.record_fab_install(&install, "D:/P/A.uproject", Some(&jpg)).unwrap();
+        assert_eq!((first.id.as_str(), first.provider.as_str(), first.kind.as_str()), ("fab-c78f-1", "fab", "model"));
+        assert!(first.files.is_empty(), "no se copian los ficheros");
+        assert_eq!(first.thumbnail.as_deref(), Some("thumbnail.jpg"));
+        assert_eq!(first.output["fabUrl"], "https://www.fab.com/listings/c78f-1");
+        assert_eq!(first.sent_to[0].asset_path, "/Game/Fab/Car/BP_Car", "si hubo Blueprint, la ruta es la del Blueprint");
+        library.record_fab_install(&install, "D:/P/A.uproject", None).unwrap();
+        let second = library.record_fab_install(&install, "D:/P/B.uproject", None).unwrap();
+        assert_eq!(library.list().iter().filter(|e| e.provider == "fab").count(), 1, "sin duplicar");
+        assert_eq!(second.sent_to.len(), 2, "el segundo proyecto se añade; repetir el primero no");
+        assert_eq!(second.thumbnail.as_deref(), Some("thumbnail.jpg"), "la miniatura se conserva");
+        let files: Vec<String> = std::fs::read_dir(dir.path().join("fab-c78f-1")).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert_eq!(files, vec!["thumbnail.jpg"], "solo la miniatura, nunca el modelo");
+        assert!(library.record_fab_install(&json!({ "listing": { "uid": "../x" } }), "p", None).is_err());
     }
 
     /// La misma elección que la ventana, con los casos comunes de `tests/fixtures/send-plan/` (D25). @spec REQ-54

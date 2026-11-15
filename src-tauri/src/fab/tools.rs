@@ -34,6 +34,11 @@ const NO_SESSION_HINT: &str = "Ask the user to click the Fab button in the Conte
 pub trait FabEditor {
     /// Llama a una función del toolset C++ (`fab_start`, `fab_status`, `run_python`…) y devuelve su valor JSON.
     fn call_cpp(&mut self, tool: &str, args: Value) -> Result<Value, String>;
+
+    /// Anota en la Biblioteca lo instalado (REQ-107) y devuelve el id de la entrada. Por defecto, nada.
+    fn record_install(&mut self, _result: &Value) -> Option<String> {
+        None
+    }
 }
 
 /// Resultado de una herramienta: texto para el modelo y listings para las tarjetas.
@@ -286,6 +291,12 @@ fn fab_install(editor: &mut dyn FabEditor, args: &Value) -> Result<FabToolResult
         if let Some(assembled) = assemble_blueprint(editor, &folder, &title) {
             result["blueprint"] = assembled.get("blueprint").cloned().unwrap_or(Value::Null);
             result["pieces"] = assembled.get("pieces").cloned().unwrap_or(Value::Null);
+        }
+    }
+    // REQ-107: lo instalado queda como referencia en la Biblioteca (sin los ficheros).
+    if result.get("success").and_then(Value::as_bool) == Some(true) {
+        if let Some(id) = editor.record_install(&result) {
+            result["library_id"] = json!(id);
         }
     }
     let place = if result.get("blueprint").is_some_and(|b| !b.is_null()) { "It arrived in pieces: place the Blueprint in `blueprint`, which assembles them." } else { "Offer to place it in the level." };

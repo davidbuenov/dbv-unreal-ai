@@ -222,3 +222,38 @@ describe('Biblioteca (REQ-16, REQ-30)', () => {
 });
 
 
+
+describe('Referencias de Fab en la Biblioteca (REQ-107)', () => {
+  const FAB = { id: 'fab-c78f-1', name: 'Camo muscle car', provider: 'fab', kind: 'model', prompt: '', createdAt: 2, files: [], thumbnail: 'thumbnail.jpg', parameters: {}, sentTo: [{ project: 'D:/P/A.uproject', assetPath: '/Game/Fab/Car/BP_Car', at: 1 }], output: { reference: true, listingUid: 'c78f-1', format: 'fbx', fabUrl: 'https://www.fab.com/listings/c78f-1' } };
+
+  it('se ve como referencia, sin enviar ni riggear, y se instala pidiéndola a Fab con confirmación', async () => {
+    const base = window.__TAURI__.core.invoke.getMockImplementation();
+    window.__TAURI__.core.invoke.mockImplementation(async (command, args) => {
+      if (command === 'library_list') return [FAB];
+      if (command === 'fab_run_tool') { invoked.push([command, args]); return { text: '{"success":true,"folder":"/Game/Fab/Camo_muscle_car"}', fabListings: [] }; }
+      return base(command, args);
+    });
+    const { host, deps, library } = view({ state: { connection: { status: 'online', endpoint: { port: 8000, path: '/mcp' }, engineVersion: '5.8', projectPath: 'D:/P/B.uproject', projectName: 'B' } }, confirm: vi.fn(async () => 'install') });
+    await library.render();
+    const card = host.querySelector('.asset-card');
+    expect(card.textContent).toContain('Referencia: los ficheros se descargan de Fab al instalar.');
+    expect(card.textContent).toContain('Instalado en 1 proyecto(s).');
+    expect(byText(card, 'Enviar a Unreal')).toBeFalsy();
+    expect(byText(card, 'Riggear…')).toBeFalsy();
+    expect(byText(card, 'Ver en fab.com ↗')).toBeTruthy();
+    byText(card, 'Instalar en este proyecto').click();
+    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'fab_run_tool')).toBe(true));
+    expect(deps.confirm).toHaveBeenCalled();
+    expect(invoked.find(([c]) => c === 'fab_run_tool')[1]).toMatchObject({ name: 'fab_install', args: { listing_uid: 'c78f-1', asset_format: 'fbx' }, project: 'D:/P/B.uproject' });
+  });
+
+  it('sin editor conectado no instala y lo dice', async () => {
+    const base = window.__TAURI__.core.invoke.getMockImplementation();
+    window.__TAURI__.core.invoke.mockImplementation(async (command, args) => (command === 'library_list' ? [FAB] : base(command, args)));
+    const { host, deps, library } = view();
+    await library.render();
+    byText(host.querySelector('.asset-card'), 'Instalar en este proyecto').click();
+    await vi.waitFor(() => expect(host.textContent).toContain('Conecta el editor de Unreal para instalarlo.'));
+    expect(deps.confirm).not.toHaveBeenCalled();
+  });
+});

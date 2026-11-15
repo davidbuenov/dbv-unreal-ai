@@ -290,6 +290,13 @@ fn get_json(url: &str) -> Result<Value, FabError> {
     result
 }
 
+/// La miniatura de un listing para la Biblioteca (REQ-107): solo de `https://media.fab.com/` y como mucho 2 MB.
+pub fn fetch_thumbnail(url: &str) -> Option<Vec<u8>> {
+    let agent = ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(Duration::from_secs(15))).build().new_agent();
+    let bytes = url.starts_with(THUMBNAIL_URL_PREFIX).then(|| agent.get(url).call().ok()).flatten().filter(|r| r.status().is_success()).and_then(|mut r| r.body_mut().with_config().limit(2 * 1024 * 1024).read_to_vec().ok());
+    bytes
+}
+
 /// Busca en el catálogo de Fab sin sesión. @spec REQ-102
 pub fn search(query: &SearchQuery) -> Result<SearchPage, FabError> {
     let result = search_url(query).and_then(|url| get_json(&url)).map(|body| parse_search(&body, &query.engine_version, query.include_incompatible));

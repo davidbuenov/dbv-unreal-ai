@@ -19,6 +19,9 @@ use crate::unreal::UnrealError;
 struct AppFab<'a> {
     state: &'a UnrealState,
     url: String,
+    /// Biblioteca y proyecto para anotar lo instalado (REQ-107).
+    library: Option<crate::library::Library>,
+    project: String,
 }
 
 impl FabEditor for AppFab<'_> {
@@ -27,6 +30,12 @@ impl FabEditor for AppFab<'_> {
             .map_err(|e| e.to_string())
             .map(|r| r.value.unwrap_or(Value::String(r.text)));
         out
+    }
+
+    fn record_install(&mut self, result: &Value) -> Option<String> {
+        let thumbnail = result.pointer("/listing/thumbnail").and_then(Value::as_str).and_then(super::fetch_thumbnail);
+        let id = self.library.as_ref().and_then(|library| library.record_fab_install(result, &self.project, thumbnail.as_deref()).ok()).map(|entry| entry.id);
+        id
     }
 }
 
@@ -43,13 +52,18 @@ pub async fn fab_run_tool(
     app: tauri::AppHandle,
     endpoint: Option<Endpoint>,
     engine_version: Option<String>,
+    project: Option<String>,
     name: String,
     args: Value,
 ) -> Result<FabToolResult, UnrealError> {
     use tauri::Manager;
+    let library = match (app.path().app_config_dir(), app.path().app_data_dir()) {
+        (Ok(config), Ok(data)) => Some(crate::library::Library::new(crate::generation::commands::GenerationSettings::load(&config).library_root(&data))),
+        _ => None,
+    };
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<UnrealState>();
-        let mut editor = endpoint.map(|e| AppFab { state: &state, url: e.url() });
+        let mut editor = endpoint.map(|e| AppFab { state: &state, url: e.url(), library, project: project.unwrap_or_default() });
         let editor_ref = editor.as_mut().map(|e| e as &mut dyn FabEditor);
         tools::run_tool(&name, &args, editor_ref, engine_version.as_deref().unwrap_or_default())
     })

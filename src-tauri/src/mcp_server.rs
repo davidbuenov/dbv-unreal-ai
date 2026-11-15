@@ -400,6 +400,13 @@ impl crate::fab::tools::FabEditor for McpFab<'_> {
             .map(|r| r.value.unwrap_or(Value::String(r.text)));
         out
     }
+
+    fn record_install(&mut self, result: &Value) -> Option<String> {
+        let thumbnail = result.pointer("/listing/thumbnail").and_then(Value::as_str).and_then(crate::fab::fetch_thumbnail);
+        let project = self.0.config.project_dir.as_ref().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+        let id = self.0.config.library.record_fab_install(result, &project, thumbnail.as_deref()).ok().map(|entry| entry.id);
+        id
+    }
 }
 
 impl session_control::Editor for McpEditor<'_> {

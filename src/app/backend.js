@@ -47,7 +47,7 @@ export const unrealPickEngine = (project, folder) => call('unreal_pick_engine', 
 export const unrealClearEngine = (project) => call('unreal_clear_engine', { project });
 /** Fab (REQ-105): las definiciones de `fab_*` y su ejecución (la búsqueda funciona sin editor). */
 export const fabToolSpecs = () => call('fab_tool_specs');
-export const fabRunTool = (endpoint, engineVersion, name, args) => call('fab_run_tool', { endpoint: endpoint ?? null, engineVersion: engineVersion ?? null, name, args });
+export const fabRunTool = (endpoint, engineVersion, name, args, project = null) => call('fab_run_tool', { endpoint: endpoint ?? null, engineVersion: engineVersion ?? null, project: project ?? null, name, args });
 /** Guías de Unreal sin red (REQ-25): estado de la copia local, elegir su carpeta, buscar y la definición de la herramienta. */
 export const guidesStatus = () => call('guides_status');
 export const guidesSetFolder = (folder) => call('guides_set_folder', { folder });
