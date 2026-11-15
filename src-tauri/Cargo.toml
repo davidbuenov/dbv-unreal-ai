@@ -51,3 +51,8 @@ base64 = "0.22"
 tempfile = "3"
 # Los tests de la sesión ACP construyen un runtime mínimo.
 tokio = { version = "1", features = ["rt", "macros"] }
+
+# Motores registrados (`HKCU\Software\Epic Games\Unreal Engine\Builds`): un `EngineAssociation` con GUID o nombre
+# (REQ-118). Solo lectura.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"

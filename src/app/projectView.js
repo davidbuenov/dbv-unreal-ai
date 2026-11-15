@@ -87,7 +87,9 @@ export function createProjectView(host, deps) {
 
   async function connect(project, mcp) {
     const endpoint = { port: mcp.port, path: mcp.path };
-    deps.state.setConnection({ projectPath: project.path, projectName: project.name, engineVersion: project.engineAssociation, endpoint, status: 'connecting', toolsets: 0 });
+    // REQ-118: la versión del motor resuelto, también si la asociación es un GUID o un nombre registrado.
+    const projectVersion = project.engineVersion ? shortVersion(project.engineVersion) : project.engineAssociation;
+    deps.state.setConnection({ projectPath: project.path, projectName: project.name, engineVersion: projectVersion, endpoint, status: 'connecting', toolsets: 0 });
     const result = await api.unrealConnect(endpoint);
     if (result.ok) {
       const toolsets = Array.isArray(result.value) ? result.value : (result.value.toolsets ?? []);
@@ -101,8 +103,8 @@ export function createProjectView(host, deps) {
       // El editor conectado puede ser de otra versión que el proyecto si el usuario lo abrió a mano con otro motor:
       // se avisa (convertir no tiene vuelta atrás) y la píldora y la IA usan la versión real (REQ-109).
       const serverVersion = Array.isArray(result.value) ? '' : (result.value.serverVersion ?? '');
-      const mismatch = versionMismatch(project.engineAssociation, serverVersion);
-      const engineVersion = serverVersion ? shortVersion(serverVersion) : project.engineAssociation;
+      const mismatch = versionMismatch(projectVersion, serverVersion);
+      const engineVersion = serverVersion ? shortVersion(serverVersion) : projectVersion;
       // Con Convai en el editor, la conversación recibe sus reglas (REQ-56).
       // REQ-115: las instrucciones que el usuario puso en el MCP del editor (UE 5.9) van al prompt de la IA integrada.
       const editorInstructions = Array.isArray(result.value) ? '' : (result.value.instructions ?? '');

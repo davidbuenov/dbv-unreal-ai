@@ -815,6 +815,7 @@ dependencies = [
  "tokio",
  "ureq",
  "walkdir",
+ "winreg",
 ]
 
 [[package]]

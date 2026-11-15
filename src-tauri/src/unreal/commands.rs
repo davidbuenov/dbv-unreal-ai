@@ -69,7 +69,10 @@ pub fn unreal_code_path_problem(relative: String) -> Option<String> {
 /// Lee un `.uproject` elegido por el usuario. @spec REQ-03
 #[tauri::command]
 pub fn unreal_read_project(path: String) -> Result<UProject, UnrealError> {
-    discovery::read_uproject(Path::new(&path))
+    let mut project = discovery::read_uproject(Path::new(&path))?;
+    // @spec REQ-118 La versión real del motor, también cuando la asociación es un GUID o un nombre.
+    project.engine_version = discovery::engine_of_project(&project).map(|(engine, _)| engine.version).unwrap_or_default();
+    Ok(project)
 }
 
 /// Estado de un editor a partir de su proceso. @spec REQ-01
@@ -121,10 +124,9 @@ pub fn unreal_remember_project(app: AppHandle, path: String) -> Result<Vec<Strin
 pub async fn unreal_open_project(path: String) -> Result<u32, UnrealError> {
     blocking(move || {
         let project = discovery::read_uproject(Path::new(&path))?;
-        let engines = discovery::find_engines();
-        let engine = discovery::engine_for(&engines, &project.engine_association)
-            // La app nunca lo abre con otro motor: abrirlo con otra versión lo convierte sin vuelta atrás (REQ-109).
-            .ok_or_else(|| UnrealError::NotFound(format!("no hay una instalación de Unreal {} en este equipo. Instálala desde el Epic Games Launcher; abrir el proyecto con otra versión lo convierte y ya no se puede volver atrás, así que si quieres probarlo con otra, hazlo con una copia", project.engine_association)))?;
+        // La app nunca lo abre con otro motor: abrirlo con otra versión lo convierte sin vuelta atrás (REQ-109).
+        // Un GUID o un nombre registrado también valen (REQ-118).
+        let (engine, _) = discovery::engine_of_project(&project).ok_or_else(|| discovery::engine_not_found(&project))?;
         if !engine.editor_exists {
             return Err(UnrealError::NotFound(format!("la instalación {} no tiene el editor: {}", engine.version, engine.editor)));
         }

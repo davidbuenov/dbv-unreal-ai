@@ -5,7 +5,7 @@
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-01, REQ-03
+// @spec REQ-01, REQ-03, REQ-118
 //
 // Hechos de la máquina de desarrollo que condicionan este código (2026-10-24):
 //   · `LauncherInstalled.dat` NO lista siempre el motor: en ella, la carpeta de
@@ -81,6 +81,9 @@ pub struct UProject {
     pub plugins: Vec<PluginEntry>,
     /// Tiene módulos C++ o carpeta `Source/`.
     pub has_cpp: bool,
+    /// Versión del motor resuelto (`5.8.4`), también si la asociación es un GUID; vacía si no se encuentra o no se
+    /// ha resuelto (solo la rellena `unreal_read_project`, que busca los motores). @spec REQ-118
+    pub engine_version: String,
 }
 
 /// Ajustes del servidor MCP del proyecto (por usuario, con los valores por defecto de Epic).
@@ -146,19 +149,9 @@ fn candidate_roots() -> Vec<PathBuf> {
         launcher_files.push(home.join("Library/Application Support/Epic/UnrealEngineLauncher/LauncherInstalled.dat"));
         parents.push(PathBuf::from("/Users/Shared/Epic Games"));
         parents.push(home.join("UnrealEngine"));
-        // Linux: compilaciones registradas en `Install.ini` ([Installations] GUID=ruta).
-        if let Ok(text) = std::fs::read_to_string(home.join(".config/Epic/UnrealEngine/Install.ini")) {
-            let mut in_section = false;
-            for line in text.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with('[') {
-                    in_section = trimmed.eq_ignore_ascii_case("[Installations]");
-                } else if let (true, Some((_, path))) = (in_section, trimmed.split_once('=')) {
-                    roots.push(PathBuf::from(path.trim()));
-                }
-            }
-        }
     }
+    // Motores registrados (GUID o nombre → carpeta): compilados desde código o registrados a mano (REQ-118).
+    roots.extend(registered_builds().into_iter().map(|(_, path)| path));
     for file in launcher_files {
         if let Ok(text) = std::fs::read_to_string(&file) {
             roots.extend(parse_launcher_installed(&text));
@@ -209,6 +202,130 @@ pub fn engine_for<'a>(engines: &'a [EngineInstall], association: &str) -> Option
     engines.iter().find(|engine| format!("{}.{}", engine.major, engine.minor) == wanted)
 }
 
+/// `[Installations]` de un `Install.ini` de Epic (Linux y macOS): `identificador=ruta`. @spec REQ-118
+pub fn parse_install_ini(text: &str) -> Vec<(String, PathBuf)> {
+    let mut out = Vec::new();
+    let mut in_section = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_section = trimmed.eq_ignore_ascii_case("[Installations]");
+        } else if let (true, Some((id, path))) = (in_section, trimmed.split_once('=')) {
+            out.push((id.trim().to_string(), PathBuf::from(path.trim())));
+        }
+    }
+    out
+}
+
+/// Motores registrados en el sistema: en Windows, los valores de `HKCU\Software\Epic Games\Unreal Engine\Builds`
+/// (GUID o nombre → carpeta); en Linux y macOS, `Install.ini`. Solo se leen. @spec REQ-118
+pub fn registered_builds() -> Vec<(String, PathBuf)> {
+    let mut out = Vec::new();
+    #[cfg(windows)]
+    {
+        let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+        if let Ok(key) = hkcu.open_subkey_with_flags(r"Software\Epic Games\Unreal Engine\Builds", winreg::enums::KEY_READ) {
+            for (name, _) in key.enum_values().flatten() {
+                if let Ok(path) = key.get_value::<String, _>(&name) {
+                    out.push((name, PathBuf::from(path)));
+                }
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        for file in [home.join(".config/Epic/UnrealEngine/Install.ini"), home.join("Library/Application Support/Epic/UnrealEngine/Install.ini")] {
+            if let Ok(text) = std::fs::read_to_string(file) {
+                out.extend(parse_install_ini(&text));
+            }
+        }
+    }
+    out
+}
+
+/// Normaliza un identificador de motor registrado para compararlo: sin llaves, sin espacios a los lados, en minúsculas.
+fn association_key(id: &str) -> String {
+    id.trim().trim_start_matches('{').trim_end_matches('}').trim().to_ascii_lowercase()
+}
+
+/// La carpeta del motor que contiene `dir` (un proyecto con la asociación vacía vive dentro del árbol del motor).
+pub fn enclosing_engine(dir: &Path) -> Option<PathBuf> {
+    let found = dir.ancestors().find(|a| a.join("Engine").join("Build").join("Build.version").is_file()).map(Path::to_path_buf);
+    found
+}
+
+/// De dónde salió el motor de un proyecto (para el diagnóstico, REQ-120).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EngineSource {
+    /// Por el número de versión (`5.8`), entre los del Launcher y las carpetas típicas.
+    Version,
+    /// Un motor registrado (GUID o nombre) en el registro o en `Install.ini`.
+    Registered,
+    /// El árbol de motor que contiene el proyecto (asociación vacía).
+    Enclosing,
+    /// Elegido a mano por el usuario (REQ-119).
+    Chosen,
+}
+
+/// El motor de un proyecto por su `EngineAssociation`, en el orden de REQ-118: número de versión, motor registrado
+/// (GUID o nombre) y, si está vacía, el motor que contiene el proyecto. Pura: las fuentes del sistema se pasan.
+/// @spec REQ-118
+pub fn resolve_engine(association: &str, engines: &[EngineInstall], registered: &[(String, PathBuf)], project_dir: &Path) -> Option<(EngineInstall, EngineSource)> {
+    let wanted = association_key(association);
+    let by_version = engine_for(engines, association).cloned().map(|e| (e, EngineSource::Version));
+    let by_registry = || {
+        registered
+            .iter()
+            .find(|(id, _)| !wanted.is_empty() && association_key(id) == wanted)
+            .and_then(|(_, path)| engines_from(vec![path.clone()]).into_iter().next())
+            .map(|e| (e, EngineSource::Registered))
+    };
+    let by_enclosing = || {
+        wanted
+            .is_empty()
+            .then(|| enclosing_engine(project_dir))
+            .flatten()
+            .and_then(|root| engines_from(vec![root]).into_iter().next())
+            .map(|e| (e, EngineSource::Enclosing))
+    };
+    let found = by_version.or_else(by_registry).or_else(by_enclosing);
+    found
+}
+
+/// El motor de un proyecto con las fuentes de este equipo (Launcher, carpetas típicas y motores registrados). @spec REQ-118
+pub fn engine_of_project(project: &UProject) -> Option<(EngineInstall, EngineSource)> {
+    let dir = Path::new(&project.path).parent().map(Path::to_path_buf).unwrap_or_default();
+    let found = resolve_engine(&project.engine_association, &find_engines(), &registered_builds(), &dir);
+    found
+}
+
+/// Error de «no encuentro el motor» en palabras llanas, con qué puede hacer el usuario. @spec REQ-118, REQ-119
+pub fn engine_not_found(project: &UProject) -> UnrealError {
+    let error = UnrealError::NotFound(format!(
+        "no encuentro el motor de Unreal de este proyecto: {}. Si tienes Unreal 5.8 o posterior instalado en otra carpeta, elígela con «Elegir la carpeta de Unreal…». Ten en cuenta que abrir el proyecto con otra versión lo convierte y ya no se puede volver atrás: si quieres probarlo con otra, hazlo con una copia",
+        describe_association(&project.engine_association)
+    ));
+    error
+}
+
+/// Qué es una `EngineAssociation`, en palabras llanas, para los mensajes de error. @spec REQ-118, REQ-119
+pub fn describe_association(association: &str) -> String {
+    let trimmed = association.trim();
+    let is_version = trimmed.split('.').count() == 2 && trimmed.split('.').all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()));
+    let is_guid = association_key(trimmed).len() == 32 + 4 && association_key(trimmed).chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+    let text = if trimmed.is_empty() {
+        "el proyecto no dice con qué motor se abre (no está dentro de la carpeta de ningún motor)".to_string()
+    } else if is_version {
+        format!("el proyecto es de Unreal {trimmed} y esa versión no aparece instalada (ni en el Epic Games Launcher ni en las carpetas habituales)")
+    } else if is_guid {
+        format!("el proyecto está asociado a un motor registrado en otro equipo o compilado desde código ({trimmed}) que este equipo no tiene registrado")
+    } else {
+        format!("el proyecto está asociado a un motor con nombre «{trimmed}» que este equipo no tiene registrado")
+    };
+    text
+}
+
 // ─── Proyectos ───────────────────────────────────────────────────────
 
 /// Lee un `.uproject`.
@@ -229,6 +346,7 @@ pub fn read_uproject(path: &Path) -> Result<UProject, UnrealError> {
         has_cpp: !modules.is_empty() || folder.join("Source").is_dir(),
         modules,
         plugins,
+        engine_version: String::new(),
     };
     Ok(result)
 }
@@ -353,6 +471,44 @@ mod tests {
         let text = "\u{feff}{\"InstallationList\":[{\"InstallLocation\":\"d:\\\\Program Files\\\\Epic Games\\\\UE_5.8\",\"AppName\":\"QuixelBridge_5.8\"},{\"AppName\":\"x\"}]}";
         assert_eq!(parse_launcher_installed(text), vec![PathBuf::from(r"d:\Program Files\Epic Games\UE_5.8")]);
         assert!(parse_launcher_installed("no es json").is_empty());
+    }
+
+    /// @spec REQ-118 GUID (con o sin llaves y en otra caja), nombre con espacios, versión y asociación vacía.
+    #[test]
+    fn resuelve_guid_nombre_version_y_asociacion_vacia() {
+        let base = tempfile::tempdir().unwrap();
+        let launcher = fake_engine(&base.path().join("UE_5.8"), (5, 8, 4));
+        let source = fake_engine(&base.path().join("Source/UnrealEngine"), (5, 8, 4));
+        let named = fake_engine(&base.path().join("Pixo"), (5, 9, 0));
+        let engines = engines_from(vec![launcher.clone()]);
+        let registered = vec![
+            ("{95B798E8-4CE8-821F-3703-E085BBF457EF}".to_string(), source.clone()),
+            ("Aximmetry DE 5.9".to_string(), named.clone()),
+        ];
+        let project = base.path().join("Proyectos/Demo");
+        let root = |r: Option<(EngineInstall, EngineSource)>| r.map(|(e, s)| (PathBuf::from(e.root), s));
+
+        assert_eq!(root(resolve_engine("5.8", &engines, &registered, &project)), Some((launcher.clone(), EngineSource::Version)));
+        assert_eq!(root(resolve_engine("{95B798E8-4CE8-821F-3703-E085BBF457EF}", &engines, &registered, &project)), Some((source.clone(), EngineSource::Registered)));
+        assert_eq!(root(resolve_engine("95b798e8-4ce8-821f-3703-e085bbf457ef", &engines, &registered, &project)), Some((source, EngineSource::Registered)), "sin llaves y en minúsculas");
+        assert_eq!(root(resolve_engine("Aximmetry DE 5.9", &engines, &registered, &project)), Some((named, EngineSource::Registered)));
+        assert!(resolve_engine("{00000000-0000-0000-0000-000000000000}", &engines, &registered, &project).is_none(), "un GUID desconocido no se adivina");
+        assert!(resolve_engine("", &engines, &registered, &project).is_none(), "vacía y fuera de un motor");
+
+        let inside = launcher.join("Samples/Demo");
+        std::fs::create_dir_all(&inside).unwrap();
+        assert_eq!(root(resolve_engine("", &engines, &registered, &inside)), Some((launcher, EngineSource::Enclosing)));
+    }
+
+    /// @spec REQ-118
+    #[test]
+    fn lee_install_ini_y_explica_cada_asociacion() {
+        let text = "[Installations]\n{AB12}=/home/a/UnrealEngine\nMi Motor = /opt/ue \n[Otra]\nX=/no";
+        assert_eq!(parse_install_ini(text), vec![("{AB12}".to_string(), PathBuf::from("/home/a/UnrealEngine")), ("Mi Motor".to_string(), PathBuf::from("/opt/ue"))]);
+        assert!(describe_association("{95B798E8-4CE8-821F-3703-E085BBF457EF}").contains("compilado desde código"));
+        assert!(describe_association("5.8").contains("Unreal 5.8"));
+        assert!(describe_association("Pixotope_22.305").contains("«Pixotope_22.305»"));
+        assert!(describe_association("").contains("no dice con qué motor"));
     }
 
     /// @spec REQ-01

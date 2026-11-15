@@ -160,9 +160,7 @@ pub fn build_command(engine_root: &Path, project_path: &Path) -> (PathBuf, Vec<S
 /// Motor del proyecto (por su `EngineAssociation`).
 pub fn engine_root_for(project_path: &Path) -> Result<PathBuf, UnrealError> {
     let project = discovery::read_uproject(project_path)?;
-    let engines = discovery::find_engines();
-    let engine = discovery::engine_for(&engines, &project.engine_association)
-        .ok_or_else(|| UnrealError::NotFound(format!("Unreal Engine {} is not installed", project.engine_association)))?;
+    let (engine, _) = discovery::engine_of_project(&project).ok_or_else(|| discovery::engine_not_found(&project))?;
     Ok(PathBuf::from(&engine.root))
 }
 

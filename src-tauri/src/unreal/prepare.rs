@@ -272,8 +272,8 @@ fn project_dir(uproject: &Path) -> &Path {
 
 /// Motor instalado que corresponde a la versión del proyecto.
 fn engine_of(project: &UProject) -> Option<EngineInstall> {
-    let engines = discovery::find_engines();
-    discovery::engine_for(&engines, &project.engine_association).cloned()
+    // @spec REQ-118 También un GUID, un nombre registrado o el motor que contiene el proyecto.
+    discovery::engine_of_project(project).map(|(engine, _)| engine)
 }
 
 /// Diagnóstico del proyecto (REQ-04): qué falta para conectarlo.

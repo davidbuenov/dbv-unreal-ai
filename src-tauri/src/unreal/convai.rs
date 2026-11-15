@@ -101,7 +101,7 @@ mod tests {
     const SECRET: &str = "cvai_SECRETO_1234567890";
 
     fn project(plugins: Vec<PluginEntry>) -> UProject {
-        UProject { path: String::new(), name: "Demo".into(), engine_association: "5.8".into(), modules: vec![], plugins, has_cpp: false }
+        UProject { path: String::new(), name: "Demo".into(), engine_association: "5.8".into(), modules: vec![], plugins, has_cpp: false, engine_version: String::new() }
     }
 
     /// Plugin en el motor (Fab), sesión iniciada y la clave sin salir de la comprobación. @spec REQ-55
