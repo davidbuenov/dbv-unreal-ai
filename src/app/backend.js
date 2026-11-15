@@ -42,6 +42,9 @@ export const sessionsToolSpecs = () => call('sessions_tool_specs');
 /** ¿Hay una grabación en marcha en el proyecto? Solo lee ficheros (REQ-94). */
 export const sessionsActive = (project) => call('sessions_active', { project: project ?? null });
 export const sessionsRunTool = (project, endpoint, name, args) => call('sessions_run_tool', { project: project ?? null, endpoint: endpoint ?? null, name, args });
+/** Motor elegido a mano para un proyecto (REQ-119). */
+export const unrealPickEngine = (project, folder) => call('unreal_pick_engine', { project, folder });
+export const unrealClearEngine = (project) => call('unreal_clear_engine', { project });
 /** Fab (REQ-105): las definiciones de `fab_*` y su ejecución (la búsqueda funciona sin editor). */
 export const fabToolSpecs = () => call('fab_tool_specs');
 export const fabRunTool = (endpoint, engineVersion, name, args) => call('fab_run_tool', { endpoint: endpoint ?? null, engineVersion: engineVersion ?? null, name, args });

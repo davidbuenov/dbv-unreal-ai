@@ -66,6 +66,25 @@ pub fn unreal_code_path_problem(relative: String) -> Option<String> {
     super::code_policy::code_path_problem(&relative)
 }
 
+/// Elige a mano la carpeta del motor de un proyecto: se valida (5.8 o posterior, con editor) y se guarda. @spec REQ-119
+#[tauri::command]
+pub fn unreal_pick_engine(project: String, folder: String) -> Result<EngineInstall, UnrealError> {
+    let engine = super::engine_choice::validate(Path::new(&folder))?;
+    let file = super::engine_choice::overrides_file().ok_or_else(|| UnrealError::Io("no encuentro la carpeta Documentos".into()))?;
+    super::engine_choice::set(&file, Path::new(&project), Path::new(&engine.root))?;
+    Ok(engine)
+}
+
+/// Vuelve a la detección automática del motor de un proyecto. @spec REQ-119
+#[tauri::command]
+pub fn unreal_clear_engine(project: String) -> Result<(), UnrealError> {
+    let result = match super::engine_choice::overrides_file() {
+        Some(file) => super::engine_choice::clear(&file, Path::new(&project)),
+        None => Ok(()),
+    };
+    result
+}
+
 /// Lee un `.uproject` elegido por el usuario. @spec REQ-03
 #[tauri::command]
 pub fn unreal_read_project(path: String) -> Result<UProject, UnrealError> {

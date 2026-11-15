@@ -159,6 +159,8 @@ pub struct Check {
 pub struct Readiness {
     pub project: UProject,
     pub engine: Option<EngineInstall>,
+    /// De dónde salió el motor (versión, registrado, el que contiene el proyecto o elegido a mano). @spec REQ-119
+    pub engine_source: Option<discovery::EngineSource>,
     pub mcp: McpSettings,
     pub proposed_port: u16,
     pub checks: Vec<Check>,
@@ -278,8 +280,10 @@ fn engine_of(project: &UProject) -> Option<EngineInstall> {
 
 /// Diagnóstico del proyecto (REQ-04): qué falta para conectarlo.
 pub fn readiness(uproject: &Path, source: &Path) -> Result<Readiness, UnrealError> {
-    let engine = engine_of(&discovery::read_uproject(uproject)?);
-    readiness_with_engine(uproject, source, engine)
+    let found = discovery::engine_of_project(&discovery::read_uproject(uproject)?);
+    let mut result = readiness_with_engine(uproject, source, found.as_ref().map(|(engine, _)| engine.clone()))?;
+    result.engine_source = found.map(|(_, source)| source);
+    Ok(result)
 }
 
 /// Igual que [`readiness`] con el motor ya resuelto (así se prueba sin Unreal instalado). @spec REQ-04, REQ-87
@@ -289,7 +293,8 @@ pub fn readiness_with_engine(uproject: &Path, source: &Path, engine: Option<Engi
     let version = parse_association(&project.engine_association);
     let mut checks = vec![Check {
         id: "engine".into(),
-        ok: version.is_some_and(|v| v >= MIN_ENGINE) && engine.is_some(),
+        // @spec REQ-118 La versión del motor encontrado (la asociación puede ser un GUID o un nombre).
+        ok: engine.as_ref().is_some_and(|e| (e.major, e.minor) >= MIN_ENGINE),
         detail: engine
             .as_ref()
             .map(|e| e.version.clone())
@@ -335,11 +340,12 @@ pub fn readiness_with_engine(uproject: &Path, source: &Path, engine: Option<Engi
     let ready = checks.iter().all(|c| c.ok);
     let proposed_port = propose_free_port(&mcp, discovery::editor_open_for(uproject));
     let direct_access = super::duplicates::scan(dir, mcp.port);
-    let engine_ok = version.is_some_and(|v| v >= MIN_ENGINE);
+    let engine_ok = engine.as_ref().map(|e| (e.major, e.minor)).or(version).is_some_and(|v| v >= MIN_ENGINE);
     let convai = super::convai::status(dir, &project, engine.as_ref(), engine_ok);
     let result = Readiness {
         project,
         engine,
+        engine_source: None,
         mcp,
         proposed_port,
         checks,

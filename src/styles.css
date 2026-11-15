@@ -611,3 +611,7 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .fab-pill--ok { color: var(--status-ok); border-color: var(--status-ok); }
 .fab-pill--paid { font-family: var(--font-mono); }
 .fab-pill--warn { color: var(--status-warn); border-color: var(--status-warn); }
+
+/* Motor elegido a mano (REQ-119) */
+.engine-choice { margin: 8px 0; gap: 8px; }
+.engine-choice .hint { flex: 1 1 260px; }

@@ -415,6 +415,8 @@ pub fn run() {
             sessions::commands::sessions_tool_specs,
             #[cfg(desktop)]
             sessions::commands::sessions_run_tool,
+            unreal::commands::unreal_pick_engine,
+            unreal::commands::unreal_clear_engine,
             fab::commands::fab_tool_specs,
             fab::commands::fab_run_tool,
             #[cfg(desktop)]

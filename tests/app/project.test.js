@@ -55,6 +55,44 @@ describe('Vista Proyecto', () => {
   });
 
   /**
+   * El amigo del usuario (2026-11-15) veía «no hay una instalación de Unreal {GUID}» sin salida: si no se encuentra el
+   * motor, la vista ofrece elegir su carpeta; si se eligió a mano, dice cuál y cómo volver a la automática.
+   * @spec REQ-119
+   */
+  it('sin motor ofrece elegir la carpeta de Unreal y guarda la elección', async () => {
+    const base = window.__TAURI__.core.invoke.getMockImplementation();
+    window.__TAURI__.core.invoke.mockImplementation(async (command, args) => {
+      if (command === 'unreal_readiness') return { project: { name: 'Demo', path: PROJECT, hasCpp: false }, engine: null, mcp: { port: 8000 }, checks: [{ id: 'engine', ok: false, detail: '{95B798E8-4CE8-821F-3703-E085BBF457EF}' }], ready: false };
+      if (command === 'unreal_pick_engine') { invoked.push([command, args]); return { version: '5.8.4', root: 'E:/UE_5.8' }; }
+      return base(command, args);
+    });
+    window.__TAURI__.dialog = { open: vi.fn(async () => 'E:/UE_5.8/Engine') };
+    const host = document.createElement('div');
+    const deps = { state: { connection: null, setConnection: vi.fn() }, toast: vi.fn(), openModal: vi.fn(), closeModal: vi.fn() };
+    const view = createProjectView(host, deps);
+    await view.select(PROJECT);
+    const pick = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Elegir la carpeta de Unreal…');
+    expect(pick).toBeDefined();
+    pick.click();
+    await vi.waitFor(() => expect(invoked.some(([c]) => c === 'unreal_pick_engine')).toBe(true));
+    expect(invoked.find(([c]) => c === 'unreal_pick_engine')[1]).toEqual({ project: PROJECT, folder: 'E:/UE_5.8/Engine' });
+    await vi.waitFor(() => expect(deps.toast).toHaveBeenCalledWith('Listo: este proyecto usará Unreal 5.8.4.'));
+  });
+
+  it('con el motor encontrado no enseña el botón; elegido a mano, enseña cuál y la vuelta a la automática @spec REQ-119', async () => {
+    const host = document.createElement('div');
+    const deps = { state: { connection: null, setConnection: vi.fn() }, toast: vi.fn(), openModal: vi.fn(), closeModal: vi.fn() };
+    await createProjectView(host, deps).select(PROJECT);
+    expect(host.textContent).not.toContain('Elegir la carpeta de Unreal');
+    const base = window.__TAURI__.core.invoke.getMockImplementation();
+    window.__TAURI__.core.invoke.mockImplementation(async (command, args) => (command === 'unreal_readiness' ? { project: { name: 'Demo', path: PROJECT, hasCpp: false }, engine: { version: '5.8.4', root: 'E:/UE_5.8' }, engineSource: 'chosen', mcp: { port: 8000 }, checks: [{ id: 'engine', ok: true, detail: '5.8.4' }], ready: true } : base(command, args)));
+    const chosen = document.createElement('div');
+    await createProjectView(chosen, deps).select(PROJECT);
+    expect(chosen.textContent).toContain('Motor elegido a mano: Unreal 5.8.4 en E:/UE_5.8.');
+    expect([...chosen.querySelectorAll('button')].some((b) => b.textContent === 'Usar la detección automática')).toBe(true);
+  });
+
+  /**
    * Regresión (2026-11-01, la vio el usuario en el log de Unreal: «Unknown tool: get_project_info» en cada conexión):
    * se llamaba sin toolset y se leía el sobre `{text, isError, value}` en vez de `value`, así que nunca se comprobaba.
    * @spec REQ-07

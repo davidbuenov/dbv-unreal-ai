@@ -296,7 +296,12 @@ pub fn resolve_engine(association: &str, engines: &[EngineInstall], registered: 
 /// El motor de un proyecto con las fuentes de este equipo (Launcher, carpetas típicas y motores registrados). @spec REQ-118
 pub fn engine_of_project(project: &UProject) -> Option<(EngineInstall, EngineSource)> {
     let dir = Path::new(&project.path).parent().map(Path::to_path_buf).unwrap_or_default();
-    let found = resolve_engine(&project.engine_association, &find_engines(), &registered_builds(), &dir);
+    // @spec REQ-119 Lo que el usuario eligió a mano va primero.
+    let chosen = super::engine_choice::overrides_file()
+        .and_then(|file| super::engine_choice::chosen_root(&file, Path::new(&project.path)))
+        .and_then(|root| engines_from(vec![root]).into_iter().next())
+        .map(|engine| (engine, EngineSource::Chosen));
+    let found = chosen.or_else(|| resolve_engine(&project.engine_association, &find_engines(), &registered_builds(), &dir));
     found
 }
 

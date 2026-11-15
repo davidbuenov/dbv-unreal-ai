@@ -270,7 +270,7 @@
   - [ ] **S144 · Vista Fab (REQ-106)**
 - [x] **`/spec` y `/plan` §3.25 (2026-11-15)** — que funcione sin nuestras herramientas, tras el error del amigo del usuario («no hay una instalación de Unreal {95B798E8-…}»): REQ-118..REQ-121, R-57 y P-37 resuelta. `implementation_plan.md` §20. **Pendiente de aprobación.**
   - [x] **S148 · Resolver GUID, nombre o asociación vacía (REQ-118)** — `discovery.rs`: `registered_builds` (registro con `winreg`, solo lectura; `Install.ini`), `resolve_engine` (pura: versión → registrado → motor que contiene el proyecto), `engine_of_project`, `describe_association` y `engine_not_found`; `commands.rs`, `compile.rs` y `prepare.rs` pasan por ella. `UProject.engine_version` en `unreal_read_project`, y la vista Proyecto lo usa en vez de la asociación. Tests: Rust 2 nuevos (376). **Pendiente:** comprobar la lectura del registro desde el MSIX.
-  - [ ] **S149 · Elegir la carpeta del motor a mano (REQ-119)**
+  - [x] **S149 · Elegir la carpeta del motor a mano (REQ-119)** — `unreal/engine_choice.rs` (`Documentos/DBV Unreal AI/engine-overrides.json`, que no se virtualiza en la Store; validación ≥ 5.8 con editor, subiendo hasta `Engine/`), `engine_of_project` lo mira primero (`EngineSource::Chosen`), `Readiness.engine_source`, la comprobación «engine» usa la versión del motor encontrado (con un GUID fallaba), comandos `unreal_pick_engine` y `unreal_clear_engine`, y la vista Proyecto (`engineChoice`) con textos ES/EN/ZH. Tests: Rust 2 (378) y Vitest 2 (475).
   - [ ] **S150 · Diagnóstico en lenguaje llano y «Copiar diagnóstico» (REQ-120)**
   - [ ] **S151 · Plugin C++ ya compilado por versión menor (REQ-121)**
   - [ ] **S145 · Referencia en la Biblioteca (REQ-107)**

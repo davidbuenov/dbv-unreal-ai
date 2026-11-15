@@ -24,6 +24,7 @@ pub mod compact;
 pub mod convai;
 pub mod discovery;
 pub mod duplicates;
+pub mod engine_choice;
 pub mod ini;
 pub mod mcp_client;
 pub mod prepare;

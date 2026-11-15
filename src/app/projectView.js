@@ -278,6 +278,7 @@ export function createProjectView(host, deps) {
       el('div', { className: 'row' }, el('h3', { text: `${project.name} · ${t('project.readiness')}` }), el('span', { className: 'spacer' })),
       readiness.ready ? el('p', { className: 'check-ok', text: t('project.ready') }) : null,
       renderChecks(readiness),
+      engineChoice(readiness),
       el(
         'div',
         { className: 'row' },
@@ -298,6 +299,40 @@ export function createProjectView(host, deps) {
         }, 'btn-ghost') : null,
       ),
     );
+  }
+
+  /**
+   * Motor elegido a mano (REQ-119): si no se encuentra, el botón para elegir la carpeta; si se eligió, cuál y cómo
+   * volver a la detección automática.
+   */
+  function engineChoice(info) {
+    const engineCheck = (info.checks ?? []).find((check) => check.id === 'engine');
+    const missing = engineCheck ? !engineCheck.ok : !info.engine;
+    const chosen = info.engineSource === 'chosen';
+    let node = null;
+    if (missing || chosen) {
+      node = el(
+        'div',
+        { className: 'row engine-choice' },
+        chosen && info.engine ? el('span', { className: 'hint', text: t('project.engineChosenHint', { version: info.engine.version, root: info.engine.root }) }) : el('span', { className: 'hint', text: t('project.engineMissingHint') }),
+        button(t('project.pickEngine'), () => pickEngine(info.project.path), missing ? 'btn-primary' : ''),
+        chosen ? button(t('project.engineAuto'), async () => {
+          const cleared = await api.unrealClearEngine(info.project.path);
+          if (!cleared.ok) return deps.toast(cleared.error.message, 'error');
+          return select(info.project.path);
+        }, 'btn-ghost') : null,
+      );
+    }
+    return node;
+  }
+
+  async function pickEngine(projectPath) {
+    const folder = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: t('project.pickEngine') });
+    if (typeof folder !== 'string') return;
+    const picked = await api.unrealPickEngine(projectPath, folder);
+    if (!picked.ok) return deps.toast(picked.error.message, 'error');
+    deps.toast(t('project.engineChosen', { version: picked.value.version }));
+    await select(projectPath);
   }
 
   async function openInUnreal(path) {
