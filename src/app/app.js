@@ -203,7 +203,7 @@ export function start() {
   document.body.append(blackboxBar.node);
   blackboxBar.start();
   const projectMemory = createProjectMemory({ api, getProject: () => state.connection?.projectPath ?? null, onChange: () => current === 'plan' && views.plan?.render() });
-  views.project = createProjectView($('#view-project'), { state, toast, openModal, closeModal, onMemoryChanged: () => projectMemory.refresh(), showView: (name) => show(name) });
+  views.project = createProjectView($('#view-project'), { state, toast, confirm, openModal, closeModal, onMemoryChanged: () => projectMemory.refresh(), showView: (name) => show(name) });
   /** Lo que se ve de un trabajo terminado: el modelo girando (o su miniatura) y el camino a la biblioteca (REQ-31). */
   async function renderJobResult(record, slot) {
     const listed = record.entryId ? await api.libraryList() : null;

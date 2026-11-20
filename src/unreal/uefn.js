@@ -56,3 +56,39 @@ export function uefnSection(overview, actions) {
   }
   return nodes;
 }
+
+/**
+ * ¿Hay que ofrecer «Activar Python»? Solo con el servidor de UEFN respondiendo (fila 5) y Python apagado (fila 4).
+ * @param {Array<{step: number, ok: boolean}>} rows
+ */
+export const canEnablePython = (rows) => rows.some((r) => r.step === 5 && r.ok) && rows.some((r) => r.step === 4 && !r.ok);
+
+/**
+ * Tarjeta del diagnóstico de UEFN (REQ-123, DESIGN.md v0.7.0): la lista numerada de REQ-120 con solo las filas de
+ * UEFN, cada una con su estado y su solución en una frase. Python es opcional: si falta, se marca con «–», no con «✗».
+ * @param {{title: string}} project
+ * @param {Array<{step: number, key: string, ok: boolean, optional: boolean, detail: string, fix: string | null}>} rows
+ * @param {{connect: () => void, enablePython: () => void, connected: boolean}} actions
+ * @returns {HTMLElement}
+ */
+export function uefnDiagnosticCard(project, rows, actions) {
+  const items = rows.map((row) => {
+    const mark = row.ok ? '✓' : row.optional ? '–' : '✗';
+    const label = t(row.key, { detail: row.detail });
+    const fix = row.ok || !row.fix ? null : el('p', { className: 'check-fix', text: t(row.fix, { detail: row.detail }) });
+    return el('li', { className: 'check' }, el('span', { className: row.ok ? 'check-ok' : 'check-fail', text: mark, attrs: { 'aria-label': row.ok ? 'ok' : 'falta' } }), el('div', {}, el('span', { text: `${row.step}. ${label}` }), fix));
+  });
+  const ready = rows.filter((r) => !r.optional).every((r) => r.ok);
+  const buttons = [
+    actions.connected ? el('span', { className: 'pill pill--online', text: t('uefn.connected') }) : button(t('uefn.connect'), actions.connect, ready ? 'btn-primary' : ''),
+    canEnablePython(rows) ? button(t('uefn.enablePython'), actions.enablePython) : null,
+  ];
+  return el(
+    'div',
+    { className: 'card' },
+    el('h3', {}, el('span', { text: project.title }), ' ', el('span', { className: 'badge badge--accent', text: '[UEFN]' })),
+    el('p', { className: 'hint', text: t('uefn.diagIntro') }),
+    el('ul', { className: 'checklist' }, items),
+    el('div', { className: 'row' }, ...buttons.filter(Boolean)),
+  );
+}

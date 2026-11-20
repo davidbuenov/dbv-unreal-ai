@@ -17,7 +17,7 @@ import { baseName, button, dirName, el } from './dom.js';
 import { convaiCard, convaiLive, directAccessBanner, hasConvaiToolsets } from './convaiCard.js';
 import { isDbvToolset } from '../unreal/unrealTools.js';
 import { shortVersion, versionMismatch } from '../unreal/engineVersion.js';
-import { uefnSection } from '../unreal/uefn.js';
+import { uefnDiagnosticCard, uefnSection } from '../unreal/uefn.js';
 
 const BACKUP_KEY = 'dbv-unreal-ai:lastBackup:';
 
@@ -208,6 +208,38 @@ export function createProjectView(host, deps) {
     ]);
   }
 
+  /**
+   * Diagnóstico de un proyecto UEFN y su conexión (REQ-123). El MCP de UEFN está en el puerto de la fila 5.
+   */
+  async function uefnPanel(project, install) {
+    const rows = await api.uefnDiagnostics(project.path);
+    if (!rows.ok) return el('div', { className: 'card' }, el('p', { className: 'error', text: rows.error.message }));
+    const port = Number(rows.value.find((r) => r.step === 5)?.detail) || 8000;
+    const endpoint = { port, path: '/mcp' };
+    const connection = deps.state.connection;
+    const connected = connection?.status === 'online' && connection?.uefn === true && sameProjectPath(connection.projectPath, project.path);
+    const connectUefn = async () => {
+      deps.state.setConnection({ projectPath: project.path, projectName: project.title, engineVersion: `UEFN ${install?.version?.version ?? ''}`.trim(), endpoint, status: 'connecting', toolsets: 0, uefn: true });
+      const result = await api.unrealConnect(endpoint);
+      if (!result.ok || !result.value.uefn) {
+        deps.state.setConnection({ status: 'offline' }, true);
+        deps.toast(result.ok ? t('uefn.fix.otherEditor', { detail: String(port) }) : result.error.message, 'error');
+      } else {
+        deps.state.setConnection({ status: 'online', endpoint: result.value.endpoint ?? endpoint, toolsets: result.value.toolsets.length, editorInstructions: result.value.instructions ?? '', uefn: true }, true);
+        deps.toast(t('project.connected', { n: String(result.value.toolsets.length) }));
+      }
+      await render();
+    };
+    const enablePython = async () => {
+      const choice = await deps.confirm({ title: t('uefn.enablePython'), text: t('uefn.enablePythonConfirm'), choices: [{ key: 'cancel', label: t('gen.cancel') }, { key: 'ok', label: t('uefn.enablePython'), tone: 'primary' }] });
+      if (choice !== 'ok') return;
+      const enabled = await api.uefnEnablePython(endpoint);
+      deps.toast(enabled.ok ? t('uefn.pythonEnabled') : enabled.error.message, enabled.ok ? undefined : 'error');
+      await render();
+    };
+    return uefnDiagnosticCard(project, rows.value, { connect: connectUefn, enablePython, connected });
+  }
+
   async function selectUefn(path) {
     selected = null;
     readiness = null;
@@ -249,6 +281,8 @@ export function createProjectView(host, deps) {
       for (const path of recentList) sections.push(projectCard(path, button(t('project.openInUnreal'), () => openInUnreal(path))));
     }
     sections.push(...uefnSection(uefn.ok ? uefn.value : null, { select: selectUefn }));
+    const uefnProject = selectedUefn && uefn.ok ? uefn.value.projects.find((p) => sameProjectPath(p.path, selectedUefn)) : null;
+    if (uefnProject) sections.push(await uefnPanel(uefnProject, uefn.value.install));
     if (selected && readiness) {
       // Encima del diagnóstico: el agente vería el editor dos veces (REQ-52).
       sections.push(directAccessBanner(readiness.directAccess, { reveal: (file) => window.__TAURI__?.opener?.revealItemInDir?.(`${dirName(selected)}/${file}`) }));

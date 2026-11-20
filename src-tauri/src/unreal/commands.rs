@@ -260,6 +260,8 @@ pub struct ConnectResponse {
     pub server_version: String,
     /// Instrucciones del MCP del editor (UE 5.9), vacías si no hay. La IA integrada las recibe. @spec REQ-115
     pub instructions: String,
+    /// El editor que responde es UEFN (por sus toolsets: `serverInfo` llega vacío). @spec REQ-123
+    pub uefn: bool,
 }
 
 /// Ajustes persistentes del proyecto (autoría, etc.). @spec REQ-74
@@ -331,7 +333,8 @@ pub async fn unreal_connect(app: AppHandle, endpoint: Endpoint) -> Result<Connec
         };
 
         crate::logging::info(&format!("connect {}: {} toolsets, editor {}", active_endpoint.url(), toolsets.len(), if server_version.is_empty() { "?" } else { server_version.as_str() }));
-        Ok(ConnectResponse { toolsets, endpoint: active_endpoint, server_version, instructions })
+        let uefn = super::uefn::server::is_uefn(&toolsets);
+        Ok(ConnectResponse { toolsets, endpoint: active_endpoint, server_version, instructions, uefn })
     })
     .await
 }
@@ -361,6 +364,56 @@ pub async fn unreal_call_tool(app: AppHandle, endpoint: Endpoint, toolset: Strin
             } else {
                 session.call_toolset_tool(&toolset, &tool, arguments.clone(), timeout)
             }
+        })
+    })
+    .await
+}
+
+// ─── UEFN (REQ-123) ─────────────────────────────────────────────────
+
+/// Filas del diagnóstico de UEFN para el proyecto `path` (`.uefnproject`): instalación, editor, proyecto abierto,
+/// Python, servidor MCP y toolsets. Solo lee; nunca escribe. @spec REQ-123
+#[tauri::command]
+pub async fn uefn_diagnostics(app: AppHandle, path: String) -> Result<Vec<super::uefn::server::DiagnosticRow>, UnrealError> {
+    use super::uefn::{discovery as uefn_discovery, server};
+    blocking(move || {
+        let project_file = PathBuf::from(&path);
+        let project = uefn_discovery::read_uefnproject(&project_file)?;
+        let ini_text = uefn_discovery::user_ini().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+        let install = uefn_discovery::find_uefn();
+        let running = install.is_some() && uefn_discovery::uefn_running();
+        let open_file = uefn_discovery::last_project_file(&ini_text).filter(|_| running);
+        let open_project = open_file.as_deref().and_then(|p| uefn_discovery::read_uefnproject(p).ok());
+        let settings = server::mcp_settings(&ini_text);
+        let url = mcp_client::endpoint_url(settings.port, &settings.path);
+        let probe = session_for(&app.state::<UnrealState>(), &url, true)
+            .and_then(|session| session.list_toolsets())
+            .map(|toolsets| server::ServerProbe { responding: true, uefn: server::is_uefn(&toolsets), toolsets: toolsets.len() })
+            .unwrap_or_default();
+        let log_tail = uefn_discovery::editor_log().and_then(|log| server::read_new(&log, server::LogCursor::default()).ok()).map(|(text, _)| text).unwrap_or_default();
+        let input = server::DiagnosticInput {
+            version: install.map(|i| i.version.version),
+            running,
+            open_is_selected: open_project.as_ref().is_some_and(|open| same_path(&open.path, &project.path)),
+            open_title: open_project.map(|open| open.title),
+            python: server::python_state(&std::fs::read_to_string(&project_file).unwrap_or_default(), &ini_text, &project.project_id),
+            port: settings.port,
+            bind_failed: !probe.responding && server::bind_failed(&log_tail, settings.port),
+            server: probe,
+        };
+        Ok(server::diagnostic_rows(&input))
+    })
+    .await
+}
+
+/// Activa Python en el proyecto abierto en UEFN con su propia herramienta del MCP. Solo tras la confirmación del
+/// usuario en la app: desde ese momento el Python del proyecto corre sin preguntar. @spec REQ-123
+#[tauri::command]
+pub async fn uefn_enable_python(app: AppHandle, endpoint: Endpoint) -> Result<(), UnrealError> {
+    let url = endpoint.url();
+    blocking(move || {
+        with_session(&app.state::<UnrealState>(), &url, |session| {
+            session.call_toolset_tool("ValkyrieToolset.ValkyriePythonToolset", "EnablePythonForMainProject", serde_json::json!({}), mcp_client::DEFAULT_TIMEOUT).map(|_| ())
         })
     })
     .await

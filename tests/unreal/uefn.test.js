@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
-import { uefnRows, uefnSection } from '../../src/unreal/uefn.js';
+import { canEnablePython, uefnDiagnosticCard, uefnRows, uefnSection } from '../../src/unreal/uefn.js';
 
 beforeAll(() => {
   window.DBV_I18N.register(APP_TRANSLATIONS);
@@ -47,5 +47,56 @@ describe('UEFN en la vista Proyecto (REQ-122)', () => {
     // @spec REQ-122
     const nodes = uefnSection(overview([]), { select: vi.fn() });
     expect(nodes.map((n) => n.textContent).join(' ')).toContain('no se ha encontrado ningún proyecto');
+  });
+});
+
+const diag = (overrides = {}) =>
+  [
+    { step: 1, key: 'uefn.diag.installed', ok: true, optional: false, detail: '43.12', fix: null },
+    { step: 2, key: 'uefn.diag.editorOpen', ok: true, optional: false, detail: '', fix: null },
+    { step: 3, key: 'uefn.diag.projectOpen', ok: true, optional: false, detail: 'DBVUnrealAITest', fix: null },
+    { step: 4, key: 'uefn.diag.python', ok: false, optional: true, detail: '', fix: 'uefn.fix.enablePython' },
+    { step: 5, key: 'uefn.diag.server', ok: true, optional: false, detail: '8000', fix: null },
+    { step: 6, key: 'uefn.diag.toolsets', ok: true, optional: false, detail: '63', fix: null },
+  ].map((row) => ({ ...row, ...(overrides[row.step] ?? {}) }));
+
+describe('diagnóstico de UEFN (REQ-123)', () => {
+  it('solo muestra filas de UEFN, sin las de Unreal Engine', () => {
+    // @spec REQ-123
+    const card = uefnDiagnosticCard({ title: 'MiIsla' }, diag(), { connect: vi.fn(), enablePython: vi.fn(), connected: false });
+    const text = card.textContent;
+    expect(card.querySelectorAll('li')).toHaveLength(6);
+    expect(text).toContain('UEFN instalado (43.12)');
+    expect(text).toContain('puerto 8000');
+    for (const ue of ['PythonScriptPlugin', 'DBVUnrealAI', 'Fab', 'C++']) expect(text).not.toContain(ue);
+  });
+
+  it('Python es opcional: se marca con «–» y no impide conectar', () => {
+    // @spec REQ-123
+    const connect = vi.fn();
+    const card = uefnDiagnosticCard({ title: 'P' }, diag(), { connect, enablePython: vi.fn(), connected: false });
+    const marks = [...card.querySelectorAll('li > span')].map((s) => s.textContent);
+    expect(marks).toEqual(['✓', '✓', '✓', '–', '✓', '✓']);
+    const connectButton = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Conectar con UEFN');
+    expect(connectButton.className).toContain('btn-primary');
+    connectButton.click();
+    expect(connect).toHaveBeenCalled();
+  });
+
+  it('con el puerto ocupado explica cómo arreglarlo', () => {
+    // @spec REQ-123
+    const rows = diag({ 5: { ok: false, fix: 'uefn.fix.portBusy' }, 6: { ok: false, detail: '0', fix: 'uefn.fix.toolsets' } });
+    const card = uefnDiagnosticCard({ title: 'P' }, rows, { connect: vi.fn(), enablePython: vi.fn(), connected: false });
+    expect(card.textContent).toContain('Stop Server');
+    expect(canEnablePython(rows)).toBe(false);
+  });
+
+  it('«Activar Python» solo aparece con el servidor de UEFN respondiendo y Python apagado', () => {
+    // @spec REQ-123
+    expect(canEnablePython(diag())).toBe(true);
+    expect(canEnablePython(diag({ 4: { ok: true, fix: null } }))).toBe(false);
+    const card = uefnDiagnosticCard({ title: 'P' }, diag({ 4: { ok: true, fix: null } }), { connect: vi.fn(), enablePython: vi.fn(), connected: true });
+    expect(card.textContent).toContain('Conectado a UEFN');
+    expect(card.textContent).not.toContain('Activar Python');
   });
 });
