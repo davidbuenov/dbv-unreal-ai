@@ -1008,6 +1008,7 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
   - **En la interfaz:**
     - Los proyectos UEFN aparecen en la lista de proyectos con el distintivo `[UEFN]` y la versión de UEFN.
     - Si la `compatibilityVersion` del proyecto es más nueva que el UEFN instalado, se avisa.
+    - **«Abrir UEFN»** *(añadido el 2026-11-20 a petición del usuario)*: con UEFN cerrado, abre UEFN a través del Epic Games Launcher (`com.epicgames.launcher://apps/<NamespaceId>%3A<ItemId>%3A<ArtifactId>?action=launch&silent=true`, de la entrada `Fortnite_Studio`), como su acceso directo, para que arranque con la sesión de Epic. UEFN muestra su lista de proyectos y el usuario elige el proyecto: la app no escribe en el `.ini` de UEFN para abrir uno concreto. Con UEFN ya abierto en otro proyecto, se indica que se cambia desde UEFN.
   - *Aceptación:* tests de Rust con un `LauncherInstalled.dat` que trae `Fortnite` y `Fortnite_Studio` (gana el segundo), un log con la línea de build, un `.ini` con las dos claves (rutas con `/`), un `.uefnproject` vinculado y otro sin vincular, y un plugin con otro nombre. En este equipo aparecen UEFN 43.10 y `DBVFornite`.
 
 - [ ] **REQ-123 · Conectar al MCP de UEFN y diagnóstico de UEFN (sustituye la parte de conexión y preparación de REQ-78):**

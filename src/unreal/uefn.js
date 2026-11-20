@@ -32,7 +32,7 @@ export function uefnRows(overview) {
  * Sección UEFN de la vista Proyecto (DESIGN.md v0.7.0): `[UEFN]` y la versión junto al nombre, y un aviso si el
  * proyecto pide una UEFN más nueva que la instalada.
  * @param {object | null} overview Respuesta de `uefn_overview`.
- * @param {{select: (path: string) => void}} actions
+ * @param {{select: (path: string) => void, open?: (title: string) => void}} actions `open`: «Abrir UEFN» por el Launcher.
  * @returns {HTMLElement[]}
  */
 export function uefnSection(overview, actions) {
@@ -40,7 +40,12 @@ export function uefnSection(overview, actions) {
   const nodes = version ? [el('div', { className: 'subheading', text: t('uefn.projects', { version }) })] : [];
   if (version && !rows.length) nodes.push(el('p', { className: 'empty', text: t('uefn.noProjects') }));
   for (const row of rows) {
-    const status = row.open ? el('span', { className: 'pill pill--online', text: t('uefn.open') }) : null;
+    // Con UEFN cerrado se puede abrir por el Launcher; con UEFN abierto en otro proyecto, se cambia desde UEFN.
+    const status = row.open
+      ? el('span', { className: 'pill pill--online', text: t('uefn.open') })
+      : !overview.running && actions.open
+        ? button(t('uefn.openUefn'), () => actions.open(row.title))
+        : el('span', { className: 'hint', text: t('uefn.switchInUefn') });
     const warning = row.newer ? el('p', { className: 'warning', text: t('uefn.newerProject', { project: row.compatibilityVersion, installed: version }) }) : null;
     nodes.push(
       el(

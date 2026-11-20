@@ -96,6 +96,23 @@ pub fn studio_from_launcher(text: &str) -> Option<(PathBuf, UefnVersion)> {
     Some((root, UefnVersion { version, changelist, source: "launcher".into() }))
 }
 
+/// Dirección del Epic Games Launcher que abre UEFN, como su acceso directo:
+/// `com.epicgames.launcher://apps/fn%3A<ItemId>%3AFortnite_Studio?action=launch&silent=true`. UEFN no se puede lanzar
+/// directamente: lo arranca el Launcher con la sesión de Epic. Las tres partes solo pueden tener letras, cifras y `_`.
+pub fn launcher_uri(launcher_text: &str) -> Option<String> {
+    let parsed: Value = serde_json::from_str(launcher_text.trim_start_matches('\u{feff}')).ok()?;
+    let entry = parsed.get("InstallationList")?.as_array()?.iter().find(|e| e.get("AppName").and_then(Value::as_str) == Some(STUDIO_APP))?;
+    let part = |key: &str| entry.get(key).and_then(Value::as_str).filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')).map(str::to_string);
+    let uri = format!("com.epicgames.launcher://apps/{}%3A{}%3A{}?action=launch&silent=true", part("NamespaceId")?, part("ItemId")?, part("ArtifactId")?);
+    Some(uri)
+}
+
+/// Dirección del Launcher para abrir UEFN en esta máquina.
+pub fn open_uri() -> Option<String> {
+    let uri = std::fs::read_to_string(launcher_file()).ok().and_then(|text| launcher_uri(&text));
+    uri
+}
+
 /// Versión de la línea `LogInit: Build: ++Fortnite+Release-43.12-CL-60598086` del log del editor.
 pub fn version_from_log(text: &str) -> Option<UefnVersion> {
     let line = text.lines().take(5000).find(|l| l.contains("LogInit: Build:"))?;
@@ -350,8 +367,8 @@ mod tests {
     use super::*;
 
     const LAUNCHER: &str = r#"{"InstallationList": [
-        {"InstallLocation": "C:\\Program Files\\Epic Games\\Fortnite", "AppVersion": "++Fortnite+Release-43.10-CL-60118918-Windows", "AppName": "Fortnite"},
-        {"InstallLocation": "C:\\Program Files\\Epic Games\\Fortnite", "AppVersion": "++Fortnite+Release-43.10-CL-60458657-Windows", "AppName": "Fortnite_Studio"},
+        {"InstallLocation": "C:\\Program Files\\Epic Games\\Fortnite", "NamespaceId": "fn", "ItemId": "4fe75bbc5a674f4f9b356b5c90567da5", "ArtifactId": "Fortnite", "AppVersion": "++Fortnite+Release-43.10-CL-60118918-Windows", "AppName": "Fortnite"},
+        {"InstallLocation": "C:\\Program Files\\Epic Games\\Fortnite", "NamespaceId": "fn", "ItemId": "1e8bda5cfbb641b9a9aea8bd62285f73", "ArtifactId": "Fortnite_Studio", "AppVersion": "++Fortnite+Release-43.10-CL-60458657-Windows", "AppName": "Fortnite_Studio"},
         {"InstallLocation": "D:\\Epic\\UE_5.8", "AppVersion": "5.8.4-1+++UE5+Release-5.8", "AppName": "UE_5.8"}
     ]}"#;
 
@@ -364,6 +381,15 @@ mod tests {
         let (root, version) = studio_from_launcher(LAUNCHER).unwrap();
         assert_eq!(root, PathBuf::from(r"C:\Program Files\Epic Games\Fortnite"));
         assert_eq!(version, UefnVersion { version: "43.10".into(), changelist: 60458657, source: "launcher".into() });
+    }
+
+    #[test]
+    fn abre_uefn_por_el_launcher_con_la_entrada_de_fortnite_studio() {
+        // @spec REQ-122 — «Abrir UEFN»: la del acceso directo de UEFN, no la del juego.
+        assert_eq!(launcher_uri(LAUNCHER).as_deref(), Some("com.epicgames.launcher://apps/fn%3A1e8bda5cfbb641b9a9aea8bd62285f73%3AFortnite_Studio?action=launch&silent=true"));
+        let injected = LAUNCHER.replace("\"NamespaceId\": \"fn\", \"ItemId\": \"1e8bda5cfbb641b9a9aea8bd62285f73\"", "\"NamespaceId\": \"fn\", \"ItemId\": \"x&action=uninstall\"");
+        assert!(launcher_uri(&injected).is_none(), "un ItemId raro no se mete en la dirección");
+        assert!(launcher_uri(r#"{"InstallationList": []}"#).is_none());
     }
 
     #[test]

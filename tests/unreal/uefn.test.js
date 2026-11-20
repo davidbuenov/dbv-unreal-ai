@@ -43,6 +43,18 @@ describe('UEFN en la vista Proyecto (REQ-122)', () => {
     expect(select).toHaveBeenCalledWith('D:/UEFN/Nuevo/Nuevo.uefnproject');
   });
 
+  it('con UEFN cerrado ofrece «Abrir UEFN»; abierto en otro proyecto, cambiarlo desde UEFN', () => {
+    // @spec REQ-122
+    const open = vi.fn();
+    const closed = uefnSection({ ...overview([project('Isla')]), running: false }, { select: vi.fn(), open });
+    const button = [...closed[1].querySelectorAll('button')].find((b) => b.textContent === 'Abrir UEFN');
+    button.click();
+    expect(open).toHaveBeenCalledWith('Isla');
+    const running = uefnSection(overview([project('Otra')]), { select: vi.fn(), open });
+    expect(running[1].textContent).toContain('cámbialo desde UEFN');
+    expect(running[1].textContent).not.toContain('Abrir UEFN');
+  });
+
   it('con UEFN y sin proyectos lo dice', () => {
     // @spec REQ-122
     const nodes = uefnSection(overview([]), { select: vi.fn() });

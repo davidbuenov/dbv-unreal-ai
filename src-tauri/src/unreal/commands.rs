@@ -66,6 +66,13 @@ pub async fn uefn_overview() -> Result<super::uefn::discovery::UefnOverview, Unr
     blocking(|| Ok(super::uefn::discovery::overview())).await
 }
 
+/// Abre UEFN a través del Epic Games Launcher (con la sesión de Epic); el usuario elige el proyecto en UEFN. @spec REQ-122
+#[tauri::command]
+pub fn uefn_open() -> Result<(), UnrealError> {
+    let uri = super::uefn::discovery::open_uri().ok_or_else(|| UnrealError::NotFound("UEFN is not installed with the Epic Games Launcher".into()))?;
+    tauri_plugin_opener::open_url(uri, None::<&str>).map_err(|error| UnrealError::Io(format!("Epic Games Launcher: {error}")))
+}
+
 /// Por qué la IA no puede proponer cambiar ese fichero del proyecto, o `None` si puede. @spec REQ-22
 #[tauri::command]
 pub fn unreal_code_path_problem(relative: String, uefn: Option<bool>) -> Option<String> {

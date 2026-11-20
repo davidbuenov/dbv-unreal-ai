@@ -325,6 +325,12 @@ export function createProjectView(host, deps) {
     return uefnKitCard(project, kit, { duplicate, install, exportZip, remove, openUrl });
   }
 
+  /** «Abrir UEFN» (REQ-122): por el Epic Games Launcher; el proyecto se elige en la lista de UEFN. */
+  async function openUefn(title) {
+    const opened = await api.uefnOpen();
+    deps.toast(opened.ok ? t('uefn.opening', { title }) : opened.error.message, opened.ok ? undefined : 'error');
+  }
+
   async function selectUefn(path) {
     selected = null;
     readiness = null;
@@ -365,7 +371,7 @@ export function createProjectView(host, deps) {
       sections.push(el('div', { className: 'subheading', text: t('project.recents') }));
       for (const path of recentList) sections.push(projectCard(path, button(t('project.openInUnreal'), () => openInUnreal(path))));
     }
-    sections.push(...uefnSection(uefn.ok ? uefn.value : null, { select: selectUefn }));
+    sections.push(...uefnSection(uefn.ok ? uefn.value : null, { select: selectUefn, open: openUefn }));
     const uefnProject = selectedUefn && uefn.ok ? uefn.value.projects.find((p) => sameProjectPath(p.path, selectedUefn)) : null;
     if (uefnProject) sections.push(await uefnPanel(uefnProject, uefn.value.install), await kitPanel(uefnProject));
     if (selected && readiness) {

@@ -15,6 +15,7 @@ export { on };
 // ─── Unreal ──────────────────────────────────────────────────────────
 export const unrealEngines = () => call('unreal_engines');
 export const uefnOverview = () => call('uefn_overview');
+export const uefnOpen = () => call('uefn_open');
 export const uefnDiagnostics = (path) => call('uefn_diagnostics', { path });
 export const uefnEnablePython = (endpoint) => call('uefn_enable_python', { endpoint });
 export const uefnToolPolicy = () => call('uefn_tool_policy');

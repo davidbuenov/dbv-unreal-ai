@@ -346,6 +346,8 @@ pub fn run() {
             #[cfg(desktop)]
             unreal::commands::uefn_overview,
             #[cfg(desktop)]
+            unreal::commands::uefn_open,
+            #[cfg(desktop)]
             unreal::commands::uefn_diagnostics,
             #[cfg(desktop)]
             unreal::commands::uefn_enable_python,
