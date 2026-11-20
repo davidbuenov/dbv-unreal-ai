@@ -16,6 +16,7 @@ import { createApprovalCard } from '../unreal/approvalCard.js';
 import { AUTONOMY_LEVELS, autonomyDecision, createPermissionMemory, loadAutonomy, requestKind, saveAutonomy } from '../unreal/permissions.js';
 import { createUnrealTools, describeCapture, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
 import { createFabTools } from '../unreal/fabTools.js';
+import { toolsForUefn } from '../unreal/uefn.js';
 import { fabCardStrip } from './fabCards.js';
 import { createFabView } from './fabView.js';
 import { openExternalUrl } from '../ai/backend.js';
@@ -254,6 +255,8 @@ export function start() {
   let readOnlyTools = [];
   // Personajes de Convai registrados en Ajustes (REQ-58): misma definición que en el MCP propio.
   let convaiCharactersSpec = null;
+  // Herramientas que se ofrecen con UEFN (REQ-123): la regla de Rust, la misma que la del MCP propio.
+  let uefnPolicy = null;
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
   // Vista Fab (REQ-106): buscar, ver la ficha e instalar sin escribir a la IA, con las mismas reglas.
   views.fab = createFabView($('#view-fab'), { state, toast, confirm, openModal, closeModal });
@@ -636,7 +639,8 @@ export function start() {
             } : null,
           })),
         });
-        return withUsage([...unreal, ...generation, ...memory, ...zones, ...convai, ...recipes, ...guides, ...fab], turnContext?.usage);
+        const all = [...unreal, ...generation, ...memory, ...zones, ...convai, ...recipes, ...guides, ...fab];
+        return withUsage(state.connection?.uefn ? toolsForUefn(all, uefnPolicy) : all, turnContext?.usage);
       },
       // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): el diálogo del sistema y Rust los leen.
       pickAttachments: async () => {
@@ -683,8 +687,9 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools(), api.sessionsToolSpecs(), api.fabToolSpecs()])
-        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly, sessions, fab]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools(), api.sessionsToolSpecs(), api.fabToolSpecs(), api.uefnToolPolicy()])
+        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly, sessions, fab, uefn]) => {
+          uefnPolicy = uefn?.ok ? uefn.value : null;
           readOnlyTools = readOnly?.ok && Array.isArray(readOnly.value) ? readOnly.value : [];
           // Un backend que no conoce el comando devuelve `null`: sin estas comprobaciones, la IA no cargaría (lección de la v0.2.0).
           recipeSpecs = recipes?.ok && Array.isArray(recipes.value) ? recipes.value : [];

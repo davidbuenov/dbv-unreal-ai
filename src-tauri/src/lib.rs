@@ -350,6 +350,8 @@ pub fn run() {
             #[cfg(desktop)]
             unreal::commands::uefn_enable_python,
             #[cfg(desktop)]
+            unreal::commands::uefn_tool_policy,
+            #[cfg(desktop)]
             unreal::commands::unreal_read_project,
             #[cfg(desktop)]
             unreal::commands::unreal_editors,

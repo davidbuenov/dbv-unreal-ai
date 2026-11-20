@@ -92,3 +92,17 @@ export function uefnDiagnosticCard(project, rows, actions) {
     el('div', { className: 'row' }, ...buttons.filter(Boolean)),
   );
 }
+
+/**
+ * Con UEFN solo se ofrecen las herramientas de la app que no necesitan nuestro plugin (REQ-123). La regla viene de
+ * Rust (`uefn_tool_policy`), la misma que usa el `--mcp`. Sin regla cargada no se ofrece ninguna: es más seguro.
+ * @template {{name: string}} T
+ * @param {T[]} tools
+ * @param {{tools: string[], prefixes: string[]} | null} policy
+ * @returns {T[]}
+ */
+export function toolsForUefn(tools, policy) {
+  const names = new Set(policy?.tools ?? []);
+  const prefixes = policy?.prefixes ?? [];
+  return tools.filter((tool) => names.has(tool.name) || prefixes.some((prefix) => tool.name.startsWith(prefix)));
+}

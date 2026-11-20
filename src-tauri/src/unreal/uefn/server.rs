@@ -57,6 +57,26 @@ pub fn mcp_settings(ini_text: &str) -> McpSettings {
     settings
 }
 
+// ─── Herramientas de la app en UEFN ─────────────────────────────────
+
+/// Herramientas de la app que funcionan con UEFN: no necesitan nuestro plugin (Python o C++ en el editor). Es una
+/// lista blanca: una herramienta nueva queda fuera de UEFN hasta que se pruebe con él. @spec REQ-123
+pub const UEFN_TOOLS: [&str; 6] = ["unreal_list_toolsets", "unreal_describe_toolset", "unreal_call_tool", "library_list", "library_rename", "generation_jobs"];
+
+/// Prefijos de herramientas que funcionan con UEFN: memoria del proyecto, generación con Tripo y World Labs, y las
+/// de Verse y UEFN (REQ-125..REQ-128).
+pub const UEFN_TOOL_PREFIXES: [&str; 9] = ["project_memory_", "generate_", "image_to_3d", "rig_model", "animate_model", "tripo_", "worldlabs_", "verse_", "uefn_"];
+
+/// ¿Se ofrece esta herramienta de la app con un proyecto UEFN?
+pub fn available_in_uefn(name: &str) -> bool {
+    UEFN_TOOLS.contains(&name) || UEFN_TOOL_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+}
+
+/// Respuesta cuando se pide en UEFN una herramienta que necesita nuestro plugin de Unreal Engine.
+pub fn not_in_uefn(name: &str) -> String {
+    format!("error: {name} is not available with UEFN: it needs the DBV Unreal AI plugin, which only runs in Unreal Engine. In UEFN use the editor's own toolsets (unreal_list_toolsets, unreal_call_tool), for example VerseToolset, LevelToolset or StaticMeshToolset.")
+}
+
 // ─── Python ─────────────────────────────────────────────────────────
 
 /// Python en un proyecto UEFN: el ajuste del proyecto y el permiso local del usuario.
@@ -247,6 +267,18 @@ mod tests {
         let init = fixture("uefn-43.10/initialize.response.json");
         assert_eq!(init.pointer("/result/serverInfo/name").and_then(Value::as_str), Some(""));
         assert_eq!(init.pointer("/result/serverInfo/version").and_then(Value::as_str), Some(""));
+    }
+
+    #[test]
+    fn en_uefn_solo_se_ofrecen_las_herramientas_que_no_necesitan_nuestro_plugin() {
+        // @spec REQ-123
+        for ok in ["unreal_call_tool", "unreal_list_toolsets", "project_memory_read", "generate_3d_model", "library_list", "verse_reference"] {
+            assert!(available_in_uefn(ok), "{ok}");
+        }
+        for hidden in ["unreal_run_python", "unreal_dress_metahuman", "unreal_playtest", "library_send_to_unreal", "level_zones_propose", "session_start", "fab_install", "convai_characters", "unreal_capture_viewport"] {
+            assert!(!available_in_uefn(hidden), "{hidden}");
+        }
+        assert!(not_in_uefn("unreal_run_python").contains("VerseToolset"));
     }
 
     #[test]

@@ -406,6 +406,12 @@ pub async fn uefn_diagnostics(app: AppHandle, path: String) -> Result<Vec<super:
     .await
 }
 
+/// Herramientas de la app que se ofrecen con UEFN (nombres y prefijos), la misma regla que el `--mcp`. @spec REQ-123
+#[tauri::command]
+pub fn uefn_tool_policy() -> serde_json::Value {
+    serde_json::json!({ "tools": super::uefn::server::UEFN_TOOLS, "prefixes": super::uefn::server::UEFN_TOOL_PREFIXES })
+}
+
 /// Activa Python en el proyecto abierto en UEFN con su propia herramienta del MCP. Solo tras la confirmación del
 /// usuario en la app: desde ese momento el Python del proyecto corre sin preguntar. @spec REQ-123
 #[tauri::command]

@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
-import { canEnablePython, uefnDiagnosticCard, uefnRows, uefnSection } from '../../src/unreal/uefn.js';
+import { canEnablePython, toolsForUefn, uefnDiagnosticCard, uefnRows, uefnSection } from '../../src/unreal/uefn.js';
 
 beforeAll(() => {
   window.DBV_I18N.register(APP_TRANSLATIONS);
@@ -98,5 +98,21 @@ describe('diagnóstico de UEFN (REQ-123)', () => {
     const card = uefnDiagnosticCard({ title: 'P' }, diag({ 4: { ok: true, fix: null } }), { connect: vi.fn(), enablePython: vi.fn(), connected: true });
     expect(card.textContent).toContain('Conectado a UEFN');
     expect(card.textContent).not.toContain('Activar Python');
+  });
+});
+
+describe('herramientas de la app con UEFN (REQ-123)', () => {
+  const policy = { tools: ['unreal_call_tool', 'unreal_list_toolsets', 'library_list'], prefixes: ['generate_', 'verse_', 'project_memory_'] };
+  const tool = (name) => ({ name });
+
+  it('solo deja las que no necesitan nuestro plugin', () => {
+    // @spec REQ-123
+    const all = ['unreal_call_tool', 'unreal_run_python', 'unreal_dress_metahuman', 'library_send_to_unreal', 'generate_3d_model', 'level_zones_propose', 'verse_reference', 'project_memory_read', 'fab_install'].map(tool);
+    expect(toolsForUefn(all, policy).map((t) => t.name)).toEqual(['unreal_call_tool', 'generate_3d_model', 'verse_reference', 'project_memory_read']);
+  });
+
+  it('sin la regla cargada no ofrece ninguna', () => {
+    // @spec REQ-123
+    expect(toolsForUefn([tool('unreal_call_tool')], null)).toEqual([]);
   });
 });

@@ -508,6 +508,12 @@ impl McpServer {
         found.ok_or_else(|| format!("unknown toolset: {wanted}"))
     }
 
+    /// ¿El editor conectado es UEFN? Sin editor no se sabe y no se oculta nada. @spec REQ-123
+    fn editor_is_uefn(&mut self) -> bool {
+        let uefn = self.toolset_list(false).map(|list| crate::unreal::uefn::server::is_uefn(&list)).unwrap_or(false);
+        uefn
+    }
+
     fn dbv_toolset(&mut self) -> Result<Option<String>, UnrealError> {
         Ok(self.toolset_names()?.into_iter().find(|n| is_dbv(n)))
     }
@@ -2004,7 +2010,12 @@ Thumbnails (show them as images if your client renders Markdown): {}", out.text,
                 "instructions": INSTRUCTIONS
             })),
             "ping" => Ok(json!({})),
-            "tools/list" => Ok(json!({ "tools": tool_specs() })),
+            // Con UEFN solo se ofrecen las herramientas que no necesitan nuestro plugin (REQ-123).
+            "tools/list" => {
+                let uefn = self.editor_is_uefn();
+                let tools: Vec<Value> = tool_specs().into_iter().filter(|spec| !uefn || spec.get("name").and_then(Value::as_str).is_some_and(crate::unreal::uefn::server::available_in_uefn)).collect();
+                Ok(json!({ "tools": tools }))
+            }
             "tools/call" => {
                 let name = params
                     .get("name")
@@ -2015,8 +2026,10 @@ Thumbnails (show them as images if your client renders Markdown): {}", out.text,
                     .get("arguments")
                     .cloned()
                     .unwrap_or_else(|| json!({}));
-                // La captura es la única que devuelve una imagen (contenido `image` de MCP, REQ-13).
-                let result = if name == "unreal_capture_viewport" {
+                // Con UEFN, una herramienta que necesita nuestro plugin se explica en vez de fallar a medias (REQ-123).
+                let result = if !crate::unreal::uefn::server::available_in_uefn(&name) && self.editor_is_uefn() {
+                    text_result(crate::unreal::uefn::server::not_in_uefn(&name), true)
+                } else if name == "unreal_capture_viewport" {
                     let annotate = arguments
                         .get("annotate")
                         .and_then(Value::as_bool)
@@ -3543,5 +3556,80 @@ mod tests {
         let list_res = rpc(&mut s, "tools/call", json!({ "name": "library_list", "arguments": {} }));
         let list_text = list_res["result"]["content"][0]["text"].as_str().unwrap();
         assert!(list_text.contains("Top Victoria"), "{list_text}");
+    }
+
+    /// Editor UEFN simulado: responde `initialize` y `list_toolsets` con lo grabado en UEFN 43.10 (spike P-14) y
+    /// apunta cualquier otra llamada para comprobar que no llega.
+    fn fake_uefn() -> (String, SeenCalls) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+        let folder = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/unreal-mcp/uefn-43.10");
+        let list: Value = serde_json::from_str(&std::fs::read_to_string(format!("{folder}/list_toolsets.response.json")).unwrap()).unwrap();
+        let calls: SeenCalls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = calls.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut socket) = stream else { break };
+                let mut received = Vec::new();
+                let mut buffer = [0u8; 8192];
+                loop {
+                    let read = socket.read(&mut buffer).unwrap_or(0);
+                    received.extend_from_slice(&buffer[..read]);
+                    let text = String::from_utf8_lossy(&received).to_string();
+                    let complete = text.find("\r\n\r\n").is_some_and(|end| {
+                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
+                        received.len() >= end + 4 + length
+                    });
+                    if complete || read == 0 {
+                        break;
+                    }
+                }
+                let request = String::from_utf8_lossy(&received).to_string();
+                let body: Value = request.split_once("\r\n\r\n").and_then(|(_, b)| serde_json::from_str(b).ok()).unwrap_or(Value::Null);
+                let id = body.get("id").cloned().unwrap_or(Value::Null);
+                let (status, headers, payload) = match body["method"].as_str().unwrap_or("") {
+                    "initialize" => ("200 OK", "Mcp-Session-Id: u1\r\n", json!({ "jsonrpc": "2.0", "id": id, "result": { "protocolVersion": "2025-06-18", "capabilities": { "tools": {} }, "serverInfo": { "name": "", "title": "", "version": "" } } }).to_string()),
+                    "notifications/initialized" => ("202 Accepted", "", String::new()),
+                    _ => {
+                        let params = &body["params"];
+                        seen.lock().unwrap().push((params["arguments"]["tool_name"].as_str().unwrap_or(params["name"].as_str().unwrap_or("")).to_string(), params["arguments"].clone()));
+                        let mut reply = list.clone();
+                        reply["id"] = id;
+                        ("200 OK", "", reply.to_string())
+                    }
+                };
+                let _ = write!(socket, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{payload}", payload.len());
+            }
+        });
+        (url, calls)
+    }
+
+    #[test]
+    fn con_uefn_solo_se_ofrecen_las_herramientas_que_no_necesitan_nuestro_plugin() {
+        // @spec REQ-123
+        let dir = tempfile::tempdir().unwrap();
+        let (url, calls) = fake_uefn();
+        let mut s = server(dir.path());
+        s.config.unreal_url = url;
+        let listed = rpc(&mut s, "tools/list", json!({}));
+        let names: Vec<&str> = listed["result"]["tools"].as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
+        assert!(names.contains(&"unreal_call_tool") && names.contains(&"generate_3d_model"), "{names:?}");
+        for hidden in ["unreal_run_python", "unreal_dress_metahuman", "library_send_to_unreal", "unreal_playtest"] {
+            assert!(!names.contains(&hidden), "{hidden} no debería ofrecerse con UEFN");
+        }
+        let refused = rpc(&mut s, "tools/call", json!({ "name": "unreal_run_python", "arguments": { "code": "print(1)" } }));
+        assert_eq!(refused["result"]["isError"], true);
+        assert!(refused["result"]["content"][0]["text"].as_str().unwrap().contains("not available with UEFN"));
+        assert!(calls.lock().unwrap().iter().all(|(tool, _)| tool == "list_toolsets"), "a UEFN solo le llegó list_toolsets");
+    }
+
+    #[test]
+    fn sin_editor_no_se_oculta_ninguna_herramienta() {
+        // @spec REQ-123 — sin editor no se sabe si es UEFN.
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = server(dir.path());
+        let listed = rpc(&mut s, "tools/list", json!({}));
+        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), tool_specs().len());
     }
 }
