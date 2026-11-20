@@ -2012,8 +2012,10 @@ Thumbnails (show them as images if your client renders Markdown): {}", out.text,
             "ping" => Ok(json!({})),
             // Con UEFN solo se ofrecen las herramientas que no necesitan nuestro plugin (REQ-123).
             "tools/list" => {
+                // Las de Verse (REQ-125) solo tienen sentido con UEFN.
                 let uefn = self.editor_is_uefn();
-                let tools: Vec<Value> = tool_specs().into_iter().filter(|spec| !uefn || spec.get("name").and_then(Value::as_str).is_some_and(crate::unreal::uefn::server::available_in_uefn)).collect();
+                let verse = if uefn { crate::unreal::uefn::verse::tool_specs() } else { Vec::new() };
+                let tools: Vec<Value> = tool_specs().into_iter().filter(|spec| !uefn || spec.get("name").and_then(Value::as_str).is_some_and(crate::unreal::uefn::server::available_in_uefn)).chain(verse).collect();
                 Ok(json!({ "tools": tools }))
             }
             "tools/call" => {
@@ -2029,6 +2031,11 @@ Thumbnails (show them as images if your client renders Markdown): {}", out.text,
                 // Con UEFN, una herramienta que necesita nuestro plugin se explica en vez de fallar a medias (REQ-123).
                 let result = if !crate::unreal::uefn::server::available_in_uefn(&name) && self.editor_is_uefn() {
                     text_result(crate::unreal::uefn::server::not_in_uefn(&name), true)
+                } else if name.starts_with("verse_") {
+                    match crate::unreal::uefn::verse::run(&name, &arguments, self.config.project_dir.as_deref()) {
+                        Ok(text) => text_result(text, false),
+                        Err(text) => text_result(text, true),
+                    }
                 } else if name == "unreal_capture_viewport" {
                     let annotate = arguments
                         .get("annotate")
@@ -3615,6 +3622,9 @@ mod tests {
         let listed = rpc(&mut s, "tools/list", json!({}));
         let names: Vec<&str> = listed["result"]["tools"].as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
         assert!(names.contains(&"unreal_call_tool") && names.contains(&"generate_3d_model"), "{names:?}");
+        assert!(names.contains(&"verse_reference"), "las de Verse solo aparecen con UEFN (REQ-125)");
+        let reference = rpc(&mut s, "tools/call", json!({ "name": "verse_reference", "arguments": {} }));
+        assert!(reference["result"]["content"][0]["text"].as_str().unwrap().contains("Verse skill"));
         for hidden in ["unreal_run_python", "unreal_dress_metahuman", "library_send_to_unreal", "unreal_playtest"] {
             assert!(!names.contains(&hidden), "{hidden} no debería ofrecerse con UEFN");
         }
@@ -3630,6 +3640,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut s = server(dir.path());
         let listed = rpc(&mut s, "tools/list", json!({}));
-        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), tool_specs().len());
+        let tools = listed["result"]["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), tool_specs().len());
+        assert!(tools.iter().all(|t| !t["name"].as_str().unwrap().starts_with("verse_")), "sin UEFN no hay herramientas de Verse");
     }
 }

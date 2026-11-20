@@ -21,6 +21,8 @@ export const uefnToolPolicy = () => call('uefn_tool_policy');
 export const uefnSkillStatus = (path) => call('uefn_skill_status', { path });
 export const uefnSkillInstall = (path, scope) => call('uefn_skill_install', { path, scope });
 export const uefnSkillUpdate = (path) => call('uefn_skill_update', { path });
+export const uefnVerseSpecs = () => call('uefn_verse_specs');
+export const uefnVerseRun = (name, args, project) => call('uefn_verse_run', { name, args, project });
 export const unrealEditors = () => call('unreal_editors');
 export const unrealReadProject = (path) => call('unreal_read_project', { path });
 export const unrealRecentProjects = () => call('unreal_recent_projects');

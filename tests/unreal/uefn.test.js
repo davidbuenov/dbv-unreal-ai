@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
-import { canEnablePython, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnRows, uefnSection } from '../../src/unreal/uefn.js';
+import { canEnablePython, createVerseTools, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnPrompt, uefnRows, uefnSection, VERSE_RULES } from '../../src/unreal/uefn.js';
 
 beforeAll(() => {
   window.DBV_I18N.register(APP_TRANSLATIONS);
@@ -149,5 +149,41 @@ describe('skill de Verse de Epic (REQ-124)', () => {
     node.querySelector('a').click();
     expect(openUrl).toHaveBeenCalledWith(repository);
     expect(skillAttribution(null, openUrl)).toBeNull();
+  });
+});
+
+describe('conocimiento de Verse para cualquier IA (REQ-125)', () => {
+  it('el prompt lleva la regla de efectos, Scene Graph primero y BuildAll', () => {
+    // @spec REQ-125
+    const prompt = uefnPrompt({ projectName: 'DBVUnrealAITest', version: '43.12' });
+    expect(VERSE_RULES).toHaveLength(10);
+    expect(prompt).toContain('<transacts><no_rollback>');
+    expect(prompt).toContain('class<final_super>(component)');
+    expect(prompt).toContain('BuildAll');
+    expect(prompt).toContain('verse_reference');
+    expect(prompt).toContain('verse_api_search');
+  });
+
+  it('no enseña creative_device como plantilla de jugabilidad ni habla de Python del motor', () => {
+    // @spec REQ-125
+    const prompt = uefnPrompt({});
+    expect(prompt).toContain('Do NOT write gameplay in creative_device');
+    expect(prompt).not.toMatch(/:= class\(creative_device\)/);
+    expect(prompt).not.toContain('unreal_run_python');
+    expect(prompt).not.toContain('OnBegin');
+  });
+
+  it('funciona aunque la skill no esté instalada: las reglas van en el prompt', () => {
+    // @spec REQ-125
+    expect(uefnPrompt({}).split('\n').filter((line) => /^\d+\. /.test(line))).toHaveLength(10);
+  });
+
+  it('las herramientas de Verse llaman a Rust y devuelven su texto', async () => {
+    // @spec REQ-125
+    const run = vi.fn(async () => ({ ok: true, value: 'Topics of Epic' }));
+    const [reference] = createVerseTools({ specs: [{ name: 'verse_reference', description: 'd', inputSchema: { type: 'object', properties: { topic: { type: 'string' } }, required: [] } }], run });
+    expect(reference.label({ topic: 'gotchas' })).toBe('Verse: reference · gotchas');
+    expect(await reference.run({ topic: 'gotchas' })).toBe('Topics of Epic');
+    expect(run).toHaveBeenCalledWith('verse_reference', { topic: 'gotchas' });
   });
 });

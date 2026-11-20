@@ -485,6 +485,22 @@ pub async fn uefn_skill_update(path: String) -> Result<super::uefn::external::In
     .await
 }
 
+/// Herramientas de Verse para la IA integrada (solo con UEFN). @spec REQ-125
+#[tauri::command]
+pub fn uefn_verse_specs() -> Vec<Value> {
+    super::uefn::verse::tool_specs()
+}
+
+/// Ejecuta una herramienta de Verse para el proyecto UEFN `project` (`.uefnproject`). @spec REQ-125
+#[tauri::command]
+pub async fn uefn_verse_run(name: String, args: Value, project: Option<String>) -> Result<String, UnrealError> {
+    blocking(move || {
+        let dir = project.as_deref().and_then(|p| Path::new(p).parent().map(Path::to_path_buf));
+        super::uefn::verse::run(&name, &args, dir.as_deref()).map_err(UnrealError::NotFound)
+    })
+    .await
+}
+
 /// Herramientas de la app que se ofrecen con UEFN (nombres y prefijos), la misma regla que el `--mcp`. @spec REQ-123
 #[tauri::command]
 pub fn uefn_tool_policy() -> serde_json::Value {

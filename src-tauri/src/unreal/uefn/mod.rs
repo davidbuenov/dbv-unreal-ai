@@ -9,9 +9,11 @@
 //   · `discovery`: instalación, versión, proyectos y proyecto abierto (REQ-122).
 //   · `server`: identificar el MCP de UEFN, diagnóstico, Python y lo que dice el log del editor (REQ-123).
 //   · `external`: repositorios de Epic que se descargan en la máquina del usuario, nunca se incluyen (REQ-124, REQ-131).
+//   · `verse`: conocimiento de Verse para cualquier IA y compilación (REQ-125..REQ-127).
 //
 // UEFN solo existe para Windows: en macOS y Linux las funciones devuelven «no hay UEFN».
 
 pub mod discovery;
 pub mod external;
 pub mod server;
+pub mod verse;
