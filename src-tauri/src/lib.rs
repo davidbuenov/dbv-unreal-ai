@@ -376,6 +376,10 @@ pub fn run() {
             #[cfg(desktop)]
             unreal::commands::uefn_recipes_run,
             #[cfg(desktop)]
+            unreal::commands::uefn_kit_info,
+            #[cfg(desktop)]
+            unreal::commands::uefn_kit_run,
+            #[cfg(desktop)]
             unreal::commands::unreal_read_project,
             #[cfg(desktop)]
             unreal::commands::unreal_editors,

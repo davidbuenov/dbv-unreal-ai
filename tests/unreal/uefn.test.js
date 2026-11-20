@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
-import { canEnablePython, createSessionTools, createVerseTools, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnPrompt, uefnRows, uefnSection, VERSE_RULES, verseHeader } from '../../src/unreal/uefn.js';
+import { canEnablePython, uefnKitCard, validKitName, createSessionTools, createVerseTools, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnPrompt, uefnRows, uefnSection, VERSE_RULES, verseHeader } from '../../src/unreal/uefn.js';
 
 beforeAll(() => {
   window.DBV_I18N.register(APP_TRANSLATIONS);
@@ -240,5 +240,38 @@ describe('sesión de UEFN (REQ-128)', () => {
     await tools[2].run({});
     expect(askApproval).not.toHaveBeenCalled();
     expect(tools[3].parameters.properties.purpose).toBeUndefined();
+  });
+});
+
+describe('UEFNKit integrado (REQ-131)', () => {
+  const kit = { version: '2.4.0', commit: '431cf6c', repository: 'https://github.com/magnusenebakk-epic/UEFNKit' };
+  const actions = () => ({ duplicate: vi.fn(), install: vi.fn(), exportZip: vi.fn(), remove: vi.fn(), openUrl: vi.fn() });
+
+  it('ofrece copia de pruebas, ejemplo de Epic, exportar y eliminar, y dice que es de Epic', () => {
+    // @spec REQ-131
+    const a = actions();
+    const card = uefnKitCard({ title: 'DBVFornite', open: false }, kit, a);
+    const labels = [...card.querySelectorAll('button')].map((b) => b.textContent);
+    expect(labels).toEqual(['Hacer una copia de pruebas', 'Instalar un ejemplo de Epic', 'Exportar para compartir', 'Eliminar proyecto']);
+    expect(card.textContent).toContain('UEFNKit 2.4.0 de Epic Games (Magnus Enebakk)');
+    expect(card.textContent).toContain('431cf6c');
+    card.querySelector('a').click();
+    expect(a.openUrl).toHaveBeenCalledWith(kit.repository);
+    expect(card.querySelector('.btn-danger').textContent).toBe('Eliminar proyecto');
+  });
+
+  it('con el proyecto abierto en UEFN avisa de cerrarlo y refrescar el navegador de proyectos', () => {
+    // @spec REQ-131
+    const card = uefnKitCard({ title: 'P', open: true }, kit, actions());
+    expect(card.textContent).toContain('conviene cerrarlo');
+    expect(card.textContent).toContain('refresca el navegador de proyectos');
+  });
+
+  it('los nombres siguen la regla de UEFNKit', () => {
+    // @spec REQ-131
+    expect(validKitName('DBVFornite_Test')).toBe(true);
+    expect(validKitName('1Copia')).toBe(false);
+    expect(validKitName('con espacio')).toBe(false);
+    expect(validKitName('')).toBe(false);
   });
 });

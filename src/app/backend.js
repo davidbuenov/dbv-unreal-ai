@@ -30,6 +30,8 @@ export const uefnRecipesAll = () => call('uefn_recipes_all');
 export const uefnRecipePrompt = (id) => call('uefn_recipe_prompt', { id });
 export const uefnRecipesSpecs = () => call('uefn_recipes_specs');
 export const uefnRecipesRun = (endpoint, project, name, args) => call('uefn_recipes_run', { endpoint, project, name, args });
+export const uefnKitInfo = () => call('uefn_kit_info');
+export const uefnKitRun = (command, confirmed = false) => call('uefn_kit_run', { command, confirmed });
 export const unrealEditors = () => call('unreal_editors');
 export const unrealReadProject = (path) => call('unreal_read_project', { path });
 export const unrealRecentProjects = () => call('unreal_recent_projects');

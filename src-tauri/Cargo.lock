@@ -806,6 +806,7 @@ dependencies = [
  "keyring",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sysinfo",
  "tauri",
  "tauri-build",

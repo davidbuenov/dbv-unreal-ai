@@ -1,11 +1,11 @@
 // =============================================================================
-// DBV Unreal AI — Repositorios de Epic para UEFN: la skill de Verse
+// DBV Unreal AI — Repositorios de Epic para UEFN: la skill de Verse y UEFNKit
 // Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona
 // Licensed under the MIT License. See LICENSE for details.
 // Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops
 // =============================================================================
 //
-// @spec REQ-124
+// @spec REQ-124, REQ-131
 //
 // La skill de Verse es trabajo de Epic Games (Magnus Enebakk) y su repositorio no tiene licencia: la app NO la incluye
 // ni la copia a su repositorio. Se descarga en la máquina del usuario (decisión 2 del usuario, 2026-11-19):
@@ -14,6 +14,12 @@
 //     un `.dbv-skill.json` con el commit y la fecha.
 // Destino: `<proyecto>/.claude/skills/verse` (por defecto) o `~/.claude/skills/verse`. Claude Code la usa sola; el resto
 // de IAs llega a ella con `verse_reference` (REQ-125).
+//
+// UEFNKit (REQ-131) es un script de PowerShell de Epic, también sin licencia: se descarga a la carpeta de datos de la
+// app FIJADO a un commit y se comprueba su `sha256` antes de guardarlo (se ejecuta con `-ExecutionPolicy Bypass`: si el
+// repositorio cambiara, la app no ejecutaría código nuevo sin que el usuario lo vea). Se usa su modo sin menús:
+// `powershell -NoProfile -ExecutionPolicy Bypass -File UEFNKit.ps1 <orden> -Json`; el resultado es el último bloque JSON
+// de la salida, código 1 = fallo con `[X] …`. `remove` y `variants` solo con confirmación explícita (`-Yes`).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -213,6 +219,130 @@ pub fn update(installed: &InstalledSkill, git_program: Option<&Path>) -> Result<
     result
 }
 
+// ─── UEFNKit (REQ-131) ──────────────────────────────────────────────
+
+pub const UEFNKIT_REPO: &str = "https://github.com/magnusenebakk-epic/UEFNKit";
+/// Commit y hash revisados (2026-11-20, UEFNKit 2.4.0). Actualizar es cambiar los tres a la vez tras revisar el script.
+pub const UEFNKIT_COMMIT: &str = "431cf6cd10c3e83b4243d75de90631bb74dc2b31";
+pub const UEFNKIT_SHA256: &str = "566266abcc603e86ff67c8d8169bb73314d21fb9e0eba698ad2b175f671804d0";
+pub const UEFNKIT_VERSION: &str = "2.4.0";
+
+/// `sha256` en hexadecimal.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Dónde se guarda el script: `<datos>/UEFNKit/<commit corto>/UEFNKit.ps1`.
+pub fn kit_path(data_dir: &Path, commit: &str) -> PathBuf {
+    data_dir.join("UEFNKit").join(commit.chars().take(7).collect::<String>()).join("UEFNKit.ps1")
+}
+
+/// El script fijado, descargándolo si hace falta. Si el hash no coincide, no se guarda ni se ejecuta.
+pub fn ensure_kit(data_dir: &Path) -> Result<PathBuf, UnrealError> {
+    let path = kit_path(data_dir, UEFNKIT_COMMIT);
+    let cached = std::fs::read(&path).ok().filter(|bytes| sha256_hex(bytes) == UEFNKIT_SHA256);
+    if cached.is_some() {
+        return Ok(path);
+    }
+    let url = format!("https://raw.githubusercontent.com/magnusenebakk-epic/UEFNKit/{UEFNKIT_COMMIT}/UEFNKit.ps1");
+    let agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(60))).build().new_agent();
+    let mut response = agent.get(&url).header("User-Agent", "dbv-unreal-ai").call().map_err(|error| UnrealError::Unreachable(format!("GitHub: {error}")))?;
+    let bytes = response.body_mut().with_config().limit(5 * 1024 * 1024).read_to_vec().map_err(|error| UnrealError::Io(error.to_string()))?;
+    let hash = sha256_hex(&bytes);
+    (hash == UEFNKIT_SHA256).then_some(()).ok_or_else(|| UnrealError::Conflict(format!("UEFNKit.ps1 does not match the reviewed version (sha256 {hash}); it was not saved nor run")))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| io_error(parent, &error))?;
+    }
+    std::fs::write(&path, bytes).map_err(|error| io_error(&path, &error))?;
+    Ok(path)
+}
+
+/// Una orden de UEFNKit que ofrece la app.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "command", rename_all = "camelCase")]
+pub enum KitCommand {
+    List,
+    Version,
+    Catalog,
+    Duplicate { project: String, name: String, title: Option<String> },
+    Install { id: String, name: Option<String> },
+    Export { project: String, out_dir: Option<String> },
+    Remove { project: String },
+    Variants { project: String },
+}
+
+/// `-Name` de UEFNKit: empieza por letra y solo letras, cifras o `_`.
+pub fn valid_kit_name(name: &str) -> bool {
+    name.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Argumentos de la orden (sin el script). `remove` y `variants` se niegan sin `confirmed`: solo entonces va `-Yes`.
+pub fn kit_args(command: &KitCommand, confirmed: bool) -> Result<Vec<String>, UnrealError> {
+    let s = |v: &str| v.to_string();
+    let named = |name: &str| valid_kit_name(name).then_some(()).ok_or_else(|| UnrealError::Format(format!("«{name}»: the name must start with a letter and use only letters, digits or _")));
+    let mut args: Vec<String> = match command {
+        KitCommand::List => vec![s("list")],
+        KitCommand::Version => vec![s("version")],
+        KitCommand::Catalog => vec![s("catalog")],
+        KitCommand::Duplicate { project, name, title } => {
+            named(name)?;
+            let mut a = vec![s("duplicate"), s("-Project"), project.clone(), s("-Name"), name.clone()];
+            a.extend(title.iter().flat_map(|t| [s("-Title"), t.clone()]));
+            a
+        }
+        KitCommand::Install { id, name } => {
+            if let Some(n) = name {
+                named(n)?;
+            }
+            let mut a = vec![s("install"), s("-Id"), id.clone()];
+            a.extend(name.iter().flat_map(|n| [s("-Name"), n.clone()]));
+            a
+        }
+        KitCommand::Export { project, out_dir } => {
+            let mut a = vec![s("export"), s("-Project"), project.clone()];
+            a.extend(out_dir.iter().flat_map(|d| [s("-OutDir"), d.clone()]));
+            a
+        }
+        KitCommand::Remove { project } | KitCommand::Variants { project } => {
+            confirmed.then_some(()).ok_or_else(|| UnrealError::Conflict("this UEFNKit command changes or deletes projects: it needs the user confirmation".into()))?;
+            let verb = if matches!(command, KitCommand::Remove { .. }) { "remove" } else { "variants" };
+            vec![s(verb), s("-Project"), project.clone(), s("-Yes")]
+        }
+    };
+    args.push(s("-Json"));
+    Ok(args)
+}
+
+/// Último bloque JSON de la salida (antes van líneas de progreso `[OK]`, `[!]`…).
+pub fn last_json(stdout: &str) -> Option<Value> {
+    let lines: Vec<&str> = stdout.lines().collect();
+    let found = (0..lines.len()).rev().filter(|&i| lines[i].trim_start().starts_with(['{', '['])).find_map(|i| serde_json::from_str::<Value>(&lines[i..].join("\n")).ok());
+    found
+}
+
+/// Mensaje de error sin las líneas de progreso: las `[X] …` o, si no hay, el error estándar.
+pub fn kit_error(stdout: &str, stderr: &str) -> String {
+    let marked: Vec<&str> = stdout.lines().chain(stderr.lines()).filter(|l| l.trim_start().starts_with("[X]")).map(str::trim).collect();
+    let message = if marked.is_empty() { stderr.trim().to_string() } else { marked.join("\n") };
+    if message.is_empty() { "UEFNKit failed without a message".to_string() } else { message }
+}
+
+/// PowerShell de Windows (UEFNKit pide 5.1+).
+pub fn powershell() -> PathBuf {
+    let found = std::env::var_os("SystemRoot").map(|root| PathBuf::from(root).join("System32").join("WindowsPowerShell").join("v1.0").join("powershell.exe")).filter(|p| p.is_file());
+    found.unwrap_or_else(|| PathBuf::from("powershell"))
+}
+
+/// Ejecuta UEFNKit en modo sin menús y devuelve su resultado JSON. Código distinto de 0 = fallo.
+pub fn run_kit(script: &Path, args: &[String]) -> Result<Value, UnrealError> {
+    let output = quiet(&powershell()).args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]).arg(script).args(args).output().map_err(|error| UnrealError::Io(format!("PowerShell: {error}")))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let result = if output.status.success() { last_json(&stdout).ok_or_else(|| UnrealError::Protocol(format!("UEFNKit gave no JSON result: {}", stdout.trim()))) } else { Err(UnrealError::Protocol(kit_error(&stdout, &stderr))) };
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,4 +451,67 @@ mod tests {
             assert!(!found, "hay un SKILL.md dentro de {dir}");
         }
     }
+
+    #[test]
+    fn el_ultimo_bloque_json_tras_las_lineas_de_progreso() {
+        // @spec REQ-131
+        let out = "[OK] Copying project\n  info line\n[!] warning\n{\n  \"name\": \"DBVFornite_Test\",\n  \"path\": \"D:\\\\U\\\\DBVFornite_Test\"\n}\n";
+        assert_eq!(last_json(out).unwrap()["name"], "DBVFornite_Test");
+        assert_eq!(last_json("[{\"name\":\"a\"},{\"name\":\"b\"}]").unwrap().as_array().unwrap().len(), 2);
+        assert!(last_json("[OK] nada").is_none());
+        assert_eq!(kit_error("[OK] x\n[X] Target folder already exists", ""), "[X] Target folder already exists");
+    }
+
+    #[test]
+    fn remove_y_variants_sin_confirmar_no_se_lanzan() {
+        // @spec REQ-131
+        assert!(matches!(kit_args(&KitCommand::Remove { project: "P".into() }, false), Err(UnrealError::Conflict(_))));
+        assert!(matches!(kit_args(&KitCommand::Variants { project: "P".into() }, false), Err(UnrealError::Conflict(_))));
+        assert_eq!(kit_args(&KitCommand::Remove { project: "P".into() }, true).unwrap(), vec!["remove", "-Project", "P", "-Yes", "-Json"]);
+        // Las demás nunca llevan -Yes.
+        let dup = kit_args(&KitCommand::Duplicate { project: "DBVFornite".into(), name: "DBVFornite_Test".into(), title: None }, true).unwrap();
+        assert_eq!(dup, vec!["duplicate", "-Project", "DBVFornite", "-Name", "DBVFornite_Test", "-Json"]);
+        assert!(kit_args(&KitCommand::Duplicate { project: "P".into(), name: "1mal".into(), title: None }, false).is_err());
+        assert!(kit_args(&KitCommand::Install { id: "MobileGamesTD".into(), name: Some("con espacio".into()) }, false).is_err());
+    }
+
+    #[test]
+    fn el_hash_fijado_protege_el_script() {
+        // @spec REQ-131
+        assert_eq!(sha256_hex(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert_eq!(UEFNKIT_SHA256.len(), 64);
+        let temp = tempfile::tempdir().unwrap();
+        assert!(kit_path(temp.path(), UEFNKIT_COMMIT).ends_with(Path::new("UEFNKit").join("431cf6c").join("UEFNKit.ps1")));
+    }
+
+    #[cfg(windows)]
+    fn fake_kit(dir: &Path, body: &str) -> PathBuf {
+        let folder = dir.join("Program Files con espacios");
+        std::fs::create_dir_all(&folder).unwrap();
+        let script = folder.join("UEFNKit.ps1");
+        std::fs::write(&script, body).unwrap();
+        script
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn lanza_el_script_falso_y_lee_su_json_aunque_la_ruta_tenga_espacios() {
+        // @spec REQ-131 — como el arreglo de la v0.6.2: rutas con espacios.
+        let temp = tempfile::tempdir().unwrap();
+        let script = fake_kit(temp.path(), "param([string]$Command, [string]$Project, [string]$Name, [switch]$Json)\nWrite-Output '[OK] Copying'\nWrite-Output ('{\"name\":\"' + $Name + '\",\"source\":\"' + $Project + '\"}')\nexit 0\n");
+        let args = kit_args(&KitCommand::Duplicate { project: "DBVFornite".into(), name: "DBVFornite_Test".into(), title: None }, false).unwrap();
+        let value = run_kit(&script, &args).unwrap();
+        assert_eq!((value["name"].as_str(), value["source"].as_str()), (Some("DBVFornite_Test"), Some("DBVFornite")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn un_codigo_1_es_un_fallo_con_su_mensaje_sin_el_progreso() {
+        // @spec REQ-131
+        let temp = tempfile::tempdir().unwrap();
+        let script = fake_kit(temp.path(), "Write-Output '[OK] Checking'\nWrite-Output '[X] Target folder already exists: choose another -Name'\nexit 1\n");
+        let error = run_kit(&script, &["install".into(), "-Json".into()]).unwrap_err();
+        assert_eq!(error.to_string(), "[X] Target folder already exists: choose another -Name");
+    }
+
 }

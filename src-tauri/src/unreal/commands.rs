@@ -561,6 +561,28 @@ pub async fn uefn_recipes_run(endpoint: Endpoint, project: Option<String>, name:
     .await
 }
 
+/// Versión fijada de UEFNKit y si ya está descargada. @spec REQ-131
+#[tauri::command]
+pub fn uefn_kit_info() -> Value {
+    use super::uefn::external as kit;
+    let downloaded = crate::paths::data_dir().is_some_and(|dir| kit::kit_path(&dir, kit::UEFNKIT_COMMIT).is_file());
+    serde_json::json!({ "version": kit::UEFNKIT_VERSION, "commit": &kit::UEFNKIT_COMMIT[..7], "repository": kit::UEFNKIT_REPO, "downloaded": downloaded })
+}
+
+/// Ejecuta una orden de UEFNKit (descargándolo antes, fijado y comprobado). `remove` y `variants` solo con
+/// `confirmed`, que la app pone tras el diálogo de confirmación. @spec REQ-131
+#[tauri::command]
+pub async fn uefn_kit_run(command: super::uefn::external::KitCommand, confirmed: bool) -> Result<Value, UnrealError> {
+    use super::uefn::external as kit;
+    blocking(move || {
+        let args = kit::kit_args(&command, confirmed)?;
+        let data = crate::paths::data_dir().ok_or_else(|| UnrealError::Io("no data folder for UEFNKit".into()))?;
+        let script = kit::ensure_kit(&data)?;
+        kit::run_kit(&script, &args)
+    })
+    .await
+}
+
 /// Herramientas de la app que se ofrecen con UEFN (nombres y prefijos), la misma regla que el `--mcp`. @spec REQ-123
 #[tauri::command]
 pub fn uefn_tool_policy() -> serde_json::Value {

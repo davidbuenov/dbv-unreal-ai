@@ -17,7 +17,7 @@ import { baseName, button, dirName, el } from './dom.js';
 import { convaiCard, convaiLive, directAccessBanner, hasConvaiToolsets } from './convaiCard.js';
 import { isDbvToolset } from '../unreal/unrealTools.js';
 import { shortVersion, versionMismatch } from '../unreal/engineVersion.js';
-import { uefnDiagnosticCard, uefnSection } from '../unreal/uefn.js';
+import { uefnDiagnosticCard, uefnKitCard, uefnSection, validKitName } from '../unreal/uefn.js';
 
 const BACKUP_KEY = 'dbv-unreal-ai:lastBackup:';
 
@@ -256,6 +256,75 @@ export function createProjectView(host, deps) {
     return uefnDiagnosticCard(project, rows.value, { connect: connectUefn, enablePython, connected, skill, installSkill, updateSkill, openUrl });
   }
 
+  /** Pide un nombre en una ventana; `null` si se cancela. */
+  function askName(title, hint, initial) {
+    return new Promise((resolve) => {
+      const input = el('input', { attrs: { type: 'text', 'aria-label': title } });
+      input.value = initial;
+      const error = el('p', { className: 'error' });
+      const done = (value) => {
+        deps.closeModal();
+        resolve(value);
+      };
+      const accept = () => (validKitName(input.value) ? done(input.value) : (error.textContent = t('kit.badName')));
+      deps.openModal([el('h3', { text: title }), el('p', { className: 'hint', text: hint }), input, error, el('div', { className: 'modal-actions' }, button(t('gen.cancel'), () => done(null)), button(t('kit.ok'), accept, 'btn-primary'))]);
+      input.focus();
+    });
+  }
+
+  /**
+   * UEFNKit (REQ-131): copia de pruebas, ejemplos de Epic, exportar y eliminar. Lo descarga la app fijado a un commit.
+   */
+  async function kitPanel(project) {
+    const info = await api.uefnKitInfo();
+    const kit = info.ok ? info.value : null;
+    const run = async (command, confirmed = false) => {
+      deps.toast(t('kit.running'));
+      const result = await api.uefnKitRun(command, confirmed);
+      if (!result.ok) deps.toast(result.error.message, 'error');
+      return result.ok ? result.value : null;
+    };
+    const folderName = baseName(project.dir ?? dirName(project.path));
+    const duplicate = async () => {
+      const name = await askName(t('kit.duplicate'), t('kit.duplicateHint'), `${folderName}_Test`);
+      const made = name ? await run({ command: 'duplicate', project: project.dir ?? dirName(project.path), name }) : null;
+      if (made) deps.toast(t('kit.duplicated', { path: made.path ?? name }));
+      if (made) await render();
+    };
+    const install = async () => {
+      const catalog = await run({ command: 'catalog' });
+      const entries = catalog?.projects ?? [];
+      if (!catalog) return;
+      const pick = (entry) => async () => {
+        deps.closeModal();
+        const installed = await run({ command: 'install', id: entry.id });
+        if (installed) deps.toast(t('kit.installed', { title: installed.title ?? entry.title }));
+        if (installed) await render();
+      };
+      deps.openModal([
+        el('h3', { text: t('kit.install') }),
+        el('p', { className: 'hint', text: t('kit.trust') }),
+        ...entries.map((entry) => el('div', { className: 'card' }, el('strong', { text: entry.title ?? entry.name }), el('p', { className: 'hint', text: `${entry.description ?? ''} · UEFN ${entry.uefnCompatibilityVersion ?? '?'} · ${entry.sizeMB ?? '?'} MB` }), button(t('kit.installThis'), pick(entry), 'btn-primary'))),
+        el('div', { className: 'modal-actions' }, button(t('gen.cancel'), deps.closeModal)),
+      ]);
+    };
+    const exportZip = async () => {
+      const exported = await run({ command: 'export', project: project.dir ?? dirName(project.path) });
+      if (exported) deps.toast(t('kit.exported', { zip: exported.zip ?? '' }));
+    };
+    const remove = async () => {
+      const choice = await deps.confirm({ title: t('kit.remove'), text: t('kit.removeConfirm', { title: project.title }), choices: [{ key: 'cancel', label: t('gen.cancel') }, { key: 'remove', label: t('kit.remove'), tone: 'danger' }] });
+      const removed = choice === 'remove' ? await run({ command: 'remove', project: project.dir ?? dirName(project.path) }, true) : null;
+      if (removed) {
+        selectedUefn = null;
+        deps.toast(t('kit.removed', { title: project.title }));
+        await render();
+      }
+    };
+    const openUrl = (url) => window.__TAURI__?.opener?.openUrl?.(url);
+    return uefnKitCard(project, kit, { duplicate, install, exportZip, remove, openUrl });
+  }
+
   async function selectUefn(path) {
     selected = null;
     readiness = null;
@@ -298,7 +367,7 @@ export function createProjectView(host, deps) {
     }
     sections.push(...uefnSection(uefn.ok ? uefn.value : null, { select: selectUefn }));
     const uefnProject = selectedUefn && uefn.ok ? uefn.value.projects.find((p) => sameProjectPath(p.path, selectedUefn)) : null;
-    if (uefnProject) sections.push(await uefnPanel(uefnProject, uefn.value.install));
+    if (uefnProject) sections.push(await uefnPanel(uefnProject, uefn.value.install), await kitPanel(uefnProject));
     if (selected && readiness) {
       // Encima del diagnóstico: el agente vería el editor dos veces (REQ-52).
       sections.push(directAccessBanner(readiness.directAccess, { reveal: (file) => window.__TAURI__?.opener?.revealItemInDir?.(`${dirName(selected)}/${file}`) }));
