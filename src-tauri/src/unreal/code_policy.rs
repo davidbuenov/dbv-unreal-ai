@@ -61,6 +61,36 @@ pub fn code_path_problem(relative: &str) -> Option<String> {
     result
 }
 
+const UEFN_ALLOWED: &str = "only Verse files under Content/ (*.verse), docs/**/*.md and the *.md files at the project root can be changed in a UEFN project";
+
+/// Motivo por el que la IA no puede cambiar `relative` en un proyecto UEFN, o `None` si puede. En UEFN el código es
+/// Verse y vive en `Content/`; los `.uasset` y `.umap` se cambian con las herramientas del editor. @spec REQ-127
+pub fn uefn_code_path_problem(relative: &str) -> Option<String> {
+    let path = normalized(relative);
+    let parts: Vec<&str> = path.split('/').collect();
+    let lower: Vec<String> = parts.iter().map(|p| p.to_ascii_lowercase()).collect();
+    let extension = path.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()).filter(|ext| !ext.contains('/')).unwrap_or_default();
+    let outside = path.is_empty() || path.starts_with('/') || path.contains(':') || parts.iter().any(|p| p.is_empty() || *p == "." || *p == "..");
+    let hidden = parts.iter().any(|p| p.starts_with('.'));
+    let allowed = match lower[0].as_str() {
+        "content" => parts.len() > 1 && extension == "verse",
+        "docs" => parts.len() > 1 && extension == "md",
+        _ => parts.len() == 1 && extension == "md",
+    };
+    let result = if outside {
+        Some(format!("{relative}: the path must be relative to the project folder, without '..'"))
+    } else if hidden {
+        Some(format!("{path}: hidden files and folders cannot be changed"))
+    } else if matches!(extension.as_str(), "uasset" | "umap") {
+        Some(format!("{path}: .uasset and .umap are binary assets; change them with the UEFN editor tools, never as text"))
+    } else if allowed {
+        None
+    } else {
+        Some(format!("{path}: {UEFN_ALLOWED}"))
+    };
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,4 +146,20 @@ mod tests {
             assert!(problem.contains(expected), "{path}: «{problem}» debería decir «{expected}»");
         }
     }
+
+    #[test]
+    fn en_uefn_solo_verse_de_content_y_markdown() {
+        // @spec REQ-127
+        assert_eq!(uefn_code_path_problem("Content/zz_test.verse"), None);
+        assert_eq!(uefn_code_path_problem("Content/Gameplay/zone.verse"), None);
+        assert_eq!(uefn_code_path_problem("README.md"), None);
+        assert!(uefn_code_path_problem("Source/a.verse").unwrap().contains("only Verse files under Content/"));
+        assert!(uefn_code_path_problem("../fuera/a.verse").is_some());
+        assert!(uefn_code_path_problem("Content/Map.umap").unwrap().contains("binary"));
+        assert!(uefn_code_path_problem("Content/a.py").is_some());
+        assert!(uefn_code_path_problem("Content/.hidden/a.verse").is_some());
+        // En un proyecto de UE, un .verse no se puede cambiar.
+        assert!(code_path_problem("Content/a.verse").is_some());
+    }
+
 }

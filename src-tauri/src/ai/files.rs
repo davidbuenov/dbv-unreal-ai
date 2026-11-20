@@ -23,8 +23,8 @@ use super::AiError;
 
 /// Extensiones de los documentos con los que trabaja la IA (las mismas que abre la app).
 /// ADAPTAR a tu app (docs/IA.md, «Qué adaptar»): es la barrera de verdad; `src/ai/paths.js` es solo la primera.
-// DBV Unreal AI: además del Markdown, el código y la configuración de un proyecto de Unreal (REQ-13).
-pub const TEXT_EXTENSIONS: [&str; 14] = ["md", "markdown", "txt", "ini", "py", "h", "hpp", "cpp", "cs", "uproject", "uplugin", "json", "usf", "ush"];
+// DBV Unreal AI: además del Markdown, el código y la configuración de un proyecto de Unreal (REQ-13), y Verse en UEFN (REQ-127).
+pub const TEXT_EXTENSIONS: [&str; 15] = ["md", "markdown", "txt", "ini", "py", "h", "hpp", "cpp", "cs", "uproject", "uplugin", "json", "usf", "ush", "verse"];
 /// Tope de lectura de un fichero.
 pub const MAX_READ_BYTES: u64 = 2 * 1024 * 1024;
 /// Niveles de carpeta que se recorren como máximo al listar o buscar.
@@ -50,6 +50,16 @@ pub fn is_markdown(path: &Path) -> bool {
 pub fn is_skipped_dir(name: &str) -> bool {
     // Unreal: carpetas de binarios, cachés, plugins de terceros y assets (`.uasset`) que no tienen texto del proyecto que leer y pesan mucho.
     name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "Intermediate" | "DerivedDataCache" | "Binaries" | "Saved" | "Content" | "Plugins")
+}
+
+/// DBV Unreal AI (REQ-127): en un proyecto UEFN el código Verse vive en `Content/`, que en Unreal Engine se salta por
+/// los `.uasset`. Solo en una carpeta con `.uefnproject` se entra en `Content/` (y solo cuentan sus documentos de texto).
+fn is_uefn_root(root: &Path) -> bool {
+    std::fs::read_dir(root).map(|entries| entries.flatten().any(|e| e.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("uefnproject")))).unwrap_or(false)
+}
+
+fn skip_dir(name: &str, uefn: bool) -> bool {
+    is_skipped_dir(name) && !(uefn && name == "Content")
 }
 
 /// Normaliza una ruta relativa del frontend: barras `/`, sin vacíos ni `.`.
@@ -119,10 +129,11 @@ pub fn resolve_inside(root: &str, relative: &str) -> Result<PathBuf, AiError> {
 /// Los documentos de texto de `root`, como rutas relativas con `/`, ordenadas.
 pub fn list_documents(root: &Path) -> Vec<String> {
     let mut found = Vec::new();
+    let uefn = is_uefn_root(root);
     let walker = walkdir::WalkDir::new(root)
         .max_depth(MAX_DEPTH)
         .into_iter()
-        .filter_entry(|entry| entry.depth() == 0 || !(entry.file_type().is_dir() && is_skipped_dir(&entry.file_name().to_string_lossy())));
+        .filter_entry(|entry| entry.depth() == 0 || !(entry.file_type().is_dir() && skip_dir(&entry.file_name().to_string_lossy(), uefn)));
     for (visited, entry) in walker.flatten().enumerate() {
         if visited >= MAX_VISITED || found.len() >= MAX_LISTED {
             break;
@@ -236,7 +247,13 @@ pub async fn ai_write_file(root: String, relative: String, content: String) -> R
     if !is_text_document(&path) {
         return Err(AiError::BadRequest(format!("«{relative}» no es un documento de texto (.md, .markdown, .txt)")));
     }
-    tauri::async_runtime::spawn_blocking(move || write_atomic(&path, &content)).await.map_err(|e| AiError::Server(e.to_string()))?
+    // DBV Unreal AI (REQ-127): un `.verse` de un proyecto abierto en UEFN se escribe por su MCP (`WriteFile`).
+    tauri::async_runtime::spawn_blocking(move || match crate::unreal::uefn::verse::editor_write(Path::new(&root), &relative, &content) {
+        Some(written) => written.map_err(AiError::Server),
+        None => write_atomic(&path, &content),
+    })
+    .await
+    .map_err(|e| AiError::Server(e.to_string()))?
 }
 
 /// Deshace la creación de un fichero propuesto por la IA: solo lo borra si sigue
@@ -248,7 +265,11 @@ pub async fn ai_delete_created(root: String, relative: String, expected: String)
         return Err(AiError::BadRequest(format!("«{relative}» no es un documento de texto")));
     }
     tauri::async_runtime::spawn_blocking(move || match read_limited(&path) {
-        Ok(current) if current == expected => std::fs::remove_file(&path).map(|_| true).map_err(|e| io_error("borrar", &path, &e)),
+        // DBV Unreal AI (REQ-127): con UEFN abierto, un `.verse` se borra por su MCP; nunca en disco.
+        Ok(current) if current == expected => match crate::unreal::uefn::verse::editor_delete(Path::new(&root), &relative) {
+            Some(deleted) => deleted.map(|_| true).map_err(AiError::Server),
+            None => std::fs::remove_file(&path).map(|_| true).map_err(|e| io_error("borrar", &path, &e)),
+        },
         _ => Ok(false),
     })
     .await
@@ -382,4 +403,19 @@ mod tests {
         assert!(!is_text_document(Path::new("a.rs")));
         assert!(!is_text_document(Path::new("a")));
     }
+
+    #[test]
+    fn en_un_proyecto_uefn_se_ven_los_verse_de_content_y_en_ue_no() {
+        // @spec REQ-127
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("Content").join("Gameplay")).unwrap();
+        std::fs::write(dir.path().join("Content").join("Gameplay").join("zone.verse"), "x").unwrap();
+        std::fs::write(dir.path().join("Content").join("Map.umap"), [0u8, 1]).unwrap();
+        assert!(list_documents(dir.path()).is_empty(), "sin .uefnproject, Content se salta como en UE");
+        std::fs::write(dir.path().join("Isla.uefnproject"), "{}").unwrap();
+        let listed = list_documents(dir.path());
+        assert!(listed.contains(&"Content/Gameplay/zone.verse".to_string()), "{listed:?}");
+        assert!(!listed.iter().any(|f| f.ends_with(".umap")));
+    }
+
 }

@@ -68,8 +68,10 @@ pub async fn uefn_overview() -> Result<super::uefn::discovery::UefnOverview, Unr
 
 /// Por qué la IA no puede proponer cambiar ese fichero del proyecto, o `None` si puede. @spec REQ-22
 #[tauri::command]
-pub fn unreal_code_path_problem(relative: String) -> Option<String> {
-    super::code_policy::code_path_problem(&relative)
+pub fn unreal_code_path_problem(relative: String, uefn: Option<bool>) -> Option<String> {
+    // REQ-127: en un proyecto UEFN la regla es la de Verse.
+    let problem = if uefn.unwrap_or(false) { super::code_policy::uefn_code_path_problem(&relative) } else { super::code_policy::code_path_problem(&relative) };
+    problem
 }
 
 /// Elige a mano la carpeta del motor de un proyecto: se valida (5.8 o posterior, con editor) y se guarda. @spec REQ-119

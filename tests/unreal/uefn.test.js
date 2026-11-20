@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
-import { canEnablePython, createVerseTools, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnPrompt, uefnRows, uefnSection, VERSE_RULES } from '../../src/unreal/uefn.js';
+import { canEnablePython, createVerseTools, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnPrompt, uefnRows, uefnSection, VERSE_RULES, verseHeader } from '../../src/unreal/uefn.js';
 
 beforeAll(() => {
   window.DBV_I18N.register(APP_TRANSLATIONS);
@@ -185,5 +185,23 @@ describe('conocimiento de Verse para cualquier IA (REQ-125)', () => {
     expect(reference.label({ topic: 'gotchas' })).toBe('Verse: reference · gotchas');
     expect(await reference.run({ topic: 'gotchas' })).toBe('Topics of Epic');
     expect(run).toHaveBeenCalledWith('verse_reference', { topic: 'gotchas' });
+  });
+});
+
+describe('escribir Verse (REQ-127)', () => {
+  it('todo .verse nuevo lleva la cabecera DBV de 6 líneas con #', () => {
+    // @spec REQ-127, REQ-69
+    const lines = verseHeader('DBVUnrealAITest').split('\n').slice(1);
+    expect(lines).toHaveLength(6);
+    expect(lines.every((line) => line.startsWith('# '))).toBe(true);
+    expect(lines[1]).toContain('DBVUnrealAITest');
+    expect(uefnPrompt({ projectName: 'DBVUnrealAITest' })).toContain('# Generated with DBV Unreal AI');
+  });
+
+  it('el prompt limita los cambios a Verse de Content/ y nombra zz_ lo de prueba', () => {
+    // @spec REQ-127
+    const prompt = uefnPrompt({});
+    expect(prompt).toContain('Verse files under Content/');
+    expect(prompt).toContain('zz_');
   });
 });

@@ -146,6 +146,22 @@ export const VERSE_RULES = [
 ];
 
 /**
+ * Cabecera DBV de 6 líneas para todo `.verse` nuevo, con `#` (el comentario de Verse). @spec REQ-127, REQ-69
+ * @param {string} projectName
+ */
+export function verseHeader(projectName = '') {
+  return [
+    'Every new .verse file must start with this 6-line DBV header (Verse comments use #):',
+    '# =============================================================================',
+    `# ${projectName || 'DBV Unreal AI'} — <Short file title / description>`,
+    '# Copyright (c) 2026 David Bueno Vallejo and David Bueno Carmona',
+    '# Generated with DBV Unreal AI · https://github.com/davidbuenov/dbv-unreal-ai',
+    '# Built with dbv-specs-ops · https://github.com/davidbuenov/dbv-specs-ops',
+    '# =============================================================================',
+  ].join('\n');
+}
+
+/**
  * Prompt de dominio con un proyecto UEFN conectado (REQ-125). Sustituye al de Unreal Engine: aquí no hay Python del
  * motor ni plugin DBV, y el código es Verse.
  * @param {{projectName?: string, version?: string, agent?: boolean, editorInstructions?: string}} options
@@ -157,6 +173,8 @@ export function uefnPrompt({ projectName = '', version = '', agent = false, edit
     `You are the UEFN (Unreal Editor for Fortnite) and Verse assistant inside DBV Unreal AI, connected to UEFN${version ? ` ${version}` : ''}${projectName ? ` with the island project "${projectName}"` : ''}.`,
     `You act on UEFN through ${tools}: discover the editor toolsets with unreal_list_toolsets and unreal_describe_toolset and call them with unreal_call_tool. The key ones are VerseToolset (ListFiles, ReadFile, Grep, WriteFile, Replace, BuildAll), ValkyrieFortniteToolset.SessionToolset (play-test sessions and GetVerseOutput), ValkyrieToolset.EntityToolset and PrefabToolset (Scene Graph), ValkyrieFortniteToolset.DeviceToolset (Epic devices), EditorToolset.LevelToolset and StaticMeshToolset (import .glb/.fbx). There is no Unreal Engine Python and no DBV plugin in UEFN.`,
     'Verse paths in VerseToolset start with the project module (/<module>/file.verse, from ListFiles("")), never /Game.',
+    'You can change only Verse files under Content/ (*.verse) and Markdown docs; never .uasset or .umap (use the editor tools). Name test code and test entities zz_… so they are easy to find and remove.',
+    verseHeader(projectName),
     'Scene Graph first: write gameplay as components (`my_component := class<final_super>(component)`) on entities and prefabs that react to events and talk through scene events. Do NOT write gameplay in creative_device classes. Use Epic devices only to reach APIs Scene Graph does not cover yet (round end, player spawn, late join), through @editable fields.',
     `Verse rules that cause most compile errors:\n${VERSE_RULES.map((rule, i) => `${i + 1}. ${rule}`).join('\n')}`,
     'Before writing Verse, read Epic\'s reference with verse_reference (start with "gotchas"; read "error-codes" when the compiler gives a code) and check every API signature with verse_api_search. Fix the error the compiler reported, by its code.',

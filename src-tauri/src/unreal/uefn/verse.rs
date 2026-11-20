@@ -209,6 +209,76 @@ pub fn run(name: &str, args: &Value, project_dir: Option<&Path>) -> Result<Strin
     result
 }
 
+// ─── Escribir Verse (REQ-127) ───────────────────────────────────────
+
+/// El proyecto UEFN cuya carpeta es `root` (la que tiene el `.uefnproject`), si lo es.
+pub fn uefn_project_at(root: &Path) -> Option<super::discovery::UefnProject> {
+    let file = std::fs::read_dir(root).ok()?.flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("uefnproject")))?;
+    super::discovery::read_uefnproject(&file).ok()
+}
+
+/// Ruta Verse del MCP para un fichero del proyecto: `Content/a/b.verse` → `/<módulo>/a/b.verse`. El módulo es el del
+/// `.uplugin` raíz (un GUID en proyectos nuevos), nunca `/Game` (P-14). `None` si no es un `.verse` de `Content/`.
+pub fn verse_path(project: &super::discovery::UefnProject, relative: &str) -> Option<String> {
+    let clean = relative.replace('\\', "/");
+    let inside = clean.trim_start_matches("./").strip_prefix("Content/").filter(|rest| !rest.is_empty() && rest.to_lowercase().ends_with(".verse"))?;
+    let module = Some(project.plugin_name.clone()).filter(|m| !m.is_empty()).or_else(|| project.modules.first().cloned())?;
+    Some(format!("/{module}/{inside}"))
+}
+
+/// ¿Tiene UEFN abierto ESTE proyecto ahora? Entonces los `.verse` se escriben por su MCP.
+fn open_in_editor(project: &super::discovery::UefnProject) -> bool {
+    let open = super::discovery::open_project().is_some_and(|open| open.path.replace('\\', "/").eq_ignore_ascii_case(&project.path.replace('\\', "/")));
+    open
+}
+
+/// URL del MCP de UEFN según el `.ini` del usuario.
+fn uefn_mcp_url() -> String {
+    let ini = super::discovery::user_ini().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    let settings = super::server::mcp_settings(&ini);
+    crate::unreal::mcp_client::endpoint_url(settings.port, &settings.path)
+}
+
+/// Escribe un `.verse` con `VerseToolset.WriteFile` en el editor de `url`. Comprueba antes que es UEFN.
+pub fn write_via_mcp(url: &str, verse: &str, content: &str) -> Result<(), String> {
+    let session = crate::unreal::mcp_client::McpSession::connect(url).map_err(|e| e.to_string())?;
+    let toolsets = session.list_toolsets().map_err(|e| e.to_string())?;
+    super::server::is_uefn(&toolsets).then_some(()).ok_or_else(|| "the editor on the MCP port is not UEFN".to_string())?;
+    let args = json!({ "path": verse, "content": content, "span": null, "bCreateIfMissing": true });
+    let called = session.call_toolset_tool("VerseToolset.VerseToolset", "WriteFile", args, crate::unreal::mcp_client::DEFAULT_TIMEOUT).map_err(|e| e.to_string())?;
+    let result = if called.is_error { Err(format!("UEFN did not write {verse}: {}", called.text)) } else { Ok(()) };
+    result
+}
+
+/// Borra un `.verse` con `VerseToolset.Delete`. Con el editor abierto, borrar en disco rompe las compilaciones hasta
+/// reiniciar UEFN (REQ-127): por eso no hay plan B en disco.
+pub fn delete_via_mcp(url: &str, verse: &str) -> Result<(), String> {
+    let session = crate::unreal::mcp_client::McpSession::connect(url).map_err(|e| e.to_string())?;
+    let called = session.call_toolset_tool("VerseToolset.VerseToolset", "Delete", json!({ "path": verse, "bRecursive": false }), crate::unreal::mcp_client::DEFAULT_TIMEOUT).map_err(|e| e.to_string())?;
+    let result = if called.is_error { Err(format!("UEFN did not delete {verse}: {}", called.text)) } else { Ok(()) };
+    result
+}
+
+/// Escritura de la IA tras la revisión (`ai_write_file`). `Some` si el fichero es un `.verse` de un proyecto UEFN que
+/// está abierto en el editor: entonces se escribe por el MCP para que UEFN lo registre a la vez. `None` = disco, como
+/// siempre (UEFN cerrado, otro proyecto o no es Verse). Si el MCP falla, se escribe en disco: un fichero nuevo en disco
+/// también entra en `BuildAll` (P-14).
+pub fn editor_write(root: &Path, relative: &str, content: &str) -> Option<Result<(), String>> {
+    let project = uefn_project_at(root)?;
+    let verse = verse_path(&project, relative)?;
+    let written = open_in_editor(&project).then(|| write_via_mcp(&uefn_mcp_url(), &verse, content)).filter(Result::is_ok);
+    written
+}
+
+/// Borrado al deshacer un fichero creado (`ai_delete_created`). `Some` si es un `.verse` de un proyecto abierto en
+/// UEFN: se borra por el MCP o no se borra.
+pub fn editor_delete(root: &Path, relative: &str) -> Option<Result<(), String>> {
+    let project = uefn_project_at(root)?;
+    let verse = verse_path(&project, relative)?;
+    let deleted = open_in_editor(&project).then(|| delete_via_mcp(&uefn_mcp_url(), &verse));
+    deleted
+}
+
 /// Carpeta de la skill instalada para un proyecto (la del proyecto o la del usuario), si la hay.
 pub fn installed_skill_dir(project_dir: Option<&Path>) -> Option<PathBuf> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -322,6 +392,107 @@ mod tests {
         std::fs::write(dir.join("Big.digest.verse"), body).unwrap();
         let text = api_search(&digest_files(temp.path()), "thing");
         assert!(text.starts_with("200 match(es)") && text.contains("170 more matches"), "{}", &text[..80]);
+    }
+
+    fn project(plugin: &str, modules: &[&str]) -> super::super::discovery::UefnProject {
+        super::super::discovery::UefnProject {
+            title: "DBVUnrealAITest".into(),
+            path: "D:/U/DBVUnrealAITest/DBVUnrealAITest.uefnproject".into(),
+            dir: "D:/U/DBVUnrealAITest".into(),
+            project_id: "id".into(),
+            verse_path: String::new(),
+            linked: false,
+            modules: modules.iter().map(|m| m.to_string()).collect(),
+            compatibility_version: "43.10".into(),
+            plugin_name: plugin.into(),
+        }
+    }
+
+    #[test]
+    fn la_ruta_verse_usa_el_modulo_del_proyecto_y_nunca_game() {
+        // @spec REQ-127 — visto en P-14: `/ca8492f4-…/dbv_spike_device.verse`.
+        let guid = "ca8492f4-e5f2-4e71-8517-ab9056326ef8";
+        let p = project(guid, &[guid]);
+        assert_eq!(verse_path(&p, "Content/dbv_spike_device.verse").as_deref(), Some("/ca8492f4-e5f2-4e71-8517-ab9056326ef8/dbv_spike_device.verse"));
+        assert_eq!(verse_path(&p, "Content\\Gameplay\\zone.verse").as_deref(), Some("/ca8492f4-e5f2-4e71-8517-ab9056326ef8/Gameplay/zone.verse"));
+        assert_eq!(verse_path(&project("", &["DBVFornite"]), "Content/a.verse").as_deref(), Some("/DBVFornite/a.verse"));
+        assert!(verse_path(&p, "Content/notes.md").is_none());
+        assert!(verse_path(&p, "Source/a.verse").is_none());
+    }
+
+    /// MCP de UEFN simulado: responde `initialize`, `list_toolsets` (grabado) y apunta `WriteFile`/`Delete`.
+    fn fake_uefn_mcp() -> (String, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+        let list: Value = serde_json::from_str(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/unreal-mcp/uefn-43.10/list_toolsets.response.json")).unwrap()).unwrap();
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = calls.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut socket) = stream else { break };
+                let mut received = Vec::new();
+                let mut buffer = [0u8; 8192];
+                loop {
+                    let read = socket.read(&mut buffer).unwrap_or(0);
+                    received.extend_from_slice(&buffer[..read]);
+                    let text = String::from_utf8_lossy(&received).to_string();
+                    let done = text.find(CRLF2).is_some_and(|end| {
+                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
+                        received.len() >= end + 4 + length
+                    });
+                    if done || read == 0 {
+                        break;
+                    }
+                }
+                let request = String::from_utf8_lossy(&received).to_string();
+                let body: Value = request.split_once(CRLF2).and_then(|(_, b)| serde_json::from_str(b).ok()).unwrap_or(Value::Null);
+                let id = body.get("id").cloned().unwrap_or(Value::Null);
+                let payload = match body["method"].as_str().unwrap_or("") {
+                    "initialize" => json!({ "jsonrpc": "2.0", "id": id, "result": { "protocolVersion": "2025-06-18", "capabilities": {} } }).to_string(),
+                    "notifications/initialized" => String::new(),
+                    _ if body["params"]["name"] == "list_toolsets" => {
+                        let mut reply = list.clone();
+                        reply["id"] = id;
+                        reply.to_string()
+                    }
+                    _ => {
+                        seen.lock().unwrap().push(body["params"]["arguments"].clone());
+                        json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": "{\"returnValue\":null}" }] } }).to_string()
+                    }
+                };
+                let head = format!("HTTP/1.1 200 OK{CRLF}Content-Type: application/json{CRLF}Mcp-Session-Id: v1{CRLF}Content-Length: {}{CRLF}Connection: close{CRLF}{CRLF}", payload.len());
+                let _ = socket.write_all(head.as_bytes());
+                let _ = socket.write_all(payload.as_bytes());
+            }
+        });
+        (url, calls)
+    }
+
+    const CRLF: &str = "\r\n";
+    const CRLF2: &str = "\r\n\r\n";
+
+    #[test]
+    fn con_uefn_abierto_escribe_por_write_file_y_borra_por_delete_sin_tocar_el_disco() {
+        // @spec REQ-127
+        let temp = tempfile::tempdir().unwrap();
+        let (url, calls) = fake_uefn_mcp();
+        write_via_mcp(&url, "/mod/zz_test.verse", "Print(\"hola\")").unwrap();
+        delete_via_mcp(&url, "/mod/zz_test.verse").unwrap();
+        let seen = calls.lock().unwrap().clone();
+        assert_eq!(seen[0]["tool_name"], "WriteFile");
+        assert_eq!(seen[0]["arguments"]["path"], "/mod/zz_test.verse");
+        assert_eq!(seen[0]["arguments"]["bCreateIfMissing"], true);
+        assert_eq!(seen[1]["tool_name"], "Delete");
+        assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 0, "nada en disco");
+    }
+
+    #[test]
+    fn un_proyecto_que_no_es_uefn_escribe_en_disco_como_siempre() {
+        // @spec REQ-127
+        let temp = tempfile::tempdir().unwrap();
+        assert!(editor_write(temp.path(), "Content/a.verse", "x").is_none());
+        assert!(editor_delete(temp.path(), "Content/a.verse").is_none());
     }
 
     #[test]

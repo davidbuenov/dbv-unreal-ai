@@ -34,7 +34,7 @@ export const unrealSetProjectSettings = (settings) => call('unreal_set_project_s
 export const unrealListToolsets = (endpoint) => call('unreal_list_toolsets', { endpoint });
 export const unrealDescribeToolset = (endpoint, toolset) => call('unreal_describe_toolset', { endpoint, toolset });
 /** Por qué la IA no puede cambiar ese fichero del proyecto, o `null` (REQ-22). */
-export const unrealCodePathProblem = (relative) => call('unreal_code_path_problem', { relative });
+export const unrealCodePathProblem = (relative, uefn = false) => call('unreal_code_path_problem', { relative, uefn });
 /** Cómo compilar esos ficheros cambiados: `{mode: 'nothing'|'liveCoding'|'editorClosed', files?}` (REQ-22). */
 export const unrealCompilePlan = (paths) => call('unreal_compile_plan', { paths });
 /** Compila con Live Coding en el editor conectado (REQ-22). */
