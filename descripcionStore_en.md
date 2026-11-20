@@ -6,10 +6,10 @@
 
 ## Description *
 
-(3602 / 10000)
+(3862 / 10000)
 
 ```text
-DBV Unreal AI is a native artificial intelligence copilot for Unreal Engine 5.8 and 5.9: lightweight, fast, local-first, and privacy-respecting — with no forced subscriptions, no ads, and no tracking telemetry.
+DBV Unreal AI is a native artificial intelligence copilot for Unreal Engine 5.8 and 5.9, and for UEFN with Verse: lightweight, fast, local-first, and privacy-respecting — with no forced subscriptions, no ads, and no tracking telemetry.
 
 It connects directly to your running Unreal Engine editor using its native Model Context Protocol (MCP) HTTP server. Create, inspect, and modify 3D scenes using natural language, generate photorealistic worlds and 3D assets with AI, and run automated workflows safely and reversibly.
 
@@ -17,6 +17,7 @@ All core interactions with your engine run 100% locally on your machine. The AI 
 
 Key Features:
 • Bidirectional native communication with Unreal Engine 5.8 and 5.9 via MCP HTTP (port 8000)
+• UEFN and Verse: the AI writes Verse with the real API of your version, the app compiles it with BuildAll and each error goes back to the AI until it compiles; tests in a UEFN session, Scene Graph recipes and test copies with UEFNKit
 • Fab content on Unreal Engine 5.8.4 and 5.9: search and look at each product with its thumbnail and link before installing it; only free or already owned products compatible with your editor, Quixel Megascans included
 • Black box: record the game without touching the project, mark moments with a key and analyse with data to debug failures that only happen while playing
 • Dress MetaHumans from the app with a deterministic tool: dresses with cloth (Chaos Cloth) fitted to the body, shirts and trousers fitted while keeping their material, and garments saved to the Library to reuse them
@@ -47,18 +48,15 @@ Key Features:
 
 ## What's new in this version
 
-(1043 / 1500)
+(825 / 1500)
 
 ```text
-v0.6.2:
-• Fixed: Claude Code and Codex did not start when Node.js was installed in its default folder (C:\Program Files\nodejs). If you saw "'C:\Program' is not recognized as an internal or external command", it is solved.
-
-v0.6.1:
-• Fab on Unreal Engine 5.8.4: ask "I want a car" and you see each product with its thumbnail and its fab.com link before installing it, in the conversation or in the new Fab view.
-• Only free products or those already in your Fab library are installed (nothing is bought from the app), and only those compatible with your editor version, Quixel Megascans included. What you install stays as a reference in the Library.
-• The app finds the engine even when the project uses a GUID or a registered engine, and if it cannot find it, it lets you choose its folder.
-• The C++ plugin now comes already compiled for Unreal 5.8 and the 5.9 Preview: Fab and splats work without Visual Studio.
-• The Project view explains every step with its fix and has "Copy diagnostics" to ask for help, without keys or your user name.
+v0.7.0: UEFN and Verse
+• The app finds UEFN, its version and your projects, and connects to its MCP server with 7-step diagnostics. "Open UEFN" starts it through the Epic Games Launcher.
+• The AI writes Verse with any model: its own prompt with Scene Graph first, the real API of your version taken from the project's digests, and Epic's Verse skill, installed from GitHub.
+• Verse changes are written through UEFN and compiled with BuildAll; each error goes back to the AI with its file and line until it compiles, with your approval on every attempt.
+• Test in a UEFN session and read the Verse output; four UEFN recipes and UEFNKit to make a test copy, install an Epic sample or export your project.
+• Fixed: "Prepare" always copies the C++ plugin's source code along with its DLLs (it was missing with the Store install).
 ```
 
 ---
@@ -146,7 +144,7 @@ Interactive Help Center with global F1 shortcut
 **14.** (56 / 200)
 
 ```text
-Global keyboard shortcuts: F1, Ctrl+Shift+I, Esc, Ctrl+S
+UEFN and Verse: the AI writes, compiles and tests your Verse code
 ```
 
 **15.** (55 / 200)
@@ -228,24 +226,24 @@ Gaussian Splatting
 **7.** (16 / 40)
 
 ```text
-Game Development
+UEFN Verse
 ```
 
 ---
 
 ## Short description (up to 270 characters) *
 
-(215 / 270)
+(232 / 270)
 
 ```text
-Native AI copilot for Unreal Engine 5.8 and 5.9. Connects via MCP HTTP to assist with 3D scene creation, world building, and animated asset generation, prioritizing local execution, open standards, and user privacy.
+Native AI copilot for Unreal Engine 5.8, 5.9 and UEFN with Verse. Connects via MCP HTTP to assist with 3D scene creation, world building, and animated asset generation, prioritizing local execution, open standards, and user privacy.
 ```
 
 ---
 
 ## Notes for certification
 
-(3504)
+(5074)
 
 ```text
 The application communicates locally with the Unreal Engine 5.8 or 5.9 editor via a local Model Context Protocol HTTP server on localhost (port 8000).
@@ -264,4 +262,9 @@ Artificial Intelligence features are 100% optional and disabled by default:
 - Fab content (optional): the app uses the Fab session the user opens in their own editor with Epic's official plugin (Fab button in the Content Browser); that session's token never leaves the editor. It only downloads into the user's Unreal project content that is free or already in the user's Fab library; it never buys anything or accepts licenses on the user's behalf. Thumbnails are loaded from media.fab.com and one per installed product is saved in the app library.
 - To find the Unreal engine, the app only reads (never writes) the registry key HKCU\Software\Epic Games\Unreal Engine\Builds. If the user picks the engine folder by hand, it is saved in Documents\DBV Unreal AI\engine-overrides.json.
 - "Prepare project", when the user accepts it, copies the app plugin into the Plugins folder of the user's Unreal project, including two DLLs already compiled for their editor version (without them it would have to be compiled with Visual Studio).
+- UEFN (optional, Windows): the app reads UEFN's version and the user's UEFN projects from disk and from the Epic Games Launcher files, and connects to the MCP server that UEFN itself runs on localhost:8000. It never reads the UEFN process command line, because it carries the user's Epic access code. "Open UEFN" starts UEFN through the Epic Games Launcher (com.epicgames.launcher:// link), like its own shortcut.
+- Verse code: when the user approves a change proposed by the AI, the app writes the .verse file through UEFN's own tools (or on disk if UEFN is closed) and compiles it with UEFN's BuildAll. Only .verse and .md files of the open UEFN project are changed.
+- Epic's Verse skill (optional): only when the user presses "Install", the app downloads Epic's public Verse skill (documentation in Markdown) from github.com/magnusenebakk-epic/verse-skill into the user's project (.claude/skills/verse) or user folder, with git or as a zip. It is not bundled with the app and it is documentation for the AI, not code the app runs.
+- UEFNKit (optional): only when the user asks to copy, install a sample, export or delete a UEFN project, the app downloads Epic's UEFNKit PowerShell script from github.com/magnusenebakk-epic/UEFNKit, pinned to a reviewed version (2.4.0, commit 431cf6c), checks its SHA-256 before saving and running it, and runs it with PowerShell on the user's UEFN projects. Deleting a project always needs a confirmation dialog. A changed script is never run.
+- "Prepare project" now always copies the C++ plugin's source code along with its DLLs.
 ```

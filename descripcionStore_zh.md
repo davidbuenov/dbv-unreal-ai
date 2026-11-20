@@ -6,10 +6,10 @@
 
 ## 描述 / Description *
 
-(1684 / 10000)
+(1824 / 10000)
 
 ```text
-DBV Unreal AI 是一款面向 Unreal Engine 5.8 和 5.9 的原生 AI 助手：轻量、快速、默认在本地运行，并尊重你的隐私——没有强制订阅、没有广告，也没有侵入性的遥测。
+DBV Unreal AI 是一款面向 Unreal Engine 5.8、5.9 以及 UEFN（Verse）的原生 AI 助手：轻量、快速、默认在本地运行，并尊重你的隐私——没有强制订阅、没有广告，也没有侵入性的遥测。
 
 它通过 Unreal 编辑器自带的 Model Context Protocol（MCP）HTTP 服务器，直接连接正在运行的编辑器。你可以用自然语言创建、修改和分析 3D 场景，用 AI 生成世界和物体，并以可撤销、安全的方式执行自动化脚本。
 
@@ -17,6 +17,7 @@ DBV Unreal AI 是一款面向 Unreal Engine 5.8 和 5.9 的原生 AI 助手：�
 
 主要功能：
 • 通过 MCP HTTP（端口 8000）与 Unreal Engine 5.8 和 5.9 原生双向通信
+• UEFN 与 Verse：AI 依据你所用版本的真实 API 编写 Verse，应用用 BuildAll 编译，每个错误都返回给 AI 直到编译通过；可在 UEFN 会话中测试，提供 Scene Graph 配方，并可用 UEFNKit 制作测试副本
 • Unreal Engine 5.8.4 和 5.9 中的 Fab 内容：安装前可查看每个产品的缩略图和链接；只安装免费或已拥有且与你的编辑器兼容的内容，包括 Quixel Megascans
 • 黑匣子：在不修改项目的情况下记录游戏，用按键标记时刻，并用数据分析，以调试只在游玩时出现的问题
 • 在应用中用确定性工具为 MetaHuman 穿衣：贴合身体的布料连衣裙（Chaos Cloth）、保留材质的贴身衬衫和裤子，以及可保存到资源库以便重复使用的服装
@@ -47,18 +48,15 @@ DBV Unreal AI 是一款面向 Unreal Engine 5.8 和 5.9 的原生 AI 助手：�
 
 ## 此版本的新增功能 / What's new in this version
 
-(488 / 1500)
+(400 / 1500)
 
 ```text
-v0.6.2:
-• 已修复：当 Node.js 安装在默认文件夹（C:\Program Files\nodejs）时，Claude Code 和 Codex 无法启动。如果你看到过“'C:\Program' 不是内部或外部命令”，现在已解决。
-
-v0.6.1:
-• Unreal Engine 5.8.4 中的 Fab：说“我想要一辆车”，在安装前即可在对话或新的 Fab 视图中看到每个产品的缩略图和 fab.com 链接。
-• 只安装免费内容或已在你的 Fab 库中的内容（应用内不会购买任何东西），并且只安装与你的编辑器版本兼容的内容，包括 Quixel Megascans。已安装的内容会作为引用保存在资源库中。
-• 即使项目使用 GUID 或已注册的引擎，应用也能找到引擎；如果找不到，可以手动选择其文件夹。
-• C++ 插件现已为 Unreal 5.8 和 5.9 Preview 预先编译：无需 Visual Studio 即可使用 Fab 和 Splat。
-• “项目”视图会逐步说明每个步骤及其解决方法，并提供“复制诊断信息”以便求助，不含密钥和你的用户名。
+v0.7.0：UEFN 与 Verse
+• 应用可找到 UEFN、其版本和你的项目，并通过 7 步诊断连接到它的 MCP 服务器。“打开 UEFN”会通过 Epic Games 启动器启动它。
+• AI 可用任何模型编写 Verse：专用提示词（Scene Graph 优先）、从项目 digest 中获取的你所用版本的真实 API，以及从 GitHub 安装的 Epic Verse 技能。
+• Verse 修改通过 UEFN 写入并用 BuildAll 编译；每个错误连同文件和行号返回给 AI，直到编译通过，每次尝试都需要你批准。
+• 在 UEFN 会话中测试并读取 Verse 输出；四个 UEFN 配方，以及用于制作测试副本、安装 Epic 示例或导出项目的 UEFNKit。
+• 已修复：“准备”现在总会把 C++ 插件的源代码与其 DLL 一起复制（Store 安装版之前缺少源代码）。
 ```
 
 ---
@@ -146,7 +144,7 @@ AI 助手支持本地、订阅和云端 API 三种方式
 **14.** (32 / 200)
 
 ```text
-全局快捷键：F1、Ctrl+Shift+I、Esc、Ctrl+S
+UEFN 与 Verse：AI 编写、编译并测试你的 Verse 代码
 ```
 
 **15.** (24 / 200)
@@ -228,15 +226,15 @@ Gaussian Splatting
 **7.** (4 / 40)
 
 ```text
-游戏开发
+UEFN Verse
 ```
 
 ---
 
 ## 简短描述 / Short description (hasta 270 caracteres) *
 
-(102 / 270)
+(113 / 270)
 
 ```text
-面向 Unreal Engine 5.8 和 5.9 的原生 AI 助手。通过 MCP HTTP 连接编辑器，协助创建和修改 3D 场景，生成照片级真实感世界和带动画的角色，默认在本地运行并尊重你的隐私。
+面向 Unreal Engine 5.8、5.9 和 UEFN（Verse）的原生 AI 助手。通过 MCP HTTP 连接编辑器，协助创建和修改 3D 场景，生成照片级真实感世界和带动画的角色，默认在本地运行并尊重你的隐私。
 ```

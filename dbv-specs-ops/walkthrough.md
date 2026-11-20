@@ -1,9 +1,27 @@
-# 🧭 Walkthrough — DBV Unreal AI v0.6.2
+# 🧭 Walkthrough — DBV Unreal AI v0.7.0
 
-> **Fecha:** 2026-11-15 · **Versión:** 0.6.2 (Patch: arreglo urgente de la 0.6.1, que a su vez fue Patch desde la 0.6.0) · **Autores:** David Bueno Vallejo y David Bueno Carmona
-> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.23 y §3.25) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.6.2.md`](./releases/v0.6.2.md) y [`releases/v0.6.1.md`](./releases/v0.6.1.md) · **Plan:** [`implementation_plan.md`](./implementation_plan.md) §19 y §20
+> **Fecha:** 2026-11-20 · **Versión:** 0.7.0 (Minor: UEFN y Verse) · **Autores:** David Bueno Vallejo y David Bueno Carmona
+> **Especificación:** [`docs/SPECIFICATIONS.md`](./docs/SPECIFICATIONS.md) (§3.26, REQ-122..REQ-131; REQ-121 corregido) · **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) · **Notas:** [`releases/v0.7.0.md`](./releases/v0.7.0.md) · **Plan:** [`implementation_plan.md`](./implementation_plan.md) §21 · **Estudio:** [`docs/UEFN_VERSE_STUDY.md`](./docs/UEFN_VERSE_STUDY.md)
 
-## Qué cambia en v0.6.2
+## Qué cambia en v0.7.0
+
+| Área | Qué hace | Requisitos |
+| --- | --- | --- |
+| **Detectar UEFN** | Versión real (instalación, Launcher y log, la más nueva), proyectos `.uefnproject` y el abierto primero; «Abrir UEFN» por el Epic Games Launcher. Nunca lee la línea de comandos de UEFN. | REQ-122 |
+| **Diagnóstico y conexión** | 7 comprobaciones solo de UEFN, reconocimiento por toolsets `Valkyrie*`, puerto 8000 ocupado aunque diga «Running», Python por MCP con confirmación. | REQ-123 |
+| **Skill de Verse** | Se instala y actualiza desde GitHub (git o zip), en el proyecto o en el usuario; no se incluye. | REQ-124 |
+| **Verse con cualquier modelo** | Prompt de Verse, `verse_reference` y `verse_api_search` sobre los digests. | REQ-125, REQ-126 |
+| **Editar y compilar** | Escritura por `VerseToolset` con UEFN abierto, `BuildAll` en bucle con la IA (5 intentos, aprobación en cada uno). | REQ-127 |
+| **Sesión de UEFN** | Arrancar, enviar cambios, partida, estado, salida de Verse y log. | REQ-128 |
+| **Recetas y UEFNKit** | Cuatro recetas *Scene Graph*; UEFNKit 2.4.0 fijado con `sha256`. | REQ-129, REQ-131 |
+| **Evals** | 12 tareas de Verse con un UEFN simulado. | REQ-130 |
+| **Plugin C++ con su código** | «Preparar» copia `Source/` junto a las DLL: con la instalación de la Store el proyecto se quedaba sin el código del plugin (lo vio el usuario en otros equipos). | REQ-121 |
+
+**Comprobado:** Rust 448, Vitest 531, Python, `dbv-lint` y clippy limpios; validación en vivo con UEFN 43.12 en `DBVUnrealAITest` (tabla de abajo) y pruebas manuales del usuario con la app antes del `/ship`. MSIX `0.7.0.0` (9,4 MB) con identidad y capacidades sin cambios. Los plugins de Unreal no cambian (siguen en `0.6.1`).
+
+Lo que sigue describe la v0.6.2 y la v0.6.1, que también lleva esta versión.
+
+## Qué cambió en v0.6.2
 
 Un usuario de la Microsoft Store (**Victor Osuna**) probó la v0.6.1 recién aprobada y Claude Code no arrancaba: «"C:\Program" no se reconoce como un comando interno o externo».
 
@@ -85,11 +103,11 @@ Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cual
 | Convai, informe de VRAM | ✅ | ⏳ | Pendiente en 5.9 |
 | Proyecto de partida del workshop | ⏳ | — | Se prepara en 5.8.4 |
 | Fab: buscar, biblioteca, instalar (cliente propio) | ✅ | ⏳ (compila y carga; en 5.9 va el `FabToolset` de Epic) | En vivo en `DBVMCPFirst`; Automation `DBV.Fab.*` en los dos |
-| Plugin C++ ya compilado, sin `Source/` | ✅ | ✅ (esta Preview) | Proyectos de solo Blueprints en los dos motores |
+| Plugin C++ ya compilado (desde la v0.7.0, con `Source/` al lado) | ✅ | ✅ (esta Preview) | Proyectos de solo Blueprints en los dos motores sin `Source/` (v0.6.1); con `Source/`, el usuario en otros equipos con la instalación de la Store |
 | Motor por GUID, nombre o elegido a mano | ✅ | ✅ | Tests de `discovery.rs` y `engine_choice.rs` |
 
 
-## UEFN y Verse (v0.7.0, en construcción — REQ-122..REQ-131)
+## UEFN y Verse (v0.7.0 — REQ-122..REQ-131)
 
 > Construido el 2026-11-20 (S152..S164, un commit por rebanada). Validado en vivo con **UEFN 43.12** (el Launcher dice 43.10: ver REQ-122) y el proyecto de pruebas `DBVUnrealAITest` (`D:\Programacion\UEFN-Fornite\DBVUnrealAITest`), nunca en `DBVFornite`. Tests: Rust 444, Vitest 530.
 

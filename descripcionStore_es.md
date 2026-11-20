@@ -6,10 +6,10 @@
 
 ## Descripción *
 
-(3728 / 10000)
+(3983 / 10000)
 
 ```text
-DBV Unreal AI es un copiloto de inteligencia artificial nativo para Unreal Engine 5.8 y 5.9: ligero, rápido, local por defecto y respetuoso con tu privacidad — sin suscripciones forzosas, sin publicidad y sin telemetría invasiva.
+DBV Unreal AI es un copiloto de inteligencia artificial nativo para Unreal Engine 5.8 y 5.9, y para UEFN con Verse: ligero, rápido, local por defecto y respetuoso con tu privacidad — sin suscripciones forzosas, sin publicidad y sin telemetría invasiva.
 
 Conecta directamente con tu editor de Unreal Engine en marcha mediante su servidor nativo Model Context Protocol (MCP) HTTP. Permite crear, modificar y analizar escenas 3D mediante lenguaje natural, generar mundos y objetos con IA y ejecutar secuencias de comandos automatizadas de forma reversible y segura.
 
@@ -17,6 +17,7 @@ Todo el flujo de trabajo con el motor es 100% local. El asistente de IA es flexi
 
 Características principales:
 • Comunicación nativa bidireccional con Unreal Engine 5.8 y 5.9 mediante MCP HTTP (puerto 8000)
+• UEFN y Verse: la IA escribe Verse con la API real de tu versión, la app lo compila con BuildAll y cada error vuelve a la IA hasta que compila; pruebas en una sesión de UEFN, recetas con Scene Graph y copias de pruebas con UEFNKit
 • Contenido de Fab en Unreal Engine 5.8.4 y 5.9: busca y mira cada producto con su miniatura y su enlace antes de instalarlo; solo lo gratuito o lo que ya tienes y compatible con tu editor, Quixel Megascans incluidos
 • Caja negra: graba el juego sin tocar el proyecto, marca momentos con una tecla y analiza con datos para depurar fallos que solo ocurren al jugar
 • Vestir MetaHumans desde la app con una herramienta determinista: vestidos con tela (Chaos Cloth) ajustados al cuerpo, camisetas y pantalones ajustados conservando su material, y prendas guardadas en la Biblioteca para reutilizarlas
@@ -47,18 +48,15 @@ Características principales:
 
 ## Novedades de esta versión
 
-(1029 / 1500)
+(877 / 1500)
 
 ```text
-v0.6.2:
-• Corregido: Claude Code y Codex no arrancaban si Node.js estaba instalado en su carpeta por defecto (C:\Program Files\nodejs). Si veías «"C:\Program" no se reconoce como un comando interno o externo», ya está resuelto.
-
-v0.6.1:
-• Fab en Unreal Engine 5.8.4: pide «quiero un coche» y verás cada producto con su miniatura y su enlace a fab.com antes de instalarlo, en la conversación o en la nueva vista Fab.
-• Solo se instala lo gratuito o lo que ya tienes en tu biblioteca de Fab (nada se compra desde la app) y solo lo compatible con tu versión del editor, Quixel Megascans incluidos. Lo instalado queda como referencia en la Biblioteca.
-• La app encuentra el motor aunque el proyecto use un GUID o un motor registrado, y si no lo encuentra te deja elegir su carpeta.
-• El plugin C++ viene ya compilado para Unreal 5.8 y la 5.9 Preview: Fab y los splats funcionan sin Visual Studio.
-• La vista Proyecto explica cada paso con su solución y tiene «Copiar diagnóstico» para pedir ayuda, sin claves ni tu nombre de usuario.
+v0.7.0: UEFN y Verse
+• La app encuentra UEFN, su versión y tus proyectos, y se conecta a su servidor MCP con un diagnóstico de 7 pasos. «Abrir UEFN» lo arranca a través del Epic Games Launcher.
+• La IA escribe Verse con cualquier modelo: un prompt propio con Scene Graph primero, la API real de tu versión sacada de los digests del proyecto y la skill de Verse de Epic, que se instala desde GitHub.
+• Los cambios en Verse se escriben a través de UEFN y se compilan con BuildAll; cada error vuelve a la IA con su fichero y línea hasta que compila, con tu aprobación en cada intento.
+• Prueba en una sesión de UEFN y lee la salida de Verse; cuatro recetas de UEFN y UEFNKit para hacer una copia de pruebas, instalar un ejemplo de Epic o exportar tu proyecto.
+• Corregido: «Preparar» copia siempre el código del plugin C++ junto a sus DLL (con la instalación de la Store faltaba).
 ```
 
 ---
@@ -146,7 +144,7 @@ Centro de Ayuda integrado con atajo rápido F1
 **14.** (46 / 200)
 
 ```text
-Atajos globales: F1, Ctrl+Mayús+I, Esc, Ctrl+S
+UEFN y Verse: la IA escribe, compila y prueba tu código Verse
 ```
 
 **15.** (59 / 200)
@@ -228,24 +226,24 @@ Gaussian Splatting
 **7.** (16 / 40)
 
 ```text
-Game Development
+UEFN Verse
 ```
 
 ---
 
 ## Descripción corta (hasta 270 caracteres) *
 
-(253 / 270)
+(248 / 270)
 
 ```text
-Copiloto nativo de inteligencia artificial para Unreal Engine 5.8 y 5.9. Conecta vía MCP HTTP, asiste en la creación y modificación de escenas 3D, genera mundos fotorrealistas y personajes animados, respetando tu privacidad y funcionando de forma local.
+Copiloto nativo de IA para Unreal Engine 5.8, 5.9 y UEFN con Verse. Conecta vía MCP HTTP, asiste en la creación y modificación de escenas 3D, genera mundos fotorrealistas y personajes animados, respetando tu privacidad y funcionando de forma local.
 ```
 
 ---
 
 ## Notas para la certificación
 
-(3630)
+(5308)
 
 ```text
 La aplicación se comunica de forma local con el editor de Unreal Engine 5.8 o 5.9 a través de un servidor HTTP Model Context Protocol en localhost (puerto 8000).
@@ -264,4 +262,9 @@ Las funciones de Inteligencia Artificial son 100% opcionales y están desactivad
 - Contenido de Fab (opcional): la app usa la sesión de Fab que el usuario abre en su propio editor con el plugin oficial de Epic (botón Fab del Content Browser); el token de esa sesión no sale del editor. Solo descarga a su proyecto de Unreal contenido gratuito o que el usuario ya tiene en su biblioteca de Fab; nunca compra nada ni acepta licencias por él. Las miniaturas se cargan de media.fab.com y se guarda una por producto instalado en la biblioteca de la app.
 - Para encontrar el motor de Unreal, la app solo lee (no escribe) la clave del registro HKCU\Software\Epic Games\Unreal Engine\Builds. Si el usuario elige a mano la carpeta del motor, se guarda en Documentos\DBV Unreal AI\engine-overrides.json.
 - «Preparar proyecto», cuando el usuario lo acepta, copia en la carpeta Plugins del proyecto de Unreal del usuario el plugin de la app, que incluye dos DLL ya compiladas para su versión del editor (sin ellas habría que compilarlo con Visual Studio).
+- UEFN (opcional, Windows): la app lee la versión de UEFN y los proyectos UEFN del usuario del disco y de los ficheros del Epic Games Launcher, y se conecta al servidor MCP que el propio UEFN abre en localhost:8000. Nunca lee la línea de comandos del proceso de UEFN, porque lleva el código de acceso de Epic del usuario. «Abrir UEFN» lo arranca a través del Epic Games Launcher (enlace com.epicgames.launcher://), como su propio acceso directo.
+- Código Verse: cuando el usuario aprueba un cambio propuesto por la IA, la app escribe el .verse con las herramientas del propio UEFN (o en disco si UEFN está cerrado) y lo compila con BuildAll de UEFN. Solo cambian ficheros .verse y .md del proyecto UEFN abierto.
+- Skill de Verse de Epic (opcional): solo cuando el usuario pulsa «Instalar», la app descarga la skill pública de Verse de Epic (documentación en Markdown) de github.com/magnusenebakk-epic/verse-skill en el proyecto del usuario (.claude/skills/verse) o en su carpeta de usuario, con git o como zip. No va incluida en la app y es documentación para la IA, no código que ejecute la app.
+- UEFNKit (opcional): solo cuando el usuario pide copiar, instalar un ejemplo, exportar o eliminar un proyecto UEFN, la app descarga el script de PowerShell UEFNKit de Epic de github.com/magnusenebakk-epic/UEFNKit, fijado a una versión revisada (2.4.0, commit 431cf6c), comprueba su SHA-256 antes de guardarlo y ejecutarlo, y lo ejecuta con PowerShell sobre los proyectos UEFN del usuario. Eliminar un proyecto exige siempre un diálogo de confirmación. Un script cambiado nunca se ejecuta.
+- «Preparar proyecto» copia ahora siempre el código fuente del plugin C++ junto a sus DLL.
 ```

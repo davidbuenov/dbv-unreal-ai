@@ -5,9 +5,9 @@
 **[🇪🇸 Español](./README.md) · 🇬🇧 English**
 
 [![Website](https://img.shields.io/badge/Website-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/en/)
-[![Releases v0.6.2](https://img.shields.io/badge/Releases-v0.6.2-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.7.0](https://img.shields.io/badge/Releases-v0.7.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
-[![status](https://img.shields.io/badge/status-stable_%7C_v0.6.2-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.2)
+[![status](https://img.shields.io/badge/status-stable_%7C_v0.7.0-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.7.0)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=en-EN&gl=EN)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -21,7 +21,7 @@
 [![Three.js](https://img.shields.io/badge/Three.js-3D_Viewer-000000?style=flat&logo=threedotjs&logoColor=white)](https://threejs.org)
 [![framework](https://img.shields.io/badge/framework-dbv--specs--ops-24292e?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-specs-ops)
 
-> Native AI copilot for Unreal Engine 5.8 and 5.9: connect any AI (local or cloud) to your open project, prepare it when needed and generate assets with Tripo and World Labs straight into the editor.
+> Native AI copilot for Unreal Engine 5.8 and 5.9, and for UEFN with Verse: connect any AI (local or cloud) to your open project, prepare it when needed and generate assets with Tripo and World Labs straight into the editor.
 >
 > 🌐 **Official website:** https://davidbuenov.github.io/dbv-unreal-ai/en/
 
@@ -147,6 +147,16 @@ These channels are not available yet; they will arrive in an upcoming version. I
 
 ## 🚧 Status
 
+**v0.7.0** (2026-11-20). **UEFN and Verse** (REQ-122..REQ-131):
+
+- **UEFN in the Project view:** the app finds UEFN, its real version (even when the Launcher lags behind after a patch) and your `.uefnproject` projects, with the one open in the editor first. With UEFN closed, "Open UEFN" starts it through the Epic Games Launcher. The app **never reads UEFN's command line**, which carries your Epic access code.
+- **Diagnostics and connection:** 7 UEFN-only checks (installed, open, project, optional Python, MCP server, tools and Verse skill), each with its fix, and "Connect to UEFN". It detects port 8000 being taken even when UEFN says "Running".
+- **The AI knows Verse with any model:** its own Verse prompt that puts *Scene Graph* first, `verse_reference` (Epic's Verse skill, downloaded from GitHub and not bundled) and `verse_api_search`, which looks up the real API of your version in the project's digests and never makes up signatures.
+- **Edit and compile Verse in a loop:** the AI proposes changes to the `.verse` files under `Content/`; with UEFN open they are written through UEFN itself and the app compiles with `BuildAll`. Each error goes back to the AI as `file:line · code · message`, up to 5 attempts and with your approval on each one. "Compiles" is only said when `BuildAll` returns no errors.
+- **Test in a UEFN session:** start the session, push the changes, start and stop the game and read the Verse output with file and line.
+- **UEFN recipes and UEFNKit:** four *Scene Graph* recipes (scoring zone, late-joining players, timer, bringing a `.glb` from the Library) and the "UEFN project" card to make a test copy, install an Epic sample or export to share. UEFNKit is downloaded pinned to a reviewed version and its `sha256` is checked before it runs.
+- **Fixed: "Prepare" always copies the C++ plugin's source code.** With the Microsoft Store install, the project was left without the `DBVUnrealAICpp` plugin's `Source/`; it now goes along with the DLLs.
+
 **v0.6.2** (2026-11-15). Urgent fix for v0.6.1:
 
 - **Claude Code and Codex start again with Node.js in its default folder:** with Node in `C:\Program Files\nodejs`, v0.6.1 failed to connect with "'C:\Program' is not recognized as an internal or external command". If that happened to you, updating is enough.
@@ -253,6 +263,7 @@ Roadmap in [`SPECIFICATIONS.md`](./dbv-specs-ops/docs/SPECIFICATIONS.md).
 ## 🧰 Requirements
 
 - **Unreal Engine 5.8** (installed with the Epic launcher or built from source).
+- Optional: **UEFN** (Unreal Editor for Fortnite) on Windows, with its MCP server turned on in *Edit → Editor Preferences → Agentic Workflows → Model Context Protocol*.
 - For development (not needed to use the [Releases](#install) installers): [Rust](https://rustup.rs) (stable), Node.js 20+ and the Tauri v2 system dependencies (WebView2 on Windows, WebKitGTK on Linux). Python 3.10+ for the toolset tests.
 - Optional: an AI (Ollama/LM Studio, an API key or a subscription agent) and a [Tripo](https://www.tripo3d.ai) API key to generate models. Keys are stored in the system credential store, never in files.
 
@@ -356,6 +367,7 @@ Each version's release notes are in two files, [`dbv-specs-ops/releases/vX.Y.Z.e
 ## 🙏 Acknowledgements
 
 - **Victor Osuna**, for testing: he tried v0.6.1 as soon as it reached the Microsoft Store and found the two problems that v0.6.2 solves.
+- **Epic Games**, for Magnus Enebakk's [Verse skill](https://github.com/magnusenebakk-epic/verse-skill) and for [UEFNKit](https://github.com/magnusenebakk-epic/UEFNKit): the app downloads them from their repositories and does not bundle them.
 
 ---
 

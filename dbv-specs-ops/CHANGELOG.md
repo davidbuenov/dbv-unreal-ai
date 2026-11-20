@@ -11,6 +11,10 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Sin publicar] / [Unreleased]
 
+## [0.7.0] - 2026-11-20
+
+Versión v0.7.0: **UEFN y Verse**. La app detecta UEFN y sus proyectos, se conecta a su servidor MCP y le da a cualquier IA lo que necesita para escribir Verse que compila: un prompt de Verse con *Scene Graph* primero, la API real de tu versión sacada de los digests del proyecto y la skill de Verse de Epic, que se descarga de GitHub y no se incluye. La IA propone cambios en `.verse`, la app los escribe por el propio UEFN y compila con `BuildAll` hasta que no haya errores, prueba en una sesión de UEFN y trae recetas propias y UEFNKit para hacer copias de pruebas. Además, «Preparar» vuelve a copiar el código del plugin C++ junto a sus DLL.
+
 ### Añadido
 - **UEFN: la app detecta UEFN, su versión y sus proyectos (REQ-122, S152).** Lee la versión del `Build.version` de la instalación, de la entrada `Fortnite_Studio` del Launcher y del log del editor, y se queda con la más nueva: el Launcher puede ir por detrás tras un parche (decía 43.10 con el editor ya en 43.12). Encuentra los proyectos (`.uefnproject`) en las carpetas que guarda UEFN y sabe cuál tiene abierto el editor por su `.ini`. Todo se lee; no se escribe nada.
 - **UEFN en la vista Proyecto (REQ-122, S153):** sección «Proyectos UEFN» con el distintivo `[UEFN]` y la versión instalada, el proyecto abierto en UEFN primero y un aviso si un proyecto pide una UEFN más nueva que la instalada. Fuera de Windows no aparece.
@@ -33,9 +37,15 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - **UEFNKit no acepta valores que parezcan parámetros (revisión de `/code-simplify`, REQ-131):** un valor que empiece por `-` (por ejemplo un `id` del catálogo remoto como `-Yes`) PowerShell lo habría tomado como un parámetro. Ahora se rechaza antes de lanzar nada.
 
 ### Corregido
+- **«Preparar» copia siempre el código del plugin C++ (REQ-121):** desde la v0.6.1, si la app traía DLL compatibles con el motor (lo normal con la instalación de la Microsoft Store y un motor del Launcher), copiaba el plugin `DBVUnrealAICpp` sin su carpeta `Source/`. En otros equipos el proyecto se quedaba sin el código del plugin y había que copiarlo del repositorio. Ahora se copian juntos `Source/` y las DLL; con el `BuildId` correcto el editor sigue cargando el plugin sin compilar.
 - **La instalación de Fortnite ya no aparece como un motor «UE 6.0» (REQ-122, S152):** trae su propio `Engine/Build/Build.version` con versión 6.0.0, y la búsqueda de motores la tomaba por uno de UE.
 - **Test intermitente del asistente de conexión (`tests/ai/connectWizard.test.js`):** con toda la suite en paralelo, la guía que se abre en la app tardaba más del segundo que esperaba el test; el primer test fallaba y su guía, al llegar tarde, hacía fallar también el siguiente. La espera de esas cargas pasa a 5 s, sin tocar ninguna comprobación.
 - **La sesión de UEFN no se queda «ocupada» para siempre tras un fallo (revisión de `/code-simplify`, REQ-128):** si una llamada de sesión fallaba de forma inesperada con el candado cogido, todas las siguientes habrían dicho que otra seguía en marcha. Ahora el candado se recupera.
+
+### Conocido
+- **La tarjeta de propuesta no dice «Aplicar y compilar Verse»:** es la tarjeta común de los cambios de la IA; la compilación con `BuildAll` sí ocurre al aplicar un `.verse`.
+- **El tope de intentos de Verse (1 a 10, 5 por defecto) aún no tiene control en Ajustes:** se guarda en el navegador de la app (`dbv-unreal-ai:verseAttempts`). La skill de Verse tampoco tiene entrada en Ajustes; se instala y actualiza desde el diagnóstico de UEFN.
+- **`verse_api_search` busca en los digests del disco, no con `VerseToolset.Grep`:** el resultado es el mismo y funciona con UEFN cerrado, pero el digest puede ir por detrás si UEFN no ha vuelto a abrir el proyecto tras un parche (la herramienta lo recuerda).
 
 ## [0.6.2] - 2026-11-15
 

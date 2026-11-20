@@ -1,8 +1,8 @@
 # 🏬 Publicación en Microsoft Store: DBV Unreal AI
 
-> **Estado:** 📦 Paquete de la `v0.3.1` generado y listo para subir a Partner Center (§7).  
-> **Versión base:** `v0.3.1`  
-> **Última revisión:** 2026-11-03  
+> **Estado:** 📦 Paquete de la `v0.7.0` generado y listo para subir a Partner Center (§13).  
+> **Versión base:** `v0.7.0`  
+> **Última revisión:** 2026-11-20  
 
 Documento operativo: checklist accionable para empaquetar y publicar **DBV Unreal AI** en la **Microsoft Store** mediante paquetes MSIX auto-firmados por la tienda, siguiendo las lecciones y estándares de `MARKETPLACE_PUBLISHING.md`.
 
@@ -224,3 +224,33 @@ Todo va en bloques de código con su recuento de caracteres, recalculado.
 1. **Paquetes:** subir `dbv-unreal-ai_0.6.2.0.msixbundle` y retirar del envío el anterior.
 2. **Fichas de Store** (español, inglés y chino): pegar *Novedades de esta versión*.
 3. **Enviar a certificación.**
+
+## 13. Envío de la v0.7.0 (2026-11-20)
+
+> ⚠️ **REQ-90 sigue abierto** (la matriz de ropa con la app instalada). Esta versión trae **UEFN y Verse** y corrige que «Preparar» dejara el proyecto sin el código del plugin C++ con la instalación de la Store (lo vio el usuario en otros equipos).
+
+**Paquete:** `src-tauri/target/msix/dbv-unreal-ai_0.7.0.0.msixbundle` (9,41 MB, generado con `npm run tauri:windows:build`). Identidad comprobada en el `AppxManifest.xml` del `.msix`: `davidbuenov.DBVUnrealAI`, `CN=13EE2A5D-F49E-48C9-8873-941069B15D63`, `Version="0.7.0.0"`, `x64`; capacidades sin cambios (`runFullTrust`, `internetClient`) y alias `dbv-unreal-ai.exe`. Lleva `unreal-plugin/` completo (con `DBVUnrealAICpp/Source/`) y `unreal-plugin-bin/5.8` y `5.9`; los plugins de Unreal siguen en `0.6.1`.
+
+**Capacidades:** no hacen falta nuevas. UEFN se lanza por el enlace `com.epicgames.launcher://` (lo abre el sistema), el MCP de UEFN va por `localhost:8000` y UEFNKit lo ejecuta `powershell.exe` como proceso hijo, que cubre `runFullTrust`.
+
+**Riesgo para la certificación (política 10.2.2, código descargado):** la app descarga, **solo a petición del usuario**, dos cosas de GitHub: la skill de Verse de Epic (Markdown, documentación para la IA) y el script de PowerShell UEFNKit de Epic, que **ejecuta** sobre los proyectos UEFN del usuario. UEFNKit va fijado a un commit revisado y se comprueba su `sha256` antes de guardarlo y ejecutarlo; no cambia la funcionalidad de la app, es una herramienta oficial de Epic que el usuario elige usar. Las notas para la certificación lo explican. Si la certificación lo rechaza, la salida más sencilla es un parche que, en la versión de la Store, abra el repositorio de UEFNKit en el navegador en lugar de descargarlo.
+
+**Riesgo del MSIX sin probar:** UEFNKit se guarda en `%APPDATA%\com.davidbuenov.dbv-unreal-ai\UEFNKit\431cf6c\` y el MSIX virtualiza esa escritura (lección del 2026-10-31). Como `powershell.exe` es proceso hijo de la app, corre dentro del paquete y debería ver la misma copia virtualizada. No se ha comprobado con el MSIX instalado: conviene probar «Hacer una copia de pruebas» con la app de la Store antes de anunciarlo.
+
+**Fichas:** en `descripcionStore_es.md`, `descripcionStore_en.md` y `descripcionStore_zh.md` cambian:
+
+- *Novedades de esta versión*: solo la v0.7.0 (ES 877, EN 825, ZH 400 de 1500);
+- la *Descripción*: «y para UEFN con Verse» en la primera frase y una viñeta nueva de UEFN y Verse tras la de comunicación con Unreal;
+- la característica 14 («UEFN y Verse: la IA escribe, compila y prueba tu código Verse», en lugar de los atajos globales);
+- la palabra clave 7 (`UEFN Verse`, en lugar de `Game Development`);
+- la *Descripción corta* (menciona UEFN con Verse);
+- cinco puntos nuevos en las *Notas para la certificación* (UEFN, código Verse, skill de Verse, UEFNKit y el código del plugin C++). Ahora tienen 5.074 caracteres en inglés; si Partner Center pone un límite menor, se pueden quitar puntos de versiones anteriores.
+
+Todo va en bloques de código con su recuento de caracteres, recalculado.
+
+**Pasos en Partner Center:**
+1. **Paquetes:** subir `dbv-unreal-ai_0.7.0.0.msixbundle` y retirar del envío el anterior.
+2. **Fichas de Store** (español, inglés y chino): pegar *Novedades de esta versión*, la *Descripción*, la *Descripción corta*, la característica 14 y la palabra clave 7.
+3. **Notas para la certificación:** pegar las de `descripcionStore_en.md` (un solo campo por envío).
+4. **Capturas (recomendado):** una de la vista Proyecto con un proyecto UEFN y otra de la tarjeta «Verse» con un error corregido.
+5. **Enviar a certificación.**

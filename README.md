@@ -5,9 +5,9 @@
 **🇪🇸 Español · [🇬🇧 English](./README.en.md)**
 
 [![Sitio Web](https://img.shields.io/badge/Sitio_Web-davidbuenov.github.io%2Fdbv--unreal--ai-0969da?style=flat&logo=googlechrome&logoColor=white)](https://davidbuenov.github.io/dbv-unreal-ai/)
-[![Releases v0.6.2](https://img.shields.io/badge/Releases-v0.6.2-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
+[![Releases v0.7.0](https://img.shields.io/badge/Releases-v0.7.0-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-9N5LS7ZKGTH5-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
-[![status](https://img.shields.io/badge/status-estable_%7C_v0.6.2-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.6.2)
+[![status](https://img.shields.io/badge/status-estable_%7C_v0.7.0-brightgreen?style=flat)](https://github.com/davidbuenov/dbv-unreal-ai/releases/tag/v0.7.0)
 [![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10_%2F_11_(Microsoft_Store)-0078D7?style=flat&logo=windows&logoColor=white)](https://apps.microsoft.com/detail/9n5ls7zkgth5?hl=es-ES&gl=ES)
 [![macOS](https://img.shields.io/badge/macOS-Universal_(.dmg)-000000?style=flat&logo=apple&logoColor=white)](https://github.com/davidbuenov/dbv-unreal-ai/releases/latest)
@@ -21,7 +21,7 @@
 [![Three.js](https://img.shields.io/badge/Three.js-Visor_3D-000000?style=flat&logo=threedotjs&logoColor=white)](https://threejs.org)
 [![framework](https://img.shields.io/badge/framework-dbv--specs--ops-24292e?style=flat&logo=github&logoColor=white)](https://github.com/davidbuenov/dbv-specs-ops)
 
-> Copiloto de IA nativo para Unreal Engine 5.8 y 5.9: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo y World Labs directamente en el editor.
+> Copiloto de IA nativo para Unreal Engine 5.8 y 5.9, y para UEFN con Verse: conecta cualquier IA (local o en la nube) a tu proyecto abierto, lo prepara si hace falta y genera assets con Tripo y World Labs directamente en el editor.
 >
 > 🌐 **Sitio web oficial:** https://davidbuenov.github.io/dbv-unreal-ai/
 
@@ -147,6 +147,16 @@ Estos canales aún no están disponibles; llegarán en una próxima versión. Mi
 
 ## 🚧 Estado
 
+**v0.7.0** (2026-11-20). **UEFN y Verse** (REQ-122..REQ-131):
+
+- **UEFN en la vista Proyecto:** la app encuentra UEFN, su versión real (aunque el Launcher vaya por detrás tras un parche) y tus proyectos `.uefnproject`, con el que tiene abierto el editor primero. Con UEFN cerrado, «Abrir UEFN» lo arranca a través del Epic Games Launcher. La app **nunca lee la línea de comandos de UEFN**, que lleva tu código de acceso de Epic.
+- **Diagnóstico y conexión:** 7 comprobaciones solo de UEFN (instalado, abierto, proyecto, Python opcional, servidor MCP, herramientas y skill de Verse), cada una con su solución, y «Conectar con UEFN». Detecta el puerto 8000 ocupado aunque UEFN diga «Running».
+- **La IA sabe Verse con cualquier modelo:** prompt propio de Verse con *Scene Graph* primero, `verse_reference` (la skill de Verse de Epic, que se descarga de GitHub y no se incluye) y `verse_api_search`, que busca la API real de tu versión en los digests del proyecto y nunca inventa firmas.
+- **Editar y compilar Verse en bucle:** la IA propone cambios en los `.verse` de `Content/`; con UEFN abierto se escriben por el propio UEFN y la app compila con `BuildAll`. Cada error vuelve a la IA como `fichero:línea · código · mensaje`, hasta 5 intentos y con tu aprobación en cada uno. «Compila» solo se dice si `BuildAll` no da errores.
+- **Probar en una sesión de UEFN:** arrancar la sesión, enviar los cambios, empezar y parar la partida y leer la salida de Verse con fichero y línea.
+- **Recetas de UEFN y UEFNKit:** cuatro recetas con *Scene Graph* (zona de puntuación, jugadores que entran tarde, temporizador, traer un `.glb` de la Biblioteca) y la tarjeta «Proyecto UEFN» para hacer una copia de pruebas, instalar un ejemplo de Epic o exportar para compartir. UEFNKit se descarga fijado a una versión revisada y se comprueba su `sha256` antes de ejecutarlo.
+- **Corregido: «Preparar» copia siempre el código del plugin C++.** Con la instalación de la Microsoft Store, el proyecto se quedaba sin `Source/` del plugin `DBVUnrealAICpp`; ahora va junto a las DLL.
+
 **v0.6.2** (2026-11-15). Arreglo urgente de la v0.6.1:
 
 - **Claude Code y Codex vuelven a arrancar con Node.js en su carpeta por defecto:** con Node en `C:\Program Files\nodejs`, la v0.6.1 fallaba al conectar con «"C:\Program" no se reconoce como un comando interno o externo». Si te pasó, basta con actualizar.
@@ -253,6 +263,7 @@ Hoja de ruta en [`SPECIFICATIONS.md`](./dbv-specs-ops/docs/SPECIFICATIONS.md).
 ## 🧰 Requisitos
 
 - **Unreal Engine 5.8** (instalado con el launcher de Epic o compilado).
+- Opcional: **UEFN** (Unreal Editor for Fortnite) en Windows, con su servidor MCP activado en *Edit → Editor Preferences → Agentic Workflows → Model Context Protocol*.
 - Para desarrollar (no hace falta para usar los instaladores de [Releases](#install)): [Rust](https://rustup.rs) (stable), Node.js 20+ y las dependencias de sistema de Tauri v2 (WebView2 en Windows, WebKitGTK en Linux). Python 3.10+ para los tests del toolset.
 - Opcional: una IA (Ollama/LM Studio, una clave de API o un agente de suscripción) y una clave de API de [Tripo](https://www.tripo3d.ai) para generar modelos. Las claves se guardan en el almacén de credenciales del sistema, nunca en ficheros.
 
@@ -356,6 +367,7 @@ Las notas de cada versión están en dos ficheros, [`dbv-specs-ops/releases/vX.Y
 ## 🙏 Agradecimientos
 
 - **Victor Osuna**, por las pruebas: probó la v0.6.1 nada más salir en la Microsoft Store y detectó los dos problemas que resuelve la v0.6.2.
+- **Epic Games**, por la [skill de Verse](https://github.com/magnusenebakk-epic/verse-skill) de Magnus Enebakk y por [UEFNKit](https://github.com/magnusenebakk-epic/UEFNKit): la app los descarga de sus repositorios y no los incluye.
 
 ---
 
