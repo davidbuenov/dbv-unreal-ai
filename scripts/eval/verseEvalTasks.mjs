@@ -105,7 +105,7 @@ export const TASKS = [
   {
     id: 'first_leader', rule: 2,
     prompt: 'Write a <decides> helper that finds the first player with more than 10 points in a map, and call it correctly from a component inside an if.',
-    errors: (code) => (/<decides>/.test(code) && /<transacts>|<reads>|<computes>/.test(code) && /\w+\[[^\]]*\]/.test(code) ? [] : [diag(3512, 'This invocation calls a function that has the <decides> effect, which is not allowed by its context. Call it with [] and give it <transacts>.', 7)]),
+    errors: (code) => (/<decides>/.test(code) && /<transacts>|<reads>|<computes>/.test(code) && /\w+\[[^\]]*\]/.test(code) ? [] : [diag(3511, "This call uses parentheses to call a function that has the 'decides' effect. Functions that may fail, which is indicated by the 'decides' effect, must be called with square brackets, while functions that always succeed must be called with parentheses.", 7)]),
     invented: ['FindFirst(', 'Where('],
   },
   {
@@ -117,7 +117,7 @@ export const TASKS = [
   {
     id: 'teleport_player', rule: 8,
     prompt: 'Write a component that teleports a player character 5 metres up from its current position. New code should use /Verse.org/SpatialMath and convert only where the API needs the old vector3.',
-    errors: (code) => (/TeleportTo\[/.test(code) ? [] : [diag(3512, 'TeleportTo has <decides>: call it with [].', 9)]),
+    errors: (code) => (/TeleportTo\[/.test(code) ? [] : [diag(3511, "This call uses parentheses to call a function that has the 'decides' effect. Functions that may fail must be called with square brackets.", 9)]),
     invented: ['SetPosition(', 'MoveTo(', 'SetActorLocation('],
   },
   {

@@ -87,3 +87,29 @@ Una aplicación de escritorio (Tauri v2: Windows, macOS, Linux) que conecta cual
 | Fab: buscar, biblioteca, instalar (cliente propio) | ✅ | ⏳ (compila y carga; en 5.9 va el `FabToolset` de Epic) | En vivo en `DBVMCPFirst`; Automation `DBV.Fab.*` en los dos |
 | Plugin C++ ya compilado, sin `Source/` | ✅ | ✅ (esta Preview) | Proyectos de solo Blueprints en los dos motores |
 | Motor por GUID, nombre o elegido a mano | ✅ | ✅ | Tests de `discovery.rs` y `engine_choice.rs` |
+
+
+## UEFN y Verse (v0.7.0, en construcción — REQ-122..REQ-131)
+
+> Construido el 2026-11-20 (S152..S164, un commit por rebanada). Validado en vivo con **UEFN 43.12** (el Launcher dice 43.10: ver REQ-122) y el proyecto de pruebas `DBVUnrealAITest` (`D:\Programacion\UEFN-Fornite\DBVUnrealAITest`), nunca en `DBVFornite`. Tests: Rust 444, Vitest 530.
+
+| Qué | Estado | Cómo se comprobó |
+| --- | --- | --- |
+| Detectar UEFN, versión y proyectos (REQ-122) | ✅ en vivo | `uefn_overview` en esta máquina: 43.12 por `Build.version`, `DBVFornite` y `DBVUnrealAITest` (abierto). Fortnite ya no sale como «UE 6.0» |
+| No leer la línea de comandos de UEFN (REQ-122) | ✅ | Test: el filtro de procesos va antes de leer argumentos |
+| Reconocer el MCP de UEFN y diagnóstico (REQ-123) | ✅ tests · ⏳ en la app | Fixtures `uefn-43.10` (63 toolsets) y `ue-5.8.4`; puerto ocupado en un log falso. Falta verlo en `tauri dev` |
+| Herramientas de la IA con UEFN (REQ-123) | ✅ tests | `--mcp` contra un UEFN falso: oculta las del plugin y explica por qué |
+| Skill de Verse de Epic (REQ-124) | ✅ tests · ⏳ en vivo | Repositorio git local en ruta con espacios, zip sin git; falta instalarla de GitHub desde la app |
+| Prompt de Verse y `verse_reference` (REQ-125) | ✅ tests | Skill falsa: temas, desconocido, sin skill, tope |
+| `verse_api_search` (REQ-126) | ✅ en vivo | Digests reales: `GetFortCharacter` → su firma en `Characters`, build 43.12 |
+| Escribir y compilar Verse en bucle (REQ-127) | ✅ en vivo | `WriteFile` por MCP de un `zz_dbv_live.verse` con `IsHigh(S)` sobre `<decides>` → **3511** en `Content/zz_dbv_live.verse:6`; con `IsHigh[S]` → `[]`; `Delete` por MCP |
+| Sesión de UEFN (REQ-128) | ✅ en vivo | `uefn_session_start` 102 s → `Connected · CanStart`; `uefn_session_push` con la partida sin empezar: «Refresh … not currently available» → se envió todo y apareció `dbv_spike_device.verse:8 ZZTEST hola` en 30 s; `uefn_session_stop` |
+| Recetas de UEFN (REQ-129) | ✅ tests · ⏳ en vivo | Falta que la IA siga las recetas 1–3 y la 4 importe un `.glb` en `DBVUnrealAITest` |
+| Evals de Verse (REQ-130) | ✅ jueces · ver §8 de la spec | `qwen3:8b` en local; falta un modelo en la nube |
+| UEFNKit (REQ-131) | ✅ tests · ⏳ en vivo | Script falso en ruta con espacios. **El script real no se ha ejecutado:** la herramienta de la sesión no permite lanzar con `-ExecutionPolicy Bypass` un script descargado; lo prueba el usuario desde la app (`duplicate` de `DBVFornite`) |
+
+**Lo que se vio en vivo y cambia el diseño:**
+
+- `()` sobre una función `<decides>` es el error **3511**; el 3512 es otro caso (una función `<decides>` llamada desde un contexto que no puede fallar).
+- Tras arrancar la sesión, la partida puede quedar en `CanStart`; enviar solo Verse entonces falla y hay que enviar todo (el plan B ya lo hace solo).
+- `EntityToolset` marca **todas** sus herramientas como `execute` en 43.x, también las de leer: con UEFN, leer entidades pide aprobación.
