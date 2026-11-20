@@ -32,6 +32,7 @@ import { createZoneTools, createZonesCard } from '../unreal/zones.js';
 import { createActionLog } from './actionLog.js';
 import * as api from './backend.js';
 import { createCodeCompiler } from './codeCompile.js';
+import { createVerseCompiler } from '../unreal/verseCompile.js';
 import { improvePrompt } from '../generation/promptImprover.js';
 import { createBlackboxBar } from './blackboxBar.js';
 import { createRecipeTools, localized, recipesCard } from './recipes.js';
@@ -336,6 +337,8 @@ export function start() {
   let aiApp = null;
   // REQ-22: compilar el C++ que la IA cambió, al aceptar su propuesta.
   const codeCompiler = createCodeCompiler({ getConnection: () => state.connection, getAi: () => aiApp, reconnect: (path) => views.project.connectProject(path) });
+  // REQ-127: con UEFN, aplicar un `.verse` compila con BuildAll y los errores vuelven a la IA.
+  const verseCompiler = createVerseCompiler({ getConnection: () => state.connection, getAi: () => aiApp, build: api.uefnBuildVerse });
   let aiLoading = null;
   const memories = new Map();
 
@@ -482,7 +485,7 @@ export function start() {
           }
         }
       },
-      onProposalApplied: (paths) => codeCompiler.afterApply(paths),
+      onProposalApplied: (paths) => (state.connection?.uefn ? verseCompiler.afterApply(paths) : codeCompiler.afterApply(paths)),
       autoAllowPermission: (params) => autoAllow(params, readOnlyTools, loadAutonomy()),
       // Un agente espera una aprobación: aviso si la ventana no está delante (REQ-115).
       onAttention: () => needsAttention(),

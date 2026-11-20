@@ -503,6 +503,17 @@ pub async fn uefn_verse_run(name: String, args: Value, project: Option<String>) 
     .await
 }
 
+/// Compila el Verse del proyecto UEFN `project` (`.uefnproject`) en el editor de `endpoint`. @spec REQ-127
+#[tauri::command]
+pub async fn uefn_build_verse(endpoint: Endpoint, project: String) -> Result<super::uefn::verse::VerseBuild, UnrealError> {
+    let url = endpoint.url();
+    blocking(move || {
+        let module = super::uefn::discovery::read_uefnproject(Path::new(&project)).map(|p| super::uefn::verse::module_of(&p)).unwrap_or_default();
+        super::uefn::verse::build_all(&url, &module).map_err(UnrealError::Protocol)
+    })
+    .await
+}
+
 /// Herramientas de la app que se ofrecen con UEFN (nombres y prefijos), la misma regla que el `--mcp`. @spec REQ-123
 #[tauri::command]
 pub fn uefn_tool_policy() -> serde_json::Value {

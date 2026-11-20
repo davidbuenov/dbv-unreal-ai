@@ -279,6 +279,95 @@ pub fn editor_delete(root: &Path, relative: &str) -> Option<Result<(), String>> 
     deleted
 }
 
+// ─── Compilar Verse (REQ-127) ───────────────────────────────────────
+
+/// Aviso del compilador por usar una API `@experimental`: la isla no se podrá publicar.
+pub const EXPERIMENTAL_CODE: i64 = 2304;
+
+/// Un diagnóstico de `BuildAll`, con la línea ya contada desde 1 y la ruta del disco si se pudo traducir.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerseDiagnostic {
+    pub severity: String,
+    pub code: i64,
+    pub message: String,
+    /// Ruta Verse del MCP (`/<módulo>/zz_test.verse`).
+    pub verse_path: String,
+    /// La misma relativa al proyecto (`Content/zz_test.verse`), vacía si es de un paquete de Epic.
+    pub relative: String,
+    /// Línea y columna desde 1 (`BuildAll` las da desde 0).
+    pub line: u32,
+    pub column: u32,
+}
+
+/// Resultado de compilar. `ok` solo si no hay ningún diagnóstico de gravedad `Error`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerseBuild {
+    pub ok: bool,
+    /// Hay una sesión de juego en marcha: no se compiló (REQ-127); se ofrece enviar los cambios.
+    pub session_running: bool,
+    pub errors: Vec<VerseDiagnostic>,
+    pub warnings: Vec<VerseDiagnostic>,
+    pub experimental: bool,
+}
+
+/// `Content/…` a partir de la ruta Verse del módulo del proyecto (`/<módulo>/a.verse` → `Content/a.verse`).
+pub fn relative_of(module: &str, verse: &str) -> String {
+    let prefix = format!("/{module}/");
+    let relative = verse.strip_prefix(&prefix).map(|rest| format!("Content/{rest}")).unwrap_or_default();
+    relative
+}
+
+/// Interpreta la lista de `BuildAll` (`returnValue`: `[{severity, code, message, filePath, span}]`).
+pub fn parse_build(value: &Value, module: &str) -> VerseBuild {
+    let list = value.as_array().cloned().unwrap_or_default();
+    let all: Vec<VerseDiagnostic> = list
+        .iter()
+        .map(|d| {
+            let verse = d.get("filePath").and_then(Value::as_str).unwrap_or("").to_string();
+            let number = |pointer: &str| d.pointer(pointer).and_then(Value::as_u64).unwrap_or(0) as u32 + 1;
+            VerseDiagnostic {
+                severity: d.get("severity").and_then(Value::as_str).unwrap_or("Error").to_string(),
+                code: d.get("code").and_then(Value::as_i64).unwrap_or(0),
+                message: d.get("message").and_then(Value::as_str).unwrap_or("").to_string(),
+                relative: relative_of(module, &verse),
+                verse_path: verse,
+                line: number("/span/startLine"),
+                column: number("/span/startCharacter"),
+            }
+        })
+        .collect();
+    let experimental = all.iter().any(|d| d.code == EXPERIMENTAL_CODE);
+    let (errors, rest): (Vec<_>, Vec<_>) = all.into_iter().partition(|d| d.severity == "Error");
+    let warnings = rest.into_iter().filter(|d| d.severity == "Warning").collect();
+    VerseBuild { ok: errors.is_empty(), session_running: false, errors, warnings, experimental }
+}
+
+/// Compila todo el Verse del proyecto abierto en el UEFN de `url`. Con una sesión de juego conectada no compila: la
+/// spec pide ofrecer enviar los cambios o parar la sesión (REQ-127, REQ-128).
+pub fn build_all(url: &str, module: &str) -> Result<VerseBuild, String> {
+    let session = crate::unreal::mcp_client::McpSession::connect(url).map_err(|e| e.to_string())?;
+    let status = session.call_toolset_tool("ValkyrieFortniteToolset.SessionToolset", "GetSessionStatus", json!({}), crate::unreal::mcp_client::DEFAULT_TIMEOUT).ok().and_then(|r| r.value).and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+    let result = if status == "Connected" {
+        Ok(VerseBuild { ok: false, session_running: true, errors: Vec::new(), warnings: Vec::new(), experimental: false })
+    } else {
+        // `BuildAll` compila todo el proyecto: con proyectos grandes tarda; 5 minutos de margen.
+        let called = session.call_toolset_tool("VerseToolset.VerseToolset", "BuildAll", json!({}), std::time::Duration::from_secs(300)).map_err(|e| e.to_string())?;
+        match (called.is_error, called.value) {
+            (false, Some(value)) => Ok(parse_build(&value, module)),
+            _ => Err(format!("BuildAll did not answer as expected: {}", called.text)),
+        }
+    };
+    result
+}
+
+/// Módulo Verse de un proyecto (el del `.uplugin` raíz).
+pub fn module_of(project: &super::discovery::UefnProject) -> String {
+    let module = Some(project.plugin_name.clone()).filter(|m| !m.is_empty()).or_else(|| project.modules.first().cloned()).unwrap_or_default();
+    module
+}
+
 /// Carpeta de la skill instalada para un proyecto (la del proyecto o la del usuario), si la hay.
 pub fn installed_skill_dir(project_dir: Option<&Path>) -> Option<PathBuf> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -493,6 +582,44 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         assert!(editor_write(temp.path(), "Content/a.verse", "x").is_none());
         assert!(editor_delete(temp.path(), "Content/a.verse").is_none());
+    }
+
+    fn recorded(file: &str) -> Value {
+        let text = std::fs::read_to_string(format!("{}/../tests/fixtures/unreal-mcp/uefn-43.10/{file}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let rpc: Value = serde_json::from_str(&text).unwrap();
+        let inner: Value = serde_json::from_str(rpc.pointer("/result/content/0/text").and_then(Value::as_str).unwrap()).unwrap();
+        inner["returnValue"].clone()
+    }
+
+    #[test]
+    fn interpreta_el_error_grabado_con_la_linea_desde_1_y_la_ruta_del_disco() {
+        // @spec REQ-127 — `BuildAll` real del spike P-14 (error 3509 en la línea 8, columna 26, contadas desde 0).
+        let module = "ca8492f4-e5f2-4e71-8517-ab9056326ef8";
+        let build = parse_build(&recorded("call_tool.VerseToolset.BuildAll.disk-file-with-error.response.json"), module);
+        assert!(!build.ok);
+        assert_eq!(build.errors.len(), 1);
+        let error = &build.errors[0];
+        assert_eq!((error.code, error.line, error.column), (3509, 9, 27));
+        assert_eq!(error.relative, "Content/dbv_spike_device.verse");
+        assert!(error.message.contains("type int"));
+    }
+
+    #[test]
+    fn solo_dice_que_compila_con_la_lista_vacia() {
+        // @spec REQ-127
+        let build = parse_build(&recorded("call_tool.VerseToolset.BuildAll.ok.response.json"), "m");
+        assert!(build.ok && build.errors.is_empty());
+    }
+
+    #[test]
+    fn los_avisos_no_impiden_compilar_y_el_2304_marca_api_experimental() {
+        // @spec REQ-127
+        let value = json!([{ "severity": "Warning", "code": 2304, "message": "experimental", "filePath": "/m/a.verse", "span": { "startLine": 0, "startCharacter": 0 } }, { "severity": "Hint", "code": 1, "message": "h", "filePath": "/Fortnite.com/x", "span": {} }]);
+        let build = parse_build(&value, "m");
+        assert!(build.ok && build.experimental);
+        assert_eq!(build.warnings.len(), 1);
+        assert_eq!(build.warnings[0].relative, "Content/a.verse");
+        assert_eq!(relative_of("m", "/Fortnite.com/x"), "");
     }
 
     #[test]

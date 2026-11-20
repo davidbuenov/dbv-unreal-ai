@@ -23,6 +23,7 @@ export const uefnSkillInstall = (path, scope) => call('uefn_skill_install', { pa
 export const uefnSkillUpdate = (path) => call('uefn_skill_update', { path });
 export const uefnVerseSpecs = () => call('uefn_verse_specs');
 export const uefnVerseRun = (name, args, project) => call('uefn_verse_run', { name, args, project });
+export const uefnBuildVerse = (endpoint, project) => call('uefn_build_verse', { endpoint, project });
 export const unrealEditors = () => call('unreal_editors');
 export const unrealReadProject = (path) => call('unreal_read_project', { path });
 export const unrealRecentProjects = () => call('unreal_recent_projects');

@@ -632,3 +632,7 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-family: var(--font-mono); }
 .badge--accent { color: var(--accent); background: var(--accent-subtle); }
 .warning { margin: 4px 0 0; font-size: 12px; color: var(--status-warn); background: var(--status-warn-bg); padding: 4px 8px; border-radius: 4px; }
+
+/* Errores de BuildAll en la tarjeta de Verse (REQ-127). */
+.verse-errors { margin: 4px 0; padding-left: 18px; font-size: 12px; }
+.verse-errors a { color: var(--status-error); }
