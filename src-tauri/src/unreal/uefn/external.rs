@@ -279,6 +279,18 @@ pub fn valid_kit_name(name: &str) -> bool {
 
 /// Argumentos de la orden (sin el script). `remove` y `variants` se niegan sin `confirmed`: solo entonces va `-Yes`.
 pub fn kit_args(command: &KitCommand, confirmed: bool) -> Result<Vec<String>, UnrealError> {
+    // Un valor que empiece por `-` (un `id` del catálogo remoto, por ejemplo) PowerShell lo tomaría por un parámetro
+    // (`-Yes`): se rechaza antes de lanzar nada.
+    let values: Vec<&String> = match command {
+        KitCommand::List | KitCommand::Version | KitCommand::Catalog => Vec::new(),
+        KitCommand::Duplicate { project, name, title } => [project, name].into_iter().chain(title.iter()).collect(),
+        KitCommand::Install { id, name } => std::iter::once(id).chain(name.iter()).collect(),
+        KitCommand::Export { project, out_dir } => std::iter::once(project).chain(out_dir.iter()).collect(),
+        KitCommand::Remove { project } | KitCommand::Variants { project } => vec![project],
+    };
+    if let Some(bad) = values.iter().find(|v| v.trim().is_empty() || v.trim_start().starts_with('-')) {
+        return Err(UnrealError::Format(format!("«{bad}» is not a valid UEFNKit value")));
+    }
     let s = |v: &str| v.to_string();
     let named = |name: &str| valid_kit_name(name).then_some(()).ok_or_else(|| UnrealError::Format(format!("«{name}»: the name must start with a letter and use only letters, digits or _")));
     let mut args: Vec<String> = match command {
@@ -473,6 +485,10 @@ mod tests {
         assert_eq!(dup, vec!["duplicate", "-Project", "DBVFornite", "-Name", "DBVFornite_Test", "-Json"]);
         assert!(kit_args(&KitCommand::Duplicate { project: "P".into(), name: "1mal".into(), title: None }, false).is_err());
         assert!(kit_args(&KitCommand::Install { id: "MobileGamesTD".into(), name: Some("con espacio".into()) }, false).is_err());
+        // Revisión de /code-simplify: un valor no puede colarse como parámetro.
+        assert!(kit_args(&KitCommand::Install { id: "-Yes".into(), name: None }, false).is_err());
+        assert!(kit_args(&KitCommand::Export { project: "P".into(), out_dir: Some("-Publish".into()) }, false).is_err());
+        assert!(kit_args(&KitCommand::Duplicate { project: " ".into(), name: "Copia".into(), title: None }, false).is_err());
     }
 
     #[test]

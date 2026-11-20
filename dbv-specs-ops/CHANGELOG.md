@@ -28,10 +28,13 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Seguridad
 - **La app ya no lee la línea de comandos del editor de UEFN (REQ-122, S152):** lleva el código de acceso de Epic (`-AUTH_PASSWORD`), el usuario y su id. Antes entraba en la búsqueda de editores de Unreal abiertos, aunque no se guardaba. Ahora se miran primero los nombres de proceso y la línea de comandos solo se lee de los editores de UE.
+- **`verse_reference` ya no puede leer ficheros fuera de la skill (revisión de `/code-simplify`, REQ-125):** el índice de temas sale del `SKILL.md`, que es de un tercero; una ruta absoluta (`C:/…/x.md`) habría hecho que la herramienta leyera cualquier `.md` del disco. Ahora solo cuentan rutas relativas dentro de la skill.
+- **UEFNKit no acepta valores que parezcan parámetros (revisión de `/code-simplify`, REQ-131):** un valor que empiece por `-` (por ejemplo un `id` del catálogo remoto como `-Yes`) PowerShell lo habría tomado como un parámetro. Ahora se rechaza antes de lanzar nada.
 
 ### Corregido
 - **La instalación de Fortnite ya no aparece como un motor «UE 6.0» (REQ-122, S152):** trae su propio `Engine/Build/Build.version` con versión 6.0.0, y la búsqueda de motores la tomaba por uno de UE.
 - **Test intermitente del asistente de conexión (`tests/ai/connectWizard.test.js`):** con toda la suite en paralelo, la guía que se abre en la app tardaba más del segundo que esperaba el test; el primer test fallaba y su guía, al llegar tarde, hacía fallar también el siguiente. La espera de esas cargas pasa a 5 s, sin tocar ninguna comprobación.
+- **La sesión de UEFN no se queda «ocupada» para siempre tras un fallo (revisión de `/code-simplify`, REQ-128):** si una llamada de sesión fallaba de forma inesperada con el candado cogido, todas las siguientes habrían dicho que otra seguía en marcha. Ahora el candado se recupera.
 
 ## [0.6.2] - 2026-11-15
 

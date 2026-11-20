@@ -17,6 +17,8 @@
 
 pub mod discovery;
 pub mod external;
+#[cfg(test)]
+pub mod fake_mcp;
 pub mod recipes;
 pub mod server;
 pub mod session;

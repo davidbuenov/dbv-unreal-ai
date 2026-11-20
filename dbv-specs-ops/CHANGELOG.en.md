@@ -28,10 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 - **The app no longer reads the UEFN editor's command line (REQ-122, S152):** it carries the Epic access code (`-AUTH_PASSWORD`), the user name and id. It used to be included in the search for open Unreal editors, though it was never stored. Process names are now checked first, and the command line is read only for UE editors.
+- **`verse_reference` can no longer read files outside the skill (`/code-simplify` review, REQ-125):** the topic index comes from `SKILL.md`, which is third-party; an absolute path (`C:/…/x.md`) would have let the tool read any `.md` on disk. Only relative paths inside the skill count now.
+- **UEFNKit rejects values that look like parameters (`/code-simplify` review, REQ-131):** a value starting with `-` (for example a remote catalog `id` such as `-Yes`) would have been taken by PowerShell as a parameter. It is now rejected before anything runs.
 
 ### Fixed
 - **The Fortnite install no longer shows up as a "UE 6.0" engine (REQ-122, S152):** it ships its own `Engine/Build/Build.version` with version 6.0.0, and the engine search took it for a UE engine.
 - **Flaky connection-wizard test (`tests/ai/connectWizard.test.js`):** with the whole suite in parallel, the in-app guide took longer than the one second the test waited; the first test failed and its late guide made the next one fail too. The wait for those loads is now 5 s, with no assertion changed.
+- **The UEFN session no longer stays "busy" forever after a failure (`/code-simplify` review, REQ-128):** if a session call failed unexpectedly while holding the lock, every later call would have said another one was still running. The lock is now recovered.
 
 ## [0.6.2] - 2026-11-15
 

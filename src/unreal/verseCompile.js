@@ -93,31 +93,32 @@ export function createVerseCompiler(deps) {
   }
 
   /** Lo que pasa tras un resultado con errores: a la IA, otra compilación, o parar en el tope. */
+  /** El mismo error tras un arreglo: se compila otra vez desde cero; si sigue igual, se sugiere reiniciar UEFN. */
+  async function rebuild(connection, signature) {
+    rebuiltOnce = true;
+    const again = await compile(connection);
+    if (again.ok) finish(again);
+    else if (errorSignature(again) === signature) {
+      addCard(again, []);
+      deps.getAi()?.panel.addNode(el('p', { className: 'warning', text: t('verse.restartUefn') }));
+    } else await onErrors(connection, again);
+  }
+
+  /** Lo que pasa tras un resultado con errores: otra compilación, parar en el tope o devolverlos a la IA. */
   async function onErrors(connection, build) {
     const max = maxAttempts(deps.storage);
     const signature = errorSignature(build);
     const repeated = signature === lastSignature && attempt > 0;
     lastSignature = signature;
-    if (repeated && !rebuiltOnce) {
-      rebuiltOnce = true;
-      const again = await compile(connection);
-      if (again.ok) return finish(again);
-      if (errorSignature(again) === signature) {
-        addCard(again, []);
-        deps.getAi()?.panel.addNode(el('p', { className: 'warning', text: t('verse.restartUefn') }));
-        return undefined;
-      }
-      return onErrors(connection, again);
-    }
-    if (attempt >= max) {
+    if (repeated && !rebuiltOnce) await rebuild(connection, signature);
+    else if (attempt >= max) {
       addCard(build);
       deps.getAi()?.panel.addNode(el('p', { className: 'hint', text: t('verse.giveUp', { max: String(max) }) }));
-      return undefined;
+    } else {
+      attempt += 1;
+      addCard(build);
+      await deps.getAi()?.ask(errorsForAi(build, attempt, max), { label: t('verse.retry', { n: String(attempt), max: String(max) }) });
     }
-    attempt += 1;
-    addCard(build);
-    await deps.getAi()?.ask(errorsForAi(build, attempt, max), { label: t('verse.retry', { n: String(attempt), max: String(max) }) });
-    return undefined;
   }
 
   function finish(build) {
@@ -134,10 +135,7 @@ export function createVerseCompiler(deps) {
   async function afterApply(paths) {
     const connection = deps.getConnection();
     if (!connection?.uefn || !paths.some((p) => /\.verse$/i.test(p))) return;
-    if (connection.status !== 'online' || !connection.endpoint) {
-      addCard(null);
-      return;
-    }
+    if (connection.status !== 'online' || !connection.endpoint) return void addCard(null);
     const build = await compile(connection);
     if (build.failure) deps.getAi()?.panel.addNode(el('p', { className: 'error', text: build.failure }));
     else if (build.sessionRunning) addCard(build, deps.pushVerse ? [button(t('verse.pushChanges'), deps.pushVerse, 'btn-primary')] : []);

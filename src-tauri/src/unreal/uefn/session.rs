@@ -63,8 +63,8 @@ pub fn tool_specs() -> Vec<Value> {
 fn lock_for(url: &str) -> Arc<Mutex<()>> {
     static LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
     let map = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
-    let lock = map.lock().map(|mut m| m.entry(url.to_string()).or_default().clone()).unwrap_or_default();
-    lock
+    let mut locks = map.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    locks.entry(url.to_string()).or_default().clone()
 }
 
 /// Una entrada de `GetVerseOutput` en una línea: `[Error] zz_test.verse:8 mensaje`.
@@ -150,7 +150,17 @@ fn test_actors(session: &McpSession) -> Vec<String> {
 pub fn run(name: &str, args: &Value, url: &str, log: Option<&Path>, sleep: &dyn Fn(Duration)) -> Result<String, String> {
     let lock = lock_for(url);
     // «Parar la sesión» espera a que acabe la llamada en curso; las demás no esperan: se explica y se reintenta.
-    let guard = if name == STOP { lock.lock().ok() } else { lock.try_lock().ok() };
+    // Si una llamada anterior entró en pánico con el candado cogido, se recupera: si no, todas las siguientes dirían
+    // «still running» para siempre.
+    let guard = if name == STOP {
+        Some(lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner))
+    } else {
+        match lock.try_lock() {
+            Ok(guard) => Some(guard),
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) => None,
+        }
+    };
     let Some(_guard) = guard else { return Err("another UEFN session call is still running (starting a session takes about 2 minutes). Wait for it to finish, then try again.".into()) };
     let session = McpSession::connect(url).map_err(|e| e.to_string())?;
     let call = Call { session: &session, log };
@@ -211,78 +221,35 @@ mod tests {
         serde_json::from_str(&text).unwrap()
     }
 
-    const CRLF: &str = "\r\n";
-    const CRLF2: &str = "\r\n\r\n";
-
     /// UEFN simulado para la sesión: responde con lo grabado en P-14. `slow_start` hace que StartSession tarde.
     /// La salida de Verse crece en cada lectura tras un envío (como en el spike, llega con retraso).
     fn fake_session(slow_start: Duration, zz: bool) -> (String, Arc<Mutex<Vec<String>>>) {
-        use std::io::{Read, Write};
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+        use super::super::fake_mcp::{recorded_result, serve, text_result, tool_name};
         let calls = Arc::new(Mutex::new(Vec::new()));
         let seen = calls.clone();
         let reads = Arc::new(AtomicUsize::new(0));
-        std::thread::spawn(move || {
-            for stream in listener.incoming() {
-                let Ok(mut socket) = stream else { break };
-                let seen = seen.clone();
-                let reads = reads.clone();
-                std::thread::spawn(move || {
-                    let mut received = Vec::new();
-                    let mut buffer = [0u8; 8192];
-                    loop {
-                        let read = socket.read(&mut buffer).unwrap_or(0);
-                        received.extend_from_slice(&buffer[..read]);
-                        let text = String::from_utf8_lossy(&received).to_string();
-                        let done = text.find(CRLF2).is_some_and(|end| {
-                            let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
-                            received.len() >= end + 4 + length
-                        });
-                        if done || read == 0 {
-                            break;
-                        }
+        let url = serve(move |body| {
+            let tool = tool_name(body);
+            seen.lock().unwrap().push(tool.clone());
+            match tool.as_str() {
+                "StartSession" => {
+                    std::thread::sleep(slow_start);
+                    recorded_result("call_tool.SessionToolset.StartSession.response.json")
+                }
+                "PushChanges" => recorded_result("call_tool.SessionToolset.PushChanges.verseOnly.response.json"),
+                "GetVerseOutput" => {
+                    // Antes del envío, 1 línea con la etiqueta; dos lecturas después aparece la nueva.
+                    let n = reads.fetch_add(1, Ordering::SeqCst);
+                    let mut entries = vec![json!({ "sequence": 1, "severity": "Normal", "message": "ZZTEST v1", "sourceFile": "zz_test.verse", "sourceLine": 8 })];
+                    if n >= 2 {
+                        entries.push(json!({ "sequence": 2, "severity": "Normal", "message": "ZZTEST v2", "sourceFile": "zz_test.verse", "sourceLine": 8 }));
                     }
-                    let request = String::from_utf8_lossy(&received).to_string();
-                    let body: Value = request.split_once(CRLF2).and_then(|(_, b)| serde_json::from_str(b).ok()).unwrap_or(Value::Null);
-                    let id = body.get("id").cloned().unwrap_or(Value::Null);
-                    let tool = body["params"]["arguments"]["tool_name"].as_str().unwrap_or("").to_string();
-                    if !tool.is_empty() {
-                        seen.lock().unwrap().push(tool.clone());
-                    }
-                    let reply = |text: String| json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": text }] } }).to_string();
-                    let payload = match (body["method"].as_str().unwrap_or(""), tool.as_str()) {
-                        ("initialize", _) => json!({ "jsonrpc": "2.0", "id": id, "result": { "protocolVersion": "2025-06-18", "capabilities": {} } }).to_string(),
-                        ("notifications/initialized", _) => String::new(),
-                        (_, "StartSession") => {
-                            std::thread::sleep(slow_start);
-                            let mut r = recorded("call_tool.SessionToolset.StartSession.response.json");
-                            r["id"] = id.clone();
-                            r.to_string()
-                        }
-                        (_, "PushChanges") => {
-                            let mut r = recorded("call_tool.SessionToolset.PushChanges.verseOnly.response.json");
-                            r["id"] = id.clone();
-                            r.to_string()
-                        }
-                        (_, "GetVerseOutput") => {
-                            // Antes del envío, 1 línea con la etiqueta; dos lecturas después aparece la nueva.
-                            let n = reads.fetch_add(1, Ordering::SeqCst);
-                            let mut entries = vec![json!({ "sequence": 1, "severity": "Normal", "message": "ZZTEST v1", "sourceFile": "zz_test.verse", "sourceLine": 8 })];
-                            if n >= 2 {
-                                entries.push(json!({ "sequence": 2, "severity": "Normal", "message": "ZZTEST v2", "sourceFile": "zz_test.verse", "sourceLine": 8 }));
-                            }
-                            reply(json!({ "returnValue": { "entries": entries, "nextCursor": entries.len() } }).to_string())
-                        }
-                        (_, "GetSessionStatus") => reply("{\"returnValue\":\"Connected\"}".into()),
-                        (_, "GetGameState") => reply("{\"returnValue\":\"Running\"}".into()),
-                        (_, "FindActors") => reply(if zz { "{\"returnValue\":[{\"refPath\":\"/m/L.L:PersistentLevel.zz_cubo\"}]}".into() } else { "{\"returnValue\":[]}".into() }),
-                        _ => reply("{\"returnValue\":null}".into()),
-                    };
-                    let head = format!("HTTP/1.1 200 OK{CRLF}Content-Type: application/json{CRLF}Mcp-Session-Id: s{CRLF}Content-Length: {}{CRLF}Connection: close{CRLF}{CRLF}", payload.len());
-                    let _ = socket.write_all(head.as_bytes());
-                    let _ = socket.write_all(payload.as_bytes());
-                });
+                    text_result(&json!({ "returnValue": { "entries": entries, "nextCursor": entries.len() } }).to_string())
+                }
+                "GetSessionStatus" => text_result("{\"returnValue\":\"Connected\"}"),
+                "GetGameState" => text_result("{\"returnValue\":\"Running\"}"),
+                "FindActors" => text_result(if zz { "{\"returnValue\":[{\"refPath\":\"/m/L.L:PersistentLevel.zz_cubo\"}]}" } else { "{\"returnValue\":[]}" }),
+                _ => text_result("{\"returnValue\":null}"),
             }
         });
         (url, calls)
@@ -330,6 +297,19 @@ mod tests {
         let start = order.iter().position(|t| t == "StartSession").unwrap();
         let stop = order.iter().position(|t| t == "StopSession").unwrap();
         assert!(start < stop, "parar va después de arrancar: {order:?}");
+    }
+
+    #[test]
+    fn un_panico_con_el_candado_cogido_no_bloquea_las_siguientes_llamadas() {
+        // @spec REQ-128 — revisión de /code-simplify.
+        let (url, _) = fake_session(Duration::ZERO, false);
+        let lock = lock_for(&url);
+        let poisoned = std::thread::spawn(move || {
+            let _guard = lock.lock().unwrap();
+            panic!("fallo a propósito con el candado cogido");
+        });
+        assert!(poisoned.join().is_err());
+        assert_eq!(run(STATUS, &json!({}), &url, None, &no_sleep).unwrap(), "Session: Connected · Game: Running");
     }
 
     #[test]

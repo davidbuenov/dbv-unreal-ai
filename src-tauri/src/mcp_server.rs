@@ -3582,49 +3582,16 @@ mod tests {
         assert!(list_text.contains("Top Victoria"), "{list_text}");
     }
 
-    /// Editor UEFN simulado: responde `initialize` y `list_toolsets` con lo grabado en UEFN 43.10 (spike P-14) y
-    /// apunta cualquier otra llamada para comprobar que no llega.
+    /// Editor UEFN simulado: responde `list_toolsets` con lo grabado en UEFN 43.10 (spike P-14) y apunta cualquier
+    /// otra llamada para comprobar que no llega.
     fn fake_uefn() -> (String, SeenCalls) {
-        use std::io::{Read, Write};
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
-        let folder = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/unreal-mcp/uefn-43.10");
-        let list: Value = serde_json::from_str(&std::fs::read_to_string(format!("{folder}/list_toolsets.response.json")).unwrap()).unwrap();
+        use crate::unreal::uefn::fake_mcp::{recorded_result, serve, tool_name};
+        let list = recorded_result("list_toolsets.response.json");
         let calls: SeenCalls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let seen = calls.clone();
-        std::thread::spawn(move || {
-            for stream in listener.incoming() {
-                let Ok(mut socket) = stream else { break };
-                let mut received = Vec::new();
-                let mut buffer = [0u8; 8192];
-                loop {
-                    let read = socket.read(&mut buffer).unwrap_or(0);
-                    received.extend_from_slice(&buffer[..read]);
-                    let text = String::from_utf8_lossy(&received).to_string();
-                    let complete = text.find("\r\n\r\n").is_some_and(|end| {
-                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
-                        received.len() >= end + 4 + length
-                    });
-                    if complete || read == 0 {
-                        break;
-                    }
-                }
-                let request = String::from_utf8_lossy(&received).to_string();
-                let body: Value = request.split_once("\r\n\r\n").and_then(|(_, b)| serde_json::from_str(b).ok()).unwrap_or(Value::Null);
-                let id = body.get("id").cloned().unwrap_or(Value::Null);
-                let (status, headers, payload) = match body["method"].as_str().unwrap_or("") {
-                    "initialize" => ("200 OK", "Mcp-Session-Id: u1\r\n", json!({ "jsonrpc": "2.0", "id": id, "result": { "protocolVersion": "2025-06-18", "capabilities": { "tools": {} }, "serverInfo": { "name": "", "title": "", "version": "" } } }).to_string()),
-                    "notifications/initialized" => ("202 Accepted", "", String::new()),
-                    _ => {
-                        let params = &body["params"];
-                        seen.lock().unwrap().push((params["arguments"]["tool_name"].as_str().unwrap_or(params["name"].as_str().unwrap_or("")).to_string(), params["arguments"].clone()));
-                        let mut reply = list.clone();
-                        reply["id"] = id;
-                        ("200 OK", "", reply.to_string())
-                    }
-                };
-                let _ = write!(socket, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{payload}", payload.len());
-            }
+        let url = serve(move |body| {
+            seen.lock().unwrap().push((tool_name(body), body["params"]["arguments"].clone()));
+            list.clone()
         });
         (url, calls)
     }

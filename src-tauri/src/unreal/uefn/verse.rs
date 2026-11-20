@@ -46,7 +46,10 @@ pub fn topics(skill_dir: &Path) -> Vec<Topic> {
     let mut found: Vec<Topic> = Vec::new();
     for word in index.split(|c: char| c.is_whitespace() || matches!(c, '(' | ')' | '[' | ']' | '`' | '"' | '\'' | ',' | '|' | '<' | '>')) {
         let file = word.trim_start_matches("./").trim_end_matches(['.', ':', ';']);
-        let is_md = file.to_lowercase().ends_with(".md") && !file.contains("://") && !file.contains("..");
+        // Solo rutas relativas DENTRO de la skill: el `SKILL.md` es de un tercero, y una ruta absoluta (`C:/x.md`,
+        // `/x.md`) haría que `join` saliera de la carpeta.
+        let relative = !file.contains(':') && !file.starts_with(['/', '\\']) && !file.contains("..");
+        let is_md = file.to_lowercase().ends_with(".md") && relative;
         if is_md && !file.eq_ignore_ascii_case("SKILL.md") && skill_dir.join(file).is_file() && !found.iter().any(|t| t.file == file) {
             let name = Path::new(file).file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
             found.push(Topic { name, file: file.replace('\\', "/") });
@@ -222,7 +225,7 @@ pub fn uefn_project_at(root: &Path) -> Option<super::discovery::UefnProject> {
 pub fn verse_path(project: &super::discovery::UefnProject, relative: &str) -> Option<String> {
     let clean = relative.replace('\\', "/");
     let inside = clean.trim_start_matches("./").strip_prefix("Content/").filter(|rest| !rest.is_empty() && rest.to_lowercase().ends_with(".verse"))?;
-    let module = Some(project.plugin_name.clone()).filter(|m| !m.is_empty()).or_else(|| project.modules.first().cloned())?;
+    let module = Some(module_of(project)).filter(|m| !m.is_empty())?;
     Some(format!("/{module}/{inside}"))
 }
 
@@ -415,6 +418,20 @@ mod tests {
     }
 
     #[test]
+    fn un_skill_md_no_puede_apuntar_fuera_de_la_skill() {
+        // @spec REQ-125 — revisión de /code-simplify: rutas absolutas o con `..` en el índice de un tercero.
+        let temp = tempfile::tempdir().unwrap();
+        let outside = temp.path().join("secreto.md");
+        std::fs::write(&outside, "dato privado").unwrap();
+        let skill = temp.path().join("verse");
+        std::fs::create_dir_all(&skill).unwrap();
+        let absolute = outside.to_string_lossy().replace('\\', "/");
+        std::fs::write(skill.join("SKILL.md"), format!("- [a]({absolute})\n- [b](../secreto.md)\n- [c](/secreto.md)\n")).unwrap();
+        assert!(topics(&skill).is_empty());
+        assert!(!reference(Some(&skill), "secreto").contains("dato privado"));
+    }
+
+    #[test]
     fn sin_tema_o_con_uno_desconocido_da_la_lista() {
         // @spec REQ-125
         let temp = tempfile::tempdir().unwrap();
@@ -514,57 +531,22 @@ mod tests {
         assert!(verse_path(&p, "Source/a.verse").is_none());
     }
 
-    /// MCP de UEFN simulado: responde `initialize`, `list_toolsets` (grabado) y apunta `WriteFile`/`Delete`.
+    /// MCP de UEFN simulado: `list_toolsets` grabado; apunta las demás llamadas (`WriteFile`, `Delete`).
     fn fake_uefn_mcp() -> (String, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
-        use std::io::{Read, Write};
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
-        let list: Value = serde_json::from_str(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/fixtures/unreal-mcp/uefn-43.10/list_toolsets.response.json")).unwrap()).unwrap();
+        use super::super::fake_mcp::{recorded_result, serve, text_result};
         let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let seen = calls.clone();
-        std::thread::spawn(move || {
-            for stream in listener.incoming() {
-                let Ok(mut socket) = stream else { break };
-                let mut received = Vec::new();
-                let mut buffer = [0u8; 8192];
-                loop {
-                    let read = socket.read(&mut buffer).unwrap_or(0);
-                    received.extend_from_slice(&buffer[..read]);
-                    let text = String::from_utf8_lossy(&received).to_string();
-                    let done = text.find(CRLF2).is_some_and(|end| {
-                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0))).unwrap_or(0);
-                        received.len() >= end + 4 + length
-                    });
-                    if done || read == 0 {
-                        break;
-                    }
-                }
-                let request = String::from_utf8_lossy(&received).to_string();
-                let body: Value = request.split_once(CRLF2).and_then(|(_, b)| serde_json::from_str(b).ok()).unwrap_or(Value::Null);
-                let id = body.get("id").cloned().unwrap_or(Value::Null);
-                let payload = match body["method"].as_str().unwrap_or("") {
-                    "initialize" => json!({ "jsonrpc": "2.0", "id": id, "result": { "protocolVersion": "2025-06-18", "capabilities": {} } }).to_string(),
-                    "notifications/initialized" => String::new(),
-                    _ if body["params"]["name"] == "list_toolsets" => {
-                        let mut reply = list.clone();
-                        reply["id"] = id;
-                        reply.to_string()
-                    }
-                    _ => {
-                        seen.lock().unwrap().push(body["params"]["arguments"].clone());
-                        json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": "{\"returnValue\":null}" }] } }).to_string()
-                    }
-                };
-                let head = format!("HTTP/1.1 200 OK{CRLF}Content-Type: application/json{CRLF}Mcp-Session-Id: v1{CRLF}Content-Length: {}{CRLF}Connection: close{CRLF}{CRLF}", payload.len());
-                let _ = socket.write_all(head.as_bytes());
-                let _ = socket.write_all(payload.as_bytes());
+        let list = recorded_result("list_toolsets.response.json");
+        let url = serve(move |body| {
+            if body["params"]["name"] == "list_toolsets" {
+                list.clone()
+            } else {
+                seen.lock().unwrap().push(body["params"]["arguments"].clone());
+                text_result("{\"returnValue\":null}")
             }
         });
         (url, calls)
     }
-
-    const CRLF: &str = "\r\n";
-    const CRLF2: &str = "\r\n\r\n";
 
     #[test]
     fn con_uefn_abierto_escribe_por_write_file_y_borra_por_delete_sin_tocar_el_disco() {
