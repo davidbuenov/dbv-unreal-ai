@@ -19,6 +19,9 @@ use serde_json::{json, Value};
 use crate::unreal::compact;
 
 pub const REFERENCE_TOOL: &str = "verse_reference";
+pub const API_SEARCH_TOOL: &str = "verse_api_search";
+/// Coincidencias como mucho por búsqueda: más no ayuda a la IA y llena el contexto (REQ-51).
+const MAX_MATCHES: usize = 30;
 
 /// Definición de la herramienta, la misma para la conversación y el `--mcp`.
 pub fn reference_spec() -> Value {
@@ -82,9 +85,117 @@ pub fn reference(skill_dir: Option<&Path>, topic: &str) -> String {
     text
 }
 
+/// Definición de `verse_api_search` (REQ-126).
+pub fn api_search_spec() -> Value {
+    json!({
+        "name": API_SEARCH_TOOL,
+        "description": "Search the real Verse API of the user's UEFN version (the *.digest.verse files of the project: Verse, UnrealEngine, Fortnite and the project assets). Returns each matching signature with the class or module that contains it and its doc comment. Use it before using any API: if it is not here, it does not exist in this version. Case-insensitive text, e.g. \"GetFortCharacter\", \"TeleportTo\", \"team_settings_and_inventory_device\". Read-only.",
+        "inputSchema": { "type": "object", "properties": { "query": { "type": "string", "description": "Text to find (case-insensitive)." } }, "required": ["query"] },
+        "annotations": { "readOnlyHint": true }
+    })
+}
+
 /// Herramientas de Verse (solo con UEFN), las mismas en la conversación y en el `--mcp`.
 pub fn tool_specs() -> Vec<Value> {
-    vec![reference_spec()]
+    vec![reference_spec(), api_search_spec()]
+}
+
+// ─── verse_api_search (REQ-126) ─────────────────────────────────────
+
+/// Carpeta de los digests de un proyecto: `%LOCALAPPDATA%\UnrealEditorFortnite\Saved\VerseProject\<Proyecto>`.
+pub fn digest_root(saved: &Path, project_name: &str) -> PathBuf {
+    saved.join("VerseProject").join(project_name)
+}
+
+/// Los `*.digest.verse` de un proyecto, en las dos formas de carpeta: `Digests\BuiltIn\…` (43.x) y
+/// `<Proyecto>\Fortnite\…` (proyectos antiguos). Primero los de Epic, en orden estable.
+pub fn digest_files(root: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = walkdir::WalkDir::new(root)
+        .max_depth(4)
+        .into_iter()
+        .flatten()
+        .map(|e| e.into_path())
+        .filter(|p| p.to_string_lossy().to_lowercase().ends_with(".digest.verse"))
+        .collect();
+    files.sort();
+    files
+}
+
+/// `Generated from build: …` de la cabecera de un digest.
+pub fn digest_build(text: &str) -> Option<String> {
+    let build = text.lines().take(20).find_map(|l| l.trim().strip_prefix("Generated from build:").map(|b| b.trim().to_string()));
+    build
+}
+
+fn indent(line: &str) -> usize {
+    line.len() - line.trim_start().len()
+}
+
+/// Declaración que contiene la línea `index`: la anterior con menos sangría que declara algo (`:=`).
+fn container_of(lines: &[&str], index: usize) -> String {
+    let own = indent(lines[index]);
+    let found = lines[..index].iter().rev().find(|l| !l.trim().is_empty() && indent(l) < own && l.contains(":=") && !l.trim_start().starts_with('#'));
+    let name = found.map(|l| l.trim().split(":=").next().unwrap_or("").split('<').next().unwrap_or("").trim().to_string()).unwrap_or_default();
+    name
+}
+
+/// Comentario de documentación justo encima de la línea `index` (líneas `#` seguidas).
+fn doc_of(lines: &[&str], index: usize) -> String {
+    let doc: Vec<&str> = lines[..index].iter().rev().take_while(|l| l.trim_start().starts_with('#')).map(|l| l.trim().trim_start_matches('#').trim()).collect();
+    doc.into_iter().rev().collect::<Vec<_>>().join(" ")
+}
+
+/// Busca `query` (sin distinguir mayúsculas) en los digests. Devuelve el texto para la IA: cada firma con su fichero,
+/// línea, contenedor y comentario, y la versión del digest. Sin digests, o sin resultados, lo dice: nunca inventa.
+pub fn api_search(files: &[PathBuf], query: &str) -> String {
+    let wanted = query.trim().to_lowercase();
+    if wanted.is_empty() {
+        return "error: pass a query, e.g. GetFortCharacter.".to_string();
+    }
+    if files.is_empty() {
+        return "No Verse digest found for this project. Open the project in UEFN and build Verse once (Verse → Build Verse Code): UEFN writes the *.digest.verse files then. Do not guess signatures meanwhile.".to_string();
+    }
+    let mut matches: Vec<String> = Vec::new();
+    let mut builds: Vec<String> = Vec::new();
+    let mut total = 0usize;
+    for file in files {
+        let text = std::fs::read_to_string(file).unwrap_or_default();
+        let lines: Vec<&str> = text.lines().collect();
+        let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if let Some(build) = digest_build(&text).filter(|b| !builds.contains(b)) {
+            builds.push(build);
+        }
+        for (i, line) in lines.iter().enumerate().filter(|(_, l)| !l.trim_start().starts_with('#') && l.to_lowercase().contains(&wanted)) {
+            total += 1;
+            if matches.len() < MAX_MATCHES {
+                let container = container_of(&lines, i);
+                let doc = doc_of(&lines, i);
+                let place = if container.is_empty() { format!("{name}:{}", i + 1) } else { format!("{name}:{} in {container}", i + 1) };
+                matches.push(format!("{place}\n  {}{}", line.trim(), if doc.is_empty() { String::new() } else { format!("\n  # {doc}") }));
+            }
+        }
+    }
+    let version = if builds.is_empty() { String::new() } else { format!(" (digest from build {})", builds.join(", ")) };
+    let text = if matches.is_empty() {
+        format!("No match for \"{query}\" in the Verse API of this project{version}. If it should exist, the digest may be out of date: build Verse again in UEFN to regenerate it. Do not invent the signature.")
+    } else {
+        let more = if total > matches.len() { format!("\n… {} more matches: refine the query.", total - matches.len()) } else { String::new() };
+        format!("{} match(es) for \"{query}\"{version}:\n\n{}{more}", total, matches.join("\n\n"))
+    };
+    compact::clip(&text)
+}
+
+/// Digests del proyecto UEFN de la carpeta `project_dir` (su nombre es el del `.uefnproject`).
+pub fn project_digests(project_dir: Option<&Path>) -> Vec<PathBuf> {
+    let name = project_dir.and_then(|dir| {
+        let file = std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("uefnproject")))?;
+        file.file_stem().map(|s| s.to_string_lossy().into_owned())
+    });
+    let files = match (name, super::discovery::saved_dir()) {
+        (Some(name), Some(saved)) => digest_files(&digest_root(&saved, &name)),
+        _ => Vec::new(),
+    };
+    files
 }
 
 /// Ejecuta una herramienta de Verse. `project_dir` es la carpeta del proyecto UEFN (para la skill del proyecto).
@@ -92,6 +203,7 @@ pub fn run(name: &str, args: &Value, project_dir: Option<&Path>) -> Result<Strin
     let topic = args.get("topic").and_then(Value::as_str).unwrap_or("");
     let result = match name {
         REFERENCE_TOOL => Ok(reference(installed_skill_dir(project_dir).as_deref(), topic)),
+        API_SEARCH_TOOL => Ok(api_search(&project_digests(project_dir), args.get("query").and_then(Value::as_str).unwrap_or(""))),
         other => Err(format!("unknown Verse tool: {other}")),
     };
     result
@@ -153,6 +265,63 @@ mod tests {
         // @spec REQ-125
         let text = reference(None, "gotchas");
         assert!(text.contains("not installed") && text.contains("verse-skill"));
+    }
+
+    /// Digest falso con la forma real (cabecera, módulo, clase, comentarios), en las dos formas de carpeta.
+    fn fake_digests(root: &Path, old_layout: bool) -> Vec<PathBuf> {
+        let fortnite = if old_layout { root.join("Fortnite") } else { root.join("Digests").join("BuiltIn").join("Fortnite") };
+        std::fs::create_dir_all(&fortnite).unwrap();
+        let body = "<#\nGenerated from build: ++Fortnite+Release-43.12-CL-60598086\n#>\n# Verse path: /Fortnite.com\nCharacters<public> := module:\n    fort_character<native><public> := interface<unique><epic_internal>(positional):\n        # Teleports this `fort_character`.\n        TeleportTo<public>(Position:vector3)<transacts><decides>:void\n\n    # Returns the `fort_character` for `InAgent`.\n    (InAgent:agent).GetFortCharacter<native><public>()<transacts><decides>:fort_character\n";
+        std::fs::write(fortnite.join("Fortnite.digest.verse"), body).unwrap();
+        let verse = if old_layout { root.join("Verse") } else { root.join("Digests").join("BuiltIn").join("Verse") };
+        std::fs::create_dir_all(&verse).unwrap();
+        std::fs::write(verse.join("Verse.digest.verse"), "<#\nGenerated from build: ++Fortnite+Release-43.12-CL-60598086\n#>\nPrint<public>(Message:string):void\n").unwrap();
+        digest_files(root)
+    }
+
+    #[test]
+    fn encuentra_la_firma_con_su_contenedor_comentario_y_version() {
+        // @spec REQ-126
+        let temp = tempfile::tempdir().unwrap();
+        let files = fake_digests(temp.path(), false);
+        assert_eq!(files.len(), 2);
+        let text = api_search(&files, "getfortcharacter");
+        assert!(text.contains("(InAgent:agent).GetFortCharacter<native><public>()<transacts><decides>:fort_character"), "{text}");
+        assert!(text.contains("in Characters"), "{text}");
+        assert!(text.contains("Returns the `fort_character` for `InAgent`"), "{text}");
+        assert!(text.contains("43.12-CL-60598086"), "{text}");
+        assert!(api_search(&files, "TeleportTo").contains("in fort_character"));
+    }
+
+    #[test]
+    fn admite_la_forma_antigua_de_carpetas() {
+        // @spec REQ-126 — `DBVFornite` (30.20) tiene `<Proyecto>\Fortnite\Fortnite.digest.verse`.
+        let temp = tempfile::tempdir().unwrap();
+        let files = fake_digests(temp.path(), true);
+        assert!(api_search(&files, "GetFortCharacter").contains("1 match"));
+    }
+
+    #[test]
+    fn sin_resultados_o_sin_digest_lo_dice_y_no_inventa() {
+        // @spec REQ-126
+        let temp = tempfile::tempdir().unwrap();
+        let files = fake_digests(temp.path(), false);
+        let none = api_search(&files, "GetDragon");
+        assert!(none.contains("No match") && none.contains("build Verse again") && none.contains("Do not invent"));
+        assert!(api_search(&[], "x").contains("No Verse digest found"));
+        assert!(api_search(&files, "  ").starts_with("error"));
+    }
+
+    #[test]
+    fn muchas_coincidencias_se_acotan() {
+        // @spec REQ-126, REQ-51
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("Digests");
+        std::fs::create_dir_all(&dir).unwrap();
+        let body: String = (0..200).map(|i| format!("Thing{i}<public>():void\n")).collect();
+        std::fs::write(dir.join("Big.digest.verse"), body).unwrap();
+        let text = api_search(&digest_files(temp.path()), "thing");
+        assert!(text.starts_with("200 match(es)") && text.contains("170 more matches"), "{}", &text[..80]);
     }
 
     #[test]
