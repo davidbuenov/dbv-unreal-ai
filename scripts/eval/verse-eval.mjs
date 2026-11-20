@@ -38,7 +38,7 @@ async function callModel({ messages, tools }) {
   const response = await fetch('http://127.0.0.1:11434/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, messages: toOllama(messages), tools: tools.map((t) => ({ type: 'function', function: t })), stream: false, think: false, options: { num_ctx: 16384, temperature: 0 } }),
+    body: JSON.stringify({ model: MODEL, messages: toOllama(messages), tools: tools.map((t) => ({ type: 'function', function: t })), stream: false, think: false, options: { num_ctx: 16384, temperature: 0, num_predict: 4096 } }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Ollama HTTP ${response.status}: ${await response.text()}`);
