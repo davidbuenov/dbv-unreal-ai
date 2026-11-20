@@ -26,6 +26,10 @@ export const uefnVerseRun = (name, args, project) => call('uefn_verse_run', { na
 export const uefnBuildVerse = (endpoint, project) => call('uefn_build_verse', { endpoint, project });
 export const uefnSessionSpecs = () => call('uefn_session_specs');
 export const uefnSessionRun = (endpoint, name, args) => call('uefn_session_run', { endpoint, name, args });
+export const uefnRecipesAll = () => call('uefn_recipes_all');
+export const uefnRecipePrompt = (id) => call('uefn_recipe_prompt', { id });
+export const uefnRecipesSpecs = () => call('uefn_recipes_specs');
+export const uefnRecipesRun = (endpoint, project, name, args) => call('uefn_recipes_run', { endpoint, project, name, args });
 export const unrealEditors = () => call('unreal_editors');
 export const unrealReadProject = (path) => call('unreal_read_project', { path });
 export const unrealRecentProjects = () => call('unreal_recent_projects');

@@ -7,6 +7,7 @@
 //
 // Todo lo propio de UEFN vive aquí y solo se activa con un proyecto UEFN (v0.7.0, §3.26):
 //   · `discovery`: instalación, versión, proyectos y proyecto abierto (REQ-122).
+//   · `recipes`: recetas de UEFN con Scene Graph primero (REQ-129).
 //   · `server`: identificar el MCP de UEFN, diagnóstico, Python y lo que dice el log del editor (REQ-123).
 //   · `external`: repositorios de Epic que se descargan en la máquina del usuario, nunca se incluyen (REQ-124, REQ-131).
 //   · `session`: probar en una sesión de UEFN y leer lo que imprime Verse (REQ-128).
@@ -16,6 +17,7 @@
 
 pub mod discovery;
 pub mod external;
+pub mod recipes;
 pub mod server;
 pub mod session;
 pub mod verse;

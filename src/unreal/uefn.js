@@ -197,7 +197,7 @@ export function createVerseTools(deps) {
     name: spec.name,
     description: spec.description,
     parameters: { ...spec.inputSchema, additionalProperties: false },
-    label: (args) => `Verse: ${spec.name.replace('verse_', '')}${args?.topic || args?.query ? ` · ${args.topic ?? args.query}` : ''}`,
+    label: (args) => `${spec.name.startsWith('verse_') ? 'Verse' : 'UEFN'}: ${spec.name.replace(/^(verse|uefn)_/, '').replace(/_/g, ' ')}${args?.topic || args?.query || args?.id ? ` · ${args.topic ?? args.query ?? args.id}` : ''}`,
     run: async (args = {}) => {
       const result = await deps.run(spec.name, args ?? {});
       return result.ok ? result.value : `error: ${result.error?.message ?? result.error}`;

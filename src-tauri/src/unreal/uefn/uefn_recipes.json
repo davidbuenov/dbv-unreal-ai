@@ -1,0 +1,63 @@
+{
+  "recipes": [
+    {
+      "id": "uefn_scoring_zone",
+      "title": { "es": "Zona de puntuación", "en": "Scoring zone", "zh-CN": "得分区域" },
+      "summary": {
+        "es": "Un componente de zona que avisa cuando entra un jugador y un componente de reglas que suma puntos.",
+        "en": "A zone component that reports when a player enters and a thin rules component that adds points.",
+        "zh-CN": "一个在玩家进入时发出通知的区域组件，以及一个负责加分的规则组件。"
+      },
+      "needs": ["uefn"],
+      "components": [
+        "zz_scoring_zone_component := class<final_super>(component): only detects players entering its entity's volume and sends a scene event upwards (single responsibility).",
+        "zz_score_rules_component := class<final_super>(component) on a parent entity: listens to that scene event and keeps the score per player; it does not know how the zone detects anything."
+      ],
+      "steps": "1. Read verse_reference \"scene-graph\" and \"gotchas\". 2. Find the real APIs with verse_api_search: \"scene_event\", \"SendUp\", \"OnReceive\", \"EntityEnteredEvent\" or \"overlap\", and \"component\". Use only what the digest shows. 3. Create Content/zz_scoring_zone.verse with both components (Scene Graph first: no creative_device class). The zone sends a custom scene event up the hierarchy; the rules component receives it and adds 1 point to that player. 4. Each component prints \"ZZTEST <name> ready\" in OnBeginSimulation, and the rules component prints \"ZZTEST score <points>\" when it changes. 5. Build with VerseToolset BuildAll and fix errors until the list is empty. 6. With ValkyrieToolset.EntityToolset create an entity zz_scoring_area with the rules component and a child entity zz_scoring_zone with the zone component and a collision volume (ask the user before changing the level). 7. If the user wants to test it: uefn_session_start, then uefn_verse_output with pattern ZZTEST.",
+      "expected": ["ZZTEST zz_scoring_zone_component ready", "ZZTEST zz_score_rules_component ready"]
+    },
+    {
+      "id": "uefn_late_join_players",
+      "title": { "es": "Seguir a los jugadores, también los que entran tarde", "en": "Track players, late joiners included", "zh-CN": "跟踪玩家（包括中途加入的玩家）" },
+      "summary": {
+        "es": "Un componente que lleva la cuenta de los jugadores aunque entren con la partida empezada, usando el evento de aparición del dispositivo de equipos.",
+        "en": "A component that keeps track of players even when they join a match in progress, using the team device spawn event.",
+        "zh-CN": "一个即使玩家在比赛进行中加入也能记录玩家的组件，使用团队设备的生成事件。"
+      },
+      "needs": ["uefn"],
+      "components": [
+        "zz_player_tracker_component := class<final_super>(component): keeps a map from player to data; subscribes to TeamMemberSpawnedEvent of a team_settings_and_inventory_device reached through an @editable field (Epic devices only as API access)."
+      ],
+      "steps": "1. Read verse_reference \"gotchas\" and \"devices\". 2. Check with verse_api_search: \"team_settings_and_inventory_device\", \"TeamMemberSpawnedEvent\", \"GetPlayspace\", \"GetPlayers\" and \"Subscribe\". 3. Create Content/zz_player_tracker.verse with the component: an @editable team_settings_and_inventory_device field, subscribe to TeamMemberSpawnedEvent so late joiners are counted, and also register the players already in the playspace when it starts. No polling loops. 4. Print \"ZZTEST tracker ready\" when it starts and \"ZZTEST players <count>\" when the count changes. 5. Build with BuildAll until it compiles. 6. Place a Team Settings & Inventory device with ValkyrieFortniteToolset.DeviceToolset and point the @editable field to it (ask before changing the level). 7. Testing joins needs a second player: give the user a short manual test with the expected ZZTEST lines.",
+      "expected": ["ZZTEST tracker ready"]
+    },
+    {
+      "id": "uefn_timer_fuse",
+      "title": { "es": "Temporizador y mecha", "en": "Timer and fuse", "zh-CN": "计时器与引信" },
+      "summary": {
+        "es": "Una cuenta atrás que se puede cancelar, con race entre Sleep y un evento de cancelar, sin bucles de sondeo.",
+        "en": "A countdown that can be cancelled, racing Sleep against a cancel event, with no polling loops.",
+        "zh-CN": "一个可以取消的倒计时，用 race 让 Sleep 与取消事件竞争，不使用轮询循环。"
+      },
+      "needs": ["uefn"],
+      "components": [
+        "zz_fuse_component := class<final_super>(component): exposes Start and Cancel; the countdown is a race between Sleep(Seconds) and an event signalled by Cancel."
+      ],
+      "steps": "1. Read verse_reference \"effects\" and \"concurrency\" (or the topic the list gives for race/sync/spawn). 2. Check with verse_api_search: \"Sleep\", \"event\" and \"Signal\". 3. Create Content/zz_fuse.verse with the component: a <suspends> countdown that uses race { Sleep(Seconds); CancelEvent.Await() } and then reports whether it exploded or was cancelled. No loop that checks a flag. Remember <suspends> and <decides> are incompatible. 4. Print \"ZZTEST fuse armed\" when it starts and \"ZZTEST fuse exploded\" or \"ZZTEST fuse cancelled\" at the end. 5. Build with BuildAll until it compiles. 6. Add the component to an entity zz_fuse with EntityToolset (ask before changing the level) and test it in a session if the user wants.",
+      "expected": ["ZZTEST fuse armed"]
+    },
+    {
+      "id": "uefn_import_model",
+      "title": { "es": "Traer un modelo de la Biblioteca o de Tripo a la isla", "en": "Bring a Library or Tripo model to the island", "zh-CN": "将资源库或 Tripo 中的模型放到岛上" },
+      "summary": {
+        "es": "Importa un .glb de la Biblioteca como StaticMesh con el propio UEFN y lo coloca en el nivel.",
+        "en": "Imports a Library .glb as a StaticMesh with UEFN itself and places it in the level.",
+        "zh-CN": "使用 UEFN 自身将资源库中的 .glb 导入为 StaticMesh，并放入关卡。"
+      },
+      "needs": ["uefn", "library"],
+      "components": [],
+      "steps": "1. Find the model with library_list (or generate it with generate_3d_model if the user asks; it costs Tripo credits). 2. Describe EditorToolset.StaticMeshToolset with unreal_describe_toolset and call ImportFile with the model .glb path (glTF goes through Interchange). Put it under a zz_ folder of the project Content while testing. 3. Describe EditorToolset.LevelToolset and add the imported mesh to the level with AddToSceneFromAsset near the player start; name the actor zz_<model>. Ask the user before each change. 4. Check that it is there with LevelToolset FindActors (name zz_). Verse is not needed; if the model needs behaviour, add a component as in the other recipes.",
+      "expected": []
+    }
+  ]
+}

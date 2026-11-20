@@ -262,6 +262,8 @@ export function start() {
   let verseSpecs = [];
   // Sesión de UEFN (REQ-128): definidas en Rust, como en el MCP propio.
   let uefnSessionSpecs = [];
+  // Recetas de UEFN (REQ-129): definidas en Rust, como en el MCP propio.
+  let uefnRecipeSpecs = [];
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
   // Vista Fab (REQ-106): buscar, ver la ficha e instalar sin escribir a la IA, con las mismas reglas.
   views.fab = createFabView($('#view-fab'), { state, toast, confirm, openModal, closeModal });
@@ -413,10 +415,12 @@ export function start() {
       rememberRequest: (language) => rememberRequest(language),
       // Menú «Recetas» (REQ-23): elegir una se la pide a la IA con sus pasos y su comprobación final.
       openRecipes: async ({ panel, ask }) => {
-        const listed = await api.recipesAll();
+        // Con UEFN, sus recetas (REQ-129); las de Unreal Engine necesitan nuestro plugin.
+        const uefn = Boolean(state.connection?.uefn);
+        const listed = uefn ? await api.uefnRecipesAll() : await api.recipesAll();
         if (!listed.ok) return toast(listed.error.message, 'error');
         return panel.addNode(recipesCard(listed.value, async (recipe) => {
-          const prompt = await api.recipesPrompt(recipe.id);
+          const prompt = uefn ? await api.uefnRecipePrompt(recipe.id) : await api.recipesPrompt(recipe.id);
           if (prompt.ok) await ask(prompt.value, { label: `📋 ${localized(recipe.title, getLanguage())}` });
         }));
       },
@@ -664,6 +668,7 @@ export function start() {
         const verse = state.connection?.uefn ? createVerseTools({ specs: verseSpecs, run: (name, args) => api.uefnVerseRun(name, args, state.connection?.projectPath ?? null) }) : [];
         if (state.connection?.uefn && state.connection?.status === 'online') {
           verse.push(...createSessionTools({ specs: uefnSessionSpecs, run: (name, args) => api.uefnSessionRun(state.connection.endpoint, name, args), askApproval, onAction: log.add }));
+          verse.push(...createVerseTools({ specs: uefnRecipeSpecs, run: (name, args) => api.uefnRecipesRun(state.connection.endpoint, state.connection.projectPath ?? null, name, args) }));
         }
         return withUsage(state.connection?.uefn ? [...toolsForUefn(all, uefnPolicy), ...verse] : all, turnContext?.usage);
       },
@@ -712,8 +717,9 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools(), api.sessionsToolSpecs(), api.fabToolSpecs(), api.uefnToolPolicy(), api.uefnVerseSpecs(), api.uefnSessionSpecs()])
-        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly, sessions, fab, uefn, verse, uefnSession]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools(), api.sessionsToolSpecs(), api.fabToolSpecs(), api.uefnToolPolicy(), api.uefnVerseSpecs(), api.uefnSessionSpecs(), api.uefnRecipesSpecs()])
+        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly, sessions, fab, uefn, verse, uefnSession, uefnRecipes]) => {
+          uefnRecipeSpecs = uefnRecipes?.ok && Array.isArray(uefnRecipes.value) ? uefnRecipes.value : [];
           uefnSessionSpecs = uefnSession?.ok && Array.isArray(uefnSession.value) ? uefnSession.value : [];
           uefnPolicy = uefn?.ok ? uefn.value : null;
           verseSpecs = verse?.ok && Array.isArray(verse.value) ? verse.value : [];

@@ -180,7 +180,7 @@ pub const READ_ONLY_TOOLS: [&str; 28] = [
 #[tauri::command]
 pub fn app_mcp_read_only_tools() -> Vec<String> {
     // UEFN (REQ-125, REQ-126, REQ-128): las de Verse y las de sesión que solo leen.
-    let uefn = [crate::unreal::uefn::verse::REFERENCE_TOOL, crate::unreal::uefn::verse::API_SEARCH_TOOL].into_iter().chain(crate::unreal::uefn::session::READ_ONLY);
+    let uefn = [crate::unreal::uefn::verse::REFERENCE_TOOL, crate::unreal::uefn::verse::API_SEARCH_TOOL, crate::unreal::uefn::recipes::LIST, crate::unreal::uefn::recipes::CHECK].into_iter().chain(crate::unreal::uefn::session::READ_ONLY);
     READ_ONLY_TOOLS
         .iter()
         .copied()
@@ -2018,7 +2018,7 @@ Thumbnails (show them as images if your client renders Markdown): {}", out.text,
             "tools/list" => {
                 // Las de Verse (REQ-125) solo tienen sentido con UEFN.
                 let uefn = self.editor_is_uefn();
-                let verse = if uefn { crate::unreal::uefn::verse::tool_specs().into_iter().chain(crate::unreal::uefn::session::tool_specs()).collect() } else { Vec::new() };
+                let verse = if uefn { crate::unreal::uefn::verse::tool_specs().into_iter().chain(crate::unreal::uefn::session::tool_specs()).chain(crate::unreal::uefn::recipes::tool_specs()).collect() } else { Vec::new() };
                 let tools: Vec<Value> = tool_specs().into_iter().filter(|spec| !uefn || spec.get("name").and_then(Value::as_str).is_some_and(crate::unreal::uefn::server::available_in_uefn)).chain(verse).collect();
                 Ok(json!({ "tools": tools }))
             }
@@ -2039,6 +2039,12 @@ Thumbnails (show them as images if your client renders Markdown): {}", out.text,
                     // Sesión de UEFN (REQ-128): el log del editor dice qué diálogos contestó UEFN solo.
                     let log = crate::unreal::uefn::discovery::editor_log();
                     match crate::unreal::uefn::session::run(&name, &arguments, &self.config.unreal_url, log.as_deref(), &std::thread::sleep) {
+                        Ok(text) => text_result(text, false),
+                        Err(text) => text_result(text, true),
+                    }
+                } else if name == crate::unreal::uefn::recipes::LIST || name == crate::unreal::uefn::recipes::CHECK {
+                    // Recetas de UEFN (REQ-129): comprobar compila con BuildAll.
+                    match crate::unreal::uefn::recipes::run(&name, &arguments, &self.config.unreal_url, self.config.project_dir.as_deref()) {
                         Ok(text) => text_result(text, false),
                         Err(text) => text_result(text, true),
                     }

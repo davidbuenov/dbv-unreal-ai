@@ -536,6 +536,8 @@ export const ZH_APP = {
   'recipes.need.tripo': '你的 Tripo 密钥（会花费积分）',
   'recipes.need.world': '资源库中的一个 World Labs 世界',
   'recipes.need.convai': '已登录的 Convai 插件',
+  'recipes.need.uefn': '已连接 UEFN',
+  'recipes.need.library': '资源库中的一个 .glb 模型',
   'recipes.checking': '正在检查配方 {id}',
   'code.compiling': '正在用 Live Coding 编译 C++…',
   'code.compiled': '已编译（{summary}）。',

@@ -532,6 +532,35 @@ pub async fn uefn_session_run(endpoint: Endpoint, name: String, args: Value) -> 
     .await
 }
 
+/// Recetas de UEFN para el menú de la conversación. @spec REQ-129
+#[tauri::command]
+pub fn uefn_recipes_all() -> Vec<super::uefn::recipes::UefnRecipe> {
+    super::uefn::recipes::all()
+}
+
+/// Lo que se le pide a la IA al elegir una receta de UEFN. @spec REQ-129
+#[tauri::command]
+pub fn uefn_recipe_prompt(id: String) -> Result<String, UnrealError> {
+    super::uefn::recipes::find(&id).map(|r| super::uefn::recipes::prompt(&r)).ok_or_else(|| UnrealError::NotFound(format!("unknown UEFN recipe {id}")))
+}
+
+/// Herramientas de recetas de UEFN, las mismas que en el `--mcp`. @spec REQ-129
+#[tauri::command]
+pub fn uefn_recipes_specs() -> Vec<Value> {
+    super::uefn::recipes::tool_specs()
+}
+
+/// Ejecuta una herramienta de recetas de UEFN en el editor de `endpoint` para el proyecto `project`. @spec REQ-129
+#[tauri::command]
+pub async fn uefn_recipes_run(endpoint: Endpoint, project: Option<String>, name: String, args: Value) -> Result<String, UnrealError> {
+    let url = endpoint.url();
+    blocking(move || {
+        let dir = project.as_deref().and_then(|p| Path::new(p).parent().map(Path::to_path_buf));
+        super::uefn::recipes::run(&name, &args, &url, dir.as_deref()).map_err(UnrealError::Protocol)
+    })
+    .await
+}
+
 /// Herramientas de la app que se ofrecen con UEFN (nombres y prefijos), la misma regla que el `--mcp`. @spec REQ-123
 #[tauri::command]
 pub fn uefn_tool_policy() -> serde_json::Value {
