@@ -1,0 +1,10 @@
+{
+ "modal": [
+  0.0,
+  "{\r\n\t\"jsonrpc\": \"2.0\",\r\n\t\"id\": 2,\r\n\t\"result\":\r\n\t{\r\n\t\t\"content\": [\r\n\t\t\t{\r\n\t\t\t\t\"type\": \"text\",\r\n\t\t\t\t\"text\": \"{\\\"returnValue\\\":\\\"'cerrado'\\\"}\"\r\n\t\t\t}\r\n\t\t]\r\n\t}\r\n}"
+ ],
+ "probe_during_modal": [
+  0.0,
+  "{\r\n\t\"jsonrpc\": \"2.0\",\r\n\t\"id\": 2,\r\n\t\"result\":\r\n\t{\r\n\t\t\"content\": [\r\n\t\t\t{\r\n\t\t\t\t\"type\": \"text\",\r\n\t\t\t\t\"text\": \"{\\\"returnValue\\\":\\\"Connected\\\"}\"\r\n\t\t\t}\r\n\t\t]\r\n\t}\r\n}"
+ ]
+}

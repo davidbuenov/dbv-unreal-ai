@@ -1,0 +1,12 @@
+{
+ "jsonrpc": "2.0",
+ "id": 11,
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\"name\":\"EditorToolset.SoundWaveToolset\",\"version\":\"1.0\",\"description\":\"Importa archivos de audio como recursos SoundWave y exporta recursos SoundWave a archivos WAV en el disco.\",\"tools\":[{\"description\":\"Importa un archivo de audio del disco como recurso SoundWave.\\n\\nAcepta las extensiones que declara SoundFactory: wav, aif, aiff, ogg, flac, opus, mp3.\",\"name\":\"EditorToolset.SoundWaveToolset.ImportFile\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"folderPath\":{\"type\":\"string\",\"description\":\"Carpeta del explorador de contenido en la que se creará el recurso.\"},\"assetName\":{\"type\":\"string\",\"description\":\"Nombre del nuevo recurso.\"},\"sourceFile\":{\"type\":\"string\",\"description\":\"La ruta absoluta al archivo de audio de origen en el disco.\"}},\"required\":[\"folderPath\",\"assetName\",\"sourceFile\"]},\"outputSchema\":{\"type\":\"object\",\"properties\":{\"returnValue\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"title\":\"/Script/CoreUObject.Object\",\"properties\":{\"refPath\":{\"type\":\"string\",\"description\":\"La referencia almacenada como una cadena de ruta temporal.\"}}},\"description\":\"Un resultado pendiente que se completa con los recursos generados durante la importación (normalmente, una única SoundWave).\"}},\"required\":[\"returnValue\"]},\"annotations\":{\"accessMode\":\"write\"}}]}"
+   }
+  ]
+ }
+}

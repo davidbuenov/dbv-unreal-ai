@@ -2,7 +2,7 @@
 
 > **Fase:** `/spec` → se valida y completa en `/plan`
 > **Estado:** Borrador `/spec` v0.5.0
-> **Última Revisión:** 2026-11-07 (integración UEFN y Verse, Ropa de MetaHumans vía Tripo Quads + GeometryScript, y Play-testing autónomo en PIE)
+> **Última Revisión:** 2026-11-19 (corregida la entrada de UEFN: no estaba implementada, ver §3.26 de SPECIFICATIONS; antes 2026-11-07: integración UEFN y Verse, Ropa de MetaHumans vía Tripo Quads + GeometryScript, y Play-testing autónomo en PIE)
 
 ---
 
@@ -102,11 +102,13 @@ Llamadas de solo lectura por HTTP desde la máquina de desarrollo:
 
 ### Módulos y Cambios de la v0.5.0 (2026-11-07)
 
-- **Soporte de UEFN y Lenguaje Verse (`src-tauri/src/unreal/discovery.rs`, `prepare.rs`, `src-tauri/src/ai/files.rs`, `src/ai/unrealTools.js`):**
-  - `discovery.rs`: detección dual de proyectos `.uproject` (`engine_kind: "ue5"`) y `.uefnproject` (`engine_kind: "uefn"`), y procesos `UnrealEditorFortnite*`.
-  - `prepare.rs`: perfil de diagnóstico `uefn` sin requisitos de `PythonScriptPlugin` ni instalación de `DBVUnrealAI` / `DBVUnrealAICpp`.
-  - `files.rs`: guardia de edición de código ampliada para ficheros `.verse` con comentario `#` para la cabecera estándar DBV de 6 líneas.
-  - `unrealTools.js` y `recipes.js`: inyección de reglas del lenguaje Verse y dispositivos de Fortnite Creative (`uefnPrompt`) y recetas específicas cuando `engine_kind === "uefn"`.
+- **Soporte de UEFN y Lenguaje Verse — NO IMPLEMENTADO (corregido el 2026-11-19):** esta entrada describía como hecho un diseño que nunca llegó al código: no hay ninguna referencia a UEFN en `src-tauri/` ni en `src/`. El diseño vigente es el de la **v0.7.0** (`SPECIFICATIONS.md` §3.26, REQ-122..REQ-131, y `docs/UEFN_VERSE_STUDY.md`):
+  - `discovery.rs` (tipo de proyecto `uefn`);
+  - `mcp_client.rs` contra el MCP del propio UEFN;
+  - `files.rs`, que escribe por `VerseToolset` con el editor abierto;
+  - herramientas `verse_reference` y `verse_api_search`;
+  - bucle `BuildAll`, sesiones de UEFN y UEFNKit lanzado en modo sin menús.
+  Los módulos concretos se deciden en `/plan`.
 - **Pipeline de Ropa para MetaHumans (`src-tauri/src/generation/tripo.rs`, `jobs.rs`, `unreal-plugin/DBVUnrealAI/Content/Python/dbv_toolset/metahuman_tools.py`):**
   - `tripo.rs` y `jobs.rs`: soporte encadenado de generación + `convert_model` (`quad: true`, `face_limit: 8000`, `flatten_bottom: false`) y modificadores de prompt anatómico por slot (`Torso`, `Legs`, `Feet`).
   - `metahuman_tools.py`: importación PBR (`two_sided = True`), carga en `UDynamicMesh` (`GeometryScriptLibrary_SceneUtilityFunctions`), auto-escalado y centrado sobre cotas anatómicas del cuerpo base del MetaHuman, transferencia de pesos de huesos mediante `GeometryScriptLibrary_MeshBoneWeightFunctions.transfer_bone_weights_from_mesh` (`INPAINT_WEIGHTS`), creación de `USkeletalMesh` emparentado a `mh_body_skm.skeleton` y equipado en vivo con `set_leader_pose_component(Body)`.

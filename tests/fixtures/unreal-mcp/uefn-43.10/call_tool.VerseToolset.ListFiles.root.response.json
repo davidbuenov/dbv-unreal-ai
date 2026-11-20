@@ -1,0 +1,12 @@
+{
+ "jsonrpc": "2.0",
+ "id": 2,
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\"returnValue\":[{\"name\":\"/ca8492f4-e5f2-4e71-8517-ab9056326ef8\",\"type\":\"Directory\"},{\"name\":\"/invaliddomain/DBVUnrealAITest (ca8492f4-e5f2-4e71-8517-ab9056326ef8/Assets)\",\"type\":\"Directory\"},{\"name\":\"/Verse.org (Verse)\",\"type\":\"Directory\"},{\"name\":\"/UnrealEngine.com (UnrealEngine)\",\"type\":\"Directory\"},{\"name\":\"/Fortnite.com (Fortnite)\",\"type\":\"Directory\"}]}"
+   }
+  ]
+ }
+}

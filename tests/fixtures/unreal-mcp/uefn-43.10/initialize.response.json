@@ -1,0 +1,19 @@
+{
+ "jsonrpc": "2.0",
+ "id": 1,
+ "result": {
+  "protocolVersion": "2025-06-18",
+  "capabilities": {
+   "resources": {},
+   "tools": {
+    "listChanged": true
+   }
+  },
+  "serverInfo": {
+   "name": "",
+   "title": "",
+   "version": ""
+  },
+  "instructions": "For questions about a material's performance, cost, complexity or optimization (Fortnite runs on mobile devices), read the skill /Script/MaterialCostTools.MaterialCostOptimizationSkill first, and use MaterialCostTools.MaterialCostToolset: GetCost measures a material and compares it with the open map's materials, GetGraph returns its whole graph in one call.\n\nThe editor is displaying positions and rotations to the user in LUF (Left-Up-Forward, the Verse/UEFN coordinate convention), but tool calls do not convert: they still take and return the engine's native XYZ (Forward-Right-Up) coordinates directly, so translate to/from LUF yourself when describing them to the user."
+ }
+}

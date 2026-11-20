@@ -1,0 +1,12 @@
+{
+ "jsonrpc": "2.0",
+ "id": 5,
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\"returnValue\":{\"entries\":[\"[2026.11.20-07.03.11:779][  0]LogConfig: Set CVar [[s.LogStreamableFailuresAsErrors:1]]\",\"[2026.11.20-07.03.15:018][  0]LogStreaming: Warning: Failed to read file 'C:/Users/<usuario>/AppData/Local/FortniteGame/Saved/PersistentDownloadDir/InstalledBundles/ManifestArchive.journal' error.\",\"[2026.11.20-07.03.17:008][  2]LogStreaming: Warning: Failed to read file 'C:/Users/<usuario>/AppData/Local/FortniteGame/Saved/PersistentDownloadDir/InstalledBundles/ManifestArchive.journal' error.\",\"[2026.11.20-07.03.17:008][  2]LogStreaming: Warning: Failed to read file 'C:/Users/<usuario>/AppData/Local/FortniteGame/Saved/PersistentDownloadDir/InstalledBundles/TEMP_ManifestArchive.journal' error.\",\"[2026.11.20-07.03.20:412][805]LogBuildPatchServices: Build Stat: ErrorCode: OK\",\"[2026.11.20-07.03.20:412][805]LogBuildPatchServices: Build Stat: FailureType: NoError\",\"[2026.11.20-07.03.23:937][816]LogRazerChroma: [StartupModule] Failed to Init Razer Chroma Editor API. The Razer Synapse client is likely not installed on this machine. Error code 6023 (RZRESULT_DLL_NOT_FOUND)\",\"[2026.11.20-07.03.26:003][816]LogFort: Display:     Adding dependency plugin 'EcosystemReadyUpErrorsUI' during initial client startup\",\"[2026.11.20-07.03.26:034][816]LogGameFeatures: Error: Game feature '../../../FortniteGame/Plugins/GameFeatures/VariableSelections/VariableSelections.uplugin' has an unknown value '' for BuiltInInitialFeatureState (expected Installed, Registered, Loaded, or Active); defaulting to Active.\",\"[2026.11.20-07.03.37:752][816]MatchmakingLog: [3f32] - Registering ErrorUI EAntiCheatReadyUpErrors::SystemConfigSanctionNotMet\"],\"lastEntryLine\":5973}}"
+   }
+  ]
+ }
+}

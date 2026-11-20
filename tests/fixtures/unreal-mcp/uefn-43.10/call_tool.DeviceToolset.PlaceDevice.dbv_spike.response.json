@@ -1,0 +1,12 @@
+{
+ "jsonrpc": "2.0",
+ "id": 2,
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\"returnValue\":{\"refPath\":\"/ca8492f4-e5f2-4e71-8517-ab9056326ef8/DBVUnrealAITest.DBVUnrealAITest:PersistentLevel.VerseDevice_C_UAID_74563C6BD2C39F1603_1745151130\"}}"
+   }
+  ]
+ }
+}

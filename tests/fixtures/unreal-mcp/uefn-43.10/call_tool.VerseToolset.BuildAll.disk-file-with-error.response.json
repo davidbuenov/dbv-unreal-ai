@@ -1,0 +1,12 @@
+{
+ "jsonrpc": "2.0",
+ "id": 3,
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\"returnValue\":[{\"severity\":\"Error\",\"code\":3509,\"message\":\"This variable expects to be initialized with a value of type int, but this initializer is an incompatible value of type []char.\",\"filePath\":\"/ca8492f4-e5f2-4e71-8517-ab9056326ef8/dbv_spike_device.verse\",\"span\":{\"startLine\":8,\"startCharacter\":26,\"endLine\":8,\"endCharacter\":43}}]}"
+   }
+  ]
+ }
+}

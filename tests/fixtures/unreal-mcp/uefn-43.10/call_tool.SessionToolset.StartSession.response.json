@@ -1,0 +1,12 @@
+{
+ "jsonrpc": "2.0",
+ "id": 4,
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\"returnValue\":\"Completed\"}"
+   }
+  ]
+ }
+}

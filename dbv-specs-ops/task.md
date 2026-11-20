@@ -21,6 +21,17 @@
       - Soporte para ficheros binarios (`.uasset`) en `prepare.rs` sin errores UTF-8.
       - Corrección de firma en `setup_cloth_for_character` (`dest_folder`) e importación automática de mallas de tela en `pipeline.py`.
       - Plugin sincronizado a `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI` y `Plugins\DBVUnrealAICpp`.
+* **RETOMAR AQUÍ PRIMERO (2026-11-19) — v0.7.0 = UEFN y Verse, `/spec` hecho:**
+  - **Hecho:**
+    - estudio de los repositorios de Epic en `docs/UEFN_VERSE_STUDY.md`;
+    - `SPECIFICATIONS.md` v1.21, §3.26, con **REQ-122..REQ-131**, que sustituyen a REQ-78 y REQ-79 (tachados);
+    - P-14 reescrita con los 8 puntos del spike y riesgos R-58..R-63;
+    - `ARCHITECTURE.md` corregido (decía que UEFN ya estaba hecho y no lo está);
+    - decisiones de interfaz v0.7.0 en `DESIGN.md`;
+    - ADR-V070-001.
+  - **Decisiones del usuario:** todo en la v0.7.0; skill y UEFNKit descargados de GitHub, nunca incluidos (el usuario habla con Magnus por la licencia); UEFNKit integrado.
+  - **Siguiente:** `/plan`. Primero las partes que no necesitan UEFN abierto: detección (REQ-122), instalar la skill (REQ-124), prompt y `verse_reference` (REQ-125), lanzador de UEFNKit (REQ-131), recetas y evals con respuestas grabadas.
+  - **Después, el spike P-14**, cuando el usuario abra UEFN 43.10 con una copia de `DBVFornite` (`D:\Programacion\UEFN-Fornite\DBVFornite`) y active *Python Editor Scripting* y *UEFN MCP Toolsets*. Hasta entonces no se construye nada marcado **[P-14]**.
 * **RETOMAR AQUÍ PRIMERO (2026-11-15) — v0.6.2 lista en local (arreglo urgente de la v0.6.1):** Victor Osuna probó la v0.6.1 de la Store y Claude Code no arrancaba («"C:\Program" no se reconoce…»): `npx.cmd` se lanzaba con `cmd.exe /d /s /c` y la ruta `C:\Program Files\nodejs` se partía. Arreglado en `ai/detect.rs` y `ai/acp.rs` (se elimina `launcher`), con test que lanza un `.cmd` desde una ruta con espacios. Versión 0.6.2 en `package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock` y `tauri.conf.json`; **los plugins de Unreal siguen en 0.6.1** (no cambian, y así nadie tiene que volver a preparar). CHANGELOG ES/EN, `releases/v0.6.2*.md`, README (con Agradecimientos), web, walkthrough, fichas de la Store y `MICROSOFT_STORE.md` §12. Commit y tag `v0.6.2` **sin subir**: `git push origin master` y `git push origin v0.6.2` lanzan `release.yml`; después, enviar el MSIX `0.6.2.0` a certificación. Pendiente: probar la app instalada con Node en `Program Files`; el conector MCP de Claude Desktop con la ruta antigua solo está documentado (volver a copiar el bloque de Ajustes).
 * **(Anterior, 2026-11-15, noche) — v0.6.1 publicada en local:** versión 0.6.1 en `package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json` y los plugins (`DBVUnrealAI` Version 9, `DBVUnrealAICpp` Version 5). CHANGELOG ES/EN publicado, notas en `releases/v0.6.1*.md`, README, web, walkthrough, fichas de la Store y MSIX `0.6.1.0` comprobado. Commit y tag `v0.6.1` **sin subir**: subirlos (`git push origin master` y `git push origin v0.6.1`) lanza `release.yml`, y enviar a certificación lo decide el usuario. Pendiente: ver en la app (`tauri dev`) las tarjetas, la vista Fab, «Elegir la carpeta de Unreal…» y el diagnóstico; probar la lectura del registro desde el MSIX; Fab con nuestro cliente en 5.9; rehacer los binarios en cada Preview nueva.
 * **(Anterior, 2026-11-15) — v0.6.1 = Fab en UE 5.8.4:** `/spec` hecho (`SPECIFICATIONS.md` v1.19, §3.23: REQ-101..REQ-108 y el nuevo **REQ-117**, que pide miniatura y enlace a fab.com en cada resultado, también en la conversación; la regla «solo lo gratuito o lo que ya tiene el usuario» se comprueba en el plugin). Pruebas en `DBVMCPFirst` (5.8.4), nivel `fab_test`, con los plugins al día. Siguiente: `/plan`, empezando por el spike REQ-101, que es la puerta.
@@ -332,7 +343,7 @@
   - [x] **Verificación de tests UE 5.8 (`REQ-80..REQ-82`):** 247 tests en Rust, 389 tests en Vitest (43 suites) y 51 tests en Python + prueba en vivo sobre `DBVMCPFirst`.
   - [x] **S89b · Ajuste estático de la ropa de Victoria (`REQ-81`, 2026-11-08):** cuello y hombros sin rendija (`_disable_neck_hide`), falda soldada, recortada con planos y ceñida en los dos sentidos (`_weld_and_trim_skirt`, `_conform_skirt`), cintura sin recortar (`_arm_cutoff`). Verificado con capturas y mediciones en `DBVMCPFirst`: holgura mediana de 2,00 a 0,93 cm, ninguna celda con el cuerpo por fuera. 58 tests Python y `dbv-lint` sin errores (Rust y Vitest no se han vuelto a pasar: no se ha tocado ese código). **Sin verificar:** prenda en movimiento, otros MetaHumans y otras faldas.
   - [ ] **Ropa pendiente (`REQ-81`):** falda en movimiento (decidir spike de Chaos Outfit/Cloth Asset); LOD de la ropa (hoy 1 frente a los 4 de `Body`); agujeros pequeños del top (`TopHalterBlanco`), que aún no pasa por soldadura; materiales a doble cara (REQ-81 lo pide y los importados siguen con `two_sided = False`).
-  - [ ] **S92 · Soporte UEFN y Lenguaje Verse (`REQ-78`, `REQ-79`):** aplazado a la **v0.6.0** por decisión del usuario (2026-11-08); sigue pendiente de la descarga de UEFN y el spike `P-14`.
+  - [ ] ~~**S92**~~ *(sustituido por la v0.7.0, REQ-122..REQ-131, 2026-11-19)* **· Soporte UEFN y Lenguaje Verse (`REQ-78`, `REQ-79`):** aplazado a la **v0.6.0** por decisión del usuario (2026-11-08); sigue pendiente de la descarga de UEFN y el spike `P-14`.
   - [ ] **Vestir un MetaHuman desde la app (`REQ-83..REQ-90`), plan en `implementation_plan.md` §14, aprobado el 2026-11-08:**
     - [x] S93 · Spikes `P-17`, `P-18` y `P-19` resueltos; `P-21` con avance, falta calibrar con prendas nuevas. Kilt en `Pablo_Kilt` (`/Game/DBV/MetaHumanOutfits/_spike`, sin guardar en el nivel), con scripts fuera del repositorio. Queda `R-40`: se abre con la pierna.
     - [x] S94 · Destino explícito (`REQ-83`) (2026-11-09): fuera «el primero del nivel» en `metahuman.py`, `sendToUnreal.js`, `unrealTools.js`, `generationTools.js` y `mcp_server.rs`. Sin destino la prenda solo se importa (no se equipa ni se coloca delante de la cámara) y se avisa; si el editor no puede equipar, el error llega tal cual. Selector en la Biblioteca (con uno solo sale elegido; sin ninguno solo se importa) y regla en el prompt. Generar no envía a Unreal, así que no necesita selector. i18n es, en, zh-CN. Tests: Python +1, Vitest +7 (incluido uno que busca nombres de personaje en el código), Rust (el de prendas pasa a comprobar los dos casos).
@@ -512,3 +523,11 @@
 > **Sujetador de `Victoria_Cloth` (2026-11-08):** no era una prenda: la ropa interior gris viene pintada en las tres texturas de piel del MetaHuman (color, normal y specular). Copias limpias en `/Game/DBV/Runway/Cloth/PielLimpia` (`T_Body_*_Limpio`, `MI_Body_PielLimpia`), aplicadas a `SK_Body_BajoFalda`, `BP_Victoria_Cloth` y al actor. Comprobado con render en f284-295 (espalda) y f168-175 (frente), con la versión previa de las texturas en el frente. Las otras Victorias no cambian. El script sigue fuera del plugin y `pasarela_victorias.mp4` no se ha vuelto a renderizar. **Pendiente del top:** mancha en el pecho y borde inferior irregular.
 
 > **Next step / Próximo paso:** Llevar el proceso de tela al plugin (ranura de vestido entero, elección del MetaHuman de destino).
+
+## v0.7.0 — UEFN y Verse (REQ-122..REQ-131; estudio en `docs/UEFN_VERSE_STUDY.md`)
+
+- [x] **Estudio** de los repositorios de Epic (2026-11-19).
+- [x] **`/spec` v1.21** (2026-11-19): §3.26, R-58..R-63, P-14 reescrita, ADR-V070-001.
+- [ ] **`/plan` v0.7.0:** Architect Review y desglose. Primero lo que no depende de P-14.
+- [ ] **Spike P-14** con UEFN 43.10 abierto: necesita al usuario. Lo marcado **[P-14]** se construye después.
+

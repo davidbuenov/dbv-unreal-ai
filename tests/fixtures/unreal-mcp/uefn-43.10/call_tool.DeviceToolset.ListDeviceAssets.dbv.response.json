@@ -1,0 +1,12 @@
+{
+ "jsonrpc": "2.0",
+ "id": 2,
+ "result": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\"returnValue\":[{\"displayName\":\"dbv_spike_device\",\"assetPath\":{\"refPath\":\"/ca8492f4-e5f2-4e71-8517-ab9056326ef8/_Verse.dbv_spike_device\"},\"category\":\"\",\"bIsVerseDevice\":true}]}"
+   }
+  ]
+ }
+}

@@ -259,7 +259,7 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 
 ### Decisiones de diseño v0.5.0 (2026-11-07)
 
-- **Distintivo de Proyecto UEFN y Verse (REQ-78, REQ-79):**
+- **Distintivo de Proyecto UEFN y Verse (REQ-78, REQ-79; vigente con REQ-122..REQ-131, ver «Decisiones de diseño v0.7.0»):**
   - En la píldora de conexión de la barra superior y en la vista *Proyecto*, los proyectos `.uefnproject` muestran un badge semántico `[UEFN]` con acento `accent` junto al nombre de la isla.
   - En la vista *Proyecto*, la lista de preparación oculta las filas exclusivas de UE 5.8 (`PythonScriptPlugin`, `DBVUnrealAI` / `DBVUnrealAICpp`) y muestra una nota informativa clara: *«Entorno UEFN detectado: herramientas nativas MCP y código Verse activos.»*
   - En las tarjetas de propuesta de código (`propose_changes`), los ficheros `.verse` muestran el badge `Verse` en `--font-mono` y el botón de acción final indica *«Aplicar y compilar Verse»*.
@@ -305,3 +305,28 @@ La aplicación se usa **al lado del editor de Unreal**, a menudo en un segundo m
 ---
 
 **Instrucción para la IA:** Lee y respeta los tokens y decisiones definidos en este fichero. Si necesitas crear un componente no definido aquí, extrapola coherentemente desde los tokens existentes y registra la nueva decisión como "Decisión de Diseño" en este mismo archivo con fecha y justificación.
+
+### Decisiones de diseño v0.7.0 (UEFN y Verse, 2026-11-19)
+
+- **Proyecto UEFN (REQ-122, REQ-123):**
+  - `[UEFN]` y la versión de UEFN junto al nombre de la isla, en la píldora de conexión y en la vista *Proyecto*.
+  - Aviso en `warning` si el proyecto pide una UEFN más nueva que la instalada.
+  - El diagnóstico usa la misma lista numerada de REQ-120, con solo las 7 filas de UEFN. Cada fila tiene su estado y su solución en una frase.
+- **Skill de Verse (REQ-124):** fila propia en el diagnóstico con «Instalar» / «Actualizar». En un texto secundario (`--text-muted`): «Skill de Verse de Epic Games (Magnus Enebakk) · versión `abc1234` del 2026-10-14» y el enlace al repositorio.
+- **Tarjeta de código Verse (REQ-127):**
+  - Badge `Verse` en `--font-mono` y botón **«Aplicar y compilar Verse»**.
+  - Debajo, el resultado de `BuildAll`:
+    - `success` «Compila» solo con la lista vacía;
+    - si hay errores, una lista de `fichero:línea · código · mensaje`, cada uno enlazado;
+    - «Sin verificar» en `warning` cuando no hay MCP;
+    - el contador «Intento 2 de 5» mientras la IA corrige.
+  - Una API experimental añade una línea en `warning`: «No se podrá publicar: usa una API experimental».
+- **Sesión de UEFN (REQ-128):**
+  - En la conversación, una fila compacta con el estado de la sesión y los botones *Enviar cambios de Verse*, *Empezar/Parar partida* y *Parar sesión*.
+  - Las líneas `ZZTEST` de `LogVerse` salen en un bloque `--font-mono` plegable.
+  - Si se agota el tiempo, un aviso en `warning` que manda a revisar los diálogos de UEFN.
+- **UEFNKit (REQ-131):**
+  - En la vista *Proyecto*, menú «Proyecto UEFN» con *Hacer una copia de pruebas*, *Instalar un ejemplo de Epic* y *Exportar para compartir*.
+  - *Eliminar* solo con el diálogo de confirmación de acciones destructivas.
+  - Se indica que UEFNKit es de Epic Games y se descarga de su repositorio.
+
