@@ -452,8 +452,8 @@ describe('estado de conexión de agentes CLI', () => {
     expect([...agyItem.querySelectorAll('button')].map((b) => b.textContent)).not.toContain('Conectar');
     Element.prototype.scrollIntoView = vi.fn();
     agyItem.querySelector('button').click();
-    await vi.waitFor(() => expect(document.querySelector('.ai-guide')).not.toBeNull());
-    await vi.waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    await vi.waitFor(() => expect(document.querySelector('.ai-guide')).not.toBeNull(), { timeout: 5000 });
+    await vi.waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled(), { timeout: 5000 });
     expect(Element.prototype.scrollIntoView.mock.contexts[0].dataset.anchor).toBe('google-antigravity-instalar-su-servidor-acp');
     expect(backend.openExternalUrl).not.toHaveBeenCalled();
     document.querySelector('.ai-guide').remove();
@@ -476,13 +476,13 @@ describe('estado de conexión de agentes CLI', () => {
     await vi.waitFor(() => expect(host.querySelector('.ai-help-link')).not.toBeNull());
 
     host.querySelector('.ai-help-link').click();
-    await vi.waitFor(() => expect(document.querySelector('.ai-guide')).not.toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('.ai-guide')).not.toBeNull(), { timeout: 5000 });
     document.querySelector('.ai-guide').remove();
 
     Element.prototype.scrollIntoView = vi.fn();
     const copilotItem = [...host.querySelectorAll('.ai-cat-card--agent .ai-detect__item')].find((li) => li.textContent.includes('Copilot'));
     copilotItem.querySelector('button').click();
-    await vi.waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    await vi.waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled(), { timeout: 5000 });
     expect(Element.prototype.scrollIntoView.mock.contexts[0].dataset.anchor).toBe('github-copilot-el-comando-copilot-de-vs-code-no-es-la-cli');
     expect(backend.openExternalUrl).not.toHaveBeenCalled();
     document.querySelector('.ai-guide').remove();

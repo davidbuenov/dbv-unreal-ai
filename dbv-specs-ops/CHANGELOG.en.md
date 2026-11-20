@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **The Fortnite install no longer shows up as a "UE 6.0" engine (REQ-122, S152):** it ships its own `Engine/Build/Build.version` with version 6.0.0, and the engine search took it for a UE engine.
+- **Flaky connection-wizard test (`tests/ai/connectWizard.test.js`):** with the whole suite in parallel, the in-app guide took longer than the one second the test waited; the first test failed and its late guide made the next one fail too. The wait for those loads is now 5 s, with no assertion changed.
 
 ## [0.6.2] - 2026-11-15
 

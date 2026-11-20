@@ -31,6 +31,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Corregido
 - **La instalación de Fortnite ya no aparece como un motor «UE 6.0» (REQ-122, S152):** trae su propio `Engine/Build/Build.version` con versión 6.0.0, y la búsqueda de motores la tomaba por uno de UE.
+- **Test intermitente del asistente de conexión (`tests/ai/connectWizard.test.js`):** con toda la suite en paralelo, la guía que se abre en la app tardaba más del segundo que esperaba el test; el primer test fallaba y su guía, al llegar tarde, hacía fallar también el siguiente. La espera de esas cargas pasa a 5 s, sin tocar ninguna comprobación.
 
 ## [0.6.2] - 2026-11-15
 

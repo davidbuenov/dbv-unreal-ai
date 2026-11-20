@@ -3641,6 +3641,7 @@ mod tests {
         assert!(names.contains(&"unreal_call_tool") && names.contains(&"generate_3d_model"), "{names:?}");
         assert!(names.contains(&"verse_reference"), "las de Verse solo aparecen con UEFN (REQ-125)");
         assert!(names.contains(&"uefn_session_start") && names.contains(&"uefn_verse_output"), "las de sesión también (REQ-128)");
+        assert!(names.contains(&"uefn_recipes_list") && !names.contains(&"recipes_list"), "con UEFN, sus recetas y no las de UE (REQ-129)");
         let read_only = app_mcp_read_only_tools();
         assert!(read_only.contains(&"uefn_verse_output".to_string()) && !read_only.contains(&"uefn_session_start".to_string()));
         let reference = rpc(&mut s, "tools/call", json!({ "name": "verse_reference", "arguments": {} }));
@@ -3662,6 +3663,6 @@ mod tests {
         let listed = rpc(&mut s, "tools/list", json!({}));
         let tools = listed["result"]["tools"].as_array().unwrap();
         assert_eq!(tools.len(), tool_specs().len());
-        assert!(tools.iter().all(|t| !t["name"].as_str().unwrap().starts_with("verse_")), "sin UEFN no hay herramientas de Verse");
+        assert!(tools.iter().all(|t| !t["name"].as_str().unwrap().starts_with("verse_") && !t["name"].as_str().unwrap().starts_with("uefn_")), "sin UEFN no hay herramientas de Verse ni recetas de UEFN (REQ-129)");
     }
 }

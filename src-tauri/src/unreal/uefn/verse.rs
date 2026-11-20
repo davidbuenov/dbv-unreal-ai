@@ -264,19 +264,24 @@ pub fn delete_via_mcp(url: &str, verse: &str) -> Result<(), String> {
 /// siempre (UEFN cerrado, otro proyecto o no es Verse). Si el MCP falla, se escribe en disco: un fichero nuevo en disco
 /// también entra en `BuildAll` (P-14).
 pub fn editor_write(root: &Path, relative: &str, content: &str) -> Option<Result<(), String>> {
-    let project = uefn_project_at(root)?;
-    let verse = verse_path(&project, relative)?;
-    let written = open_in_editor(&project).then(|| write_via_mcp(&uefn_mcp_url(), &verse, content)).filter(Result::is_ok);
+    let verse = editor_route(root, relative, open_in_editor)?;
+    let written = Some(write_via_mcp(&uefn_mcp_url(), &verse, content)).filter(Result::is_ok);
     written
+}
+
+/// Ruta Verse por la que ir al editor, o `None` si se escribe en disco: solo un `.verse` de `Content/` de un proyecto
+/// UEFN que `is_open` dice que está abierto en el editor.
+pub fn editor_route(root: &Path, relative: &str, is_open: impl Fn(&super::discovery::UefnProject) -> bool) -> Option<String> {
+    let project = uefn_project_at(root)?;
+    let route = verse_path(&project, relative).filter(|_| is_open(&project));
+    route
 }
 
 /// Borrado al deshacer un fichero creado (`ai_delete_created`). `Some` si es un `.verse` de un proyecto abierto en
 /// UEFN: se borra por el MCP o no se borra.
 pub fn editor_delete(root: &Path, relative: &str) -> Option<Result<(), String>> {
-    let project = uefn_project_at(root)?;
-    let verse = verse_path(&project, relative)?;
-    let deleted = open_in_editor(&project).then(|| delete_via_mcp(&uefn_mcp_url(), &verse));
-    deleted
+    let verse = editor_route(root, relative, open_in_editor)?;
+    Some(delete_via_mcp(&uefn_mcp_url(), &verse))
 }
 
 // ─── Compilar Verse (REQ-127) ───────────────────────────────────────
@@ -574,6 +579,17 @@ mod tests {
         assert_eq!(seen[0]["arguments"]["bCreateIfMissing"], true);
         assert_eq!(seen[1]["tool_name"], "Delete");
         assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 0, "nada en disco");
+    }
+
+    #[test]
+    fn solo_con_el_proyecto_abierto_en_uefn_se_va_por_el_editor() {
+        // @spec REQ-127 — con UEFN abierto no se escribe en disco; cerrado, sí.
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("ca8492f4.uplugin"), "{}").unwrap();
+        std::fs::write(temp.path().join("Isla.uefnproject"), r#"{"title": "Isla", "bindings": {"modules": {"ca8492f4": "ca8492f4"}}}"#).unwrap();
+        assert_eq!(editor_route(temp.path(), "Content/zz_test.verse", |_| true).as_deref(), Some("/ca8492f4/zz_test.verse"));
+        assert_eq!(editor_route(temp.path(), "Content/zz_test.verse", |_| false), None);
+        assert_eq!(editor_route(temp.path(), "README.md", |_| true), None);
     }
 
     #[test]
