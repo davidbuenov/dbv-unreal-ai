@@ -24,6 +24,8 @@ export const uefnSkillUpdate = (path) => call('uefn_skill_update', { path });
 export const uefnVerseSpecs = () => call('uefn_verse_specs');
 export const uefnVerseRun = (name, args, project) => call('uefn_verse_run', { name, args, project });
 export const uefnBuildVerse = (endpoint, project) => call('uefn_build_verse', { endpoint, project });
+export const uefnSessionSpecs = () => call('uefn_session_specs');
+export const uefnSessionRun = (endpoint, name, args) => call('uefn_session_run', { endpoint, name, args });
 export const unrealEditors = () => call('unreal_editors');
 export const unrealReadProject = (path) => call('unreal_read_project', { path });
 export const unrealRecentProjects = () => call('unreal_recent_projects');

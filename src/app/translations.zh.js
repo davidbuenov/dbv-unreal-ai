@@ -31,6 +31,7 @@ export const ZH_APP = {
   'uefn.projects': 'UEFN 项目 · UEFN {version}',
   'uefn.noProjects': '已安装 UEFN，但在其文件夹中未找到任何项目。',
   'uefn.open': '已在 UEFN 中打开',
+  'session.startWarning': 'UEFN 将保存关卡并上传项目，大约需要 2 分钟。',
   'verse.title': '在 UEFN 中编译 Verse',
   'verse.compiles': '编译成功：BuildAll 没有报告任何错误。',
   'verse.failed': '编译失败：{n} 个错误。',

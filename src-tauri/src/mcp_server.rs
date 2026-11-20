@@ -179,8 +179,12 @@ pub const READ_ONLY_TOOLS: [&str; 28] = [
 /// Las herramientas de solo lectura, para que la ventana apruebe sola sus permisos. @spec REQ-12
 #[tauri::command]
 pub fn app_mcp_read_only_tools() -> Vec<String> {
+    // UEFN (REQ-125, REQ-126, REQ-128): las de Verse y las de sesión que solo leen.
+    let uefn = [crate::unreal::uefn::verse::REFERENCE_TOOL, crate::unreal::uefn::verse::API_SEARCH_TOOL].into_iter().chain(crate::unreal::uefn::session::READ_ONLY);
     READ_ONLY_TOOLS
         .iter()
+        .copied()
+        .chain(uefn)
         .map(|name| name.to_string())
         .collect()
 }
@@ -2014,7 +2018,7 @@ Thumbnails (show them as images if your client renders Markdown): {}", out.text,
             "tools/list" => {
                 // Las de Verse (REQ-125) solo tienen sentido con UEFN.
                 let uefn = self.editor_is_uefn();
-                let verse = if uefn { crate::unreal::uefn::verse::tool_specs() } else { Vec::new() };
+                let verse = if uefn { crate::unreal::uefn::verse::tool_specs().into_iter().chain(crate::unreal::uefn::session::tool_specs()).collect() } else { Vec::new() };
                 let tools: Vec<Value> = tool_specs().into_iter().filter(|spec| !uefn || spec.get("name").and_then(Value::as_str).is_some_and(crate::unreal::uefn::server::available_in_uefn)).chain(verse).collect();
                 Ok(json!({ "tools": tools }))
             }
@@ -2031,6 +2035,13 @@ Thumbnails (show them as images if your client renders Markdown): {}", out.text,
                 // Con UEFN, una herramienta que necesita nuestro plugin se explica en vez de fallar a medias (REQ-123).
                 let result = if !crate::unreal::uefn::server::available_in_uefn(&name) && self.editor_is_uefn() {
                     text_result(crate::unreal::uefn::server::not_in_uefn(&name), true)
+                } else if crate::unreal::uefn::session::tool_specs().iter().any(|spec| spec["name"] == name.as_str()) {
+                    // Sesión de UEFN (REQ-128): el log del editor dice qué diálogos contestó UEFN solo.
+                    let log = crate::unreal::uefn::discovery::editor_log();
+                    match crate::unreal::uefn::session::run(&name, &arguments, &self.config.unreal_url, log.as_deref(), &std::thread::sleep) {
+                        Ok(text) => text_result(text, false),
+                        Err(text) => text_result(text, true),
+                    }
                 } else if name.starts_with("verse_") {
                     match crate::unreal::uefn::verse::run(&name, &arguments, self.config.project_dir.as_deref()) {
                         Ok(text) => text_result(text, false),
@@ -3623,6 +3634,9 @@ mod tests {
         let names: Vec<&str> = listed["result"]["tools"].as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
         assert!(names.contains(&"unreal_call_tool") && names.contains(&"generate_3d_model"), "{names:?}");
         assert!(names.contains(&"verse_reference"), "las de Verse solo aparecen con UEFN (REQ-125)");
+        assert!(names.contains(&"uefn_session_start") && names.contains(&"uefn_verse_output"), "las de sesión también (REQ-128)");
+        let read_only = app_mcp_read_only_tools();
+        assert!(read_only.contains(&"uefn_verse_output".to_string()) && !read_only.contains(&"uefn_session_start".to_string()));
         let reference = rpc(&mut s, "tools/call", json!({ "name": "verse_reference", "arguments": {} }));
         assert!(reference["result"]["content"][0]["text"].as_str().unwrap().contains("Verse skill"));
         for hidden in ["unreal_run_python", "unreal_dress_metahuman", "library_send_to_unreal", "unreal_playtest"] {

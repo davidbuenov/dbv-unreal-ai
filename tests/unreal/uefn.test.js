@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
-import { canEnablePython, createVerseTools, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnPrompt, uefnRows, uefnSection, VERSE_RULES, verseHeader } from '../../src/unreal/uefn.js';
+import { canEnablePython, createSessionTools, createVerseTools, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnPrompt, uefnRows, uefnSection, VERSE_RULES, verseHeader } from '../../src/unreal/uefn.js';
 
 beforeAll(() => {
   window.DBV_I18N.register(APP_TRANSLATIONS);
@@ -203,5 +203,42 @@ describe('escribir Verse (REQ-127)', () => {
     const prompt = uefnPrompt({});
     expect(prompt).toContain('Verse files under Content/');
     expect(prompt).toContain('zz_');
+  });
+});
+
+describe('sesión de UEFN (REQ-128)', () => {
+  const spec = (name) => ({ name, description: 'd', inputSchema: { type: 'object', properties: {}, required: [] } });
+  const specs = ['uefn_session_start', 'uefn_session_push', 'uefn_session_status', 'uefn_verse_output'].map(spec);
+
+  it('arrancar pide aprobación y avisa de que guarda el nivel y tarda unos 2 minutos', async () => {
+    // @spec REQ-128
+    const askApproval = vi.fn(async () => 'once');
+    const run = vi.fn(async () => ({ ok: true, value: 'Session: Completed' }));
+    const [start] = createSessionTools({ specs, run, askApproval });
+    expect(start.parameters.properties.purpose).toBeTruthy();
+    expect(await start.run({ purpose: 'Probar la zona' })).toBe('Session: Completed');
+    const request = askApproval.mock.calls[0][0];
+    expect(request.purpose).toContain('2 minutos');
+    expect(request.purpose).toContain('Probar la zona');
+    expect(run).toHaveBeenCalledWith('uefn_session_start', {});
+  });
+
+  it('si se deniega no se ejecuta', async () => {
+    // @spec REQ-128
+    const run = vi.fn();
+    const [, push] = createSessionTools({ specs, run, askApproval: async () => 'deny' });
+    expect(await push.run({ wait_for: 'ZZTEST' })).toContain('DENIED');
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('leer el estado y la salida de Verse no pide permiso', async () => {
+    // @spec REQ-128
+    const askApproval = vi.fn();
+    const run = vi.fn(async () => ({ ok: true, value: 'zz_test.verse:8 ZZTEST hola' }));
+    const tools = createSessionTools({ specs, run, askApproval });
+    expect(await tools[3].run({ pattern: 'ZZTEST' })).toContain('ZZTEST hola');
+    await tools[2].run({});
+    expect(askApproval).not.toHaveBeenCalled();
+    expect(tools[3].parameters.properties.purpose).toBeUndefined();
   });
 });

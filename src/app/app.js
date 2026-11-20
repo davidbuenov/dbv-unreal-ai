@@ -16,7 +16,7 @@ import { createApprovalCard } from '../unreal/approvalCard.js';
 import { AUTONOMY_LEVELS, autonomyDecision, createPermissionMemory, loadAutonomy, requestKind, saveAutonomy } from '../unreal/permissions.js';
 import { createUnrealTools, describeCapture, pythonNudge, unrealPrompt } from '../unreal/unrealTools.js';
 import { createFabTools } from '../unreal/fabTools.js';
-import { createVerseTools, toolsForUefn, uefnPrompt } from '../unreal/uefn.js';
+import { createSessionTools, createVerseTools, toolsForUefn, uefnPrompt } from '../unreal/uefn.js';
 import { fabCardStrip } from './fabCards.js';
 import { createFabView } from './fabView.js';
 import { openExternalUrl } from '../ai/backend.js';
@@ -260,6 +260,8 @@ export function start() {
   let uefnPolicy = null;
   // Herramientas de Verse (REQ-125): definidas en Rust, como en el MCP propio.
   let verseSpecs = [];
+  // Sesión de UEFN (REQ-128): definidas en Rust, como en el MCP propio.
+  let uefnSessionSpecs = [];
   // Lo que se lanza desde la Biblioteca (riggear, animar, imagen → 3D) se sigue en Generar, con su consola.
   // Vista Fab (REQ-106): buscar, ver la ficha e instalar sin escribir a la IA, con las mismas reglas.
   views.fab = createFabView($('#view-fab'), { state, toast, confirm, openModal, closeModal });
@@ -338,7 +340,16 @@ export function start() {
   // REQ-22: compilar el C++ que la IA cambió, al aceptar su propuesta.
   const codeCompiler = createCodeCompiler({ getConnection: () => state.connection, getAi: () => aiApp, reconnect: (path) => views.project.connectProject(path) });
   // REQ-127: con UEFN, aplicar un `.verse` compila con BuildAll y los errores vuelven a la IA.
-  const verseCompiler = createVerseCompiler({ getConnection: () => state.connection, getAi: () => aiApp, build: api.uefnBuildVerse });
+  const verseCompiler = createVerseCompiler({
+    getConnection: () => state.connection,
+    getAi: () => aiApp,
+    build: api.uefnBuildVerse,
+    // Con una sesión en marcha, «Enviar cambios de Verse» los manda a la sesión (REQ-128).
+    pushVerse: async () => {
+      const pushed = await api.uefnSessionRun(state.connection.endpoint, 'uefn_session_push', { verse_only: true });
+      aiApp?.panel.addNote(pushed.ok ? pushed.value : pushed.error.message, pushed.ok ? 'info' : 'error');
+    },
+  });
   let aiLoading = null;
   const memories = new Map();
 
@@ -651,6 +662,9 @@ export function start() {
         const all = [...unreal, ...generation, ...memory, ...zones, ...convai, ...recipes, ...guides, ...fab];
         // Con UEFN: las herramientas de la app que valen allí (REQ-123) y las de Verse (REQ-125).
         const verse = state.connection?.uefn ? createVerseTools({ specs: verseSpecs, run: (name, args) => api.uefnVerseRun(name, args, state.connection?.projectPath ?? null) }) : [];
+        if (state.connection?.uefn && state.connection?.status === 'online') {
+          verse.push(...createSessionTools({ specs: uefnSessionSpecs, run: (name, args) => api.uefnSessionRun(state.connection.endpoint, name, args), askApproval, onAction: log.add }));
+        }
         return withUsage(state.connection?.uefn ? [...toolsForUefn(all, uefnPolicy), ...verse] : all, turnContext?.usage);
       },
       // Imágenes y documentos de referencia de cualquier carpeta (REQ-32): el diálogo del sistema y Rust los leen.
@@ -698,8 +712,9 @@ export function start() {
 
   function loadAi() {
     if (!aiLoading) {
-      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools(), api.sessionsToolSpecs(), api.fabToolSpecs(), api.uefnToolPolicy(), api.uefnVerseSpecs()])
-        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly, sessions, fab, uefn, verse]) => {
+      aiLoading = Promise.all([import('../ai/entry.js'), import('../ai/markdown.js'), api.generationToolSpecs(), api.memoryToolSpecs(), projectMemory.refresh(), api.zonesToolSpecs(), api.convaiCharactersSpec(), api.recipesToolSpecs(), api.guidesToolSpec(), api.appMcpReadOnlyTools(), api.sessionsToolSpecs(), api.fabToolSpecs(), api.uefnToolPolicy(), api.uefnVerseSpecs(), api.uefnSessionSpecs()])
+        .then(([entry, markdown, specs, memory, , zones, characters, recipes, guides, readOnly, sessions, fab, uefn, verse, uefnSession]) => {
+          uefnSessionSpecs = uefnSession?.ok && Array.isArray(uefnSession.value) ? uefnSession.value : [];
           uefnPolicy = uefn?.ok ? uefn.value : null;
           verseSpecs = verse?.ok && Array.isArray(verse.value) ? verse.value : [];
           readOnlyTools = readOnly?.ok && Array.isArray(readOnly.value) ? readOnly.value : [];

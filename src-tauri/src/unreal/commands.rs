@@ -514,6 +514,24 @@ pub async fn uefn_build_verse(endpoint: Endpoint, project: String) -> Result<sup
     .await
 }
 
+/// Herramientas de sesión de UEFN para la IA integrada. @spec REQ-128
+#[tauri::command]
+pub fn uefn_session_specs() -> Vec<Value> {
+    super::uefn::session::tool_specs()
+}
+
+/// Ejecuta una herramienta de sesión de UEFN en el editor de `endpoint`. Arrancar tarda unos 2 minutos: va en un hilo
+/// aparte y la conversación sigue usable. @spec REQ-128
+#[tauri::command]
+pub async fn uefn_session_run(endpoint: Endpoint, name: String, args: Value) -> Result<String, UnrealError> {
+    let url = endpoint.url();
+    blocking(move || {
+        let log = super::uefn::discovery::editor_log();
+        super::uefn::session::run(&name, &args, &url, log.as_deref(), &std::thread::sleep).map_err(UnrealError::Protocol)
+    })
+    .await
+}
+
 /// Herramientas de la app que se ofrecen con UEFN (nombres y prefijos), la misma regla que el `--mcp`. @spec REQ-123
 #[tauri::command]
 pub fn uefn_tool_policy() -> serde_json::Value {

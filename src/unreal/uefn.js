@@ -204,3 +204,36 @@ export function createVerseTools(deps) {
     },
   }));
 }
+
+/** Herramientas de sesión que solo leen: no piden permiso (REQ-128). */
+export const SESSION_READ_ONLY = new Set(['uefn_session_status', 'uefn_verse_output', 'uefn_client_log']);
+
+/**
+ * Herramientas de sesión de UEFN para la IA integrada (REQ-128): arrancar, enviar Verse, partida, estado, salida de
+ * Verse, log del cliente y parar. Las que cambian algo piden aprobación; arrancar avisa de que UEFN guarda el nivel y
+ * tarda unos 2 minutos.
+ * @param {{specs: object[], run: (name: string, args: object) => Promise<{ok: boolean, value?: string, error?: {message: string}}>, askApproval: (request: object) => Promise<string>, onAction?: (entry: object) => void, now?: () => number}} deps
+ */
+export function createSessionTools(deps) {
+  const now = deps.now ?? (() => Date.now());
+  return (deps.specs ?? []).map((spec) => {
+    const asks = !SESSION_READ_ONLY.has(spec.name);
+    const properties = asks ? { ...spec.inputSchema.properties, purpose: { type: 'string', description: 'One sentence for the user: what this checks.' } } : spec.inputSchema.properties;
+    return {
+      name: spec.name,
+      description: spec.description,
+      parameters: { ...spec.inputSchema, properties, additionalProperties: false },
+      label: () => `UEFN: ${spec.name.replace('uefn_', '').replace(/_/g, ' ')}`,
+      run: async (args = {}) => {
+        const { purpose = '', ...rest } = args ?? {};
+        const warning = spec.name === 'uefn_session_start' ? t('session.startWarning') : '';
+        const allowed = !asks || ['once', 'always'].includes(await deps.askApproval({ kind: 'tool', toolset: 'UEFN session', tool: spec.name, args: rest, purpose: [warning, purpose].filter(Boolean).join(' ') }));
+        if (!allowed) return 'The user DENIED this action. It was not executed.';
+        const started = now();
+        const result = await deps.run(spec.name, rest);
+        deps.onAction?.({ at: started, toolset: 'UEFN session', tool: spec.name, kind: asks ? 'modify' : 'read', args: rest, ms: now() - started, outcome: result.ok ? 'ok' : 'error' });
+        return result.ok ? result.value : `error: ${result.error?.message ?? result.error}`;
+      },
+    };
+  });
+}
