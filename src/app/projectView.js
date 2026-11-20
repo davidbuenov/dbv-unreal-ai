@@ -17,6 +17,7 @@ import { baseName, button, dirName, el } from './dom.js';
 import { convaiCard, convaiLive, directAccessBanner, hasConvaiToolsets } from './convaiCard.js';
 import { isDbvToolset } from '../unreal/unrealTools.js';
 import { shortVersion, versionMismatch } from '../unreal/engineVersion.js';
+import { uefnSection } from '../unreal/uefn.js';
 
 const BACKUP_KEY = 'dbv-unreal-ai:lastBackup:';
 
@@ -116,6 +117,8 @@ export async function editorIdentity(endpoint, toolsets) {
 export function createProjectView(host, deps) {
   let selected = null;
   let readiness = null;
+  // Proyecto UEFN elegido (REQ-122): va aparte de `selected`, que es un `.uproject` con su diagnóstico de UE.
+  let selectedUefn = null;
 
   async function connect(project, mcp) {
     const endpoint = { port: mcp.port, path: mcp.path };
@@ -205,8 +208,16 @@ export function createProjectView(host, deps) {
     ]);
   }
 
+  async function selectUefn(path) {
+    selected = null;
+    readiness = null;
+    selectedUefn = path;
+    await render();
+  }
+
   async function select(path) {
     selected = path;
+    selectedUefn = null;
     const report = await api.unrealReadiness(path);
     readiness = report.ok ? report.value : null;
     await render();
@@ -222,7 +233,7 @@ export function createProjectView(host, deps) {
   }
 
   async function render() {
-    const [editors, recents] = await Promise.all([api.unrealEditors(), api.unrealRecentProjects()]);
+    const [editors, recents, uefn] = await Promise.all([api.unrealEditors(), api.unrealRecentProjects(), api.uefnOverview()]);
     const open = editors.ok ? editors.value.filter((e) => e.project) : [];
     const sections = [el('div', { className: 'view-header' }, el('h2', { text: t('project.title') }), el('span', { className: 'spacer' }), button(t('project.refresh'), () => render()), button(t('project.openFile'), pickFile))];
     sections.push(el('div', { className: 'subheading', text: t('project.editors') }));
@@ -237,6 +248,7 @@ export function createProjectView(host, deps) {
       sections.push(el('div', { className: 'subheading', text: t('project.recents') }));
       for (const path of recentList) sections.push(projectCard(path, button(t('project.openInUnreal'), () => openInUnreal(path))));
     }
+    sections.push(...uefnSection(uefn.ok ? uefn.value : null, { select: selectUefn }));
     if (selected && readiness) {
       // Encima del diagnóstico: el agente vería el editor dos veces (REQ-52).
       sections.push(directAccessBanner(readiness.directAccess, { reveal: (file) => window.__TAURI__?.opener?.revealItemInDir?.(`${dirName(selected)}/${file}`) }));

@@ -627,3 +627,8 @@ label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(-
 .fab-tabs { margin: 8px 0; }
 .fab-detail__thumb { width: 100%; max-width: 480px; border-radius: 8px; }
 .fab-detail__text { white-space: pre-wrap; max-height: 240px; overflow: auto; }
+
+/* UEFN (v0.7.0, REQ-122): distintivo [UEFN] y aviso de versión. */
+.badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-family: var(--font-mono); }
+.badge--accent { color: var(--accent); background: var(--accent-subtle); }
+.warning { margin: 4px 0 0; font-size: 12px; color: var(--status-warn); background: var(--status-warn-bg); padding: 4px 8px; border-radius: 4px; }

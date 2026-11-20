@@ -60,6 +60,12 @@ pub async fn unreal_engines() -> Result<Vec<EngineInstall>, UnrealError> {
     blocking(|| Ok(discovery::find_engines())).await
 }
 
+/// UEFN en esta máquina: instalación, proyectos y cuál está abierto. @spec REQ-122
+#[tauri::command]
+pub async fn uefn_overview() -> Result<super::uefn::discovery::UefnOverview, UnrealError> {
+    blocking(|| Ok(super::uefn::discovery::overview())).await
+}
+
 /// Por qué la IA no puede proponer cambiar ese fichero del proyecto, o `None` si puede. @spec REQ-22
 #[tauri::command]
 pub fn unreal_code_path_problem(relative: String) -> Option<String> {

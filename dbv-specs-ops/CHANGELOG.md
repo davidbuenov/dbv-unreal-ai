@@ -13,6 +13,7 @@ y el proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Añadido
 - **UEFN: la app detecta UEFN, su versión y sus proyectos (REQ-122, S152).** Lee la versión del `Build.version` de la instalación, de la entrada `Fortnite_Studio` del Launcher y del log del editor, y se queda con la más nueva: el Launcher puede ir por detrás tras un parche (decía 43.10 con el editor ya en 43.12). Encuentra los proyectos (`.uefnproject`) en las carpetas que guarda UEFN y sabe cuál tiene abierto el editor por su `.ini`. Todo se lee; no se escribe nada.
+- **UEFN en la vista Proyecto (REQ-122, S153):** sección «Proyectos UEFN» con el distintivo `[UEFN]` y la versión instalada, el proyecto abierto en UEFN primero y un aviso si un proyecto pide una UEFN más nueva que la instalada. Fuera de Windows no aparece.
 
 ### Seguridad
 - **La app ya no lee la línea de comandos del editor de UEFN (REQ-122, S152):** lleva el código de acceso de Epic (`-AUTH_PASSWORD`), el usuario y su id. Antes entraba en la búsqueda de editores de Unreal abiertos, aunque no se guardaba. Ahora se miran primero los nombres de proceso y la línea de comandos solo se lee de los editores de UE.

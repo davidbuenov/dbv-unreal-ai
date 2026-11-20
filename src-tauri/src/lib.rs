@@ -344,6 +344,8 @@ pub fn run() {
             #[cfg(desktop)]
             unreal::commands::unreal_engines,
             #[cfg(desktop)]
+            unreal::commands::uefn_overview,
+            #[cfg(desktop)]
             unreal::commands::unreal_read_project,
             #[cfg(desktop)]
             unreal::commands::unreal_editors,

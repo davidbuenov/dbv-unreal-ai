@@ -14,6 +14,7 @@ export { on };
 
 // ─── Unreal ──────────────────────────────────────────────────────────
 export const unrealEngines = () => call('unreal_engines');
+export const uefnOverview = () => call('uefn_overview');
 export const unrealEditors = () => call('unreal_editors');
 export const unrealReadProject = (path) => call('unreal_read_project', { path });
 export const unrealRecentProjects = () => call('unreal_recent_projects');

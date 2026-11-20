@@ -297,6 +297,54 @@ pub fn open_project() -> Option<UefnProject> {
     project
 }
 
+// ─── Resumen para la interfaz ───────────────────────────────────────
+
+/// Un proyecto con lo que la lista necesita mostrar.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UefnProjectStatus {
+    #[serde(flatten)]
+    pub project: UefnProject,
+    /// Es el que tiene abierto UEFN ahora.
+    pub open: bool,
+    /// Pide una UEFN más nueva que la instalada.
+    pub newer_than_installed: bool,
+}
+
+/// Lo que la vista Proyecto sabe de UEFN.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UefnOverview {
+    pub install: Option<UefnInstall>,
+    pub running: bool,
+    pub projects: Vec<UefnProjectStatus>,
+}
+
+/// Cruza instalación, proyectos y proyecto abierto. Función pura para poder probarla sin UEFN.
+pub fn build_overview(install: Option<UefnInstall>, running: bool, projects: Vec<UefnProject>, open_file: Option<&Path>) -> UefnOverview {
+    let installed = install.as_ref().map(|i| i.version.version.clone()).unwrap_or_default();
+    let open_key = open_file.filter(|_| running).map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase());
+    let projects = projects
+        .into_iter()
+        .map(|project| {
+            let open = open_key.as_deref() == Some(project.path.replace('\\', "/").to_lowercase().as_str());
+            let newer_than_installed = !installed.is_empty() && project_newer_than(&project.compatibility_version, &installed);
+            UefnProjectStatus { project, open, newer_than_installed }
+        })
+        .collect();
+    UefnOverview { install, running, projects }
+}
+
+/// Resumen de UEFN en esta máquina. Sin UEFN instalado (o fuera de Windows) no hay proyectos que mostrar.
+pub fn overview() -> UefnOverview {
+    let install = find_uefn();
+    let ini_text = user_ini().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    let projects = if install.is_some() { find_projects() } else { Vec::new() };
+    let running = install.is_some() && uefn_running();
+    let open_file = last_project_file(&ini_text);
+    build_overview(install, running, projects, open_file.as_deref())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,6 +437,23 @@ mod tests {
         assert!(!project_newer_than("43.10", "43.12"));
         assert!(!project_newer_than("", "43.12"));
         assert!(project_newer_than("44.0", "43.12"));
+    }
+
+    #[test]
+    fn el_resumen_marca_el_proyecto_abierto_y_el_de_version_mas_nueva() {
+        // @spec REQ-122
+        let temp = tempfile::tempdir().unwrap();
+        let open_file = write_project(temp.path(), "Abierto", "Abierto", "");
+        let newer_file = write_project(temp.path(), "Nuevo", "Nuevo", "");
+        let mut newer = read_uefnproject(&newer_file).unwrap();
+        newer.compatibility_version = "43.20".into();
+        let open = read_uefnproject(&open_file).unwrap();
+        let install = UefnInstall { root: "C:/F".into(), version: UefnVersion { version: "43.12".into(), changelist: 1, source: "build".into() } };
+        let overview = build_overview(Some(install.clone()), true, vec![open.clone(), newer.clone()], Some(&open_file));
+        assert_eq!(overview.projects.iter().map(|p| (p.open, p.newer_than_installed)).collect::<Vec<_>>(), vec![(true, false), (false, true)]);
+        // Con UEFN cerrado, `LastProjectFileName` no dice qué está abierto.
+        let closed = build_overview(Some(install), false, vec![open], Some(&open_file));
+        assert!(!closed.projects[0].open);
     }
 
     #[test]
