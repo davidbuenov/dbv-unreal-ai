@@ -241,6 +241,14 @@ export function createSessionTools(deps) {
 /** Nombre válido para UEFNKit (`-Name`): empieza por letra y solo letras, cifras o `_` (REQ-131). */
 export const validKitName = (name) => /^[A-Za-z][A-Za-z0-9_]*$/.test(String(name ?? ''));
 
+/** «Eliminar proyecto»: desactivado mientras UEFN tenga abierto ese proyecto (borrar lo que el editor usa no se ofrece). */
+function removeButton(open, onRemove) {
+  const remove = button(t('kit.remove'), onRemove, 'btn-danger');
+  remove.disabled = Boolean(open);
+  if (open) remove.title = t('kit.removeOpen');
+  return remove;
+}
+
 /**
  * Tarjeta «Proyecto UEFN» (REQ-131, DESIGN.md v0.7.0): copia de pruebas, ejemplo de Epic, exportar y eliminar (este,
  * con el diálogo de acciones destructivas). Dice que UEFNKit es de Epic Games y que conviene cerrar UEFN.
@@ -259,7 +267,7 @@ export function uefnKitCard(project, kit, actions) {
     { className: 'card' },
     el('h3', { text: t('kit.title') }),
     project.open ? el('p', { className: 'warning', text: t('kit.closeUefn') }) : null,
-    el('div', { className: 'row' }, button(t('kit.duplicate'), actions.duplicate, 'btn-primary'), button(t('kit.install'), actions.install), button(t('kit.export'), actions.exportZip), button(t('kit.remove'), actions.remove, 'btn-danger')),
+    el('div', { className: 'row' }, button(t('kit.duplicate'), actions.duplicate, 'btn-primary'), button(t('kit.install'), actions.install), button(t('kit.export'), actions.exportZip), removeButton(project.open, actions.remove)),
     kit ? el('p', { className: 'hint' }, el('span', { text: `${t('kit.by', { version: kit.version, commit: kit.commit })} · ` }), link) : null,
   );
 }

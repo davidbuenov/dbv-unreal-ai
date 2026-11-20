@@ -260,11 +260,15 @@ describe('UEFNKit integrado (REQ-131)', () => {
     expect(card.querySelector('.btn-danger').textContent).toBe('Eliminar proyecto');
   });
 
-  it('con el proyecto abierto en UEFN avisa de cerrarlo y refrescar el navegador de proyectos', () => {
+  it('con el proyecto abierto en UEFN explica qué se puede hacer y no deja eliminarlo', () => {
     // @spec REQ-131
     const card = uefnKitCard({ title: 'P', open: true }, kit, actions());
-    expect(card.textContent).toContain('conviene cerrarlo');
-    expect(card.textContent).toContain('refresca el navegador de proyectos');
+    expect(card.textContent).toContain('no aparecerán en la lista de proyectos de UEFN hasta que la actualices');
+    expect(card.textContent).toContain('para eliminarlo tienes que cerrarlo en UEFN');
+    const remove = card.querySelector('.btn-danger');
+    expect(remove.disabled).toBe(true);
+    expect(remove.title).toBe('Cierra el proyecto en UEFN para poder eliminarlo.');
+    expect(uefnKitCard({ title: 'P', open: false }, kit, actions()).querySelector('.btn-danger').disabled).toBe(false);
   });
 
   it('los nombres siguen la regla de UEFNKit', () => {
