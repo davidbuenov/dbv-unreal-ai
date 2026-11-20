@@ -994,16 +994,16 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
 1. Entra todo en la v0.7.0, incluida la prueba en una sesión de juego.
 2. La skill de Epic **no tiene licencia**: no se incluye en la app. Se instala desde GitHub en la máquina del usuario, y el usuario habla con Magnus sobre la licencia.
 3. UEFNKit se integra llamando a su modo sin menús.
-4. El spike P-14 se hará cuando el usuario abra UEFN 43.10 con `DBVFornite`. Mientras tanto se avanza todo lo que no depende de él, y lo que sí depende lleva la marca **[P-14]**.
+4. El spike P-14 se hizo el 2026-11-20 en UEFN 43.10 con `DBVUnrealAITest`; sus resultados están en los requisitos marcados «(P-14)».
 
-*Ámbito común:* UEFN solo existe para Windows. En macOS y Linux esta sección no se muestra. Versión de referencia: **UEFN 43.10** (la instalada); la skill de Epic está escrita para 42.30 con marcas para versiones posteriores. Las pruebas se hacen sobre una **copia** de `DBVFornite`, creada con UEFNKit (REQ-131), y lo que crea la IA para probar se nombra `zz_…`.
+*Ámbito común:* UEFN solo existe para Windows. En macOS y Linux esta sección no se muestra. Versión de referencia: **UEFN 43.10** (la instalada); la skill de Epic está escrita para 42.30 con marcas para versiones posteriores. Las pruebas en vivo se hacen en `DBVUnrealAITest` (`D:\Programacion\UEFN-Fornite\DBVUnrealAITest`), el proyecto de pruebas creado para el spike P-14, nunca en `DBVFornite`; lo que crea la IA para probar se nombra `zz_…`.
 
 - [ ] **REQ-122 · Detectar UEFN, su versión y sus proyectos (sustituye la parte de detección de REQ-78):**
   - **Ámbito:** `discovery.rs` añade el tipo de proyecto `uefn` junto a `ue5`:
     - **Versión instalada:** entrada `Fortnite_Studio` de `LauncherInstalled.dat` (patrón `++Fortnite+Release-<versión>-CL-<cl>`). La entrada `Fortnite` es el juego y se ignora. Si no hay entrada, se usa la línea `LogInit: Build:` del log del editor (`%LOCALAPPDATA%\UnrealEditorFortnite\Saved\Logs\UnrealEditorFortnite.log`).
     - **Carpetas de proyectos:** `LastCreatedProjectLocation` y `AdditionalProjectPaths` de la sección `[/Script/ValkyrieEditor.ValkyrieEditorConfig]` de `EditorPerProjectUserSettings.ini`. Si no están, `Documentos\Fortnite Projects`.
     - **Proyecto:** carpeta con un `<Nombre>.uefnproject` (JSON) y un `.uplugin`. Se leen el título, `projectId`, `projectVersePath` (vacío = aún sin vincular a una cuenta), módulos y `compatibilityVersion`. El nombre del plugin puede ser distinto del del proyecto.
-    - **Editor abierto:** procesos `UnrealEditorFortnite*`. **[P-14]** Cómo saber qué proyecto tiene abierto (argumentos del proceso, título de la ventana o una herramienta MCP).
+    - **Editor abierto:** procesos `UnrealEditorFortnite*`, **sin leer nunca su línea de comandos**: lleva el código de acceso de Epic (`-AUTH_PASSWORD`) y el usuario (P-14). El proyecto abierto es `LastProjectFileName` de `EditorPerProjectUserSettings.ini` (el título de la ventana no lo dice). Con el MCP conectado, se confirma con `VerseToolset.ListFiles("")`.
     - Solo se **leen** el registro de Epic, el `.ini` y los proyectos: no se escribe en ellos.
   - **En la interfaz:**
     - Los proyectos UEFN aparecen en la lista de proyectos con el distintivo `[UEFN]` y la versión de UEFN.
@@ -1012,24 +1012,25 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
 
 - [ ] **REQ-123 · Conectar al MCP de UEFN y diagnóstico de UEFN (sustituye la parte de conexión y preparación de REQ-78):**
   - **Ámbito:**
-    - **Conexión:** el cliente MCP actual (`mcp_client.rs`) se conecta a `http://127.0.0.1:8000/mcp`. **[P-14]** Falta ver si UEFN publica las herramientas sueltas (`VerseToolset.BuildAll`…) o con el sistema de toolsets (`list_toolsets` / `describe_toolset` / `call_tool`). El cliente admite las dos formas, como ya hace con el toolset virtual de la 5.9 (REQ-113).
-    - **Identificar el servidor:** si en el 8000 responde un editor de UE en vez de UEFN, la app lo dice y no lo confunde. **[P-14]** Qué distingue a UEFN (`serverInfo` del `initialize`, nombres de toolsets).
+    - **Conexión:** el cliente MCP actual (`mcp_client.rs`) se conecta a `http://127.0.0.1:8000/mcp`. UEFN 43.10 usa el sistema de toolsets de UE 5.8 (`list_toolsets`, `describe_toolset` en singular, `call_tool` con el nombre corto de la herramienta), y cada herramienta trae `annotations.accessMode` (`read`, `write`, `execute`) (P-14).
+    - **Identificar el servidor:** si en el 8000 responde un editor de UE en vez de UEFN, la app lo dice y no lo confunde. `serverInfo` llega vacío en UEFN; lo que lo distingue son los toolsets `Valkyrie*` (`ValkyrieFortniteToolset.SessionToolset`…) y, como apoyo, las `instructions` que mencionan UEFN (P-14).
+    - **Puerto ocupado:** si otro editor tenía el 8000 al arrancar UEFN, este registra `HttpListener unable to bind to 127.0.0.1:8000` y su panel sigue diciendo «Running». El diagnóstico lo detecta en el log y explica que hay que liberar el puerto y pulsar *Stop Server* / *Start Server* (P-14).
     - **Varios editores:** si hay dos UEFN abiertos, solo el primero sirve el puerto, y se avisa de cuál es. Al reiniciar el editor, la app abre una sesión MCP nueva sola.
     - **Diagnóstico en lenguaje llano**, con el estilo de REQ-120:
       1. UEFN instalado y su versión;
       2. editor abierto;
       3. proyecto abierto;
-      4. **Python Editor Scripting** y **UEFN MCP Toolsets** activados en Project Settings;
-      5. servidor MCP respondiendo;
+      4. Python activado en el proyecto (opcional: el MCP funciona sin él);
+      5. servidor MCP respondiendo (se activa en *Edit → Editor Preferences → Agentic Workflows → Model Context Protocol*);
       6. toolsets disponibles;
       7. skill de Verse instalada (REQ-124).
 
-      Las filas de UE (PythonScriptPlugin, `DBVUnrealAI`, plugin C++, Fab) no se muestran. **[P-14]** Dónde se guardan los dos ajustes (para comprobarlos y, si se puede, activarlos con «Preparar»). Si no se pueden activar desde fuera, el diagnóstico explica dónde están en el editor.
+      Las filas de UE (PythonScriptPlugin, `DBVUnrealAI`, plugin C++, Fab) no se muestran. Python se lee en el `.uefnproject` (`dataSets.experimental.pythonExperimental.bEnablePythonForProject`) y en `EnablePythonLocallyPerProject` del `.ini` del usuario. «Preparar» lo activa con `ValkyrieToolset.ValkyriePythonToolset.EnablePythonForMainProject`, **solo tras confirmación explícita**, porque desde ese momento el Python del proyecto corre sin preguntar. La app no escribe esos ficheros (P-14).
     - **Herramientas:** las del MCP de UEFN llegan a la IA (conversación y `--mcp`) igual que las de UE, con los mismos permisos: lectura sin preguntar y escritura con aprobación. Las herramientas de la app que necesitan Python o C++ en el editor (vestir MetaHumans, splats, Fab, caja negra, recetas de UE) no se ofrecen en UEFN, y si se piden la app explica por qué.
   - *Aceptación:*
-    - Tests de Rust con respuestas grabadas de UEFN (`tests/fixtures/unreal-mcp/uefn-43.10/`, **[P-14]**) y con un editor de UE en el 8000.
+    - Tests de Rust con respuestas grabadas de UEFN (`tests/fixtures/unreal-mcp/uefn-43.10/`) y con un editor de UE en el 8000; un log falso con la línea `unable to bind`.
     - Tests de Vitest: la lista del diagnóstico solo muestra filas de UEFN.
-    - Con `DBVFornite` abierto, la app conecta y lista los toolsets **[P-14]**.
+    - En vivo, con `DBVUnrealAITest` abierto, la app conecta y lista los toolsets.
 
 - [ ] **REQ-124 · Instalar y actualizar la skill de Verse de Epic:**
   - **Ámbito:**
@@ -1055,9 +1056,9 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
 - [ ] **REQ-126 · Consultar la API real del UEFN del usuario (`verse_api_search`):**
   - **Ámbito:** herramienta de solo lectura que busca un texto o una expresión en los digests de la versión del usuario: `Verse.digest.verse`, `UnrealEngine.digest.verse`, `Fortnite.digest.verse` y el `Assets.digest.verse` del proyecto.
     - Devuelve las líneas encontradas con su contexto (la clase o el módulo que las contiene) y la versión del digest (`Generated from build: …`).
-    - Fuente: con el editor conectado, `VerseToolset.Grep`/`ReadFile`; sin editor, los ficheros en disco. **[P-14]** Ruta exacta de los digests en disco (se espera `%LOCALAPPDATA%\UnrealEditorFortnite\Saved\VerseProject\<Nombre>`).
+    - Fuente: con el editor conectado, `VerseToolset.Grep`/`ReadFile` (paquetes `/Verse.org`, `/UnrealEngine.com`, `/Fortnite.com`); sin editor, los ficheros en disco en `%LOCALAPPDATA%\UnrealEditorFortnite\Saved\VerseProject\<Proyecto>\Digests\BuiltIn\{Verse,UnrealEngine,Fortnite}\` y `Digests\<módulo>-Assets\`. Los proyectos de versiones anteriores los tienen sin `Digests\BuiltIn` (`<Proyecto>\Fortnite\Fortnite.digest.verse`): se admiten las dos formas (P-14).
     - Si no se encuentra nada, lo dice y recuerda que el digest puede estar desfasado («compila de nuevo en UEFN para regenerarlo»). No inventa firmas.
-  - *Aceptación:* tests de Rust con digests falsos (encuentra una función y su clase, respeta el tope de REQ-51, sin digest da el mensaje). Con `DBVFornite`, buscar `GetFortCharacter` devuelve su firma **[P-14]**.
+  - *Aceptación:* tests de Rust con digests falsos (encuentra una función y su clase, respeta el tope de REQ-51, sin digest da el mensaje). En vivo con `DBVUnrealAITest`, buscar `GetFortCharacter` devuelve su firma.
 
 - [ ] **REQ-127 · Escribir Verse y compilar en bucle cerrado (sustituye la parte de edición de REQ-79):**
   - **Ámbito:**
@@ -1065,7 +1066,7 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
     - **Cómo se escribe:**
       - Con UEFN abierto, la escritura pasa por `VerseToolset.WriteFile`/`Replace`, y borrar o deshacer un fichero creado, por `VerseToolset.Delete`. **Nunca se borra ni se mueve un `.verse` en disco con el editor abierto**, porque rompe todas las compilaciones hasta reiniciar.
       - Con UEFN cerrado se escribe en disco como hoy.
-      - **[P-14]** Si un fichero nuevo escrito en disco con el editor abierto entra en la compilación.
+      - Un fichero nuevo escrito en disco con el editor abierto sí entra en `BuildAll` (P-14), pero se sigue prefiriendo `WriteFile` para que UEFN lo registre a la vez. Las rutas Verse del MCP son `/<módulo>/…` (el módulo es el GUID del `.uplugin`), no `/Game`.
     - **Compilar:** el botón de la tarjeta pasa a **«Aplicar y compilar Verse»**:
       1. aplica el cambio;
       2. llama a `BuildAll`;
@@ -1079,21 +1080,22 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
     - Tests de Rust: ruta fuera de `Content/` rechazada, cabecera con `#`, con editor abierto no hay escritura en disco (un MCP simulado recibe `WriteFile`).
     - Tests de Rust del bucle con respuestas grabadas: errores → arreglo → `[]`; tope de intentos; error repetido.
     - Tests de Vitest de la tarjeta.
-    - En vivo **[P-14]**: un componente con un `<decides>` sin efecto falla con 3512, la IA lo arregla y compila.
+    - En vivo, en `DBVUnrealAITest`: un componente con un `<decides>` sin efecto falla con 3512, la IA lo arregla y compila. Los diagnósticos traen `code`, `message`, `filePath` y `span` con líneas desde 0: la tarjeta suma 1 al mostrarlas.
 
 - [ ] **REQ-128 · Probar en una sesión de UEFN (equivalente a REQ-82 en PIE):**
   - **Ámbito:** herramientas para la IA y botones en la conversación:
-    - **Iniciar sesión:** antes, la app avisa de que UEFN guarda el nivel y de que la primera vez puede tardar más de 2 minutos, y pide aprobación.
-    - **Enviar cambios de Verse:** `PushChanges` solo de Verse, ~10 s. Si UEFN responde que no está disponible, se para la partida y se envía todo, avisando de que tarda más.
-    - **Empezar y parar la partida**, consultar el estado y **parar la sesión**.
-    - **Leer la salida de Verse:** `LogVerse`, filtrada por una etiqueta de texto plano.
+    - **Iniciar sesión:** `ValkyrieFortniteToolset.SessionToolset.StartSession`. Antes, la app avisa de que UEFN guarda el nivel y de que tarda unos 2 minutos (medido en P-14: la llamada no responde hasta que el cliente está dentro), y pide aprobación. La llamada se hace en segundo plano con un tiempo máximo de 5 minutos y la conversación sigue usable.
+    - **Enviar cambios de Verse:** `PushChanges` con `bVerseOnly`, ~15 s; vuelve a ejecutar `OnBegin` (P-14). Si UEFN responde que no está disponible, se envía todo, avisando de que tarda más.
+    - **Empezar y parar la partida** (`StartGame`/`StopGame`), consultar el estado (`GetSessionStatus`, `GetGameState`) y **parar la sesión** (`StopSession`).
+    - **Leer la salida de Verse:** `GetVerseOutput`, filtrada por una etiqueta (`pattern`) y leída con su cursor (`nextCursor`). Cada entrada trae mensaje, gravedad, fichero y línea. La salida llega con unos segundos de retraso, así que tras enviar o empezar la partida se relee durante un máximo de 10 s hasta ver la etiqueta de versión. Los avisos del cliente se leen con `GetClientLogEntries`.
     - **Convención de pruebas:** el código de prueba de la IA imprime una etiqueta de versión al arrancar y líneas con etiqueta (`ZZTEST …`). Al acabar, esas impresiones se quitan o quedan tras un `@editable` de depuración.
   - **Protecciones:**
-    - Cada llamada tiene un tiempo máximo. Si se pasa, la app dice: «revisa UEFN: puede haber un diálogo abierto (Unable to Play o un error de Verse); ciérralo y reintenta». Si la validación falla, lee los motivos («Disallowed reference to …») en el log del editor en disco, porque no salen por el MCP.
+    - **Diálogos contestados solos:** durante una llamada MCP, UEFN no deja abierto ningún diálogo: lo contesta con la respuesta por defecto y solo queda en su log (`Message dialog closed, result: <botón>, title: <título>, text: …`) (P-14; pasó con «Unable to Check Out From Revision Control!» al colocar un dispositivo). Tras cada llamada que modifica, la app lee las líneas nuevas del log del editor y, si hay alguna, la tarjeta dice qué diálogo salió y qué se contestó.
+    - Cada llamada tiene un tiempo máximo. Si se pasa, la app dice que UEFN no ha respondido y sugiere mirar el editor. Si la validación falla, lee los motivos («Disallowed reference to …») en el log del editor en disco, porque no salen por el MCP.
     - Antes de iniciar, se avisa si hay entidades `zz_` de prueba en el nivel.
     - La IA no provoca `Err` a propósito sin avisar al usuario.
     - Lo que necesita mover al jugador no se puede automatizar: la IA entrega un guion de prueba manual corto con los mensajes esperados.
-  - *Aceptación:* tests de Rust con respuestas grabadas (sesión iniciada, envío de Verse, lectura filtrada de `LogVerse`, tiempo agotado con el mensaje del diálogo, motivos de validación leídos de un log falso). En vivo **[P-14]**: un componente que imprime `ZZTEST hola` al empezar la partida se ve en la conversación tras enviar los cambios.
+  - *Aceptación:* tests de Rust con respuestas grabadas (sesión iniciada, envío de Verse, lectura de `GetVerseOutput` con cursor, relectura hasta ver la etiqueta, tiempo agotado, diálogo contestado leído de un log falso, motivos de validación leídos de un log falso). En vivo, en `DBVUnrealAITest`: un componente que imprime `ZZTEST hola` al empezar la partida se ve en la conversación tras enviar los cambios.
 
 - [ ] **REQ-129 · Recetas de UEFN con Scene Graph primero (sustituye las recetas de REQ-79):**
   - **Ámbito:** recetas que solo aparecen con un proyecto UEFN. Se definen en la app, no en `recipes.json` del plugin, que no existe en UEFN. Cada una trae:
@@ -1106,9 +1108,9 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
       1. **zona de puntuación**: componente de zona con un evento de escena enviado hacia arriba y un componente de reglas fino;
       2. **seguimiento de jugadores con incorporación tardía**: `team_settings_and_inventory_device.TeamMemberSpawnedEvent`;
       3. **temporizador y mecha**: `race` entre `Sleep` y un evento de cancelar, sin bucles de sondeo;
-      4. **traer un modelo de la Biblioteca o de Tripo a la isla** **[P-14]**: depende de que UEFN exponga la importación de `.glb`; si no, la receta guía la importación a mano.
+      4. **traer un modelo de la Biblioteca o de Tripo a la isla**: `EditorToolset.StaticMeshToolset.ImportFile` importa `.glb`/`.gltf` (Interchange), FBX y OBJ, y `SoundWaveToolset.ImportFile` el audio (P-14); después se coloca con `LevelToolset`.
     - Ninguna receta usa clases `creative_device` para la jugabilidad.
-  - *Aceptación:* tests de Rust de las recetas (aparecen solo en UEFN; sus comprobaciones son `BuildAll` y `LogVerse`). El código de las recetas 1–3 compila en `DBVFornite` **[P-14]**.
+  - *Aceptación:* tests de Rust de las recetas (aparecen solo en UEFN; sus comprobaciones son `BuildAll` y `LogVerse`). En vivo, el código de las recetas 1–3 compila en `DBVUnrealAITest` y la 4 importa un `.glb` de la Biblioteca.
 
 - [ ] **REQ-130 · Evals de Verse:**
   - **Ámbito:** un conjunto de **12 tareas de Verse** en `dbv-specs-ops/evals/` (p. ej. «un componente que cuenta las eliminaciones de cada jugador» o «una puerta que se abre 3 s cuando entra un jugador»), que cubren las 10 reglas del estudio. Cada tarea se da por buena solo si:
@@ -1300,7 +1302,7 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
 - **R-62 · La skill está escrita para UEFN 42.30 y el usuario tiene 43.10** (REQ-124..REQ-126): algunas reglas pueden haber cambiado.
   - **Mitigación:** las marcas de versión de la skill (`[4300+]`, `[4310+]`) y, sobre todo, el digest de la versión del usuario (REQ-126) y `BuildAll` (REQ-127) como jueces finales.
 - **R-63 · Puerto 8000 compartido con un editor de UE** (REQ-123): el editor de UE 5.9 también usa el 8000 por defecto.
-  - **Mitigación:** identificar el servidor antes de usarlo **[P-14]** y avisar si no es UEFN.
+  - **Mitigación:** identificar el servidor antes de usarlo (por los toolsets `Valkyrie*`, P-14) y avisar si no es UEFN.
 - ~~**R-13 · «Copilot» es una marca registrada de Microsoft.**~~ *Retirado el 2026-10-24: el usuario cambió el nombre visible a «DBV Unreal AI», que no usa la marca.*
 
 ## ❓ 7. Preguntas Abiertas
@@ -1375,4 +1377,4 @@ Buena parte se solapa con la app (ver `memory.md`, ADR-V060-002). El usuario dec
 - [ ] **Ejecución:** suite contra un **editor simulado** (respuestas grabadas del editor real; base inicial: las 282 herramientas aplanadas de `.mcp_tools_cache.json` de MCPCLiente y las respuestas capturadas el 2026-10-24) en CI, y contra el **editor real** de un proyecto de pruebas en local, con guardado tras cada tarea, tiempo límite por petición y parada tras tres fallos de conexión seguidos (lecciones de dbv-typst-editor).
 
 ---
-**Instrucción para la IA:** Las preguntas abiertas críticas de v0.1–v0.4 están resueltas; P-15 y P-16 ya se ejecutaron. Antes de construir REQ-85..REQ-87 hay que ejecutar los spikes P-17, P-18, P-19 y P-21; P-20 antes de `/ship`. P-14 (UEFN) se ejecuta antes de construir lo marcado **[P-14]** en §3.26 (REQ-122..REQ-131); lo demás de la v0.7.0 no depende de él. Antes de construir la caja negra (REQ-91..REQ-97), ejecutar el spike P-23 en S106 y medir P-22 con la primera grabadora.
+**Instrucción para la IA:** Las preguntas abiertas críticas de v0.1–v0.4 están resueltas; P-15 y P-16 ya se ejecutaron. Antes de construir REQ-85..REQ-87 hay que ejecutar los spikes P-17, P-18, P-19 y P-21; P-20 antes de `/ship`. P-14 (UEFN) quedó resuelta en vivo el 2026-11-20: nada de §3.26 (REQ-122..REQ-131) espera ya al spike. Antes de construir la caja negra (REQ-91..REQ-97), ejecutar el spike P-23 en S106 y medir P-22 con la primera grabadora.

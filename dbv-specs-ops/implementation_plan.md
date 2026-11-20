@@ -1,16 +1,21 @@
 ---
-# Frontmatter de la fase vigente: v0.6.0, compatible con UE 5.8.4 y 5.9 (REQ-109..REQ-116, §18).
+# Frontmatter de la fase vigente: v0.7.0, UEFN y Verse (REQ-122..REQ-131, §21).
 dependencies:
-  - UE 5.8.4 con DBVMCPFirst (no se abre con 5.9) y UE 5.9 MegaJam Preview con PruebaUnreal59 (C++, MCP en el 8000)
-  - Fixtures grabados de 5.9 en tests/fixtures/unreal-mcp/ue-5.9/
-  - Toolsets de Epic de 5.9 con annotations.accessMode y describe_toolsets
+  - UEFN 43.10 con DBVUnrealAITest (D:\Programacion\UEFN-Fornite\DBVUnrealAITest), MCP en el 8000, Python activado
+  - Fixtures grabados en el spike P-14 en tests/fixtures/unreal-mcp/uefn-43.10/
+  - Repositorios de Epic sin licencia, descargados en la máquina del usuario y nunca incluidos (verse-skill, UEFNKit)
+  - git opcional (sin git, el zip de GitHub) y PowerShell 5.1+ para UEFNKit
 risks:
-  - "R-52: la 5.9 es una Preview -> compatibilidad por capacidad (probar la forma de 5.8 y caer a la de 5.9), sin atarse a números de versión salvo para los .ini"
-  - "R-53: plazo del workshop (2026-12-10) -> solo P1 en esta entrega; lo P2 en v0.6.x"
-  - "R-55: ~109 toolsets en 5.9 -> topes de REQ-51 comprobados con los fixtures de 5.9"
+  - "R-58..R-63 de SPECIFICATIONS.md, y además:"
+  - "Secreto en la línea de comandos de UEFN (-AUTH_PASSWORD) -> running_editors deja de leer argumentos de procesos *Fortnite* (S152)"
+  - "UE y UEFN comparten el puerto 8000 -> se identifica por toolsets Valkyrie* antes de usar nada (S154)"
+  - "StartSession tarda ~2 min y DEFAULT_TIMEOUT es 60 s -> tiempo propio de 5 min y llamada en segundo plano (S161)"
+  - "UEFN contesta solo los diálogos -> leer 'Message dialog closed' en el log tras cada escritura (S161)"
+  - "UEFNKit es un script descargado que se ejecuta con -ExecutionPolicy Bypass -> versión fijada a un commit y actualizar solo a petición del usuario (S163)"
 rollback_strategy: >
-  Un commit por rebanada (S124..S130). Todas son aditivas: revertir una deja 5.8.4 como en la v0.5.1 y quita a 5.9
-  solo esa mejora.
+  Un commit por rebanada (S152..S165). Todo es aditivo y solo se activa con un proyecto UEFN: revertir una rebanada
+  deja UE 5.8.4 y 5.9 como en la v0.6.2. La única que toca un camino compartido es S152 (running_editors), que se
+  revierte sola sin afectar a UE.
 ---
 
 # Plan de implementación — DBV Unreal AI v0.1 → v0.2
@@ -790,3 +795,65 @@ Un commit por rebanada. Si S138 falla, se revierte el C++ de Fab (el plugin qued
 ### Rollback
 
 Un commit por rebanada. S148 y S149 solo añaden caminos de búsqueda: si se revierten, queda la detección de hoy. S151 se puede desactivar dejando `unreal-plugin-bin/` vacío, y entonces «Preparar» copia el código como hasta ahora.
+
+## 21. Plan v0.7.0 — UEFN y Verse (`REQ-122..REQ-131`)
+
+> **Modo:** Orquestador. Rust (`unreal/` con un módulo nuevo `uefn/`, `ai/files.rs`, `mcp_server.rs`), JS (`unrealTools.js`, vista de proyecto, diagnóstico, tarjeta de aprobación, traducciones), un script de eval y 12 tareas.
+> **Aprobación:** pendiente.
+> **Origen:** `/spec` del 2026-11-19 (§3.26) y spike P-14 en vivo del 2026-11-20 (`DBVUnrealAITest`, fixtures en `tests/fixtures/unreal-mcp/uefn-43.10/`).
+
+### Evidencias (2026-11-20)
+
+1. `discovery::running_editors` (`discovery.rs:431`) filtra por nombre `unrealeditor*` y lee la línea de comandos de cada proceso (`with_cmd`). `UnrealEditorFortnite-Win64-Shipping.exe` entra en ese filtro, y su línea de comandos lleva `-AUTH_PASSWORD`, `-epicusername` y `-epicuserid`. Hoy no se guarda (solo se busca un `.uproject`), pero UEFN aparece como un editor de UE sin proyecto.
+2. `mcp_client.rs` ya tiene lo que pide UEFN: metaherramientas (`META_TOOLS`), `describe_toolset` en singular, `call_toolset_tool` con tiempo propio y `access_mode` desde `annotations.accessMode` (`mcp_client.rs:304`). UEFN publica `accessMode` en cada herramienta (fixtures `describe_toolset.*`).
+3. `initialize` de UEFN: `serverInfo` con `name`, `title` y `version` vacíos; `instructions` habla de UEFN y LUF.
+4. `DEFAULT_TIMEOUT` = 60 s (`mcp_client.rs:36`). `StartSession` tardó 1 min 57 s y no responde hasta acabar.
+5. `ai/files.rs:27`: `TEXT_EXTENSIONS` no incluye `verse`; `files.rs:52` salta las carpetas `Content`, `Saved` y `Plugins` al listar. El `.verse` de UEFN vive en `<proyecto>/Content/`.
+6. Rutas Verse del MCP: `/<GUID del módulo>/fichero.verse` (`ListFiles("")`), no `/Game`. El dispositivo compilado aparece como `/<GUID>/_Verse.<clase>`.
+7. Log del editor (`%LOCALAPPDATA%\UnrealEditorFortnite\Saved\Logs\UnrealEditorFortnite.log`, 5,8 MB tras una mañana): `Message dialog closed, result: …` y `HttpListener unable to bind`.
+8. Digests: `Saved\VerseProject\<Proyecto>\Digests\BuiltIn\…` en 43.10 y `Saved\VerseProject\<Proyecto>\Fortnite\…` en un proyecto antiguo (`DBVFornite`).
+
+### Architect Review
+
+```xml
+<architect_review>
+  <builder>Módulo nuevo `src-tauri/src/unreal/uefn/` con cuatro ficheros: `discovery.rs` (REQ-122: Launcher, log, `.ini`, `.uefnproject`, proyecto abierto por `LastProjectFileName`), `server.rs` (REQ-123: identificar UEFN por toolsets `Valkyrie*`, diagnóstico, líneas del log), `verse.rs` (REQ-125/126/127: `verse_reference`, `verse_api_search`, bucle de compilación) y `session.rs` (REQ-128). El cliente MCP no cambia: UEFN habla como UE 5.8. Las herramientas de UEFN llegan a la IA por las metaherramientas que ya existen, y la clasificación lectura/escritura usa `accessMode`, que UEFN sí publica. Skill y UEFNKit (REQ-124, REQ-131) en `uefn/external.rs`: descarga, versión y lanzador. Recetas (REQ-129) en `recipes.rs` con un campo de motor `uefn`. Evals (REQ-130) en `scripts/eval/verse-eval.mjs`, reutilizando el andamiaje de `fab-eval.mjs`.</builder>
+  <adversary>(1) La spec (REQ-122) dice «sin leer nunca su línea de comandos», pero `running_editors` ya la lee para todo proceso `unrealeditor*`, UEFN incluido: el secreto pasa por la memoria de la app y, si un día alguien añade un registro de los argumentos, acaba en `logging.rs`. Además UEFN contaría como «un editor de UE abierto» en la vista Proyecto. (2) REQ-127 promete escribir `.verse` en `Content/`, pero `files.rs` salta `Content` y no admite la extensión `verse`: quitar `Content` de la lista de saltos inundaría el contexto con `.uasset` y `__ExternalActors__` de cualquier proyecto UE. (3) REQ-128 promete que `StartSession` no bloquea la conversación, pero `call_toolset_tool` es síncrono; con 2 minutos de llamada y el `DEFAULT_TIMEOUT` de 60 s, la sesión se daría por fallida estando bien. Y si el usuario pulsa «Parar sesión» mientras tanto, habría dos llamadas a la vez sobre el mismo servidor. (4) Los diálogos contestados solos (REQ-128) se leen de un log de varios MB que crece sin parar: leerlo entero tras cada escritura es lento, y si UEFN lo rota se pierde la posición. (5) REQ-131 ejecuta un `UEFNKit.ps1` descargado con `-ExecutionPolicy Bypass`: si alguien cambia el repositorio, la app ejecutaría código nuevo sin que el usuario lo vea. Lo mismo, en menor medida, con la skill: son textos que lee la IA (inyección de instrucciones). (6) Identificar UEFN por `instructions` es frágil: el usuario puede escribir sus propias instrucciones en el panel del MCP, y Epic puede cambiar el texto.</adversary>
+  <evidence>`SPECIFICATIONS.md` §3.26: REQ-122 «sin leer nunca su línea de comandos», REQ-127 «`.verse` dentro del `Content/` del proyecto UEFN», REQ-128 «tiempo máximo de 5 minutos y la conversación sigue usable» y «lee las líneas nuevas del log del editor», REQ-131 «`-ExecutionPolicy Bypass`»; `discovery.rs:431-447` (`with_cmd`, filtro `unrealeditor`); `files.rs:27` y `files.rs:52`; `mcp_client.rs:36` (`DEFAULT_TIMEOUT`) y `:285` (`call_toolset_tool` síncrono); fixtures `initialize.response.json` (`serverInfo` vacío) y `spike.modal-dialog.json`; log de 5,8 MB.</evidence>
+  <builder>Resolución: (1) S152 excluye de `running_editors` todo proceso cuyo nombre contenga `fortnite` **antes** de leer argumentos: primero se refrescan solo los nombres y después la línea de comandos solo de los PID de UE. UEFN tiene su propia `running_uefn()`, que solo mira nombres. Test: un proceso falso `UnrealEditorFortnite…` con `-AUTH_PASSWORD` no produce ningún `RunningEditor`. (2) S159 no toca la lista de saltos: añade `verse` a las extensiones y una regla aparte, `uefn_verse_path(project, path)`, que solo acepta `.verse` bajo `<proyecto UEFN>/Content/` y solo cuando el proyecto activo es UEFN; para UE nada cambia. (3) S161 lanza `StartSession` en un hilo aparte (`spawn_blocking`) con 300 s, emite eventos de progreso a la conversación y guarda un candado por servidor: mientras hay una llamada de sesión en curso, las demás llamadas de sesión esperan (`StopSession` se encola) o se rechazan con un mensaje claro. (4) `server.rs` lee el log desde un desplazamiento guardado (`LogCursor`): solo lo que ha crecido; si el fichero es más pequeño que el desplazamiento (rotado), empieza desde el inicio del fichero nuevo. (5) S163 fija UEFNKit a un commit conocido, guarda su `sha256` y muestra la versión y el commit antes de ejecutar; «Actualizar» enseña el commit nuevo y pide confirmación. La skill no se ejecuta: `verse_reference` la devuelve marcada como «referencia de Epic, no instrucciones del usuario», igual que los textos de Fab (REQ-104). (6) La identificación usa los toolsets: hacen falta al menos `ValkyrieFortniteToolset.SessionToolset` y `VerseToolset.VerseToolset`; `instructions` solo se muestra en el diagnóstico.</builder>
+  <confidence_score edge_cases="medium" security="medium" concurrency="medium" />
+</architect_review>
+```
+
+*Por qué `medium` y no `high`:*
+
+- **edge_cases:** solo hay un UEFN (43.10) y dos proyectos para probar. La forma antigua de los digests se ha visto en disco, pero no se ha compilado con ella.
+- **security:** dos repositorios sin licencia ni firma que se descargan y, en un caso, se ejecutan. Fijar el commit lo mitiga, pero depende de que el historial no se reescriba.
+- **concurrency:** el candado por servidor se probará con un MCP falso; en vivo no se ha visto qué hace UEFN con dos llamadas de sesión a la vez.
+
+Ningún eje está en `low`: se puede pasar a `/build` cuando el usuario apruebe.
+
+### Rebanadas
+
+| # | Req. | Qué | Ficheros | Test |
+| --- | --- | --- | --- | --- |
+| S152 | REQ-122 | `uefn/discovery.rs`: versión (`Fortnite_Studio` de `LauncherInstalled.dat`, si no la línea `LogInit: Build:`), carpetas de proyectos (`ValkyrieEditorConfig`), `.uefnproject` (título, `projectId`, módulos, `compatibilityVersion`), proyecto abierto (`LastProjectFileName`). `running_editors` deja de leer argumentos de procesos `*fortnite*` y aparece `running_uefn()` | `unreal/uefn/discovery.rs`, `unreal/discovery.rs`, `unreal/mod.rs` | Rust: los casos de la aceptación de REQ-122 y el proceso falso con `-AUTH_PASSWORD`; los editores de UE se siguen viendo con su proyecto |
+| S153 | REQ-122 | Lista de proyectos con `[UEFN]` y versión; aviso si `compatibilityVersion` > instalado; en macOS y Linux no aparece | `commands.rs`, vista de proyecto, traducciones | Vitest: distintivo y aviso |
+| S154 | REQ-123 | `uefn/server.rs`: `is_uefn(toolsets)`, filas del diagnóstico de UEFN (sin filas de UE), `LogCursor` y lectura de `unable to bind` y `Message dialog closed`; «Preparar» de UEFN = activar Python por MCP con confirmación | `unreal/uefn/server.rs`, `commands.rs`, diagnóstico JS | Rust con los fixtures `uefn-43.10` y los de `ue-5.8.4` (no es UEFN); log falso rotado; Vitest de las filas |
+| S155 | REQ-123 | Herramientas de UEFN para la IA (conversación y `--mcp`) con permisos por `accessMode`; las herramientas que necesitan nuestro Python/C++ no se ofrecen en UEFN y explican por qué | `unrealTools.js`, `mcp_server.rs`, `agentPermissions.js` | Vitest y Rust: `BuildAll` (`execute`) pide aprobación y `ReadFile` (`read`) no; `unreal_dress_metahuman` no aparece con UEFN |
+| S156 | REQ-124 | `uefn/external.rs` (skill): instalar con `git clone` o zip en `<proyecto>/.claude/skills/verse` o `~/.claude/skills/verse`, atribución con commit y fecha, «Actualizar», aviso de commits nuevos como mucho una vez al día, detectar una ya instalada | `unreal/uefn/external.rs`, `commands.rs`, Ajustes, fila 7 del diagnóstico | Rust con un repositorio git local falso, sin git, ruta con espacios; test del paquete: nada de la skill en `tauri.conf.json` ni en el instalador |
+| S157 | REQ-125 | Prompt de Verse en inglés (10 reglas, Scene Graph primero, «solo `BuildAll` dice que compila») y `verse_reference(tema)` con el índice del `SKILL.md` instalado y el tope de REQ-51 | `src/ai/` (prompt de dominio), `uefn/verse.rs`, `unrealTools.js`, `mcp_server.rs` | Vitest del prompt; Rust: tema conocido, desconocido, sin skill, fichero que pasa el tope |
+| S158 | REQ-126 | `verse_api_search`: digests por MCP (`Grep`) o en disco (las dos formas de carpeta), con la clase o el módulo de cada línea y `Generated from build` | `uefn/verse.rs`, `unrealTools.js`, `mcp_server.rs` | Rust con digests falsos de las dos formas; sin digest, el mensaje |
+| S159 | REQ-127 | `files.rs`: extensión `verse` y `uefn_verse_path` (solo `Content/` de un proyecto UEFN); cabecera DBV con `#`; con UEFN abierto, la escritura va por `VerseToolset.WriteFile`/`Replace`/`Delete` y nunca al disco; mapa ruta de disco ↔ ruta Verse `/<GUID>/…` | `ai/files.rs`, `uefn/verse.rs`, `applyProposal.js` | Rust: ruta fuera de `Content/` rechazada, cabecera, un MCP falso recibe `WriteFile` y el disco no cambia |
+| S160 | REQ-127 | «Aplicar y compilar Verse»: `BuildAll`, diagnósticos enlazados (línea + 1), bucle de hasta 5 intentos (1–10), error repetido → otra compilación y sugerencia de reiniciar UEFN, «sin verificar» sin MCP, aviso 2304, con sesión en marcha se ofrece enviar | `uefn/verse.rs`, `approvalCard.js`, traducciones | Rust con `BuildAll.disk-file-with-error` y `BuildAll.ok`; tope; error repetido; Vitest de la tarjeta |
+| S161 | REQ-128 | `uefn/session.rs`: `StartSession` en segundo plano (300 s) con progreso y candado por servidor, `PushChanges(bVerseOnly)`, `StartGame`/`StopGame`, estados, `GetVerseOutput` con cursor y relectura ≤ 10 s hasta la etiqueta, `GetClientLogEntries`, diálogos contestados en la tarjeta, aviso de entidades `zz_` | `unreal/uefn/session.rs`, `unrealTools.js`, `mcp_server.rs` | Rust con los fixtures `SessionToolset.*` y un MCP falso lento (candado, tiempo agotado); log falso con `Message dialog closed` |
+| S162 | REQ-129 | Recetas 1–4 de UEFN (zona de puntuación, jugadores con incorporación tardía, temporizador con `race`, modelo de la Biblioteca con `StaticMeshToolset.ImportFile`), solo con proyecto UEFN | `recipes.rs`, datos de recetas | Rust: solo en UEFN, ninguna usa `creative_device` para la jugabilidad, comprobaciones `BuildAll` + salida |
+| S163 | REQ-131 | `uefn/external.rs` (UEFNKit): descarga fijada a un commit con `sha256`, lanzador `powershell -NoProfile -ExecutionPolicy Bypass -File … -Json` (último bloque JSON, código 1 = fallo), `list`, `duplicate`, `catalog` + `install`, `export`; `remove`/`variants` solo con confirmación (`-Yes`) | `unreal/uefn/external.rs`, `commands.rs`, vista de proyecto | Rust con un `UEFNKit.ps1` falso (progreso + JSON, código 1, ruta con espacios); Vitest: `remove` sin confirmar no se lanza |
+| S164 | REQ-130 | 12 tareas de Verse y `scripts/eval/verse-eval.mjs`: sin UEFN, contra respuestas grabadas de `BuildAll`; con UEFN, en vivo. Comprueba `BuildAll`, sin `creative_device`, firmas en el digest, sin `SpatialMath` salvo para convertir | `dbv-specs-ops/evals/verse/`, `scripts/eval/` | La propia eval; resultado en §8 de la spec (nube y local) |
+| S165 | todas | Validación en vivo en `DBVUnrealAITest` (las aceptaciones «en vivo» de REQ-122..REQ-131) y documentación (README ES/EN, ayuda, DESIGN si cambia algo) | — | Matriz en `walkthrough.md` |
+
+**Orden:** S152 → S154 → S155 (sin ellas no hay UEFN en la app). Después, en paralelo si se quiere, S156 → S157 → S158 y S159 → S160 → S161. Luego S162 y S163, y al final S164 y S165. S152 va primero también porque corrige la lectura del secreto.
+
+### Rollback
+
+Un commit por rebanada. Todo lo nuevo vive en `unreal/uefn/` y solo se activa con un proyecto UEFN: revertir una rebanada deja UE 5.8.4 y 5.9 como en la v0.6.2. S152 cambia `running_editors`, que también usa UE; su test comprueba que los editores de UE se siguen viendo con su proyecto, y revertirla devuelve el comportamiento actual. S159 añade `verse` a las extensiones sin tocar la lista de carpetas saltadas.

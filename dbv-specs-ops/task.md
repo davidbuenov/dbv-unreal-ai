@@ -21,7 +21,12 @@
       - Soporte para ficheros binarios (`.uasset`) en `prepare.rs` sin errores UTF-8.
       - Corrección de firma en `setup_cloth_for_character` (`dest_folder`) e importación automática de mallas de tela en `pipeline.py`.
       - Plugin sincronizado a `D:\Programacion\Unreal\DBVMCPFirst\Plugins\DBVUnrealAI` y `Plugins\DBVUnrealAICpp`.
-* **RETOMAR AQUÍ PRIMERO (2026-11-19) — v0.7.0 = UEFN y Verse, `/spec` hecho:**
+* **RETOMAR AQUÍ PRIMERO (2026-11-20) — v0.7.0: spike P-14 hecho y `/plan` escrito, falta la aprobación:**
+  - **Spike P-14 en vivo** con UEFN 43.10 y `DBVUnrealAITest` (`D:\Programacion\UEFN-Fornite\DBVUnrealAITest`, proyecto de pruebas; nunca `DBVFornite`). Resultados en P-14 de `SPECIFICATIONS.md` y 38 respuestas en `tests/fixtures/unreal-mcp/uefn-43.10/`. En el proyecto quedan `dbv_spike_device.verse` y el dispositivo colocado.
+  - **Spec corregida con lo visto:** REQ-122 (no leer la línea de comandos), REQ-123 (identificar por toolsets `Valkyrie*`, puerto ocupado, Python por MCP), REQ-126 (rutas de digests), REQ-127, REQ-128 (`GetVerseOutput`, ~2 min, diálogos contestados solos) y REQ-129 (importar `.glb` por MCP). Ya no queda nada marcado [P-14].
+  - **Plan:** `implementation_plan.md` §21, rebanadas **S152..S165**, confianza `medium` en los tres ejes. Primero S152 (detección y quitar la lectura de la línea de comandos de UEFN en `running_editors`), S154 y S155.
+  - **Siguiente:** aprobación del usuario y `/build` S152.
+* **(Anterior, 2026-11-19) — v0.7.0 = UEFN y Verse, `/spec` hecho:**
   - **Hecho:**
     - estudio de los repositorios de Epic en `docs/UEFN_VERSE_STUDY.md`;
     - `SPECIFICATIONS.md` v1.21, §3.26, con **REQ-122..REQ-131**, que sustituyen a REQ-78 y REQ-79 (tachados);
