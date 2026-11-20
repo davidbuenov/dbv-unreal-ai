@@ -483,11 +483,12 @@ pub fn cpp_plugin_state(dir: &Path, engine: Option<&EngineInstall>) -> &'static 
     state
 }
 
-/// Ficheros del plugin C++ con los binarios de la app: todo menos `Source/` (sin código, el editor no intenta
-/// compilarlo y carga las DLL, comprobado el 2026-11-15 en un proyecto de solo Blueprints) más `Binaries/Win64/`.
-/// @spec REQ-121
+/// Ficheros del plugin C++ con los binarios de la app: el plugin entero, `Source/` incluido, más `Binaries/Win64/`.
+/// El código va siempre: sin él, un proyecto con C++ no compila («falta el código del plugin») y la IA no puede
+/// leerlo ni recompilarlo; con el `BuildId` correcto el editor carga las DLL sin compilar igualmente (lo vio el
+/// usuario el 2026-11-20 con la instalación de la Store, copiando `Source/` del repositorio). @spec REQ-121
 fn cpp_binary_files(source: &Path, binaries: &Path) -> Result<Vec<(String, PathBuf)>, UnrealError> {
-    let skip = [format!("Plugins/{CPP_PLUGIN}/Source/"), format!("Plugins/{CPP_PLUGIN}/Binaries/"), format!("Plugins/{CPP_PLUGIN}/Intermediate/")];
+    let skip = [format!("Plugins/{CPP_PLUGIN}/Binaries/"), format!("Plugins/{CPP_PLUGIN}/Intermediate/")];
     let mut files: Vec<(String, PathBuf)> = plugin_files(source, CPP_PLUGIN)?.into_iter().filter(|(relative, _)| !skip.iter().any(|s| relative.starts_with(s.as_str()))).collect();
     let entries = std::fs::read_dir(binaries).map_err(|error| io_error(binaries, &error))?;
     for entry in entries.flatten().filter(|e| e.path().is_file()) {
@@ -1089,7 +1090,8 @@ mod tests {
         if cfg!(windows) {
             assert!(files.iter().any(|r| r == "Plugins/DBVUnrealAICpp/Binaries/Win64/UnrealEditor-DBVUnrealAICpp.dll"));
             assert!(files.iter().any(|r| r == "Plugins/DBVUnrealAICpp/Binaries/Win64/UnrealEditor.modules"));
-            assert!(!files.iter().any(|r| r.starts_with("Plugins/DBVUnrealAICpp/Source/")), "sin código: el editor no intenta compilar");
+            assert!(files.iter().any(|r| r == "Plugins/DBVUnrealAICpp/Source/DBVUnrealAICpp/DBVUnrealAICpp.Build.cs"), "el código va siempre con las DLL (REQ-121)");
+            assert!(!files.iter().any(|r| r.starts_with("Plugins/DBVUnrealAICpp/Intermediate/")));
             assert!(files.iter().any(|r| r == "Plugins/DBVUnrealAICpp/DBVUnrealAICpp.uplugin"));
         }
 
