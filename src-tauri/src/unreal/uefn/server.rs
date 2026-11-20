@@ -194,9 +194,11 @@ pub struct DiagnosticInput {
     pub port: u16,
     pub server: ServerProbe,
     pub bind_failed: bool,
+    /// Versión de la skill de Verse instalada (`abc1234 · 2026-10-14`), o `None` (REQ-124).
+    pub skill: Option<String>,
 }
 
-/// Una fila del diagnóstico de UEFN (las 6 primeras de REQ-123; la 7, la skill, la añade REQ-124). `key` es la clave
+/// Una fila del diagnóstico de UEFN (las 7 de REQ-123; la 7 es la skill de Verse de REQ-124). `key` es la clave
 /// de traducción de la fila y `fix` la de su solución; `detail` lleva los datos (versión, puerto, número de toolsets).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -230,6 +232,7 @@ pub fn diagnostic_rows(input: &DiagnosticInput) -> Vec<DiagnosticRow> {
         row(4, "python", input.python.enabled(), true, String::new(), "enablePython"),
         row(5, "server", input.server.responding && input.server.uefn, false, input.port.to_string(), server_fix),
         row(6, "toolsets", input.server.uefn && input.server.toolsets > 0, false, input.server.toolsets.to_string(), "toolsets"),
+        row(7, "skill", input.skill.is_some(), true, input.skill.clone().unwrap_or_default(), "installSkill"),
     ];
     rows
 }
@@ -350,9 +353,11 @@ mod tests {
             port: 8000,
             server: ServerProbe { responding: true, uefn: true, toolsets: 63 },
             bind_failed: false,
+            skill: Some("abc1234 · 2026-10-14".into()),
         };
         let rows = diagnostic_rows(&ready);
-        assert_eq!(rows.len(), 6);
+        assert_eq!(rows.len(), 7);
+        assert_eq!(rows[6].detail, "abc1234 · 2026-10-14");
         assert!(rows.iter().all(|r| r.ok && r.fix.is_none()));
         assert!(rows.iter().all(|r| !r.key.contains("Plugin") && !r.key.contains("fab")));
         let busy = DiagnosticInput { bind_failed: true, server: ServerProbe::default(), ..ready.clone() };

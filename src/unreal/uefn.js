@@ -68,7 +68,7 @@ export const canEnablePython = (rows) => rows.some((r) => r.step === 5 && r.ok) 
  * UEFN, cada una con su estado y su solución en una frase. Python es opcional: si falta, se marca con «–», no con «✗».
  * @param {{title: string}} project
  * @param {Array<{step: number, key: string, ok: boolean, optional: boolean, detail: string, fix: string | null}>} rows
- * @param {{connect: () => void, enablePython: () => void, connected: boolean}} actions
+ * @param {{connect: () => void, enablePython: () => void, connected: boolean, skill?: {installed: object | null, updateAvailable: boolean, repository: string} | null, installSkill?: () => void, updateSkill?: () => void, openUrl?: (url: string) => void}} actions
  * @returns {HTMLElement}
  */
 export function uefnDiagnosticCard(project, rows, actions) {
@@ -82,6 +82,8 @@ export function uefnDiagnosticCard(project, rows, actions) {
   const buttons = [
     actions.connected ? el('span', { className: 'pill pill--online', text: t('uefn.connected') }) : button(t('uefn.connect'), actions.connect, ready ? 'btn-primary' : ''),
     canEnablePython(rows) ? button(t('uefn.enablePython'), actions.enablePython) : null,
+    actions.installSkill && !actions.skill?.installed ? button(t('uefn.skill.install'), actions.installSkill) : null,
+    actions.updateSkill && actions.skill?.updateAvailable ? button(t('uefn.skill.update'), actions.updateSkill) : null,
   ];
   return el(
     'div',
@@ -89,8 +91,26 @@ export function uefnDiagnosticCard(project, rows, actions) {
     el('h3', {}, el('span', { text: project.title }), ' ', el('span', { className: 'badge badge--accent', text: '[UEFN]' })),
     el('p', { className: 'hint', text: t('uefn.diagIntro') }),
     el('ul', { className: 'checklist' }, items),
+    skillAttribution(actions.skill, actions.openUrl),
     el('div', { className: 'row' }, ...buttons.filter(Boolean)),
   );
+}
+
+/**
+ * Atribución de la skill de Verse (REQ-124, DESIGN.md v0.7.0): es trabajo de Epic Games y se descarga de su
+ * repositorio; la app no la incluye.
+ * @param {{installed: {commit: string, date: string} | null, repository: string} | null | undefined} skill
+ * @param {((url: string) => void) | undefined} openUrl
+ */
+export function skillAttribution(skill, openUrl) {
+  if (!skill) return null;
+  const version = skill.installed?.commit ? t('uefn.skill.version', { commit: skill.installed.commit, date: skill.installed.date || '?' }) : '';
+  const open = (event) => {
+    event.preventDefault();
+    openUrl?.(skill.repository);
+  };
+  const link = el('a', { text: skill.repository, attrs: { href: '#' }, on: { click: open } });
+  return el('p', { className: 'hint' }, el('span', { text: `${t('uefn.skill.by')}${version ? ` · ${version}` : ''} · ` }), link);
 }
 
 /**

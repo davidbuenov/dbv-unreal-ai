@@ -212,7 +212,8 @@ export function createProjectView(host, deps) {
    * Diagnóstico de un proyecto UEFN y su conexión (REQ-123). El MCP de UEFN está en el puerto de la fila 5.
    */
   async function uefnPanel(project, install) {
-    const rows = await api.uefnDiagnostics(project.path);
+    const [rows, skillStatus] = await Promise.all([api.uefnDiagnostics(project.path), api.uefnSkillStatus(project.path)]);
+    const skill = skillStatus.ok ? skillStatus.value : null;
     if (!rows.ok) return el('div', { className: 'card' }, el('p', { className: 'error', text: rows.error.message }));
     const port = Number(rows.value.find((r) => r.step === 5)?.detail) || 8000;
     const endpoint = { port, path: '/mcp' };
@@ -237,7 +238,22 @@ export function createProjectView(host, deps) {
       deps.toast(enabled.ok ? t('uefn.pythonEnabled') : enabled.error.message, enabled.ok ? undefined : 'error');
       await render();
     };
-    return uefnDiagnosticCard(project, rows.value, { connect: connectUefn, enablePython, connected });
+    // Skill de Verse de Epic (REQ-124): sin licencia, se descarga de GitHub a la máquina del usuario.
+    const installSkill = async () => {
+      const scope = await deps.confirm({ title: t('uefn.skill.install'), text: t('uefn.skill.where'), choices: [{ key: 'cancel', label: t('gen.cancel') }, { key: 'user', label: t('uefn.skill.user') }, { key: 'project', label: t('uefn.skill.project'), tone: 'primary' }] });
+      if (scope !== 'project' && scope !== 'user') return;
+      deps.toast(t('uefn.skill.installing'));
+      const installed = await api.uefnSkillInstall(project.path, scope);
+      deps.toast(installed.ok ? t('uefn.skill.installed', { path: installed.value.path }) : installed.error.message, installed.ok ? undefined : 'error');
+      await render();
+    };
+    const updateSkill = async () => {
+      const updated = await api.uefnSkillUpdate(project.path);
+      deps.toast(updated.ok ? t('uefn.skill.updated', { commit: updated.value.commit }) : updated.error.message, updated.ok ? undefined : 'error');
+      await render();
+    };
+    const openUrl = (url) => window.__TAURI__?.opener?.openUrl?.(url);
+    return uefnDiagnosticCard(project, rows.value, { connect: connectUefn, enablePython, connected, skill, installSkill, updateSkill, openUrl });
   }
 
   async function selectUefn(path) {

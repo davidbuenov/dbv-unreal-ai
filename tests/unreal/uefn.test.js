@@ -7,7 +7,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { APP_TRANSLATIONS } from '../../src/app/translations.js';
-import { canEnablePython, toolsForUefn, uefnDiagnosticCard, uefnRows, uefnSection } from '../../src/unreal/uefn.js';
+import { canEnablePython, skillAttribution, toolsForUefn, uefnDiagnosticCard, uefnRows, uefnSection } from '../../src/unreal/uefn.js';
 
 beforeAll(() => {
   window.DBV_I18N.register(APP_TRANSLATIONS);
@@ -114,5 +114,40 @@ describe('herramientas de la app con UEFN (REQ-123)', () => {
   it('sin la regla cargada no ofrece ninguna', () => {
     // @spec REQ-123
     expect(toolsForUefn([tool('unreal_call_tool')], null)).toEqual([]);
+  });
+});
+
+describe('skill de Verse de Epic (REQ-124)', () => {
+  const repository = 'https://github.com/magnusenebakk-epic/verse-skill';
+  const base = { connect: vi.fn(), enablePython: vi.fn(), connected: true, installSkill: vi.fn(), updateSkill: vi.fn(), openUrl: vi.fn() };
+
+  it('sin skill ofrece instalarla y dice de quién es', () => {
+    // @spec REQ-124
+    const card = uefnDiagnosticCard({ title: 'P' }, diag(), { ...base, skill: { installed: null, updateAvailable: false, repository } });
+    const install = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Instalar la skill de Verse de Epic');
+    expect(install).toBeTruthy();
+    install.click();
+    expect(base.installSkill).toHaveBeenCalled();
+    expect(card.textContent).toContain('Epic Games (Magnus Enebakk)');
+  });
+
+  it('instalada muestra commit y fecha, y «Actualizar» solo si hay commits nuevos', () => {
+    // @spec REQ-124
+    const installed = { commit: 'abc1234', date: '2026-10-14', path: 'x' };
+    const card = uefnDiagnosticCard({ title: 'P' }, diag(), { ...base, skill: { installed, updateAvailable: false, repository } });
+    expect(card.textContent).toContain('versión abc1234 del 2026-10-14');
+    expect(card.textContent).not.toContain('Actualizar la skill');
+    expect(card.textContent).not.toContain('Instalar la skill');
+    const newer = uefnDiagnosticCard({ title: 'P' }, diag(), { ...base, skill: { installed, updateAvailable: true, repository } });
+    expect(newer.textContent).toContain('Actualizar la skill de Verse');
+  });
+
+  it('el enlace abre el repositorio de Epic', () => {
+    // @spec REQ-124
+    const openUrl = vi.fn();
+    const node = skillAttribution({ installed: null, repository }, openUrl);
+    node.querySelector('a').click();
+    expect(openUrl).toHaveBeenCalledWith(repository);
+    expect(skillAttribution(null, openUrl)).toBeNull();
   });
 });

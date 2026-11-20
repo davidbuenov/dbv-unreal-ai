@@ -352,6 +352,12 @@ pub fn run() {
             #[cfg(desktop)]
             unreal::commands::uefn_tool_policy,
             #[cfg(desktop)]
+            unreal::commands::uefn_skill_status,
+            #[cfg(desktop)]
+            unreal::commands::uefn_skill_install,
+            #[cfg(desktop)]
+            unreal::commands::uefn_skill_update,
+            #[cfg(desktop)]
             unreal::commands::unreal_read_project,
             #[cfg(desktop)]
             unreal::commands::unreal_editors,

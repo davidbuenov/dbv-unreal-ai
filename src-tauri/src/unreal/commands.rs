@@ -400,8 +400,87 @@ pub async fn uefn_diagnostics(app: AppHandle, path: String) -> Result<Vec<super:
             port: settings.port,
             bind_failed: !probe.responding && server::bind_failed(&log_tail, settings.port),
             server: probe,
+            skill: skill_of(&project_file).map(|s| format!("{} · {}", s.commit, s.date).trim_matches([' ', '·']).to_string()),
         };
         Ok(server::diagnostic_rows(&input))
+    })
+    .await
+}
+
+// ─── Skill de Verse de Epic (REQ-124) ──────────────────────────────
+
+fn home_dir() -> PathBuf {
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// La skill instalada para el proyecto `uefnproject` (la del proyecto o la del usuario).
+fn skill_of(uefnproject: &Path) -> Option<super::uefn::external::InstalledSkill> {
+    let git = crate::ai::detect::which("git");
+    super::uefn::external::detect(uefnproject.parent(), &home_dir(), git.as_deref())
+}
+
+/// Estado de la skill de Verse: instalada (con su versión) y si hay commits nuevos. La comprobación remota se hace
+/// como mucho una vez al día y se guarda en la carpeta de configuración. @spec REQ-124
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillStatus {
+    pub installed: Option<super::uefn::external::InstalledSkill>,
+    pub update_available: bool,
+    pub git: bool,
+    pub repository: String,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillCheck {
+    last_check: u64,
+    remote: String,
+}
+
+#[tauri::command]
+pub async fn uefn_skill_status(app: AppHandle, path: String) -> Result<SkillStatus, UnrealError> {
+    use super::uefn::external;
+    let dir = config_dir(&app)?;
+    blocking(move || {
+        let git = crate::ai::detect::which("git");
+        let installed = skill_of(Path::new(&path));
+        let file = dir.join("uefn-skill-check.json");
+        let mut check: SkillCheck = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        if installed.is_some() && external::should_check((check.last_check > 0).then_some(check.last_check), now) {
+            if let Some((sha, _)) = external::remote_head(external::SKILL_REPO, git.as_deref()) {
+                check = SkillCheck { last_check: now, remote: sha };
+                let _ = std::fs::create_dir_all(&dir);
+                let _ = std::fs::write(&file, serde_json::to_string(&check).unwrap_or_default());
+            }
+        }
+        let update_available = installed.as_ref().is_some_and(|s| external::has_update(s, &check.remote));
+        Ok(SkillStatus { installed, update_available, git: git.is_some(), repository: external::SKILL_REPO.to_string() })
+    })
+    .await
+}
+
+/// Instala la skill de Verse de Epic desde GitHub en el proyecto o en la carpeta del usuario. @spec REQ-124
+#[tauri::command]
+pub async fn uefn_skill_install(path: String, scope: super::uefn::external::SkillScope) -> Result<super::uefn::external::InstalledSkill, UnrealError> {
+    use super::uefn::external;
+    blocking(move || {
+        let project_dir = Path::new(&path).parent().map(Path::to_path_buf).unwrap_or_default();
+        let git = crate::ai::detect::which("git");
+        let target = external::skill_dir(scope, &project_dir, &home_dir());
+        external::install(external::SKILL_REPO, &target, git.as_deref())?;
+        skill_of(Path::new(&path)).ok_or_else(|| UnrealError::NotFound("the Verse skill was downloaded but SKILL.md is missing".into()))
+    })
+    .await
+}
+
+/// Actualiza la skill de Verse instalada (`git pull` o el zip de nuevo). @spec REQ-124
+#[tauri::command]
+pub async fn uefn_skill_update(path: String) -> Result<super::uefn::external::InstalledSkill, UnrealError> {
+    blocking(move || {
+        let installed = skill_of(Path::new(&path)).ok_or_else(|| UnrealError::NotFound("the Verse skill is not installed".into()))?;
+        super::uefn::external::update(&installed, crate::ai::detect::which("git").as_deref())?;
+        skill_of(Path::new(&path)).ok_or_else(|| UnrealError::NotFound("the Verse skill is not installed".into()))
     })
     .await
 }
