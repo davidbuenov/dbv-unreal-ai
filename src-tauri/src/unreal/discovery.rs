@@ -170,13 +170,20 @@ pub fn find_engines() -> Vec<EngineInstall> {
     engines_from(candidate_roots())
 }
 
-/// Instalaciones válidas entre `roots` (las que tienen `Build.version`).
+/// ¿Es `root` la instalación de Fortnite/UEFN? Trae su propio `Engine/Build/Build.version` (`MajorVersion: 6`), que no
+/// es un motor de UE (REQ-122, P-14).
+fn is_fortnite_install(root: &Path) -> bool {
+    let text = std::fs::read_to_string(root.join("Engine").join("Build").join("Build.version")).unwrap_or_default();
+    super::uefn::discovery::is_fortnite_build(&text)
+}
+
+/// Instalaciones válidas entre `roots` (las que tienen `Build.version`; la de Fortnite no cuenta).
 pub fn engines_from(roots: Vec<PathBuf>) -> Vec<EngineInstall> {
     let mut seen = HashSet::new();
     let mut engines: Vec<EngineInstall> = Vec::new();
     for root in roots {
         let key = root.to_string_lossy().to_lowercase().replace('\\', "/").trim_end_matches('/').to_string();
-        if !seen.insert(key) {
+        if !seen.insert(key) || is_fortnite_install(&root) {
             continue;
         }
         if let Some((major, minor, patch)) = read_build_version(&root) {
@@ -427,15 +434,25 @@ pub fn absolute_project(project: &str, executable: &Path) -> String {
     clean.to_string_lossy().into_owned()
 }
 
-/// Editores de Unreal abiertos ahora mismo.
+/// ¿Es el nombre de un proceso del editor de Unreal Engine? UEFN (`UnrealEditorFortnite…`) no lo es: su línea de
+/// comandos lleva el código de acceso de Epic y no se puede leer nunca (REQ-122, P-14).
+pub fn is_ue_editor_process(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.starts_with("unrealeditor") && !lower.contains("fortnite")
+}
+
+/// Editores de Unreal abiertos ahora mismo. Primero se miran solo los nombres; la línea de comandos se lee después y
+/// solo de los procesos de UE, para que la de UEFN no llegue a la memoria de la app.
 pub fn running_editors() -> Vec<RunningEditor> {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
     let mut system = System::new();
-    system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always).with_exe(UpdateKind::Always));
+    system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+    let pids: Vec<Pid> = system.processes().iter().filter(|(_, process)| is_ue_editor_process(&process.name().to_string_lossy())).map(|(pid, _)| *pid).collect();
+    system.refresh_processes_specifics(ProcessesToUpdate::Some(&pids), true, ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always).with_exe(UpdateKind::Always));
     let mut editors: Vec<RunningEditor> = system
         .processes()
         .values()
-        .filter(|process| process.name().to_string_lossy().to_lowercase().starts_with("unrealeditor"))
+        .filter(|process| is_ue_editor_process(&process.name().to_string_lossy()))
         .map(|process| {
             let args: Vec<String> = process.cmd().iter().map(|a| a.to_string_lossy().into_owned()).collect();
             let executable = process.exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
@@ -613,5 +630,27 @@ mod tests {
             assert!(editor.ends_with("Engine/Binaries/Linux/UnrealEditor"), "{editor}");
             assert!(settings.contains("LinuxEditor"));
         }
+    }
+
+    #[test]
+    fn uefn_no_cuenta_como_editor_de_ue_y_no_se_lee_su_linea_de_comandos() {
+        // @spec REQ-122 — la línea de comandos de UEFN lleva `-AUTH_PASSWORD`: el filtro va antes de leerla.
+        assert!(is_ue_editor_process("UnrealEditor.exe"));
+        assert!(is_ue_editor_process("UnrealEditor-Win64-DebugGame.exe"));
+        assert!(!is_ue_editor_process("UnrealEditorFortnite-Win64-Shipping.exe"));
+        assert!(!is_ue_editor_process("FortniteClient-Win64-Shipping.exe"));
+    }
+
+    #[test]
+    fn la_instalacion_de_fortnite_no_es_un_motor_de_ue() {
+        // @spec REQ-122 — Fortnite trae `Engine/Build/Build.version` con `MajorVersion: 6`.
+        let temp = tempfile::tempdir().unwrap();
+        let ue = fake_engine(&temp.path().join("UE_5.8"), (5, 8, 4));
+        let fortnite = temp.path().join("Fortnite");
+        let build = fortnite.join("Engine").join("Build");
+        std::fs::create_dir_all(&build).unwrap();
+        std::fs::write(build.join("Build.version"), r#"{"MajorVersion": 6, "MinorVersion": 0, "PatchVersion": 0, "BranchName": "++Fortnite+Release-43.12"}"#).unwrap();
+        let engines = engines_from(vec![ue, fortnite]);
+        assert_eq!(engines.iter().map(|e| e.version.as_str()).collect::<Vec<_>>(), vec!["5.8.4"]);
     }
 }

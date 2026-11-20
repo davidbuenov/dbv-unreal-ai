@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **UEFN: the app detects UEFN, its version and its projects (REQ-122, S152).** It reads the version from the install's `Build.version`, from the Launcher's `Fortnite_Studio` entry and from the editor log, and keeps the newest one: the Launcher can lag behind after a patch (it said 43.10 while the editor was already on 43.12). It finds projects (`.uefnproject`) in the folders UEFN remembers and knows which one the editor has open from its `.ini`. Everything is read-only.
+
+### Security
+- **The app no longer reads the UEFN editor's command line (REQ-122, S152):** it carries the Epic access code (`-AUTH_PASSWORD`), the user name and id. It used to be included in the search for open Unreal editors, though it was never stored. Process names are now checked first, and the command line is read only for UE editors.
+
+### Fixed
+- **The Fortnite install no longer shows up as a "UE 6.0" engine (REQ-122, S152):** it ships its own `Engine/Build/Build.version` with version 6.0.0, and the engine search took it for a UE engine.
+
 ## [0.6.2] - 2026-11-15
 
 Version v0.6.2: **urgent fix for v0.6.1**. **Claude Code and Codex start again** on machines with Node.js installed in its default folder (`C:\Program Files\nodejs`). Thanks to **Victor Osuna**, who tested the freshly published v0.6.1 from the Microsoft Store and found both problems in this version.

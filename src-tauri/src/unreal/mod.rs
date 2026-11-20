@@ -28,6 +28,7 @@ pub mod engine_choice;
 pub mod ini;
 pub mod mcp_client;
 pub mod prepare;
+pub mod uefn;
 
 use serde::Serialize;
 
